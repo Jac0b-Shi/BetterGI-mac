@@ -354,18 +354,43 @@ Fail fast if config-dependent fields (`PickRo`, `PickVk`) accessed before `Confi
 
 ### B8: AutoPickTrigger.OnCapture platform dependency extraction
 
-- Extract input sends (Simulation.SendInput) to IInputBackend
-- Extract TaskContext.Instance().SystemInfo.AssetScale (requires ISystemInfoProvider or equivalent)
-- Extract TaskContext.Instance().Config.AutoPickConfig runtime reads in OnCapture()
-- Do NOT yet delete Shims — callers may still exist
-- Verification: v8 assertions including capture-path mocks
+**Sub-phases** — each audited separately; do NOT rewrite OnCapture in one pass:
+
+#### B8.1: Input sends → existing IInputBackend
+
+- `Simulation.SendInput.Keyboard.KeyPress(PickVk)` (lines 210, 257, 355, 386)
+- `Simulation.SendInput.Mouse.VerticalScroll(2)` (line 198)
+- `PlatformServices.Input` → existing `IInputBackend`
+- No new interface; no static gateway
+
+#### B8.2: Capture metrics / AssetScale → existing ISystemInfo
+
+- `TaskContext.Instance().SystemInfo.AssetScale` (line 214)
+- Inject existing `ISystemInfo` into AutoPickTrigger
+- Do NOT create `ISystemInfoProvider` — that only wraps the existing interface
+- If audit reveals AutoPick needs only `AssetScale`, a narrower `IAutoPickCaptureMetrics` may be warranted; default to injecting `ISystemInfo` directly
+
+#### B8.3: Runtime AutoPickConfig reads → existing IAutoPickConfigProvider
+
+- `TaskContext.Instance().Config.AutoPickConfig` offsets (lines 215, 227-228, 276-277)
+- `config.WhiteListEnabled`, `config.BlackListEnabled`, `config.OcrEngine`
+- Already injected via `_configProvider`; simply read from it in OnCapture() too
+- Do NOT snapshot AutoPickConfig — config may change at runtime
+
+**Each sub-phase constraint:**
+- Windows behavior unchanged
+- macOS wired through injected dependency, no static fallback
+- No static gateways; no OCR/Yap changes
+- Verification per sub-phase
 
 ### B9: Remaining static gateways / file and UI abstractions
 
-- OcrFactory.Paddle static → injected IOcrService
-- TextInferenceFactory static → injected ITextInference
-- Global.ReadAllTextIfExist → IFileSystem abstraction
-- ThemedMessageBox → IUserInteractionService
+*(Interface names below are **provisional placeholders**. Implementation must start from real call-site needs, not create broad service interfaces directly.)*
+
+- OcrFactory.Paddle static → injected `IOcrService` or `IPaddleOcrService` (audit needed: Ocr, OcrWithoutDetector, which call sites)
+- TextInferenceFactory static → injected `ITextInference` or `IPickTextInference` (audit needed: AutoPick only uses Pick.Inference)
+- Global.ReadAllTextIfExist → `IAssetReader` or `IConfigFileService` (audit needed: read-only text vs JSON deserialization vs path resolution)
+- ThemedMessageBox → `IUserInteractionService` (audit needed: error only, or confirm/cancel patterns)
 - Do NOT yet delete Shims
 
 ### B10: Final Shim deletion
@@ -400,25 +425,21 @@ Delete only when all three searches return zero results in the linked-file set.
 | B6 | AutoPickAssets constructor split + Configure() | B2+B3 (config provider + mac adapter) |
 | B7 | macOS composition root + AutoPickTrigger provider injection | B4-B6 (consumers must work) |
 | B8 | OnCapture platform dependency extraction | B7 (trigger must be composable) |
-| B9 | Static gateways + file/UI abstractions | B8 (input abstraction in place) |
-| B10 | Final Shim deletion | All above (caller count = 0) |
+| B9 | Static gateways + file/UI abstractions | B7 (trigger must be composable) |
+| B10 | Final Shim deletion | B8 + B9 + zero direct callers |
 
-B2 and B3 each depend on B1 (interfaces must be visible first). B4-B6 depend on B2+B3. B7 depends on B4-B6. B10 is terminal — B8 and B9 can be ordered flexibly.
+B2 and B3 each depend on B1 (interfaces must be visible first). B4-B6 depend on B2+B3. B7 depends on B4-B6. B10 is terminal. B8 and B9 are independently implementable but scheduled B8 first.
 
 ---
 
-## 9. Service Locator Cleanup — Deferred to Phase C
+## 9. Service Locator Cleanup — Moved to B9/B10
 
-These are NOT addressed in Phase B:
-- `OcrFactory.Paddle` static (20+ call sites in Windows host)
-- `PickTextInference` constructor (uses `App.ServiceProvider.GetRequiredService<BgiOnnxFactory>()`)
-
-Phase C will:
-- Replace `OcrFactory.Paddle` static with injected `IOcrService`
-- Inject `BgiOnnxFactory` into `PickTextInference`
-- Remove `App.ServiceProvider` calls from recognition code
-
-Phase B's goal is to **add config providers** — not eliminate all service locators.
+These are now addressed in Phase B9/B10 (was originally planned for Phase C):
+- `OcrFactory.Paddle` static → injected interface (B9)
+- `PickTextInference` constructor → injected interface (B9)
+- `Global.ReadAllTextIfExist` → file abstraction (B9)
+- `ThemedMessageBox` → UI abstraction (B9)
+- Shim deletion gated on zero callers (B10)
 
 
 ---
