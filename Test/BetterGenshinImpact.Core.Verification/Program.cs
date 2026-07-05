@@ -5,6 +5,7 @@ using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Runtime.Windows;
 using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
+using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.AutoPick;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.GameTask.Model.Area;
@@ -637,15 +638,19 @@ var b82Prov = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "F", Enabled = true },
     PaddleOcrModelConfig.V5, "zh-Hans");
 var assetsBefore = AutoPickAssets.Instance;
-var b82Trigger = new AutoPickTrigger(null, null, b82Prov, b82Recorder, b5SystemInfo);
-b82Trigger.Init();
-Assert("B8.2 AddTrigger-style ctor + Init succeeds",
-    b82Trigger != null, "trigger null");
-Assert("B8.2 AddTrigger trigger IsEnabled",
-    b82Trigger.IsEnabled == true, $"IsEnabled={b82Trigger.IsEnabled}");
+
+// Real AddTrigger call (not pseudo-trigger via new ctor)
+GameTaskManager.ClearTriggers();
+var added = GameTaskManager.AddTrigger("AutoPick", null, b82Recorder, b5SystemInfo);
+Assert("B8.2 AddTrigger returns true", added, "returned false");
+Assert("B8.2 TriggerDictionary contains AutoPick",
+    GameTaskManager.TriggerDictionary?.ContainsKey("AutoPick") == true, "not found");
+var addedTrigger = GameTaskManager.TriggerDictionary?["AutoPick"];
+Assert("B8.2 Added trigger is AutoPickTrigger",
+    addedTrigger is AutoPickTrigger, $"got {addedTrigger?.GetType().Name}");
 var assetsAfter = AutoPickAssets.Instance;
-Assert("B8.2 Assets singleton preserved after trigger ctor",
-    ReferenceEquals(assetsAfter, assetsBefore), "assets were replaced");
+Assert("B8.2 Assets singleton preserved after AddTrigger",
+    ReferenceEquals(assetsAfter, assetsBefore), "assets were replaced by duplicate Initialize");
 
 Console.WriteLine();
 
