@@ -289,6 +289,33 @@ var cleanupProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
 AutoPickAssets.Instance.Configure(cleanupProv);
 Console.WriteLine();
 
+// ==== B6.3: property guards ====
+Console.WriteLine("AutoPickAssets: property guards");
+var assetType = typeof(AutoPickAssets);
+
+// Properties are read-only
+var pickVkProp = assetType.GetProperty("PickVk");
+var pickRoProp = assetType.GetProperty("PickRo");
+var chatProp = assetType.GetProperty("ChatPickRo");
+Assert("PickVk setter not public", pickVkProp?.GetSetMethod() == null, "found setter");
+Assert("PickRo setter not public", pickRoProp?.GetSetMethod() == null, "found setter");
+Assert("ChatPickRo setter not public", chatProp?.GetSetMethod() == null, "found setter");
+
+// Old instance after Destroy keeps its own configured state
+AutoPickAssets.DestroyInstance();
+var oldInstance = AutoPickAssets.Instance;
+oldInstance.Configure(new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
+    new AutoPickConfig { PickKey = "W" }, PaddleOcrModelConfig.V5, "zh-Hans"));
+var oldKey = oldInstance.PickVk; // should not throw — old instance keeps its state
+AutoPickAssets.DestroyInstance();
+var newInstance = AutoPickAssets.Instance; // new singleton, not configured
+Assert("Old instance keeps PickVk after Destroy", oldKey == BgiKey.F, $"got {oldKey}");
+
+// New singleton not configured, throws independently
+try { _ = newInstance.PickRo; Assert("new PickRo should throw", false, ""); }
+catch (InvalidOperationException) { Assert("New singleton unconfigured throws", true, ""); }
+Console.WriteLine();
+
 Console.WriteLine($"=== {passed} passed, {failed} failed ===");
 Environment.Exit(failed > 0 ? 1 : 0);
 

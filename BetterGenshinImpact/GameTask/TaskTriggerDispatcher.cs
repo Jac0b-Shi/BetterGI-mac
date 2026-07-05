@@ -1,17 +1,6 @@
+using BetterGenshinImpact.Core.Abstractions.Runtime;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.Common;
-using BetterGenshinImpact.Helpers;
-using BetterGenshinImpact.View;
-using Fischless.GameCapture;
-using Microsoft.Extensions.Logging;
-using OpenCvSharp;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Windows;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.GameLoading;
 using Fischless.GameCapture.Graphics;
@@ -62,20 +51,14 @@ namespace BetterGenshinImpact.GameTask
         private DateTime PrevGameUiChangeTime = DateTime.Now; // 上一次UI变化时间
         
 
-        private readonly IAutoPickConfigProvider? _autoPickConfigProvider;
-
-        public TaskTriggerDispatcher()
-        {
-            _instance = this;
-            _timer.Elapsed += Tick;
-            //_timer.Tick += Tick;
-        }
+        private readonly IAutoPickConfigProvider _autoPickConfigProvider;
 
         public TaskTriggerDispatcher(IAutoPickConfigProvider autoPickConfigProvider)
         {
+            ArgumentNullException.ThrowIfNull(autoPickConfigProvider);
+            _autoPickConfigProvider = autoPickConfigProvider;
             _instance = this;
             _timer.Elapsed += Tick;
-            _autoPickConfigProvider = autoPickConfigProvider;
         }
 
         public static TaskTriggerDispatcher Instance()
@@ -146,10 +129,7 @@ namespace BetterGenshinImpact.GameTask
             TaskContext.Instance().Init(hWnd);
 
             // 配置 AutoPickAssets（必须在 LoadInitialTriggers 之前）
-            if (_autoPickConfigProvider != null)
-            {
-                AutoPickAssets.AutoPickAssets.Instance.Configure(_autoPickConfigProvider);
-            }
+            AutoPickAssets.AutoPickAssets.Instance.Configure(_autoPickConfigProvider);
 
             // 初始化触发器(一定要在任务上下文初始化完毕后使用)
             _triggers = GameTaskManager.LoadInitialTriggers();
