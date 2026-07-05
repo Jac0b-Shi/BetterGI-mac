@@ -14,22 +14,21 @@ public class AutoPickAssets : BaseAssets<AutoPickAssets>
 {
     private readonly ILogger<AutoPickAssets> _logger = App.GetLogger<AutoPickAssets>();
 
+    // Template-only assets (no config dependency)
     public RecognitionObject FRo;
     public RecognitionObject ChatIconRo;
     public RecognitionObject SettingsIconRo;
     public RecognitionObject LRo;
 
-
-    public BgiKey PickVk = BgiKey.F;
-    public RecognitionObject PickRo;
-    public RecognitionObject ChatPickRo;
+    // Config-dependent assets — property-backed with EnsureConfigured guard
+    private BgiKey _pickVk = BgiKey.F;
+    private RecognitionObject? _pickRo;
+    private RecognitionObject? _chatPickRo;
     private bool _configured;
 
-    /// <summary>
-    /// Config provider for this singleton. Read by Init/OnCapture paths.
-    /// Must be set via <see cref="Configure"/> before any config-dependent field access.
-    /// </summary>
-    private IAutoPickConfigProvider? _configProvider;
+    public BgiKey PickVk { get { EnsureConfigured(); return _pickVk; } set { _pickVk = value; } }
+    public RecognitionObject PickRo { get { EnsureConfigured(); return _pickRo!; } set { _pickRo = value; } }
+    public RecognitionObject ChatPickRo { get { EnsureConfigured(); return _chatPickRo!; } set { _chatPickRo = value; } }
 
     /// <summary>
     /// Template-only initialization. No config reads — all config-dependent work
@@ -81,14 +80,12 @@ public class AutoPickAssets : BaseAssets<AutoPickAssets>
                 (int)(70 * AssetScale),
                 (int)(100 * AssetScale)),
         }.InitTemplate();
-
-        PickRo = FRo; // default until Configure sets the real one
     }
 
     /// <summary>
-    /// Apply configuration from the provided provider.
-    /// Must be called once before any config-dependent field access.
-    /// Idempotent: re-calling with a different provider throws.
+    /// Single-use configuration. Any repeated Configure call throws.
+    /// All config-dependent asset initialization (PickKey, PickVk, PickRo, ChatPickRo)
+    /// happens here. On failure, falls back to F-key defaults and writes back PickKey="F".
     /// </summary>
     public void Configure(IAutoPickConfigProvider provider)
     {
@@ -96,25 +93,35 @@ public class AutoPickAssets : BaseAssets<AutoPickAssets>
         if (_configured)
             throw new InvalidOperationException("AutoPickAssets is already configured.");
 
-        _configProvider = provider;
         var keyName = provider.AutoPickConfig.PickKey;
+
+        if (string.IsNullOrEmpty(keyName))
+        {
+            // No custom key configured — defaults apply
+            _pickRo = FRo;
+            _pickVk = BgiKey.F;
+            _chatPickRo = null;
+            _configured = true;
+            return;
+        }
 
         try
         {
-            PickRo = LoadCustomPickKey(keyName);
-            PickVk = BgiKeyMapper.ToKey(keyName);
+            _pickRo = LoadCustomPickKey(keyName);
+            _pickVk = BgiKeyMapper.ToKey(keyName);
 #if BGI_FULL_WINDOWS
-            TaskContext.Instance().Config.KeyBindingsConfig.PickUpOrInteract = (Core.Config.KeyId)(int)PickVk;
+            TaskContext.Instance().Config.KeyBindingsConfig.PickUpOrInteract = (Core.Config.KeyId)(int)_pickVk;
 #endif
-            ChatPickRo = LoadCustomChatPickKey(keyName);
+            _chatPickRo = LoadCustomChatPickKey(keyName);
         }
         catch (Exception e)
         {
             _logger.LogDebug(e, "加载自定义拾取按键时发生异常");
             _logger.LogError("加载自定义拾取按键失败，继续使用默认的F键");
             provider.AutoPickConfig.PickKey = "F";
-            PickRo = FRo;
-            PickVk = BgiKey.F;
+            _pickRo = FRo;
+            _pickVk = BgiKey.F;
+            _chatPickRo = null;
             _configured = true; // configured to fallback state
             return;
         }
@@ -128,7 +135,7 @@ public class AutoPickAssets : BaseAssets<AutoPickAssets>
     }
 
     /// <summary>
-    /// Ensure configuration has been applied. Call before any config-dependent access.
+    /// Ensure configuration has been applied. Called by property getters and init paths.
     /// </summary>
     public static void EnsureConfigured()
     {

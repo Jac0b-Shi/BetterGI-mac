@@ -228,59 +228,65 @@ var pickConfigProvider = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAda
     PaddleOcrModelConfig.V5, "zh-Hans");
 var assets = AutoPickAssets.Instance;
 
-// EnsureConfigured should throw before Configure
-try
-{
-    AutoPickAssets.EnsureConfigured();
-    Assert("EnsureConfigured pre-Configure should throw", false, "no exception");
-}
-catch (InvalidOperationException)
-{
-    Assert("EnsureConfigured pre-Configure throws", true, "");
-}
+// 1. Field access before Configure should throw
+try { _ = assets.PickRo; Assert("PickRo pre-Configure should throw", false, "no exception"); }
+catch (InvalidOperationException) { Assert("PickRo pre-Configure throws", true, ""); }
 
-// Configure (will fall back to F since no template assets exist in test env)
+try { _ = assets.PickVk; Assert("PickVk pre-Configure should throw", false, "no exception"); }
+catch (InvalidOperationException) { Assert("PickVk pre-Configure throws", true, ""); }
+
+try { _ = assets.ChatPickRo; Assert("ChatPickRo pre-Configure should throw", false, "no exception"); }
+catch (InvalidOperationException) { Assert("ChatPickRo pre-Configure throws", true, ""); }
+
+// 2. Configure (falls back to F since no test assets exist)
+var configObj = pickConfigProvider.AutoPickConfig;
 assets.Configure(pickConfigProvider);
-Assert("After Configure PickVk is F (fallback — no test assets)",
-    assets.PickVk == BgiKey.F, $"got {assets.PickVk}");
-Assert("After Configure PickRo is FRo (fallback — no test assets)",
-    ReferenceEquals(assets.PickRo, assets.FRo), "not FRo");
-Assert("EnsureConfigured post-Configure passes",
-    true, "");
+Assert("After Configure PickVk = F", assets.PickVk == BgiKey.F, $"got {assets.PickVk}");
+Assert("PickRo is FRo (fallback)", ReferenceEquals(assets.PickRo, assets.FRo), "not FRo");
+Assert("ChatPickRo null (fallback)", assets.ChatPickRo == null, $"got {assets.ChatPickRo}");
+Assert("PickKey written back to F", configObj.PickKey == "F", $"got {configObj.PickKey}");
 
-// Duplicate Configure throws (now that _configured = true is set in catch block)
-try
-{
-    assets.Configure(pickConfigProvider);
-    Assert("Duplicate Configure should throw", false, "no exception");
-}
-catch (InvalidOperationException)
-{
-    Assert("Duplicate Configure throws", true, "");
-}
+// EnsureConfigured actually passes (not a no-op)
+AutoPickAssets.EnsureConfigured();
+Assert("EnsureConfigured post-Configure passes", true, "");
 
-// DestroyInstance + re-Configure
+// 3. Duplicate Configure throws
+try { assets.Configure(pickConfigProvider); Assert("duplicate should throw", false, ""); }
+catch (InvalidOperationException) { Assert("Duplicate Configure throws", true, ""); }
+
+// 4. Destroy + re-Configure
 AutoPickAssets.DestroyInstance();
 var freshAssets = AutoPickAssets.Instance;
+var freshConfig = new AutoPickConfig { PickKey = "S" };
 var freshProvider = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
-    new AutoPickConfig { PickKey = "S" },
-    PaddleOcrModelConfig.V5, "zh-Hans");
+    freshConfig, PaddleOcrModelConfig.V5, "zh-Hans");
 freshAssets.Configure(freshProvider);
-Assert("Re-configured PickVk is F (fallback — no test assets)",
-    freshAssets.PickVk == BgiKey.F, $"got {freshAssets.PickVk}");
+Assert("Re-configured PickVk = F", freshAssets.PickVk == BgiKey.F, $"got {freshAssets.PickVk}");
+Assert("Re-configured PickKey=F", freshConfig.PickKey == "F", $"got {freshConfig.PickKey}");
 
-// Re-configure should still be required
-try
-{
-    AutoPickAssets.DestroyInstance();
-    _ = AutoPickAssets.Instance;
-    AutoPickAssets.EnsureConfigured();
-    Assert("Third Destroy + ensure should throw", false, "no exception");
-}
-catch (InvalidOperationException)
-{
-    Assert("Third Destroy + ensure throws", true, "");
-}
+// 5. Destroy + access throws
+AutoPickAssets.DestroyInstance();
+_ = AutoPickAssets.Instance;
+try { AutoPickAssets.EnsureConfigured(); Assert("post-Destroy should throw", false, ""); }
+catch (InvalidOperationException) { Assert("Post-Destroy EnsureConfigured throws", true, ""); }
+
+// 6. Empty-key behavior: Configure with empty key uses defaults, no write-back
+AutoPickAssets.DestroyInstance();
+var emptyCfg = new AutoPickConfig { PickKey = "" };
+var emptyProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
+    emptyCfg, PaddleOcrModelConfig.V5, "zh-Hans");
+var emptyAssets = AutoPickAssets.Instance;
+emptyAssets.Configure(emptyProv);
+Assert("Empty key: PickVk = F", emptyAssets.PickVk == BgiKey.F, $"got {emptyAssets.PickVk}");
+Assert("Empty key: PickRo is FRo", ReferenceEquals(emptyAssets.PickRo, emptyAssets.FRo), "not FRo");
+Assert("Empty key: PickKey unchanged (empty)", emptyCfg.PickKey == "", $"got '{emptyCfg.PickKey}'");
+
+// Cleanup: return singleton to configured state for remaining tests
+AutoPickAssets.DestroyInstance();
+_ = AutoPickAssets.Instance;
+var cleanupProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
+    new AutoPickConfig { PickKey = "F" }, PaddleOcrModelConfig.V5, "zh-Hans");
+AutoPickAssets.Instance.Configure(cleanupProv);
 Console.WriteLine();
 
 Console.WriteLine($"=== {passed} passed, {failed} failed ===");

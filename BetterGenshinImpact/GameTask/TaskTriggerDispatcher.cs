@@ -136,6 +136,17 @@ namespace BetterGenshinImpact.GameTask
             // 初始化任务上下文(一定要在初始化触发器前完成)
             TaskContext.Instance().Init(hWnd);
 
+            // 配置 AutoPickAssets（必须在 LoadInitialTriggers 之前）
+            try
+            {
+                AutoPickAssets.AutoPickAssets.Instance.Configure(
+                    new BetterGenshinImpact.Core.Runtime.Windows.WindowsAutoPickConfigProvider());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "AutoPickAssets 配置失败");
+            }
+
             // 初始化触发器(一定要在任务上下文初始化完毕后使用)
             _triggers = GameTaskManager.LoadInitialTriggers();
             GameLoadingTrigger.GlobalEnabled = TaskContext.Instance().Config.GenshinStartConfig.AutoEnterGameEnabled;
