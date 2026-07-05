@@ -54,6 +54,7 @@ public partial class AutoPickTrigger : ITaskTrigger
     // 外部配置
     private AutoPickExternalConfig? _externalConfig;
     private readonly IAutoPickRuntimeState? _runtimeState;
+    private readonly IAutoPickConfigProvider? _configProvider;
 
     /// <summary>
     /// Unified StopCount: prefer injected runtime state; fall back to RunnerContext for Windows legacy paths.
@@ -69,15 +70,24 @@ public partial class AutoPickTrigger : ITaskTrigger
     {
     }
 
-    /// <summary>
-    /// Combined external config and runtime state. macOS trigger factory uses this (pass null for config).
-    /// Master constructor — all overloads delegate here.
-    /// </summary>
     public AutoPickTrigger(AutoPickExternalConfig? config, IAutoPickRuntimeState? runtimeState)
+        : this(config, runtimeState, null)
+    {
+    }
+
+    /// <summary>
+    /// Master constructor. When <paramref name="configProvider"/> is non-null, Init() reads
+    /// AutoPickConfig from the provider instead of TaskContext.Instance().
+    /// </summary>
+    public AutoPickTrigger(
+        AutoPickExternalConfig? config,
+        IAutoPickRuntimeState? runtimeState,
+        IAutoPickConfigProvider? configProvider)
     {
         _autoPickAssets = AutoPickAssets.Instance;
         _externalConfig = config;
         _runtimeState = runtimeState;
+        _configProvider = configProvider;
         // _pickRo is set in Init() after AutoPickAssets.EnsureConfigured
     }
 
@@ -85,7 +95,8 @@ public partial class AutoPickTrigger : ITaskTrigger
     {
         AutoPickAssets.EnsureConfigured();
         _pickRo = _autoPickAssets.PickRo;
-        var config = TaskContext.Instance().Config.AutoPickConfig;
+        var config = _configProvider?.AutoPickConfig
+                     ?? TaskContext.Instance().Config.AutoPickConfig;
         IsEnabled = config.Enabled;
 
         if (config.BlackListEnabled)

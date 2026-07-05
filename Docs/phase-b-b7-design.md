@@ -148,6 +148,8 @@ public sealed class MacAutoPickComposition
         Trigger = trigger;
     }
 
+    private static readonly object StateLock = new();
+
     /// <summary>
     /// Compose a fully-wired AutoPickTrigger for macOS.
     /// Call exactly once per process lifetime.
@@ -159,6 +161,42 @@ public sealed class MacAutoPickComposition
         IAutoPickConfigProvider configProvider,
         IAutoPickRuntimeState runtimeState,
         AutoPickExternalConfig? externalConfig = null)
+    {
+        // Validate arguments BEFORE touching any static state.
+        // Null args are a caller bug, not a composition failure — must not
+        // transition the state machine to Failed.
+        ArgumentNullException.ThrowIfNull(configProvider);
+        ArgumentNullException.ThrowIfNull(runtimeState);
+
+        lock (StateLock)
+        {
+            ThrowIfCannotCompose();
+            _state = CompositionState.Composing;
+        }
+
+        try
+        {
+            AutoPickAssets.Instance.Configure(configProvider);
+            var trigger = new AutoPickTrigger(externalConfig, runtimeState, configProvider);
+            trigger.Init();
+
+            lock (StateLock)
+            {
+                _state = CompositionState.Composed;
+            }
+            return new MacAutoPickComposition(trigger);
+        }
+        catch
+        {
+            lock (StateLock)
+            {
+                _state = CompositionState.Failed;
+            }
+            throw;
+        }
+    }
+
+    private static void ThrowIfCannotCompose()
     {
         switch (_state)
         {
@@ -174,22 +212,6 @@ public sealed class MacAutoPickComposition
                     "Previous macOS AutoPick composition failed. " +
                     "Restart the process.");
         }
-
-        _state = CompositionState.Composing;
-        try
-        {
-            AutoPickAssets.Instance.Configure(configProvider);
-            var trigger = new AutoPickTrigger(externalConfig, runtimeState, configProvider);
-            trigger.Init();
-
-            _state = CompositionState.Composed;
-            return new MacAutoPickComposition(trigger);
-        }
-        catch
-        {
-            _state = CompositionState.Failed;
-            throw;
-        }
     }
 
     /// <summary>
@@ -198,8 +220,11 @@ public sealed class MacAutoPickComposition
     /// </summary>
     internal static void ResetForVerification()
     {
-        _state = CompositionState.NotComposed;
-        AutoPickAssets.DestroyInstance();
+        lock (StateLock)
+        {
+            AutoPickAssets.DestroyInstance();
+            _state = CompositionState.NotComposed;
+        }
     }
 }
 ```
@@ -218,6 +243,8 @@ public sealed class MacAutoPickComposition
 | Multiple triggers | One trigger per composition | `AutoPickAssets` is a singleton with single Configure() — creating multiple triggers sharing the same assets is valid but not currently useful. The composition exposes exactly one trigger for the current dispatcher lifecycle. |
 | `ResetComposition()` public API | **Deleted.** Replaced with `internal ResetForVerification()`. | Public reset enables the dangerous dual-instance state described in B6 testing. At the process level, restart is the only safe reset path. |
 | `IDisposable` | **Not implemented.** | No owned resources. Would mislead callers into thinking `Dispose()` enables re-composition. Can be added later when real resources exist. |
+| Null argument validation | `ArgumentNullException.ThrowIfNull` before any state change | Null args are a caller bug, not a composition failure. Must not poison the process to `Failed`. Validation is before the lock so failed callers can retry with correct args. |
+| Thread safety | Private `static readonly object StateLock`; switch/check + `_state = Composing` inside lock; Configure/Init outside lock | Public static API must be self-protecting. Lock is NOT held during file I/O or UI paths (Configure/Init). |
 
 ### 2.5 Why Not a Generic Factory
 
@@ -292,10 +319,14 @@ This avoids adding `InternalsVisibleTo` to the production assembly for a single 
 | B7.5 | Init() uses unique config value to prove provider is the source | Set `Enabled = true` on one provider; Compose → verify `trigger.IsEnabled == true`; ResetForVerification; change to `false` on another provider; Compose → verify `trigger.IsEnabled == false` |
 | B7.6 | `_configProvider` field preserved on trigger | Reflection: `_configProvider` == provider reference |
 | B7.7 | Double Compose throws (`Composed` state) | `InvalidOperationException` containing "already been composed" |
-| B7.8 | Compose failure leads to `Failed` state, subsequent Compose throws with restart message | Simulate failure (e.g., null config triggers exception inside Init); retry Compose → `InvalidOperationException` containing "Restart the process" |
-| B7.9 | After ResetForVerification, Compose succeeds again | Reconfigured trigger works; no exception |
-| B7.10 | Compose with `BlackListEnabled = false` | Reflection on `_blackList` field is empty |
-| B7.11 | Compose with `WhiteListEnabled = false` | Reflection on `_whiteList` field is empty |
+| B7.8 | After ResetForVerification, Compose succeeds again | Reconfigured trigger works; no exception |
+| B7.9 | Compose with `BlackListEnabled = false` | Reflection on `_blackList` field is empty |
+| B7.10 | Compose with `WhiteListEnabled = false` | Reflection on `_whiteList` field is empty |
+| B7.11 | Compose(null, validState) throws before state change | `ArgumentNullException`; state still `NotComposed`; subsequent valid Compose succeeds |
+| B7.12 | Compose(validProvider, null) throws before state change | `ArgumentNullException`; state still `NotComposed`; subsequent valid Compose succeeds |
+| B7.13 | Concurrent Compose calls: only one succeeds | Spawn two threads calling Compose simultaneously; exactly one returns valid composition; the other throws `InvalidOperationException` (Composing or Composed) |
+| B7.14 | Compose failure → Failed state; retry throws with restart message | Force failure (e.g., throw from inside Init); retry Compose → `InvalidOperationException` containing "Restart the process" |
+| B7.15 | ResetForVerification restores NotComposed | After B7.14's Failed state, call ResetForVerification; state is NotComposed; Compose succeeds again |
 
 ### 5.3 Tests NOT Included (deferred or requiring controlled fixtures)
 

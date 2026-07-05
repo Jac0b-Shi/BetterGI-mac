@@ -142,6 +142,11 @@
     <Compile Include="Adapters/MacAutoPickRuntimeState.cs" />
   </ItemGroup>
 
+  <!-- ==================== macOS Composition ==================== -->
+  <ItemGroup>
+    <Compile Include="Composition/MacAutoPickComposition.cs" />
+  </ItemGroup>
+
   <!-- ==================== SHIM: platform facade files ==================== -->
   <ItemGroup>
     <Compile Include="Shim/App.cs" />
