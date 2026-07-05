@@ -42,36 +42,72 @@ All 8 call sites access `AutoPickAssets.Instance`, which calls `TaskContext.Inst
 AutoPickAssets has a **private** constructor (CRTP singleton pattern: `BaseAssets<AutoPickAssets>` via `Singleton<T>`).
 Normal constructor injection is not possible without breaking the singleton base.
 
-### Recommended: Explicit Configure() — Not Static Setter
+### Recommended: Configure() — But Constructor Must Be Split
 
-A static setter (`AutoPickAssets.ConfigProvider`) is **also a static gateway** — it has the same problems:
-- Initialization order dependency
-- Cross-test pollution
-- No isolation for multi-runtime scenarios
-- Will remain after Shim deletion, contradicting the static-gateway ban (§4)
-
-**Correct approach — explicit Configure() method:**
-
+The current private constructor reads config immediately:
 ```csharp
-// AutoPickAssets.cs (unchanged singleton)
-private IAutoPickConfigProvider? _configProvider;
-private bool _configured;
+private AutoPickAssets()
+{
+    var keyName = TaskContext.Instance().Config.AutoPickConfig.PickKey;
+    // LoadCustomPickKey, PickVk mapping, ChatPickRo ...
+}
+```
 
+This means `Configure()` called AFTER `Instance` first access is **too late**. The
+constructor has already read `TaskContext.Instance()` before `Configure()` runs.
+
+**Required refactoring:**
+
+1. Private constructor initializes only config-independent template assets:
+```csharp
+private AutoPickAssets()
+{
+    FRo = new RecognitionObject { ... template only, no config ... };
+    ChatIconRo = new RecognitionObject { ... };
+    SettingsIconRo = new RecognitionObject { ... };
+    LRo = new RecognitionObject { ... };
+    // NO PickKey, NO PickVk, NO ChatPickRo here
+}
+```
+
+2. All config-dependent initialization moves to `Configure()`:
+```csharp
 public void Configure(IAutoPickConfigProvider provider)
 {
-    if (_configured) throw new InvalidOperationException("Already configured");
+    if (_configured)
+        throw new InvalidOperationException("AutoPickAssets is already configured.");
     _configProvider = provider;
+    var keyName = provider.AutoPickConfig.PickKey;
+    PickRo = LoadCustomPickKey(keyName);
+    PickVk = BgiKeyMapper.ToKey(keyName);
+    ChatPickRo = LoadCustomChatPickKey(keyName);
     _configured = true;
 }
 ```
 
+3. `PickVk` and `PickRo` remain mutable (fields, not readonly) since they are
+   now set in `Configure()`, not the constructor.
+
 | Property | Value |
 |----------|-------|
-| Invoked by | Composition root or trigger factory, after Instance first access |
-| Must complete before | First OnCapture() call |
-| Must be idempotent | Single-call; repeat throws |
+| Invoked by | Composition root, immediately after `AutoPickAssets.Instance` first access |
+| Must complete before | First `OnCapture()` call |
+| Constructor scope | Template assets only — no config reads |
 | Fallback to TaskContext? | No — fail fast if unconfigured |
-| Test reset | Support reset via DestroyInstance() + re-Configure |
+| Test reset | `AutoPickAssets.DestroyInstance()` + re-`Configure()` — not `TaskContext.DestroyInstance()` |
+
+### Concrete Code Migration (AutoPickAssets.cs)
+
+Lines to **move** from constructor to `Configure()`:
+
+| Line | Content | New Home |
+|------|---------|----------|
+| `var keyName = TaskContext.Instance().Config.AutoPickConfig.PickKey` | Config read | `Configure()` |
+| `PickVk = BgiKeyMapper.ToKey(keyName)` | Key mapping | `Configure()` |
+| `PickRo = LoadCustomPickKey(keyName)` | Custom key asset | `Configure()` |
+| `ChatPickRo = LoadCustomChatPickKey(keyName)` | Chat key asset | `Configure()` |
+| `PickKey = "F"` write-back on failure | Config fallback | `Configure()` |
+| `TaskContext.Instance().Config.AutoPickConfig.KeyBindingsConfig...` (guarded) | Setter | `Configure()`, still guarded |
 
 ### Long-term evaluation: split template assets from runtime config
 
@@ -118,7 +154,58 @@ Do not rely on `RunnerContext.Instance()` after Phase C.
 
 
 
-## 4. Static Gateway Is Banned — All References Deleted
+## 4. Cross-Project Interface Sharing — Structural Problem
+
+### The Problem
+
+Phase A placed three interfaces in `BetterGenshinImpact.Core/Abstractions/Runtime/`.
+
+Windows host (`BetterGenshinImpact.csproj`) does NOT reference `BetterGenshinImpact.Core`.
+If it did, both assemblies would contain same-namespace types (AutoPickConfig, OcrFactory,
+TaskContext, etc.) — creating **type identity conflicts** and unresolvable ambiguity.
+
+Therefore:
+- ❌ B1 cannot place `WindowsAutoPickConfigProvider` in Core and register it in App.xaml.cs
+- ❌ B2 cannot modify OcrFactory in the upstream project while depending on an interface
+      only visible in the Core assembly
+- ❌ Windows DI cannot reference types from Core assembly
+
+### Solution: Shared Source (Not Shared Assembly)
+
+Move interface files into the upstream source tree, so BOTH projects compile them
+independently — each into its own assembly. No assembly-to-assembly dependency.
+
+**New file location:**
+```
+BetterGenshinImpact/Core/Abstractions/Runtime/
+  IAutoPickConfigProvider.cs
+  IOcrRuntimeConfigProvider.cs
+  IAutoPickRuntimeState.cs
+```
+
+**Windows host:** Default `EnableDefaultCompileItems` (true) — auto-compiled.
+**Core:** `EnableDefaultCompileItems` is `false` — explicit `Compile Include` with `Link`:
+```xml
+<Compile Include="../BetterGenshinImpact/Core/Abstractions/Runtime/IAutoPickConfigProvider.cs"
+         Link="Core/Abstractions/Runtime/IAutoPickConfigProvider.cs" />
+```
+
+**Delete** the old copies in `BetterGenshinImpact.Core/Abstractions/Runtime/`.
+
+**Windows providers** live in `BetterGenshinImpact/Core/Runtime/Windows/` (Windows project).
+**Mac providers** live in `BetterGenshinImpact.Core/Adapters/` (Core project).
+
+### Type Identity
+
+Both assemblies compile the same `.cs` files — the interface types exist in each assembly
+independently. Consumers in Windows see `Windows.BetterGenshinImpact.Core.Abstractions.Runtime.IAutoPickConfigProvider`.
+Consumers in Core see `Core.BetterGenshinImpact.Core.Abstractions.Runtime.IAutoPickConfigProvider`.
+They are different .NET types (different assembly). This is OK — there is **no shared assembly
+boundary** where type identity must match. Each host wires its own providers independently.
+
+---
+
+## 5. Static Gateway Is Banned — All References Deleted
 
 Revision 3 prohibits: non-replaceable static global gateway.
 
@@ -132,21 +219,6 @@ The following suggestions from the previous document are **removed**:
 - Constructor injection (preferred)
 - Explicit factory parameter when constructor injection is infeasible
 - Host composition root creates and wires dependencies — dispatcher consumes them
-
----
-
-## 5. B1 Design Correction
-
-**Original:** "Add providers to LoadInitialTriggers as out-params" — direction reversed.
-**Corrected:** `LoadInitialTriggers(IAutoPickConfigProvider config, IAutoPickRuntimeState state)`
-
-| Design | OK? | Reasoning |
-|--------|-----|-----------|
-| Explicit input parameters | ✅ | Clear dependency declaration |
-| `ITriggerFactory` interface | ✅ | Replaceable; no static state |
-| out-params | ❌ | Direction reversed |
-| Pre-populated static container | ❌ | Global state by another name |
-| Static gateway fallback | ❌ | Banned by Revision 3 |
 
 ---
 
@@ -210,101 +282,108 @@ Result: OcrFactory takes `IOcrRuntimeConfigProvider` in constructor. `PaddleOcrS
 
 ---
 
-## 9. Revised Phase B Steps (B1-B6)
+## 9. Revised Phase B Steps (B1-B8)
 
-Each step must include:
-- Consumer signature change (if any)
-- Composition root / DI registration
-- Windows provider implementation
-- macOS adapter wiring (if applicable)
-- Core/Verification test harness update
-- Must compile and pass 15/15 at every step
+Each step must:
+- Compile and pass 15/15 at every step
+- Include host-specific wiring (DI registration, adapter creation, test harness update)
+- Not introduce unregistered service dependencies
 
-### B1: Provider implementations + composition-root registration (no consumer changes)
+### B1: Move interfaces to shared upstream source tree
 
-**Scope:** Windows adapter + DI registration for all three Phase A interfaces.
-Do NOT modify OcrFactory, AutoPickTrigger, or AutoPickAssets yet.
+| Action | Notes |
+|--------|-------|
+| Move `IAutoPickConfigProvider.cs` | From `Core/Abstractions/Runtime/` → `BetterGenshinImpact/Core/Abstractions/Runtime/` |
+| Move `IOcrRuntimeConfigProvider.cs` | Same |
+| Move `IAutoPickRuntimeState.cs` | Same |
+| Add `Compile Include` with `Link` to Core csproj | 3 entries |
+| Delete old copies in `Core/Abstractions/Runtime/` | Remove directory |
+| Verify `dotnet build` | Both src trees compile the same interface |
 
-| File | Change |
-|------|--------|
-| `BetterGenshinImpact.Core/Adapters/WindowsAutoPickConfigProvider.cs` | New — reads from `TaskContext.Instance().Config.AutoPickConfig` |
-| `BetterGenshinImpact.Core/Adapters/WindowsOcrRuntimeConfigProvider.cs` | New — reads from `TaskContext.Instance().Config.OtherConfig` |
-| `BetterGenshinImpact.Core/Adapters/WindowsAutoPickRuntimeState.cs` | New — wraps `RunnerContext.Instance` |
-| `BetterGenshinImpact/App.xaml.cs` | Register all three in DI container |
-| `BetterGenshinImpact.Platform.Abstractions/` | No changes — interfaces live in `Core/Abstractions/Runtime/` |
+**No consumer changes. No new types. Just file relocation.**
 
-**Verification:** `dotnet build BetterGenshinImpact.sln` — all providers exist, no functional change.
-**macOS:** Not affected — B4 creates Mac adapters.
+### B2: Windows providers + DI registration
 
-### B2: OcrFactory — inject IOcrRuntimeConfigProvider
+| File | Location | Change |
+|------|----------|--------|
+| `WindowsAutoPickConfigProvider.cs` | `BetterGenshinImpact/Core/Runtime/Windows/` | New — wraps `TaskContext.Instance().Config.AutoPickConfig` |
+| `WindowsOcrRuntimeConfigProvider.cs` | Same | New — wraps `TaskContext.Instance().Config.OtherConfig` |
+| `WindowsAutoPickRuntimeState.cs` | Same | New — wraps `RunnerContext.Instance` |
+| `App.xaml.cs` | DI registration | Register all three as singletons |
 
-- Add `IOcrRuntimeConfigProvider` parameter to `OcrFactory(ILogger, IOcrRuntimeConfigProvider)`
+**No consumer changes. DI registrations don't change runtime behavior.**
+
+### B3: macOS providers + Verification wiring
+
+| File | Location | Change |
+|------|----------|--------|
+| `MacCoreRuntimeAdapter.cs` | `Core/Adapters/` | Implements `IAutoPickConfigProvider` + `IOcrRuntimeConfigProvider`; input: `(AutoPickConfig, PaddleOcrModelConfig, string cultureInfo)` |
+| `MacAutoPickRuntimeState.cs` | `Core/Adapters/` | Implements `IAutoPickRuntimeState` |
+| `Program.cs` (Verification) | Test harness | Wire MacCoreRuntimeAdapter into existing tests |
+
+**Verification must still pass 15/15 after wiring.**
+
+### B4: OcrFactory — inject IOcrRuntimeConfigProvider
+
+- Add `IOcrRuntimeConfigProvider` to `OcrFactory` constructor
 - Replace `GetConfig()` body with provider access
-- Windows: DI resolves the registered `WindowsOcrRuntimeConfigProvider`
-- macOS: DI or explicit construction uses `MacCoreRuntimeAdapter`
-- **Must include in same commit:**
-  - OcrFactory constructor change
-  - Windows DI registration update (App.xaml.cs)
-  - macOS adapter wiring (Verification test)
-  - Default-config fallback for OcrFactory.Paddle static (still works via DI)
+- Must include in same commit: Windows DI registration update (App.xaml.cs), macOS adapter wiring (Verification)
 
-**Not changed in B2:**
-- `OcrFactory.Paddle` static — still uses `App.ServiceProvider`
-- `BgiOnnxFactory` service locator — still resolved via DI
-- `PickTextInference` — unchanged
+### B5: AutoPickTrigger — inject IAutoPickRuntimeState
 
-### B3: AutoPickTrigger — inject IAutoPickRuntimeState
+- Add constructor overload `AutoPickTrigger(IAutoPickRuntimeState)`
+- Parameterless constructor keeps `RunnerContext.Instance` (Windows backward compat)
+- macOS trigger creation uses new overload
 
-- Add `IAutoPickRuntimeState` parameter to new constructor overload `AutoPickTrigger(IAutoPickRuntimeState)`
-- Parameterless constructor keeps `RunnerContext.Instance` for backward compat
-- Windows: uses parameterless constructor (no change)
-- macOS: uses new overload with adapter-provided state
-- Query: `state.StopCount` instead of `RunnerContext.Instance.AutoPickTriggerStopCount`
+### B6: AutoPickAssets — split constructor + Configure()
 
-**Same commit must include:**
-- AutoPickTrigger new overload
-- macOS trigger creation path uses new overload
+As described in §2. Config-dependent logic moves from constructor to `Configure(IAutoPickConfigProvider)`.
+Fail fast if `OnCapture` called before `Configure`.
+
+### B7: macOS trigger factory / composition root
+
+- `MacTriggerFactory` creates triggers with macOS wiring
+- macOS bootstrap calls factory, then dispatcher
 - Windows unchanged
 
-### B4: AutoPickAssets — explicit Configure() (not static setter)
+### B8: Delete Shim files
 
-- Add `Configure(IAutoPickConfigProvider)` instance method
-- Private constructor reads config only if already configured
-- Fail fast if OnCapture called before Configure
-- Unlike a static setter, this is NOT a static gateway — the provider reference is per-instance.
-- Composition root calls it after first Instance access, before first business use.
-- Windows: called after TaskContext init
-- macOS: called after adapter creation
+**Gate:** Direct caller count must reach zero. Verify with:
 
-**Same commit must include:**
-- AutoPickAssets.Configure()
-- Composition root wiring (both platforms)
-- Verification test setup
-- AutoPickTrigger.OnCapture calls are protected (checks configured state)
+```bash
+rg 'TaskContext\.Instance\(' BetterGenshinImpact/GameTask/AutoPick/ BetterGenshinImpact/GameTask/CaptureContent.cs BetterGenshinImpact/GameTask/Model/BaseAssets.cs BetterGenshinImpact/Core/Recognition/OCR/OcrFactory.cs
+rg 'RunnerContext\.Instance' BetterGenshinImpact/GameTask/AutoPick/
+rg -l 'Shim/TaskContext\|Shim/RunnerContext\|Shim/CoreConfig' BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj
+```
 
-### B5: Create MacCoreRuntimeAdapter + trigger factory
+Delete only when all three searches return zero results in the linked-file set.
 
-- `Core/Adapters/MacCoreRuntimeAdapter` — implements `IAutoPickConfigProvider` + `IOcrRuntimeConfigProvider`
-- Input (no redundancy): `(AutoPickConfig, PaddleOcrModelConfig, string cultureInfo)`
-- `Core/Adapters/MacAutoPickRuntimeState` — implements `IAutoPickRuntimeState`
-- `Core/Adapters/MacTriggerFactory` — creates triggers with macOS-specific wiring
-- Verification test uses MacCoreRuntimeAdapter for all three interfaces
-
-### B6: Delete Shim Files (conditional)
-
-Only possible when no linked file accesses `TaskContext.Instance()` or `RunnerContext.Instance()`.
-
-| File | Direct Caller Count | Ready to Delete? |
-|------|---------------------|------------------|
-| `Shim/TaskContext.cs` | 5 active (AutoPickTrigger:2, AutoPickAssets:2, CaptureContent:1) | ❌ — B2+B4+B5 must finish first |
-| `Shim/RunnerContext.cs` | 1 active (AutoPickTrigger:164) | ❌ — B3 must finish first |
-| `Shim/CoreConfig.cs` | 0 (only referenced by Shim/TaskContext) | ⏳ — after B2+B4 |
-
-**Until then: Shims stay.** Delete only after each direct caller count reaches zero.
+| File | Condition to Delete |
+|------|---------------------|
+| `Shim/TaskContext.cs` | Zero linked files access `TaskContext.Instance()` for AutoPick/OCR config |
+| `Shim/RunnerContext.cs` | Zero linked files access `RunnerContext.Instance` |
+| `Shim/CoreConfig.cs` | Shim/TaskContext CSproj reference removed |
 
 ---
 
-## 10. Service Locator Cleanup — Deferred to Phase C
+## Summary: Phase B Feasibility
+
+| Step | Scope | Dependency |
+|------|-------|------------|
+| B1 | Interface file relocation — no consumer changes | None (Phase A complete) |
+| B2 | Windows providers + DI — no consumer changes | B1 (interfaces must be visible) |
+| B3 | macOS providers + Verification wiring — no consumer changes | B1 |
+| B4 | OcrFactory ctor + provider injection | B2+B3 (both providers must exist) |
+| B5 | AutoPickTrigger overload + runtime-state injection | B3 (mac state must exist) |
+| B6 | AutoPickAssets constructor split + Configure() | B3 (mac config provider must exist) |
+| B7 | macOS trigger factory | B4-B6 (consumers must work) |
+| B8 | Delete Shim files | All above (caller count = 0) |
+
+B1-B3 are parallel (no shared dependency). B4-B6 depend on B2+B3. B7 depends on B4-B6. B8 is terminal.
+
+---
+
+## 9. Service Locator Cleanup — Deferred to Phase C
 
 These are NOT addressed in Phase B:
 - `OcrFactory.Paddle` static (20+ call sites in Windows host)
@@ -316,10 +395,6 @@ Phase C will:
 - Remove `App.ServiceProvider` calls from recognition code
 
 Phase B's goal is to **add config providers** — not eliminate all service locators.
-
----
-
-## Summary: Phase B Feasibility
 
 | Step | Scope | Existing Prerequisite |
 |------|-------|----------------------|
