@@ -6,6 +6,7 @@ using BetterGenshinImpact.Core.Recognition.ONNX.SVTR;
 using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Platform.Abstractions;
 using BetterGenshinImpact.Service;
@@ -56,6 +57,7 @@ public partial class AutoPickTrigger : ITaskTrigger
     private readonly IAutoPickRuntimeState? _runtimeState;
     private readonly IAutoPickConfigProvider? _configProvider;
     private readonly IInputBackend _inputBackend;
+    private readonly ISystemInfo _systemInfo;
 
     /// <summary>
     /// Unified StopCount: prefer injected runtime state; fall back to RunnerContext for Windows legacy paths.
@@ -64,20 +66,23 @@ public partial class AutoPickTrigger : ITaskTrigger
         _runtimeState?.StopCount ?? RunnerContext.Instance.AutoPickTriggerStopCount;
 
     /// <summary>
-    /// Master constructor. IInputBackend is required — no static fallback.
+    /// Master constructor. IInputBackend and ISystemInfo are required — no static fallback.
     /// </summary>
     public AutoPickTrigger(
         AutoPickExternalConfig? config,
         IAutoPickRuntimeState? runtimeState,
         IAutoPickConfigProvider? configProvider,
-        IInputBackend inputBackend)
+        IInputBackend inputBackend,
+        ISystemInfo systemInfo)
     {
         ArgumentNullException.ThrowIfNull(inputBackend);
+        ArgumentNullException.ThrowIfNull(systemInfo);
         _autoPickAssets = AutoPickAssets.Instance;
         _externalConfig = config;
         _runtimeState = runtimeState;
         _configProvider = configProvider;
         _inputBackend = inputBackend;
+        _systemInfo = systemInfo;
         // _pickRo is set in Init() after AutoPickAssets.EnsureConfigured
     }
 
@@ -212,7 +217,7 @@ public partial class AutoPickTrigger : ITaskTrigger
             return;
         }
 
-        var scale = TaskContext.Instance().SystemInfo.AssetScale;
+        var scale = _systemInfo.AssetScale;
         var config = TaskContext.Instance().Config.AutoPickConfig;
 
         // 存在 L 键位是千星奇遇，无需拾取

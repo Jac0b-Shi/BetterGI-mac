@@ -371,7 +371,6 @@ private ISystemInfo RequireSystemInfo() =>
 | MacAutoPickComposition.Compose accepts ISystemInfo | Required | `MacAutoPickComposition.cs` |
 | AutoPickAssets receives ISystemInfo via dedicated Initialize() | Required | `AutoPickAssets.cs` |
 | Core csproj links ISystemInfo | If not already linked | `.csproj` |
-| Core csproj links ISystemInfo | If not already linked | `.csproj` |
 | Verification tests update | Required | `Program.cs` |
 
 ## 7. Out of Scope

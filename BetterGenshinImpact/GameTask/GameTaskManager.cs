@@ -37,14 +37,14 @@ internal class GameTaskManager
     /// <summary>
     /// 一定要在任务上下文初始化完毕后使用
     /// </summary>
-    public static List<ITaskTrigger> LoadInitialTriggers(IInputBackend inputBackend)
+    public static List<ITaskTrigger> LoadInitialTriggers(IInputBackend inputBackend, ISystemInfo systemInfo)
     {
         ReloadAssets();
         TriggerDictionary = new ConcurrentDictionary<string, ITaskTrigger>();
 
         TriggerDictionary.TryAdd("RecognitionTest", new TestTrigger());
         TriggerDictionary.TryAdd("GameLoading", new GameLoadingTrigger());
-        TriggerDictionary.TryAdd("AutoPick", new AutoPick.AutoPickTrigger(null, null, null, inputBackend));
+        TriggerDictionary.TryAdd("AutoPick", new AutoPick.AutoPickTrigger(null, null, null, inputBackend, systemInfo));
         TriggerDictionary.TryAdd("QuickTeleport", new QuickTeleport.QuickTeleportTrigger());
         TriggerDictionary.TryAdd("AutoSkip", new AutoSkip.AutoSkipTrigger());
         TriggerDictionary.TryAdd("AutoFish", new AutoFishing.AutoFishingTrigger());
@@ -84,7 +84,7 @@ internal class GameTaskManager
     /// </summary>
     /// <param name="name"></param>
     /// <param name="externalConfig"></param>
-    public static bool AddTrigger(string name, object? externalConfig, IInputBackend inputBackend)
+    public static bool AddTrigger(string name, object? externalConfig, IInputBackend inputBackend, ISystemInfo systemInfo)
     {
         TriggerDictionary ??= new ConcurrentDictionary<string, ITaskTrigger>();
 
@@ -94,7 +94,7 @@ internal class GameTaskManager
         {
             case "AutoPick":
                 triggerName = "AutoPick";
-                trigger = new AutoPick.AutoPickTrigger(externalConfig as AutoPickExternalConfig, null, null, inputBackend);
+                trigger = new AutoPick.AutoPickTrigger(externalConfig as AutoPickExternalConfig, null, null, inputBackend, systemInfo);
                 break;
             case "AutoSkip":
                 triggerName = "AutoSkip";

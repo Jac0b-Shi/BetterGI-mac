@@ -26,6 +26,39 @@ public class AutoPickAssets : BaseAssets<AutoPickAssets>
     private RecognitionObject? _chatPickRo;
     private bool _configured;
 
+    private static readonly object InitializationLock = new();
+
+    // ── Singleton entry point ──
+
+    /// <summary>
+    /// Sole initialization entry point. Must be called once before any Instance access.
+    /// </summary>
+    public static void Initialize(ISystemInfo systemInfo, IAutoPickConfigProvider configProvider)
+    {
+        ArgumentNullException.ThrowIfNull(systemInfo);
+        ArgumentNullException.ThrowIfNull(configProvider);
+        lock (InitializationLock)
+        {
+            if (_instance != null)
+                throw new InvalidOperationException(
+                    "AutoPickAssets is already initialized. Call DestroyInstance() first.");
+
+            var instance = new AutoPickAssets(systemInfo);
+            instance.Configure(configProvider);
+            _instance = instance;
+        }
+    }
+
+    /// <summary>
+    /// Hidden static property. Does NOT fall back to Activator/parameterless constructor.
+    /// Throws if <see cref="Initialize"/> has not been called.
+    /// </summary>
+    public new static AutoPickAssets Instance =>
+        _instance ?? throw new InvalidOperationException(
+            "AutoPickAssets.Initialize(...) must be called before Instance.");
+
+    // ── Property guards ──
+
     private void EnsureThisConfigured()
     {
         if (!_configured)
@@ -38,10 +71,31 @@ public class AutoPickAssets : BaseAssets<AutoPickAssets>
     public RecognitionObject? ChatPickRo { get { EnsureThisConfigured(); return _chatPickRo; } }
 
     /// <summary>
-    /// Template-only initialization. No config reads — all config-dependent work
-    /// (PickKey, PickVk, PickRo, ChatPickRo) is deferred to <see cref="Configure"/>.
+    /// Static convenience: check the current singleton. Instance-level checks use <see cref="EnsureThisConfigured"/>.
+    /// </summary>
+    public static void EnsureConfigured() =>
+        Instance.EnsureThisConfigured();
+
+    // ── Constructors ──
+
+    /// <summary>
+    /// Legacy parameterless ctor (source compat only). Not called by Initialize() or hidden Instance.
     /// </summary>
     private AutoPickAssets()
+    {
+        InitTemplateAssets();
+    }
+
+    /// <summary>
+    /// Parameterized ctor used by <see cref="Initialize"/>. Receives ISystemInfo explicitly.
+    /// </summary>
+    private AutoPickAssets(ISystemInfo systemInfo)
+        : base(systemInfo)
+    {
+        InitTemplateAssets();
+    }
+
+    private void InitTemplateAssets()
     {
         FRo = new RecognitionObject
         {
@@ -88,6 +142,8 @@ public class AutoPickAssets : BaseAssets<AutoPickAssets>
                 (int)(100 * AssetScale)),
         }.InitTemplate();
     }
+
+    // ── Configuration ──
 
     /// <summary>
     /// Single-use configuration. Any repeated Configure call throws.
@@ -141,11 +197,7 @@ public class AutoPickAssets : BaseAssets<AutoPickAssets>
         _configured = true;
     }
 
-    /// <summary>
-    /// Static convenience: check the current singleton. Instance-level checks use <see cref="EnsureThisConfigured"/>.
-    /// </summary>
-    public static void EnsureConfigured() =>
-        Instance.EnsureThisConfigured();
+    // ── Load helpers ──
 
     public RecognitionObject LoadCustomPickKey(string key)
     {

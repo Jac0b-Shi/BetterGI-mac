@@ -173,6 +173,14 @@ Console.WriteLine();
 Console.WriteLine("AutoPickTrigger: IAutoPickRuntimeState injection");
 BetterGenshinImpact.GameTask.TaskContext.Instance().SystemInfo =
     new BetterGenshinImpact.GameTask.MacSystemInfo();
+var b5SystemInfo = BetterGenshinImpact.GameTask.TaskContext.Instance().SystemInfo;
+
+// Initialize AutoPickAssets before any trigger creation (trigger ctor accesses Instance)
+AutoPickAssets.DestroyInstance();
+AutoPickAssets.Initialize(b5SystemInfo,
+    new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
+        new AutoPickConfig { PickKey = "F" }, PaddleOcrModelConfig.V5, "zh-Hans"));
+
 var stopCountProp = typeof(BetterGenshinImpact.GameTask.AutoPick.AutoPickTrigger)
     .GetProperty("StopCount", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 var extField = typeof(BetterGenshinImpact.GameTask.AutoPick.AutoPickTrigger)
@@ -180,23 +188,23 @@ var extField = typeof(BetterGenshinImpact.GameTask.AutoPick.AutoPickTrigger)
 var stateField = typeof(BetterGenshinImpact.GameTask.AutoPick.AutoPickTrigger)
     .GetField("_runtimeState", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
-// Test 1: injection with StopCount=0 (via four-param ctor, null config + provider)
+// Test 1: injection with StopCount=0 (via five-param ctor, null config + provider)
 var b5Recorder = new RecordingInputBackend();
 var state0B5 = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(0);
-var t0 = new AutoPickTrigger(null, state0B5, null, b5Recorder);
+var t0 = new AutoPickTrigger(null, state0B5, null, b5Recorder, b5SystemInfo);
 var actualStop0 = (int)(stopCountProp?.GetValue(t0) ?? throw new InvalidOperationException());
 Assert("StopCount=0 from state", actualStop0 == 0, $"got {actualStop0}");
 
 // Test 2: injection with StopCount=2
 var b5Recorder2 = new RecordingInputBackend();
 var stateForB5 = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(2);
-var t2 = new AutoPickTrigger(null, stateForB5, null, b5Recorder2);
+var t2 = new AutoPickTrigger(null, stateForB5, null, b5Recorder2, b5SystemInfo);
 var actualStop2 = (int)(stopCountProp?.GetValue(t2) ?? throw new InvalidOperationException());
 Assert("StopCount=2 from state", actualStop2 == 2, $"got {actualStop2}");
 
 // Test 3: explicit null config + state preserves null _externalConfig and _runtimeState
 var b5Recorder3 = new RecordingInputBackend();
-var tNull = new AutoPickTrigger(null, null, null, b5Recorder3);
+var tNull = new AutoPickTrigger(null, null, null, b5Recorder3, b5SystemInfo);
 var extNull = extField?.GetValue(tNull);
 var stateNull = stateField?.GetValue(tNull);
 Assert("AutoPickTrigger(null,null,null,recorder) has null _externalConfig",
@@ -207,7 +215,7 @@ Assert("AutoPickTrigger(null,null,null,recorder) has null _runtimeState",
 // Test 4: externalConfig-only preserves _externalConfig, no runtime state
 var b5Recorder4 = new RecordingInputBackend();
 var external = new AutoPickExternalConfig { ForceInteraction = true };
-var t3 = new AutoPickTrigger(external, null, null, b5Recorder4);
+var t3 = new AutoPickTrigger(external, null, null, b5Recorder4, b5SystemInfo);
 var ext3 = extField?.GetValue(t3);
 Assert("externalConfig-only preserves _externalConfig",
     ReferenceEquals(ext3, external), "different reference");
@@ -216,7 +224,7 @@ Assert("externalConfig-only has null _runtimeState",
 
 // Test 5: combined externalConfig + runtimeState
 var b5Recorder5 = new RecordingInputBackend();
-var t4 = new AutoPickTrigger(external, stateForB5, null, b5Recorder5);
+var t4 = new AutoPickTrigger(external, stateForB5, null, b5Recorder5, b5SystemInfo);
 var ext4 = extField?.GetValue(t4);
 var state4 = stateField?.GetValue(t4);
 Assert("Combined ctor preserves _externalConfig",
@@ -225,75 +233,70 @@ Assert("Combined ctor preserves _runtimeState",
     ReferenceEquals(state4, stateForB5), "different reference");
 
 // Test 6: null inputBackend → ArgumentNullException
-try { _ = new AutoPickTrigger(null, null, null, null!); Assert("null inputBackend should throw", false, ""); }
+try { _ = new AutoPickTrigger(null, null, null, null!, b5SystemInfo); Assert("null inputBackend should throw", false, ""); }
 catch (ArgumentNullException) { Assert("null inputBackend → ArgumentNullException", true, ""); }
 
-// ==== B6: AutoPickAssets split constructor + Configure() ====
-Console.WriteLine("AutoPickAssets: split constructor + Configure()");
+// ==== B6: AutoPickAssets.Initialize lifecycle ====
+Console.WriteLine("AutoPickAssets: Initialize lifecycle");
 var pickConfigProvider = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "W" },
     PaddleOcrModelConfig.V5, "zh-Hans");
-var assets = AutoPickAssets.Instance;
 
-// 1. Field access before Configure should throw
-try { _ = assets.PickRo; Assert("PickRo pre-Configure should throw", false, "no exception"); }
-catch (InvalidOperationException) { Assert("PickRo pre-Configure throws", true, ""); }
+// 1. Field access before Initialize should throw (Instance throws)
+AutoPickAssets.DestroyInstance();
+try { _ = AutoPickAssets.Instance; Assert("Instance pre-Initialize should throw", false, "no exception"); }
+catch (InvalidOperationException) { Assert("Instance pre-Initialize throws", true, ""); }
 
-try { _ = assets.PickVk; Assert("PickVk pre-Configure should throw", false, "no exception"); }
-catch (InvalidOperationException) { Assert("PickVk pre-Configure throws", true, ""); }
-
-try { _ = assets.ChatPickRo; Assert("ChatPickRo pre-Configure should throw", false, "no exception"); }
-catch (InvalidOperationException) { Assert("ChatPickRo pre-Configure throws", true, ""); }
-
-// 2. Configure (falls back to F since no test assets exist)
-var configObj = pickConfigProvider.AutoPickConfig;
-assets.Configure(pickConfigProvider);
-Assert("After Configure PickVk = F", assets.PickVk == BgiKey.F, $"got {assets.PickVk}");
+// 2. Configure via Initialize (falls back to F since no test assets exist)
+AutoPickAssets.DestroyInstance();
+AutoPickAssets.Initialize(b5SystemInfo, pickConfigProvider);
+AutoPickAssets? assets = AutoPickAssets.Instance;
+Assert("After Initialize PickVk = F", assets.PickVk == BgiKey.F, $"got {assets.PickVk}");
 Assert("PickRo is FRo (fallback)", ReferenceEquals(assets.PickRo, assets.FRo), "not FRo");
 Assert("ChatPickRo null (fallback)", assets.ChatPickRo == null, $"got {assets.ChatPickRo}");
-Assert("PickKey written back to F", configObj.PickKey == "F", $"got {configObj.PickKey}");
+Assert("PickKey written back to F", pickConfigProvider.AutoPickConfig.PickKey == "F", $"got {pickConfigProvider.AutoPickConfig.PickKey}");
 
 // EnsureConfigured actually passes (not a no-op)
 AutoPickAssets.EnsureConfigured();
 Assert("EnsureConfigured post-Configure passes", true, "");
 
-// 3. Duplicate Configure throws
-try { assets.Configure(pickConfigProvider); Assert("duplicate should throw", false, ""); }
-catch (InvalidOperationException) { Assert("Duplicate Configure throws", true, ""); }
-
-// 4. Destroy + re-Configure
+// 3. Duplicate Initialize throws
 AutoPickAssets.DestroyInstance();
-var freshAssets = AutoPickAssets.Instance;
+AutoPickAssets.Initialize(b5SystemInfo, pickConfigProvider);
+try { AutoPickAssets.Initialize(b5SystemInfo, pickConfigProvider); Assert("duplicate should throw", false, ""); }
+catch (InvalidOperationException) { Assert("Duplicate Initialize throws", true, ""); }
+
+// 4. Destroy + re-Initialize
+AutoPickAssets.DestroyInstance();
 var freshConfig = new AutoPickConfig { PickKey = "S" };
 var freshProvider = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     freshConfig, PaddleOcrModelConfig.V5, "zh-Hans");
-freshAssets.Configure(freshProvider);
-Assert("Re-configured PickVk = F", freshAssets.PickVk == BgiKey.F, $"got {freshAssets.PickVk}");
-Assert("Re-configured PickKey=F", freshConfig.PickKey == "F", $"got {freshConfig.PickKey}");
+AutoPickAssets.Initialize(b5SystemInfo, freshProvider);
+var freshAssets = AutoPickAssets.Instance;
+Assert("Re-initialized PickVk = F", freshAssets.PickVk == BgiKey.F, $"got {freshAssets.PickVk}");
+Assert("Re-initialized PickKey=F", freshConfig.PickKey == "F", $"got {freshConfig.PickKey}");
 
-// 5. Destroy + access throws
+// 5. Destroy + Instance access throws
 AutoPickAssets.DestroyInstance();
-_ = AutoPickAssets.Instance;
-try { AutoPickAssets.EnsureConfigured(); Assert("post-Destroy should throw", false, ""); }
-catch (InvalidOperationException) { Assert("Post-Destroy EnsureConfigured throws", true, ""); }
+try { _ = AutoPickAssets.Instance; Assert("post-Destroy Instance should throw", false, ""); }
+catch (InvalidOperationException) { Assert("Post-Destroy Instance throws", true, ""); }
 
-// 6. Empty-key behavior: Configure with empty key uses defaults, no write-back
+// 6. Empty-key behavior: Initialize with empty key uses defaults, no write-back
 AutoPickAssets.DestroyInstance();
 var emptyCfg = new AutoPickConfig { PickKey = "" };
 var emptyProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     emptyCfg, PaddleOcrModelConfig.V5, "zh-Hans");
+AutoPickAssets.Initialize(b5SystemInfo, emptyProv);
 var emptyAssets = AutoPickAssets.Instance;
-emptyAssets.Configure(emptyProv);
 Assert("Empty key: PickVk = F", emptyAssets.PickVk == BgiKey.F, $"got {emptyAssets.PickVk}");
 Assert("Empty key: PickRo is FRo", ReferenceEquals(emptyAssets.PickRo, emptyAssets.FRo), "not FRo");
 Assert("Empty key: PickKey unchanged (empty)", emptyCfg.PickKey == "", $"got '{emptyCfg.PickKey}'");
 
 // Cleanup: return singleton to configured state for remaining tests
-AutoPickAssets.DestroyInstance();
-_ = AutoPickAssets.Instance;
 var cleanupProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "F" }, PaddleOcrModelConfig.V5, "zh-Hans");
-AutoPickAssets.Instance.Configure(cleanupProv);
+AutoPickAssets.DestroyInstance();
+AutoPickAssets.Initialize(b5SystemInfo, cleanupProv);
 Console.WriteLine();
 
 // ==== B6.3: property guards ====
@@ -308,25 +311,10 @@ Assert("PickVk setter not public", pickVkProp?.GetSetMethod() == null, "found se
 Assert("PickRo setter not public", pickRoProp?.GetSetMethod() == null, "found setter");
 Assert("ChatPickRo setter not public", chatProp?.GetSetMethod() == null, "found setter");
 
-// Old instance after Destroy keeps its own configured state — read AFTER Destroy
+// Initialize systemInfo at known state for the remaining B7 tests
+// (B7 Compose calls will re-initialize via their own Initialize calls)
 AutoPickAssets.DestroyInstance();
-var oldInstance = AutoPickAssets.Instance;
-oldInstance.Configure(new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
-    new AutoPickConfig { PickKey = "W" }, PaddleOcrModelConfig.V5, "zh-Hans"));
-AutoPickAssets.DestroyInstance();
-var oldKeyAfterDestroy = oldInstance.PickVk; // old instance keeps its own state
-Assert("Old instance PickVk after Destroy = F", oldKeyAfterDestroy == BgiKey.F, $"got {oldKeyAfterDestroy}");
-
-// New singleton not configured, throws independently
-var afterDestroyInstance = AutoPickAssets.Instance;
-try { _ = afterDestroyInstance.PickRo; Assert("new PickRo should throw", false, ""); }
-catch (InvalidOperationException) { Assert("New singleton unconfigured throws", true, ""); }
-
-// Restore configured singleton for any subsequent tests
-AutoPickAssets.DestroyInstance();
-var finalProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
-    new AutoPickConfig { PickKey = "F" }, PaddleOcrModelConfig.V5, "zh-Hans");
-AutoPickAssets.Instance.Configure(finalProv);
+AutoPickAssets.Initialize(b5SystemInfo, cleanupProv);
 Console.WriteLine();
 
 // ==== B7: MacAutoPickComposition ====
@@ -359,7 +347,7 @@ var b7Recorder = new RecordingInputBackend();
 MacAutoPickComposition? comp7;
 {
     comp7 = (MacAutoPickComposition)composeMethod.Invoke(null,
-        [b7Provider, b7State, b7Recorder, b7ExtConfig])!;
+        [b7Provider, b7State, b7Recorder, b5SystemInfo, b7ExtConfig])!;
     Assert("B7.1 Compose succeeds", comp7.Trigger != null, "trigger is null");
 }
 
@@ -381,7 +369,7 @@ Assert("B7.5 _configProvider preserved",
 // B7.6: Double Compose throws (Composed state)
 try
 {
-    composeMethod.Invoke(null, [b7Provider, b7State, b7Recorder, null]);
+    composeMethod.Invoke(null, [b7Provider, b7State, b7Recorder, b5SystemInfo, null]);
     Assert("B7.6 Double Compose should throw", false, "no exception");
 }
 catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException ioe)
@@ -398,7 +386,7 @@ var disabledCfg = new AutoPickConfig { PickKey = "F", Enabled = false };
 var disabledProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     disabledCfg, PaddleOcrModelConfig.V5, "zh-Hans");
 var disabledState = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(0);
-comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [disabledProv, disabledState, b7Recorder, null])!;
+comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [disabledProv, disabledState, b7Recorder, b5SystemInfo, null])!;
 Assert("B7.7 Init uses provider (not TaskContext): IsEnabled = false",
     comp7.Trigger.IsEnabled == false, $"got {comp7.Trigger.IsEnabled} (TaskContext.Enabled would be true)");
 
@@ -408,7 +396,7 @@ var reProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "F", Enabled = true },
     PaddleOcrModelConfig.V5, "zh-Hans");
 var reState = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(1);
-comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [reProv, reState, b7Recorder, null])!;
+comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [reProv, reState, b7Recorder, b5SystemInfo, null])!;
 Assert("B7.8 After ResetForVerification, Compose succeeds",
     comp7.Trigger != null && comp7.Trigger.IsEnabled == true, $"trigger null or IsEnabled != true");
 
@@ -417,7 +405,7 @@ resetForVerification.Invoke(null, null);
 var blOffCfg = new AutoPickConfig { PickKey = "F", Enabled = true, BlackListEnabled = false };
 var blOffProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     blOffCfg, PaddleOcrModelConfig.V5, "zh-Hans");
-comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [blOffProv, reState, b7Recorder, null])!;
+comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [blOffProv, reState, b7Recorder, b5SystemInfo, null])!;
 var blList = (System.Collections.Generic.HashSet<string>)b7BlackListField.GetValue(comp7.Trigger)!;
 Assert("B7.9 BlackListEnabled=false: _blackList empty", blList.Count == 0, $"got {blList.Count}");
 
@@ -426,7 +414,7 @@ resetForVerification.Invoke(null, null);
 var wlOffCfg = new AutoPickConfig { PickKey = "F", Enabled = true, WhiteListEnabled = false };
 var wlOffProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     wlOffCfg, PaddleOcrModelConfig.V5, "zh-Hans");
-comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [wlOffProv, reState, b7Recorder, null])!;
+comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [wlOffProv, reState, b7Recorder, b5SystemInfo, null])!;
 var wlList = (System.Collections.Generic.HashSet<string>)b7WhiteListField.GetValue(comp7.Trigger)!;
 Assert("B7.10 WhiteListEnabled=false: _whiteList empty", wlList.Count == 0, $"got {wlList.Count}");
 
@@ -434,7 +422,7 @@ Assert("B7.10 WhiteListEnabled=false: _whiteList empty", wlList.Count == 0, $"go
 resetForVerification.Invoke(null, null);
 try
 {
-    composeMethod.Invoke(null, [null!, b7State, b7Recorder, null]);
+    composeMethod.Invoke(null, [null!, b7State, b7Recorder, b5SystemInfo, null]);
     Assert("B7.11 null provider should throw", false, "no exception");
 }
 catch (TargetInvocationException ex) when (ex.InnerException is ArgumentNullException)
@@ -445,7 +433,7 @@ catch (TargetInvocationException ex) when (ex.InnerException is ArgumentNullExce
 var b711Prov = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "F", Enabled = true },
     PaddleOcrModelConfig.V5, "zh-Hans");
-comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [b711Prov, b7State, b7Recorder, null])!;
+comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [b711Prov, b7State, b7Recorder, b5SystemInfo, null])!;
 Assert("B7.11 After null provider: valid Compose succeeds",
     comp7.Trigger != null, "trigger null — state was poisoned");
 
@@ -453,7 +441,7 @@ Assert("B7.11 After null provider: valid Compose succeeds",
 resetForVerification.Invoke(null, null);
 try
 {
-    composeMethod.Invoke(null, [b7Provider, null!, b7Recorder, null]);
+    composeMethod.Invoke(null, [b7Provider, null!, b7Recorder, b5SystemInfo, null]);
     Assert("B7.12 null runtimeState should throw", false, "no exception");
 }
 catch (TargetInvocationException ex) when (ex.InnerException is ArgumentNullException)
@@ -463,7 +451,7 @@ catch (TargetInvocationException ex) when (ex.InnerException is ArgumentNullExce
 var b712Prov = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "F", Enabled = true },
     PaddleOcrModelConfig.V5, "zh-Hans");
-comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [b712Prov, b7State, b7Recorder, null])!;
+comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [b712Prov, b7State, b7Recorder, b5SystemInfo, null])!;
 Assert("B7.12 After null state: valid Compose succeeds",
     comp7.Trigger != null, "trigger null");
 
@@ -483,7 +471,7 @@ void ConcurrentCompose()
     barrier.SignalAndWait();
     try
     {
-        composeMethod.Invoke(null, [concProv, concState, b7Recorder, null]);
+        composeMethod.Invoke(null, [concProv, concState, b7Recorder, b5SystemInfo, null]);
         Interlocked.Increment(ref successCount);
     }
     catch (TargetInvocationException ex)
@@ -510,7 +498,7 @@ var throwingProvider = new ThrowingAutoPickConfigProvider();
 var validState = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(0);
 try
 {
-    composeMethod.Invoke(null, [throwingProvider, validState, b7Recorder, null]);
+    composeMethod.Invoke(null, [throwingProvider, validState, b7Recorder, b5SystemInfo, null]);
     Assert("B7.14 Failed compose should throw", false, "no exception");
 }
 catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException ioe)
@@ -521,7 +509,7 @@ catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperation
 // Retry with valid provider should give "Restart the process"
 try
 {
-    composeMethod.Invoke(null, [concProv, concState, b7Recorder, null]);
+    composeMethod.Invoke(null, [concProv, concState, b7Recorder, b5SystemInfo, null]);
     Assert("B7.14 Retry after Failed should throw", false, "no exception");
 }
 catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException ioe)
@@ -535,16 +523,16 @@ resetForVerification.Invoke(null, null);
 var b715Prov = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "F", Enabled = true },
     PaddleOcrModelConfig.V5, "zh-Hans");
-var b715Comp = (MacAutoPickComposition)composeMethod.Invoke(null, [b715Prov, concState, b7Recorder, null])!;
+var b715Comp = (MacAutoPickComposition)composeMethod.Invoke(null, [b715Prov, concState, b7Recorder, b5SystemInfo, null])!;
 Assert("B7.15 From Failed: after ResetForVerification, Compose succeeds",
     b715Comp.Trigger != null, "trigger null");
 Console.WriteLine();
 
-// Final cleanup: restore configured singleton
-resetForVerification.Invoke(null, null);
+// Final cleanup: restore configured singleton for any subsequent tests
+AutoPickAssets.DestroyInstance();
 var b7CleanupProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "F" }, PaddleOcrModelConfig.V5, "zh-Hans");
-AutoPickAssets.Instance.Configure(b7CleanupProv);
+AutoPickAssets.Initialize(b5SystemInfo, b7CleanupProv);
 
 // ==== B8.1.0: Win32InputHelpers pure functions ====
 Console.WriteLine("B8.1.0: Win32InputHelpers coordinate + key mapping");
@@ -607,7 +595,7 @@ var inputField = typeof(AutoPickTrigger)
 
 // Recreate trigger with fresh recorder to verify field injection
 var b811Recorder = new RecordingInputBackend();
-var b811Trigger = new AutoPickTrigger(null, null, null, b811Recorder);
+var b811Trigger = new AutoPickTrigger(null, null, null, b811Recorder, b5SystemInfo);
 var injectedBackend = inputField.GetValue(b811Trigger);
 Assert("B8.1.1 _inputBackend field set",
     ReferenceEquals(injectedBackend, b811Recorder), "different reference");
@@ -622,7 +610,7 @@ var b811Prov = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
 var b811State = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(0);
 var b811ComposeRecorder = new RecordingInputBackend();
 var b811Comp = (MacAutoPickComposition)composeMethod.Invoke(null,
-    [b811Prov, b811State, b811ComposeRecorder, null])!;
+    [b811Prov, b811State, b811ComposeRecorder, b5SystemInfo, null])!;
 var compInput = inputField.GetValue(b811Comp.Trigger);
 Assert("B8.1.1 Compose preserves _inputBackend",
     ReferenceEquals(compInput, b811ComposeRecorder), "different reference");
