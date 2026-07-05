@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Abstractions.Recognition;
 using BetterGenshinImpact.Core.Abstractions.Runtime;
 using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
 using BetterGenshinImpact.GameTask.AutoPick;
@@ -46,16 +47,16 @@ public static class GameTaskManager
         TriggerDictionary?.Clear();
     }
 
-    public static bool AddTrigger(string name, object? externalConfig, IInputBackend inputBackend, ISystemInfo systemInfo, IAutoPickConfigProvider autoPickConfigProvider)
+    public static bool AddTrigger(string name, object? externalConfig, IInputBackend inputBackend, ISystemInfo systemInfo, IAutoPickConfigProvider autoPickConfigProvider,
+        IPaddleAutoPickTextRecognizer paddleRecognizer, IYapAutoPickTextRecognizer yapRecognizer)
     {
         TriggerDictionary ??= new ConcurrentDictionary<string, ITaskTrigger>();
 
         ITaskTrigger? trigger = null;
         if (name == "AutoPick")
         {
-            // Assets already initialized by LoadInitialTriggers; reuse.
             trigger = new AutoPick.AutoPickTrigger(
-                externalConfig as AutoPickExternalConfig, null, autoPickConfigProvider, inputBackend, systemInfo);
+                externalConfig as AutoPickExternalConfig, null, autoPickConfigProvider, inputBackend, systemInfo, paddleRecognizer, yapRecognizer);
         }
 
         if (trigger == null) return false;

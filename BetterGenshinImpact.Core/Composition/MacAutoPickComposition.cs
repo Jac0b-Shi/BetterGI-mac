@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Abstractions.Recognition;
 using BetterGenshinImpact.Core.Abstractions.Runtime;
 using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
 using BetterGenshinImpact.GameTask.AutoPick;
@@ -37,6 +38,8 @@ public sealed class MacAutoPickComposition
         IAutoPickRuntimeState runtimeState,
         IInputBackend inputBackend,
         ISystemInfo systemInfo,
+        IPaddleAutoPickTextRecognizer paddleRecognizer,
+        IYapAutoPickTextRecognizer yapRecognizer,
         AutoPickExternalConfig? externalConfig = null)
     {
         // Validate arguments BEFORE touching any static state.
@@ -46,6 +49,8 @@ public sealed class MacAutoPickComposition
         ArgumentNullException.ThrowIfNull(runtimeState);
         ArgumentNullException.ThrowIfNull(inputBackend);
         ArgumentNullException.ThrowIfNull(systemInfo);
+        ArgumentNullException.ThrowIfNull(paddleRecognizer);
+        ArgumentNullException.ThrowIfNull(yapRecognizer);
 
         lock (StateLock)
         {
@@ -56,7 +61,7 @@ public sealed class MacAutoPickComposition
         try
         {
             AutoPickAssets.Initialize(systemInfo, configProvider);
-            var trigger = new AutoPickTrigger(externalConfig, runtimeState, configProvider, inputBackend, systemInfo);
+            var trigger = new AutoPickTrigger(externalConfig, runtimeState, configProvider, inputBackend, systemInfo, paddleRecognizer, yapRecognizer);
             trigger.Init();
 
             lock (StateLock)

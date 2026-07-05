@@ -1,8 +1,7 @@
+using BetterGenshinImpact.Core.Abstractions.Recognition;
 using BetterGenshinImpact.Core.Abstractions.Runtime;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.Core.Recognition.OCR;
-using BetterGenshinImpact.Core.Recognition.ONNX.SVTR;
 using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.GameTask.Model.Area;
@@ -58,6 +57,8 @@ public partial class AutoPickTrigger : ITaskTrigger
     private readonly IAutoPickConfigProvider _configProvider;
     private readonly IInputBackend _inputBackend;
     private readonly ISystemInfo _systemInfo;
+    private readonly IPaddleAutoPickTextRecognizer _paddleRecognizer;
+    private readonly IYapAutoPickTextRecognizer _yapRecognizer;
 
     /// <summary>
     /// Unified StopCount: prefer injected runtime state; fall back to RunnerContext for Windows legacy paths.
@@ -66,24 +67,30 @@ public partial class AutoPickTrigger : ITaskTrigger
         _runtimeState?.StopCount ?? RunnerContext.Instance.AutoPickTriggerStopCount;
 
     /// <summary>
-    /// Master constructor. IInputBackend and ISystemInfo are required — no static fallback.
+    /// Master constructor. All injected dependencies are required — no static fallback.
     /// </summary>
     public AutoPickTrigger(
         AutoPickExternalConfig? config,
         IAutoPickRuntimeState? runtimeState,
         IAutoPickConfigProvider configProvider,
         IInputBackend inputBackend,
-        ISystemInfo systemInfo)
+        ISystemInfo systemInfo,
+        IPaddleAutoPickTextRecognizer paddleRecognizer,
+        IYapAutoPickTextRecognizer yapRecognizer)
     {
         ArgumentNullException.ThrowIfNull(configProvider);
         ArgumentNullException.ThrowIfNull(inputBackend);
         ArgumentNullException.ThrowIfNull(systemInfo);
+        ArgumentNullException.ThrowIfNull(paddleRecognizer);
+        ArgumentNullException.ThrowIfNull(yapRecognizer);
         _autoPickAssets = AutoPickAssets.Instance;
         _externalConfig = config;
         _runtimeState = runtimeState;
         _configProvider = configProvider;
         _inputBackend = inputBackend;
         _systemInfo = systemInfo;
+        _paddleRecognizer = paddleRecognizer;
+        _yapRecognizer = yapRecognizer;
         // _pickRo is set in Init() after AutoPickAssets.EnsureConfigured
     }
 
@@ -299,43 +306,13 @@ public partial class AutoPickTrigger : ITaskTrigger
         string text;
         if (config.OcrEngine == nameof(PickOcrEngineEnum.Yap))
         {
-            var textMat = new Mat(content.CaptureRectArea.CacheGreyMat, textRect);
-            text = TextInferenceFactory.Pick.Value.Inference(textMat);
+            using var textMat = new Mat(content.CaptureRectArea.CacheGreyMat, textRect);
+            text = _yapRecognizer.Recognize(textMat);
         }
         else
         {
             using var textMat = new Mat(content.CaptureRectArea.SrcMat, textRect);
-            var boundingRect = TextRectExtractor.GetTextBoundingRect(textMat);
-            // var boundingRect = new Rect(); // 不使用自己写的文字区域提取
-            // 如果找到有效区域
-            if (boundingRect.X < 20 && boundingRect.Width > 5 && boundingRect.Height > 5)
-            {
-                // 截取只包含文字的区域
-                using var textOnlyMat = new Mat(textMat, new Rect(0, 0,
-                    boundingRect.Right + 5 < textMat.Width ? boundingRect.Right + 5 : textMat.Width, textMat.Height));
-                text = OcrFactory.Paddle.OcrWithoutDetector(textOnlyMat);
-
-                // if (RuntimeHelper.IsDebug)
-                // {
-                //     // 如果不等于正确文字，则保存图片
-                //     if (text != "烹饪")
-                //     {
-                //         var path = Global.Absolute("log/pick");
-                //         Directory.CreateDirectory(path);
-                //         var str = $"{DateTime.Now:yyyyMMddHHmmssfff}";
-                //         // textMat.SaveImage(Path.Combine(path, $"pick_ocr_ori_{str}.png"));
-                //         // 画上 boundingRect
-                //         Cv2.Rectangle(textMat, boundingRect, new Scalar(0, 0, 255), 1);
-                //         textMat.SaveImage(Path.Combine(path, $"pick_ocr_rect_{str}.png"));
-                //         bin.SaveImage(Path.Combine(path, $"bin_{str}.png"));
-                //     }
-                // }
-            }
-            else
-            {
-                Debug.WriteLine("-- 无法识别到有效文字区域，尝试直接OCR DET");
-                text = OcrFactory.Paddle.Ocr(textMat);
-            }
+            text = _paddleRecognizer.Recognize(textMat);
         }
 
         speedTimer.Record("文字识别");
