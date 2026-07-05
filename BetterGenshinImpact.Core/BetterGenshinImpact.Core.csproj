@@ -136,6 +136,15 @@
     <Compile Include="../BetterGenshinImpact/Core/Abstractions/Runtime/IOcrRuntimeConfigProvider.cs" Link="Core/Abstractions/Runtime/IOcrRuntimeConfigProvider.cs" />
   </ItemGroup>
 
+  <!-- ==================== B9 Text Recognition Interfaces ==================== -->
+  <ItemGroup>
+    <Compile Include="Abstractions/IAutoPickTextRecognizer.cs" />
+    <Compile Include="Abstractions/IPaddleAutoPickTextRecognizer.cs" />
+    <Compile Include="Abstractions/IYapAutoPickTextRecognizer.cs" />
+    <Compile Include="Abstractions/UnsupportedPaddleAutoPickTextRecognizer.cs" />
+    <Compile Include="Abstractions/UnsupportedYapAutoPickTextRecognizer.cs" />
+  </ItemGroup>
+
   <!-- ==================== macOS Adapters ==================== -->
   <ItemGroup>
     <Compile Include="Adapters/MacCoreRuntimeAdapter.cs" />

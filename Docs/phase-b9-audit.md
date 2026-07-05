@@ -168,7 +168,7 @@ The current `OcrWithoutDetector` / `Ocr` branch is handled inside `WindowsPaddle
 - Else → `Ocr`
 - `TextRectExtractor.GetTextBoundingRect` called internally
 
-### 3.5 Paddle routing — behavioral equivalence constraints
+### 3.4 Paddle routing — behavioral equivalence constraints
 
 When moving the Paddle OCR routing into `WindowsPaddleAutoPickTextRecognizer`, the following must be preserved identically:
 
@@ -184,19 +184,7 @@ When moving the Paddle OCR routing into `WindowsPaddleAutoPickTextRecognizer`, t
 | Mat disposal | `using var textMat`, `using var textOnlyMat` — same disposal pattern |
 | Returns | Raw OCR string — `ProcessOcrText` remains in trigger, not in adapter |
 
-### 3.8 Engine selection — two-branch dispatch stays in trigger
-
-The `config.OcrEngine` comparison and dispatch remains in `AutoPickTrigger.OnCapture`.
-Exactly one recognizer is invoked per frame — never both:
-
-```csharp
-if (config.OcrEngine == nameof(PickOcrEngineEnum.Yap))
-    text = _yapRecognizer.Recognize(textMat);
-else
-    text = _paddleRecognizer.Recognize(textMat);
-```
-
-### 3.7 TextRectExtractor stays as static utility
+### 3.5 TextRectExtractor stays as static utility
 
 `TextRectExtractor.GetTextBoundingRect` is a pure function — no state, no static gateway, no injection needed. It remains a static utility called inside `WindowsPaddleAutoPickTextRecognizer`.
 

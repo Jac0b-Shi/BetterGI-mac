@@ -166,6 +166,9 @@ public partial class App : Application
                 services.AddSingleton<Core.Abstractions.Runtime.IAutoPickRuntimeState, Core.Runtime.Windows.WindowsAutoPickRuntimeState>();
                 // Platform abstractions (Windows backend)
                 services.AddSingleton<Platform.Abstractions.IInputBackend, Core.Runtime.Windows.Win32InputBackend>();
+                // B9 Text recognition adapters
+                services.AddSingleton<Core.Abstractions.Recognition.IPaddleAutoPickTextRecognizer, Core.Runtime.Windows.WindowsPaddleAutoPickTextRecognizer>();
+                services.AddSingleton<Core.Abstractions.Recognition.IYapAutoPickTextRecognizer, Core.Runtime.Windows.WindowsYapAutoPickTextRecognizer>();
                 services.AddMemoryCache();
                 services.AddSingleton<IAppCache, CachingService>();
                 services.AddSingleton<MemoryFileCache>();
