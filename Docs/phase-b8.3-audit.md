@@ -291,7 +291,7 @@ OnCapture offset/engine behavior tests deferred: they require stable fake Captur
 | `e62fa5f` | Audit correction (6 fields/12 accesses, test migration, live semantics) |
 | `2cfde22` | Docs: fix WhiteListEnabled/BlackListEnabled nuance |
 | `d457dee` | Implementation: configProvider required, TaskContext fallback removed |
-| `d457dee→*` | Verification + closeout (this commit) |
+| `d0c3f87` | Verification + closeout |
 
 ### Verification
 
