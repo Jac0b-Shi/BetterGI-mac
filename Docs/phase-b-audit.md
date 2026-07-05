@@ -413,3 +413,7 @@ Commit: `2dde64a`. Windows providers + DI registration.
 ## B3 Status: Complete
 
 Commit: `b05cba5`. Mac adapters + verification (20/20).
+
+## B4 Status: Complete
+
+Commit: pending. OcrFactory takes IOcrRuntimeConfigProvider; zero TaskContext refs; fallback preserved.

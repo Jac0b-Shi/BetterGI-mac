@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition.OCR.Paddle;
 using BetterGenshinImpact.Core.Recognition.ONNX;
-using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.Core.Abstractions.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -20,16 +20,46 @@ public class OcrFactory : IDisposable
 
     private IOcrService? _paddleOcrService;
     private readonly ILogger<BgiOnnxFactory> _logger;
-    private readonly OtherConfig.Ocr _config;
+    private readonly PaddleOcrModelConfig _paddleModel;
+    private readonly string _gameCultureInfoName;
 
     /// <summary>
-    ///  OCR 工厂,不可以直接实例化,请使用 App.ServiceProvider获取实例
+    ///  OCR 工厂
     /// </summary>
-    /// <param name="logger"></param>
-    public OcrFactory(ILogger<BgiOnnxFactory> logger)
+    public OcrFactory(ILogger<BgiOnnxFactory> logger, IOcrRuntimeConfigProvider runtimeConfig)
     {
         _logger = logger;
-        _config = GetConfig();
+        _paddleModel = GetPaddleModel(runtimeConfig);
+        _gameCultureInfoName = GetGameCultureInfoName(runtimeConfig);
+    }
+
+    private static PaddleOcrModelConfig GetPaddleModel(IOcrRuntimeConfigProvider provider)
+    {
+        try
+        {
+            return provider.PaddleModel;
+        }
+        catch (Exception e)
+        {
+            // 如果配置获取失败，使用默认配置
+            var defaultConfig = new OtherConfig.Ocr();
+            return defaultConfig.PaddleOcrModelConfig;
+        }
+    }
+
+    private static string GetGameCultureInfoName(IOcrRuntimeConfigProvider provider)
+    {
+        try
+        {
+            var name = provider.GameCultureInfoName;
+            if (!string.IsNullOrWhiteSpace(name))
+                return name;
+        }
+        catch (Exception e)
+        {
+            // log within CreatePaddleOcrInstance fallback
+        }
+        return new OtherConfig().GameCultureInfoName;
     }
 
     /// <summary>
@@ -47,26 +77,6 @@ public class OcrFactory : IDisposable
     }
 
     /// <summary>
-    /// 获取 OCR 配置
-    /// 为了单元测试
-    /// </summary>
-    /// <returns></returns>
-    private OtherConfig.Ocr GetConfig()
-    {
-        try
-        {
-            // 直接使用配置
-            return TaskContext.Instance().Config.OtherConfig.OcrConfig;
-        }
-        catch (Exception e)
-        {
-            // 如果配置获取失败，使用默认配置
-            _logger.LogWarning(e, "获取 OCR 配置失败，使用默认配置");
-            return new OtherConfig.Ocr();
-        }
-    }
-
-    /// <summary>
     /// 若果配置中没有设置文化信息，则使用默认的文化信息
     /// 为了单元测试
     /// </summary>
@@ -75,7 +85,7 @@ public class OcrFactory : IDisposable
     {
         try
         {
-            return new CultureInfo(TaskContext.Instance().Config.OtherConfig.GameCultureInfoName);
+            return new CultureInfo(_gameCultureInfoName);
         }
         catch (Exception e)
         {
@@ -87,7 +97,7 @@ public class OcrFactory : IDisposable
 
     private PaddleOcrService CreatePaddleOcrInstance()
     {
-        return _config.PaddleOcrModelConfig switch
+        return _paddleModel switch
         {
             PaddleOcrModelConfig.V4Auto =>
                 new PaddleOcrService(App.ServiceProvider.GetRequiredService<BgiOnnxFactory>(),
@@ -118,8 +128,8 @@ public class OcrFactory : IDisposable
             PaddleOcrModelConfig.V5Eslav =>
                 new PaddleOcrService(App.ServiceProvider.GetRequiredService<BgiOnnxFactory>(),
                     PaddleOcrService.PaddleOcrModelType.V5Eslav),
-            _ => throw new ArgumentOutOfRangeException(nameof(_config.PaddleOcrModelConfig),
-                _config.PaddleOcrModelConfig, "不支持的 Paddle OCR 模型配置")
+            _ => throw new ArgumentOutOfRangeException(nameof(_paddleModel),
+                _paddleModel, "不支持的 Paddle OCR 模型配置")
         };
     }
 

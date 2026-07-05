@@ -121,8 +121,39 @@ catch (ArgumentException)
 }
 Console.WriteLine();
 
+// ==== OcrFactory config injection tests ====
+Console.WriteLine("OcrFactory: IOcrRuntimeConfigProvider injection");
+using var ocrFactory = new BetterGenshinImpact.Core.Recognition.OCR.OcrFactory(
+    Microsoft.Extensions.Logging.Abstractions.NullLogger<BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory>.Instance,
+    adapter);
+
+// Use reflection to verify injected values were adopted
+var modelField = typeof(BetterGenshinImpact.Core.Recognition.OCR.OcrFactory)
+    .GetField("_paddleModel", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+var cultureField = typeof(BetterGenshinImpact.Core.Recognition.OCR.OcrFactory)
+    .GetField("_gameCultureInfoName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+var actualModel = (PaddleOcrModelConfig)(modelField?.GetValue(ocrFactory) ?? throw new InvalidOperationException());
+var actualCulture = (string)(cultureField?.GetValue(ocrFactory) ?? throw new InvalidOperationException());
+Assert("OcrFactory PaddleModel V5", actualModel == PaddleOcrModelConfig.V5, $"got {actualModel}");
+Assert("OcrFactory GameCultureInfoName zh-Hans", actualCulture == "zh-Hans", $"got {actualCulture}");
+
+// Test fallback: creating OcrFactory with a provider that throws
+var deadProvider = new DeadProvider();
+using var fallbackFactory = new BetterGenshinImpact.Core.Recognition.OCR.OcrFactory(
+    Microsoft.Extensions.Logging.Abstractions.NullLogger<BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory>.Instance,
+    deadProvider);
+var fallbackModel = (PaddleOcrModelConfig)(modelField?.GetValue(fallbackFactory) ?? throw new InvalidOperationException());
+Assert("Fallback PaddleModel is valid value", fallbackModel != default(PaddleOcrModelConfig), $"got {fallbackModel}");
+Console.WriteLine();
+
 Console.WriteLine($"=== {passed} passed, {failed} failed ===");
 Environment.Exit(failed > 0 ? 1 : 0);
+
+class DeadProvider : BetterGenshinImpact.Core.Abstractions.Runtime.IOcrRuntimeConfigProvider
+{
+    public PaddleOcrModelConfig PaddleModel => throw new InvalidOperationException("Dead provider");
+    public string GameCultureInfoName => throw new InvalidOperationException("Dead provider");
+}
 
 class RecordingInputBackend : IInputBackend
 {
