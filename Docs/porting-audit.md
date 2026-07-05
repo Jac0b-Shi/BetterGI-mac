@@ -398,3 +398,21 @@ Core recognition path (Find, Derive, ConvertRes, coordinate transforms) is 100% 
 | A6 | Confirm no files added to `Platform.Abstractions/` | `Platform.Abstractions/` | A1-A5 |
 | A7 | Propose Phase B adapter design | Design doc | A5 |
 | A8 | No code changes to upstream TaskContext/RunnerContext | — | All above |
+
+### Phase A Outcome: Interfaces Defined
+
+Three interfaces created in `BetterGenshinImpact.Core/Abstractions/Runtime/`:
+- `IAutoPickConfigProvider` — returns mutable `AutoPickConfig` reference (preserves write-back semantics)
+- `IOcrRuntimeConfigProvider` — `PaddleOcrModelConfig + GameCultureInfoName` only (no ObservableObject)
+- `IAutoPickRuntimeState` — read-only `int StopCount`
+
+Build: 0 errors. Verification: 15/15 passed. No consumers modified.
+
+### Phase B Preview: OCR Dependency Notes
+
+Even with `IOcrRuntimeConfigProvider` injected, `OcrFactory` still contains two static service locator calls:
+```
+App.ServiceProvider.GetRequiredService<OcrFactory>()
+App.ServiceProvider.GetRequiredService<BgiOnnxFactory>()
+```
+These must be addressed separately in Phase B — configuration injection alone does not eliminate global state. Documented for follow-up.

@@ -129,6 +129,13 @@
     <Compile Include="../BetterGenshinImpact/Model/Singleton.cs" Link="Model/Singleton.cs" />
   </ItemGroup>
 
+  <!-- ==================== Core Runtime Abstractions ==================== -->
+  <ItemGroup>
+    <Compile Include="Abstractions/Runtime/IAutoPickConfigProvider.cs" />
+    <Compile Include="Abstractions/Runtime/IOcrRuntimeConfigProvider.cs" />
+    <Compile Include="Abstractions/Runtime/IAutoPickRuntimeState.cs" />
+  </ItemGroup>
+
   <!-- ==================== SHIM: platform facade files ==================== -->
   <ItemGroup>
     <Compile Include="Shim/App.cs" />
