@@ -593,10 +593,6 @@ catch (ArgumentOutOfRangeException) { Assert("B8.1.0 None → ArgumentOutOfRange
     Assert("B8.1.0 top-monitor px(960,-540) virtT=-1080 → (32784,16391)", nx == 32784 && ny == 16391, $"({nx},{ny})");
 }
 
-// --- Scroll semantics: WheelDeltaPerClick constant ---
-Assert("B8.1.0 WheelDeltaPerClick = 120",
-    Win32InputHelpers.WheelDeltaPerClick == 120, $"got {Win32InputHelpers.WheelDeltaPerClick}");
-
 Console.WriteLine();
 
 Console.WriteLine($"=== {passed} passed, {failed} failed ===");

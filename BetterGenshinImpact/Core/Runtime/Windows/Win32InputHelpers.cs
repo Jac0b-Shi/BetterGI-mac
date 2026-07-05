@@ -70,10 +70,4 @@ public static class Win32InputHelpers
 
         return (nx, ny);
     }
-
-    /// <summary>
-    /// Number of WHEEL_DELTA units per logical scroll click (Windows convention).
-    /// Used by Fischless.VerticalScroll internally; kept as a reference constant.
-    /// </summary>
-    public const int WheelDeltaPerClick = 120;
 }
