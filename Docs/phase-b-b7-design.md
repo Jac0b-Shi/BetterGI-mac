@@ -61,14 +61,16 @@ it has set up `PlatformServices.Input`, `DesktopRegion` dimensions, and (eventua
 Make `IAutoPickConfigProvider` injectable into `AutoPickTrigger` so Init() can read
 `AutoPickConfig` fields from the provider instead of `TaskContext.Instance()`:
 
-**New field + constructor parameter (AutoPickTrigger.cs):**
+**New field + master constructor (AutoPickTrigger.cs):**
 ```csharp
 private readonly IAutoPickConfigProvider? _configProvider;
 
+// Master constructor — no default value on configProvider.
+// Callers must explicitly pass null if they intend the TaskContext fallback.
 public AutoPickTrigger(
     AutoPickExternalConfig? config,
     IAutoPickRuntimeState? runtimeState,
-    IAutoPickConfigProvider? configProvider = null)
+    IAutoPickConfigProvider? configProvider)
 {
     _autoPickAssets = AutoPickAssets.Instance;
     _externalConfig = config;
@@ -77,17 +79,28 @@ public AutoPickTrigger(
 }
 ```
 
+**Existing two-param overload delegates null explicitly:**
+```csharp
+public AutoPickTrigger(
+    AutoPickExternalConfig? config,
+    IAutoPickRuntimeState? runtimeState)
+    : this(config, runtimeState, null)
+{
+}
+```
+
+This avoids silent TaskContext fallback — callers see the three-parameter signature and must
+decide whether to supply a provider or explicitly pass null.
+
 **Updated Init() (line 88 only):**
 ```csharp
 var config = _configProvider?.AutoPickConfig
              ?? TaskContext.Instance().Config.AutoPickConfig;
 ```
 
-- Windows callers (parameterless ctor / config-only ctor): `_configProvider` is null → falls back to `TaskContext.Instance().Config.AutoPickConfig` — **zero breakage**.
-- macOS composition root: passes `IAutoPickConfigProvider` → `TaskContext.Instance()` is **never accessed** during Init().
+- Windows callers (parameterless ctor / two-param ctor): `_configProvider` is null → falls back to `TaskContext.Instance().Config.AutoPickConfig` — **zero breakage**.
+- macOS composition root: passes `IAutoPickConfigProvider` → `TaskContext.Instance()` is **never accessed** during Init() config lookup.
 - `OnCapture()` line 215 (`TaskContext.Instance().Config.AutoPickConfig`) is NOT changed — this is a separate follow-up (B8+).
-
-This is a minimal, backward-compatible, verifiable change. The macOS creation path (`new AutoPickTrigger(null, runtimeState, configProvider)`) becomes TaskContext-free for Init().
 
 ---
 
@@ -99,18 +112,34 @@ This is a minimal, backward-compatible, verifiable change. The macOS creation pa
 
 **Not** in `Core/Adapters/`. Adapters contain interface implementations (MacCoreRuntimeAdapter, MacAutoPickRuntimeState). The composition root **creates and wires** those adapters — it is the assembler, not the assembled.
 
-**Alternative considered:** `Core/Bootstrap/MacAutoPickComposition.cs`. Both are acceptable. `Composition/` is preferred because it keeps all composition types in one directory for future expansion (e.g., a combined `MacComposition` for all trigger types).
+**Class name:** `MacAutoPickComposition` (not `MacTriggerFactory`). "Factory" implies a generic creation pattern; "Composition" accurately describes the responsibility: assembling the full object graph for one trigger type.
 
-**Class name:** `MacAutoPickComposition` (not `MacTriggerFactory`). "Factory" implies a generic creation pattern; `Composition` accurately describes the responsibility: assembling the full object graph for one trigger type.
+### 2.2 State Machine
 
-### 2.2 Interface
+A single `bool _composed` is insufficient: if `AutoPickAssets.Configure()` succeeds but
+`trigger.Init()` fails, the assets singleton is already configured and cannot be re-used,
+yet `_composed` is still `false` — a subsequent `Compose()` call would pass the guard then
+crash on duplicate `Configure()`.
+
+Explicit four-state machine:
+
+
+| State | Meaning | Next `Compose()` behavior |
+|-------|---------|--------------------------|
+| `NotComposed` | Initial state — no composition has been attempted | Proceed to `Composing` |
+| `Composing` | Composition is in progress (guard against re-entrant calls) | Throw: "MacAutoPickComposition is already being composed." |
+| `Composed` | Composition succeeded | Throw: "MacAutoPickComposition has already been composed. Restart the application." |
+| `Failed` | A previous Compose() attempt failed after partial side effects | Throw: "Previous macOS AutoPick composition failed. Restart the process." |
+
+### 2.3 Interface
 
 ```csharp
 namespace BetterGenshinImpact.Core.Composition;
 
-public sealed class MacAutoPickComposition : IDisposable
+public sealed class MacAutoPickComposition
 {
-    private static bool _composed;
+    private enum CompositionState { NotComposed, Composing, Composed, Failed }
+    private static CompositionState _state = CompositionState.NotComposed;
 
     public AutoPickTrigger Trigger { get; }
 
@@ -123,7 +152,7 @@ public sealed class MacAutoPickComposition : IDisposable
     /// Compose a fully-wired AutoPickTrigger for macOS.
     /// Call exactly once per process lifetime.
     /// </summary>
-    /// <param name="configProvider">AutoPick + OCR config provider (MacCoreRuntimeAdapter or custom).</param>
+    /// <param name="configProvider">AutoPick configuration provider.</param>
     /// <param name="runtimeState">AutoPick runtime state (StopCount coordination).</param>
     /// <param name="externalConfig">Optional script-layer override config.</param>
     public static MacAutoPickComposition Compose(
@@ -131,19 +160,36 @@ public sealed class MacAutoPickComposition : IDisposable
         IAutoPickRuntimeState runtimeState,
         AutoPickExternalConfig? externalConfig = null)
     {
-        if (_composed)
-            throw new InvalidOperationException(
-                "MacAutoPickComposition has already been composed. " +
-                "Only one composition is allowed per process lifetime. " +
-                "Restart the application to re-initialize.");
+        switch (_state)
+        {
+            case CompositionState.Composing:
+                throw new InvalidOperationException(
+                    "MacAutoPickComposition is already being composed.");
+            case CompositionState.Composed:
+                throw new InvalidOperationException(
+                    "MacAutoPickComposition has already been composed. " +
+                    "Restart the application.");
+            case CompositionState.Failed:
+                throw new InvalidOperationException(
+                    "Previous macOS AutoPick composition failed. " +
+                    "Restart the process.");
+        }
 
-        AutoPickAssets.Instance.Configure(configProvider);
+        _state = CompositionState.Composing;
+        try
+        {
+            AutoPickAssets.Instance.Configure(configProvider);
+            var trigger = new AutoPickTrigger(externalConfig, runtimeState, configProvider);
+            trigger.Init();
 
-        var trigger = new AutoPickTrigger(externalConfig, runtimeState, configProvider);
-        trigger.Init();
-
-        _composed = true;
-        return new MacAutoPickComposition(trigger);
+            _state = CompositionState.Composed;
+            return new MacAutoPickComposition(trigger);
+        }
+        catch
+        {
+            _state = CompositionState.Failed;
+            throw;
+        }
     }
 
     /// <summary>
@@ -152,29 +198,28 @@ public sealed class MacAutoPickComposition : IDisposable
     /// </summary>
     internal static void ResetForVerification()
     {
-        _composed = false;
+        _state = CompositionState.NotComposed;
         AutoPickAssets.DestroyInstance();
-    }
-
-    public void Dispose()
-    {
-        // Future: unregister dispatcher hooks, stop capture loop, etc.
     }
 }
 ```
 
-### 2.3 Design Decisions
+**No `IDisposable`.** The composition currently owns no resources — no event subscriptions, no capture loop, no native handles. An empty `Dispose()` would mislead callers into thinking disposal enables re-composition. When real disposable resources appear (dispatcher hooks, capture loop registration), `IDisposable` can be added then with real semantics.
+
+### 2.4 Design Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
+| State machine vs bool | Four-state enum (`NotComposed`, `Composing`, `Composed`, `Failed`) | `Configure` success + `Init` failure leaves assets configured; bool `_composed` does not capture this. `Failed` state requires process restart. |
+| Compose error handling | try/catch with state transitions | `Composing` set before work; `Composed` on success; `Failed` on any exception. No auto-rollback (Init() may have partial file/UI side effects). |
 | Parameters vs options record | Narrow constructor parameters (`IAutoPickConfigProvider`, `IAutoPickRuntimeState`, `AutoPickExternalConfig?`) | No `MacRuntimeOptions` monolith. The composition root receives already-constructed dependencies; the macOS host creates adapters. |
 | `StopCount` as parameter | **Not** a parameter — comes from `IAutoPickRuntimeState.StopCount` | The int snapshot in the old `MacRuntimeOptions` design was premature. The interface reference is dynamic; future mutable implementations propagate changes automatically. |
-| One compose per process | `_composed` static guard with `InvalidOperationException` | Prevents double-configuration of `AutoPickAssets` singleton and dual-trigger states. Matches AutoPickAssets.Configure() single-call semantics. |
+| One compose per process | State-machine guard with specific error messages per state | Prevents double-configuration of `AutoPickAssets` singleton. `Failed` state message explicitly says "restart the process" — no false hope of retry. |
 | Multiple triggers | One trigger per composition | `AutoPickAssets` is a singleton with single Configure() — creating multiple triggers sharing the same assets is valid but not currently useful. The composition exposes exactly one trigger for the current dispatcher lifecycle. |
 | `ResetComposition()` public API | **Deleted.** Replaced with `internal ResetForVerification()`. | Public reset enables the dangerous dual-instance state described in B6 testing. At the process level, restart is the only safe reset path. |
-| `IDisposable` | Composition implements `IDisposable` | Future-proof for dispatcher unregistration, capture loop teardown, etc. Currently a no-op dispose. |
+| `IDisposable` | **Not implemented.** | No owned resources. Would mislead callers into thinking `Dispose()` enables re-composition. Can be added later when real resources exist. |
 
-### 2.4 Why Not a Generic Factory
+### 2.5 Why Not a Generic Factory
 
 - `AutoPickAssets` is a singleton with single-call `Configure()` — the composition is intrinsically one-shot.
 - The trigger-creation logic is simple (`new AutoPickTrigger(...)` + `Init()`) — a separate factory class adds indirection without abstraction.
@@ -197,14 +242,16 @@ Swift host / .NET bridge
   │
   └─ var composition = MacAutoPickComposition.Compose(
          adapter, state, externalConfig: null)
-       ├─ AutoPickAssets.Instance.Configure(adapter)        ← TaskContext-free (guarded in Core)
-       ├─ new AutoPickTrigger(null, state, adapter)         ← IAutoPickConfigProvider injected
+       ├─ AutoPickAssets.Instance.Configure(adapter)        ← uses provider's AutoPickConfig
+       ├─ new AutoPickTrigger(null, state, adapter)         ← configProvider injected
        └─ trigger.Init()                                    ← reads adapter.AutoPickConfig (NOT TaskContext)
 ```
 
-**Init() TaskContext accesses:** **Zero** (verified by rg search + assertion).
+**Construction + Init config lookup:** TaskContext-free when `configProvider` is non-null.
 
-**OnCapture() TaskContext accesses:** Still present (AssetScale + AutoPickConfig offsets). These are out of B7 scope. The Swift host is not yet running the capture loop.
+**Pre-conditions still use shim:** `TaskContext.Instance().SystemInfo` must be set (shim) before the capture loop can call `OnCapture()`. This shim is B3-era — not B7 scope.
+
+**OnCapture() still accesses TaskContext:** `AssetScale` and `AutoPickConfig` offset fields are read from `TaskContext.Instance()` at runtime (lines 214–215). Out of B7 scope — B8+.
 
 ---
 
@@ -213,37 +260,51 @@ Swift host / .NET bridge
 | Step | Actor | When | Constraint |
 |------|-------|------|------------|
 | Pre-condition | macOS host | Before `Compose()` | `PlatformServices.Input` set, `DesktopRegion` dimensions set, `TaskContext.Instance().SystemInfo` set (shim) |
-| Compose | `MacAutoPickComposition.Compose(...)` | Once per process | `_composed` guard; throws on second call |
-| Assets configured | `AutoPickAssets.Configure(provider)` | Inside `Compose()` | Must be called exactly once, throws on duplicate |
-| Trigger created | `new AutoPickTrigger(...)` | Inside `Compose()` | Receives all three injected dependencies (config, runtime, provider) |
-| Init called | `trigger.Init()` | Inside `Compose()` | Blacklists/whitelists loaded from disk (shim Global); IsEnabled set from provider |
+| Compose | `MacAutoPickComposition.Compose(...)` | Once per process | Guard: `NotComposed` only; `Composing`/`Composed`/`Failed` each have distinct error messages |
+| Configure | `AutoPickAssets.Configure(provider)` | Inside `Compose()` try-block | Success continues; failure → `Failed` state (no retry) |
+| Init | `trigger.Init()` | Inside `Compose()` try-block | Success → `Composed` state; failure → `Failed` state |
 | Trigger ready | `composition.Trigger` | After `Compose()` returns | Dispatcher can begin tick loop |
-| Shutdown | `composition.Dispose()` | Process exit | Currently no-op; future-proof |
-| Reset | `MacAutoPickComposition.ResetForVerification()` | **Tests only** | `internal` — NOT accessible to production callers |
+| Reset | `MacAutoPickComposition.ResetForVerification()` | **Tests only** | `internal` — resets to `NotComposed` + `DestroyInstance()` |
 
 ---
 
 ## 5. Verification Plan
 
-### 5.1 New Tests (added to `Program.cs`)
+### 5.1 Test Access to Internal Reset
+
+Verification project accesses `ResetForVerification()` via reflection:
+```csharp
+var resetMethod = typeof(MacAutoPickComposition)
+    .GetMethod("ResetForVerification", BindingFlags.NonPublic | BindingFlags.Static);
+resetMethod!.Invoke(null, null);
+```
+
+This avoids adding `InternalsVisibleTo` to the production assembly for a single test-only method.
+
+### 5.2 New Tests (added to `Program.cs`)
 
 | # | Test | Assertion |
 |---|------|-----------|
-| B7.1 | `MacAutoPickComposition.ResetForVerification()` | `internal` — compiles from test project via `InternalsVisibleTo` (add to csproj) |
-| B7.2 | Compose with provider + state (no external config) | `composition.Trigger` is non-null |
-| B7.3 | Compose preserves external config reference | `_externalConfig` field == original object (reflection) |
-| B7.4 | Compose preserves runtime state reference | `_runtimeState` field == original object (reflection) |
-| B7.5 | Init() reads IsEnabled from provider | `trigger.IsEnabled` == `provider.AutoPickConfig.Enabled` |
-| B7.6 | Double Compose throws | `InvalidOperationException` with specific message |
-| B7.7 | After ResetForVerification, Compose succeeds again | Reconfigured trigger works |
-| B7.8 | Init() call chain: zero TaskContext.Instance() accesses | This can be verified by: (a) `rg 'TaskContext'` on `MacAutoPickComposition.cs` returns zero; (b) Init() receives `_configProvider` != null so the fallback `TaskContext.Instance().Config.AutoPickConfig` is NEVER reached |
-| B7.9 | Compose with `enabled = false` | `trigger.IsEnabled == false` |
-| B7.10 | Compose with `BlackListEnabled = false` | Init() skips blacklist loading (reflection on `_blackList` is empty) |
-| B7.11 | Compose with `WhiteListEnabled = false` | Init() skips whitelist loading |
-| B7.12 | Compose with `BlackListEnabled = true` | Init() loads default blacklist from assets JSON |
-| B7.13 | `MacAutoPickComposition` is `IDisposable` | `using` statement compiles; `Dispose()` does not throw |
+| B7.1 | Compose succeeds (provider + state, no external config) | `composition.Trigger` is non-null |
+| B7.2 | Compose preserves external config reference | `_externalConfig` field == original object (reflection) |
+| B7.3 | Compose preserves runtime state reference | `_runtimeState` field == original object (reflection) |
+| B7.4 | Init() reads IsEnabled from provider (not TaskContext fallback) | Set `provider.AutoPickConfig.Enabled = false`; `trigger.IsEnabled` == false |
+| B7.5 | Init() uses unique config value to prove provider is the source | Set `Enabled = true` on one provider; Compose → verify `trigger.IsEnabled == true`; ResetForVerification; change to `false` on another provider; Compose → verify `trigger.IsEnabled == false` |
+| B7.6 | `_configProvider` field preserved on trigger | Reflection: `_configProvider` == provider reference |
+| B7.7 | Double Compose throws (`Composed` state) | `InvalidOperationException` containing "already been composed" |
+| B7.8 | Compose failure leads to `Failed` state, subsequent Compose throws with restart message | Simulate failure (e.g., null config triggers exception inside Init); retry Compose → `InvalidOperationException` containing "Restart the process" |
+| B7.9 | After ResetForVerification, Compose succeeds again | Reconfigured trigger works; no exception |
+| B7.10 | Compose with `BlackListEnabled = false` | Reflection on `_blackList` field is empty |
+| B7.11 | Compose with `WhiteListEnabled = false` | Reflection on `_whiteList` field is empty |
 
-### 5.2 Existing Tests That Must Continue to Pass
+### 5.3 Tests NOT Included (deferred or requiring controlled fixtures)
+
+| Test | Why deferred |
+|------|-------------|
+| Blacklist file loading with `BlackListEnabled = true` | Requires controlled test fixtures (real Assets dir content varies by developer machine). Verification project should either copy a small fixture JSON, or defer to an integration test that runs from a known working directory. |
+| `rg`-based TaskContext absence check | Not sufficient — `rg` on the composition source file doesn't prove runtime behavior. B7.4–B7.6 cover this via behavioral verification (unique config values + field reflection). |
+
+### 5.4 Existing Tests That Must Continue to Pass
 
 - All 57 assertions from B1–B6 (`AutoPickAssets.Configure` lifecycle, `OcrFactory` injection, `AutoPickTrigger` constructor chain, `StopCount`, property guards)
 - After `ResetForVerification()` + re-Compose in B7 tests, final cleanup must restore `AutoPickAssets` singleton to configured state so no downstream assertion fails
@@ -254,22 +315,25 @@ Swift host / .NET bridge
 
 | Step | Files | Description |
 |------|-------|-------------|
-| 7.1 | `AutoPickTrigger.cs` | Add `_configProvider` field + master ctor parameter. Update `Init()` line 88 to prefer provider over `TaskContext`. Zero breakage for Windows (parameterless ctor leaves `_configProvider = null`). |
-| 7.2 | `Core/Composition/MacAutoPickComposition.cs` | New file. `Compose()`, `ResetForVerification()`, `IDisposable`. |
+| 7.1 | `AutoPickTrigger.cs` | Add `_configProvider` field + new three-param master ctor (no default on provider). Existing two-param ctor explicitly delegates null. Update `Init()` line 88 to prefer provider over `TaskContext`. |
+| 7.2 | `Core/Composition/MacAutoPickComposition.cs` | New file. Four-state enum, `Compose()` with try/catch, `ResetForVerification()`. No `IDisposable`. |
 | 7.3 | `BetterGenshinImpact.Core.csproj` | Add `<Compile Include="Composition/MacAutoPickComposition.cs" />` |
-| 7.4 | `Test/.../BetterGenshinImpact.Core.Verification.csproj` | Add `InternalsVisibleTo` for verification project (or test accesses internal via assembly attribute) |
-| 7.5 | `Test/.../Program.cs` | Add B7.1–B7.13 test assertions |
-| 7.6 | Build + verify | `dotnet build` zero errors; `dotnet run` all tests pass |
-| 7.7 | rg check | `rg 'TaskContext|RunnerContext' BetterGenshinImpact.Core/Composition/MacAutoPickComposition.cs` → zero hits |
+| 7.4 | `Test/.../Program.cs` | Add B7.1–B7.11 test assertions. Reflection access to `ResetForVerification`. Final cleanup restores singleton state. |
+| 7.5 | Build + verify | `dotnet build` zero errors; `dotnet run` all tests pass |
 
 ### 7.1 Detail: AutoPickTrigger.cs Changes
 
-**Constructor (replace master constructor at line 76):**
+**New field:**
+```csharp
+private readonly IAutoPickConfigProvider? _configProvider;
+```
+
+**New master constructor (replaces current three-param at line 76):**
 ```csharp
 public AutoPickTrigger(
     AutoPickExternalConfig? config,
     IAutoPickRuntimeState? runtimeState,
-    IAutoPickConfigProvider? configProvider = null)
+    IAutoPickConfigProvider? configProvider)
 {
     _autoPickAssets = AutoPickAssets.Instance;
     _externalConfig = config;
@@ -278,13 +342,23 @@ public AutoPickTrigger(
 }
 ```
 
+**Updated existing two-param overload (delegates null explicitly):**
+```csharp
+public AutoPickTrigger(
+    AutoPickExternalConfig? config,
+    IAutoPickRuntimeState? runtimeState)
+    : this(config, runtimeState, null)
+{
+}
+```
+
+Parameterless and config-only overloads chain through the two-param overload unchanged.
+
 **Init() change (replace line 88):**
 ```csharp
 var config = _configProvider?.AutoPickConfig
              ?? TaskContext.Instance().Config.AutoPickConfig;
 ```
-
-**No other changes to AutoPickTrigger.cs.** OnCapture() is unchanged for B7.
 
 ---
 
