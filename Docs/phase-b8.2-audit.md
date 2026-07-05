@@ -185,11 +185,11 @@ Rationale:
 
 | Caller | Current SystemInfo source | Change needed |
 |--------|--------------------------|---------------|
-| `TaskTriggerDispatcher.Start()` → `GameTaskManager.LoadInitialTriggers(inputBackend)` → `new AutoPickTrigger(...)` | `TaskContext.Instance().SystemInfo` | Dispatcher already has `_inputBackend`; add `_systemInfo` (from `TaskContext.Instance()`). Pass to LoadInitialTriggers. |
-| `GameTaskManager.LoadInitialTriggers(IInputBackend)` → `new AutoPickTrigger(...)` | Via `AutoPickTrigger.OnCapture` at runtime | Accept `ISystemInfo` param; pass to trigger constructor |
-| `GameTaskManager.AddTrigger(name, config, inputBackend)` → `new AutoPickTrigger(...)` | Same | Same |
-| `AutoPickAssets` singleton constructor (via `BaseAssets`) | `TaskContext.Instance().SystemInfo` | Pass ISystemInfo to AutoPickAssets.Configure() or new ctor param |
-| `AutoPickAssets` template ROIs | via `systemInfo.AssetScale` | No change — systemInfo is already available via current pattern |
+| `TaskTriggerDispatcher.Start()` → ... | `TaskContext.Instance().SystemInfo` | Dispatcher reads SystemInfo inside Start() after TaskContext.Init(hWnd); stores as `_systemInfo`. Passes to LoadInitialTriggers. |
+| `GameTaskManager.LoadInitialTriggers(IInputBackend, ISystemInfo)` → trigger | Via `AutoPickTrigger.OnCapture` at runtime | Accept `ISystemInfo` param; pass to trigger constructor |
+| `GameTaskManager.AddTrigger(name, config, inputBackend, systemInfo)` → trigger | Same | Same |
+| `AutoPickAssets.Initialize(systemInfo, configProvider)` | `TaskContext.Instance().SystemInfo` | Only via dedicated Initialize path — not Configure() |
+| `AutoPickAssets` template ROIs | via `systemInfo.AssetScale` | No change — systemInfo is already available via parameterized ctor |
 
 ### 4.2 macOS composition
 
@@ -246,50 +246,65 @@ var scale = _systemInfo.AssetScale;
 AutoPickAssets' template ROIs read `AssetScale` and `CaptureRect` during construction.
 By the time `Configure()` is called, these values are already consumed. Post-hoc injection is impossible.
 
-**Solution: private parameterized constructor + static `Initialize()`**
+**Solution: private parameterized constructor + static `Initialize()` + hidden `Instance`**
 
 ```csharp
-// AutoPickAssets adds a private constructor that accepts ISystemInfo
+// AutoPickAssets: private constructor accepting ISystemInfo
 private AutoPickAssets(ISystemInfo systemInfo)
     : base(systemInfo)
 {
     // Copy of existing template-only ctor body (FRo, ChatIconRo, SettingsIconRo, LRo)
-    // AssetScale and CaptureRect are now available via base class fields
 }
 
-// New static initialization replaces the default singleton path
+private static readonly object InitializationLock = new();
+
+/// <summary>Sole initialization entry point. Must be called once before Instance.</summary>
 public static void Initialize(
     ISystemInfo systemInfo,
     IAutoPickConfigProvider configProvider)
 {
     ArgumentNullException.ThrowIfNull(systemInfo);
     ArgumentNullException.ThrowIfNull(configProvider);
-    lock (syncRoot ??= new())
+    lock (InitializationLock)
     {
         if (_instance != null)
-            throw new InvalidOperationException(...);
+            throw new InvalidOperationException(
+                "AutoPickAssets is already initialized. Call DestroyInstance() first.");
         var instance = new AutoPickAssets(systemInfo);
         instance.Configure(configProvider);
         _instance = instance;
     }
 }
+
+/// <summary>
+/// Hidden static property. Does NOT fall back to Activator/parameterless constructor.
+/// Throws if Initialize() has not been called.
+/// </summary>
+public new static AutoPickAssets Instance =>
+    _instance ?? throw new InvalidOperationException(
+        "AutoPickAssets.Initialize(...) must be called before Instance.");
 ```
 
 **Initialization sequence:**
 1. `ISystemInfo` → passed to parameterized `AutoPickAssets(systemInfo)` constructor
-2. `BaseAssets(ISystemInfo)` → sets `this.systemInfo`
+2. `BaseAssets(ISystemInfo)` → sets `this.systemInfo` (readonly, now correct)
 3. Template ROI expressions evaluate `AssetScale` and `CaptureRect` correctly
 4. `Configure(configProvider)` → handles config-dependent assets (PickRo, PickVk, ChatPickRo)
 5. Singleton published as `_instance`
 
-**Existing `DestroyInstance()` + `Instance` getter must still work:**
-DestroyInstance → clears `_instance` → next `Instance` call → calls `Initialize` or re-creates via old path depending on context.
+**Lifecycle:**
+- `Initialize()` = only way to publish instance; single-call guard
+- `Instance` = hidden getter; throws if never initialized
+- `DestroyInstance()` → clears `_instance` → next `Instance` access **throws** (no silent fallback)
+- Re-initialize requires explicit `DestroyInstance()` + `Initialize()` again
+- Parameterless constructor may remain in source for legacy compatibility but `Instance` will NOT call it
+- `EnsureConfigured()` (existing) gates on `_configured` flag — will also fail since `Instance` throws first
 
-This means `AutoPickAssets.cs` needs two constructors:
-- The existing parameterless one (for backward/legacy paths)
-- A new private `AutoPickAssets(ISystemInfo)` for the explicit initialization path
-
-The `Instance` getter (from `Singleton<T>`) can be overridden or guarded to prefer the initialized path.
+**Contrast with old design (withdrawn):**
+- No `lock (syncRoot ??= new())` — race condition risk eliminated
+- No `override Instance` — static properties cannot be overridden
+- No "depending on context" fallback to parameterless constructor — clear deterministic failure
+- No modification to `BaseAssets<T>` or `Singleton<T>`
 
 ### 5.3 Windows Lifecycle — dispatcher does NOT hold ISystemInfo
 
@@ -301,25 +316,39 @@ At dispatcher construction time, no valid SystemInfo exists. **Do not inject ISy
 
 **Windows chain (corrected):**
 
+**No need to receive ISystemInfo at dispatcher construction time.** Instead:
+
 ```
 TaskTriggerDispatcher.Start(hWnd, mode)
-  ├─ TaskContext.Instance().Init(hWnd)         // creates SystemInfo
-  ├─ AutoPickAssets.Initialize(                 // NEW: dedicated init
-  │     TaskContext.Instance().SystemInfo,
+  ├─ TaskContext.Instance().Init(hWnd)           // creates SystemInfo
+  ├─ _systemInfo = TaskContext.Instance().SystemInfo  // stored
+  ├─ AutoPickAssets.Initialize(                  // NEW: dedicated init
+  │     _systemInfo,
   │     _autoPickConfigProvider)
   ├─ GameTaskManager.LoadInitialTriggers(
   │     _inputBackend,
-  │     TaskContext.Instance().SystemInfo)     // pass ISystemInfo on Start, not constructor
+  │     _systemInfo)                             // pass stored ISystemInfo
   │   └─ new AutoPickTrigger(..., systemInfo)
   └─ ...
 ```
 
-**ReloadInitialTriggers() behavior:**
-- Called from `TaskRunner.End()` — after `Start()`, so SystemInfo is available
-- Can read `TaskContext.Instance().SystemInfo` at call time instead of storing stale reference
-- If called before `Start()`, SystemInfo may be the shim default — acceptable for reload
+**ReloadInitialTriggers() — uses stored reference, no fallback:**
+```csharp
+public void ReloadInitialTriggers()
+{
+    var si = RequireSystemInfo();
+    SetTriggers(GameTaskManager.LoadInitialTriggers(_inputBackend, si));
+}
 
-**No need to store `_systemInfo` on the dispatcher.** The dispatcher reads it from `TaskContext.Instance()` inside `Start()` and passes it downstream. Other methods access it when needed.
+private ISystemInfo RequireSystemInfo() =>
+    _systemInfo ?? throw new InvalidOperationException(
+        "TaskTriggerDispatcher.Start() must be called first.");
+```
+
+- Called from `TaskRunner.End()` — after `Start()`, so `_systemInfo` already set
+- If called before `Start()`: **throws `InvalidOperationException`**
+- No fallback to shim/default SystemInfo
+- No silent re-read of `TaskContext.Instance()`
 
 ### 5.4 macOS composition
 
@@ -340,7 +369,8 @@ TaskTriggerDispatcher.Start(hWnd, mode)
 | GameTaskManager.LoadInitialTriggers/AddTrigger accept ISystemInfo | Required | `GameTaskManager.cs` |
 | TaskTriggerDispatcher forwards ISystemInfo | Required | `TaskTriggerDispatcher.cs` |
 | MacAutoPickComposition.Compose accepts ISystemInfo | Required | `MacAutoPickComposition.cs` |
-| AutoPickAssets receives ISystemInfo during Configure or ctor | Required | `AutoPickAssets.cs`, `BaseAssets.cs` |
+| AutoPickAssets receives ISystemInfo via dedicated Initialize() | Required | `AutoPickAssets.cs` |
+| Core csproj links ISystemInfo | If not already linked | `.csproj` |
 | Core csproj links ISystemInfo | If not already linked | `.csproj` |
 | Verification tests update | Required | `Program.cs` |
 
