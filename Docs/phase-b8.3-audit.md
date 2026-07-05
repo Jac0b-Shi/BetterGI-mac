@@ -33,7 +33,11 @@ These are already using the fallback chain from B7: `_configProvider` wins if no
 | 358 | `config.WhiteListEnabled` | bool | Static TaskContext | **Live** |
 | 373 | `config.BlackListEnabled` | bool | Static TaskContext | **Live** |
 
-**Total: 10 live OnCapture reads** from `TaskContext.Instance().Config.AutoPickConfig`, all replaceable by `_configProvider.AutoPickConfig`.
+**Count:**
+- 1 TaskContext config-source access (line 221)
+- 6 distinct live fields: `ItemIconLeftOffset`, `ItemTextLeftOffset`, `ItemTextRightOffset`, `WhiteListEnabled`, `BlackListEnabled`, `OcrEngine`
+- 12 active property accesses across the 6 fields
+- `FastModeEnabled` is commented dead code — excluded from live reads
 
 ---
 
@@ -58,6 +62,16 @@ public AutoPickConfig AutoPickConfig => GameTask.TaskContext.Instance().Config.A
 ```
 
 ...this preserves **live-read semantics**. No snapshot, no stale copy.
+
+### White/Blacklist nuance
+
+`WhiteListEnabled` / `BlackListEnabled` are read live every frame.
+However, the actual list CONTENTS (`_whiteList`, `_blackList`, `_fuzzyBlackList`) are loaded only in `Init()`.
+This means:
+- Toggling `Enabled` off → OnCapture honors it live
+- Toggling `Enabled` on → the decision is live, but lists may be empty because Init was already called
+- This is the **existing upstream behavior** — B8.3 does NOT add runtime list reload
+- B8.3 keeps the behavior: toggle decision is live; list contents are Init-time snapshots
 
 ### Conclusion: Live reads via provider, not TaskContext.
 
@@ -128,14 +142,19 @@ LoadInitialTriggers(IInputBackend, ISystemInfo, IAutoPickConfigProvider)
 
 ConfigProvider **present** ✅.
 
-**Route: `TaskTriggerDispatcher.AddTrigger()` → `GameTaskManager.AddTrigger()` → `new AutoPickTrigger(...)`**
+**Route: `TaskTriggerDispatcher.AddTrigger()` — dispatcher public signature UNCHANGED**
 
 ```
-AddTrigger("AutoPick", externalConfig, inputBackend, systemInfo)
-  → new AutoPickTrigger(externalConfig, null, null, inputBackend, systemInfo)
+AddTrigger(string name, object? externalConfig)    // public — no new parameter
+  → GameTaskManager.AddTrigger(                     // internal — restored configProvider
+        name, externalConfig,
+        _inputBackend, RequireSystemInfo(),
+        _autoPickConfigProvider)                   // dispatcher already holds this
+  → new AutoPickTrigger(externalConfig, null,
+        autoPickConfigProvider, inputBackend, systemInfo)
 ```
 
-ConfigProvider **missing** ❌ — null is passed. This path needs the configProvider parameter restored.
+ConfigProvider was **removed** in B8.2c — now needs **restoring** on the `GameTaskManager.AddTrigger` signature (not the dispatcher's public method). The dispatcher forwards from its existing `_autoPickConfigProvider` field.
 
 ### 5.2 macOS
 
@@ -149,7 +168,11 @@ Compose(configProvider, runtimeState, inputBackend, systemInfo, externalConfig)
 
 ConfigProvider **present** ✅.
 
-### 5.3 Tests
+### 5.3 Tests — All must pass a non-null provider
+
+Once `_configProvider` becomes required (non-nullable), ALL `new AutoPickTrigger(..., null, ...)` calls in Verification will fail with `ArgumentNullException` at construction time — even tests that only check `StopCount`, field wiring, or `inputBackend`.
+
+**All test callers must be updated** to pass a test `IAutoPickConfigProvider`. No null exceptions are permitted for reflection-only tests.
 
 | # | Constructor call | ConfigProvider | Notes |
 |---|-----------------|----------------|-------|
@@ -168,10 +191,10 @@ ConfigProvider **present** ✅.
 | OnCapture: `configProvider.AutoPickConfig` replaces `TaskContext.Instance().Config.AutoPickConfig` | Required | `AutoPickTrigger.cs` |
 | `configProvider` becomes required (non-nullable) in master constructor | Required | `AutoPickTrigger.cs` |
 | Re-add `IAutoPickConfigProvider` to `GameTaskManager.AddTrigger` | Required | `GameTaskManager.cs` |
-| Re-add `IAutoPickConfigProvider` to `TaskTriggerDispatcher.AddTrigger` | Required | `TaskTriggerDispatcher.cs` |
-| Remove `?? TaskContext.Instance()` fallback from Init() | Required | `AutoPickTrigger.cs` |
-| Keep `?? TaskContext.Instance()` fallback in OnCapture for legacy? | **Remove entirely** — all production paths now supply provider | `AutoPickTrigger.cs` |
-| Verify tests pass with non-null provider | Required | `Program.cs` |
+| TaskTriggerDispatcher.AddTrigger forwards `_autoPickConfigProvider` to manager | Required | `TaskTriggerDispatcher.cs` |
+| Remove `?? TaskContext.Instance()` fallback from both Init() and OnCapture() | Required | `AutoPickTrigger.cs` |
+| All test `new AutoPickTrigger(..., null, ...)` → pass test provider | Required | `Program.cs` |
+| Core shim AddTrigger restores configProvider param | Required | `Shim/GameTaskManager.cs` |
 
 ### Specific code changes
 
@@ -227,12 +250,19 @@ public bool AddTrigger(string name, object? externalConfig)
 
 | # | Test | Assertion |
 |---|------|-----------|
-| B8.3.1 | OnCapture reads config from provider, not TaskContext | Inject provider with `ItemIconLeftOffset = 99`; OnCapture uses it |
-| B8.3.2 | null configProvider → ArgumentNullException | Master ctor rejects null |
-| B8.3.3 | Init skips whitelist when provider says disabled | Provider.WhiteListEnabled=false → `_whiteList` empty |
-| B8.3.4 | Init skips blacklist when provider says disabled | Same |
-| B8.3.5 | Live config mutation reflected in OnCapture | Change provider's AutoPickConfig property between reads |
-| B8.3.6 | AddTrigger with configProvider restores path | Verify trigger constructed with non-null provider |
+| B8.3.1 | null configProvider → ArgumentNullException | Master ctor rejects null |
+| B8.3.2 | Non-null provider preserved in field | Reflection: `_configProvider` == passed instance |
+| B8.3.3 | Init reads Enabled from provider | Provider.Enabled=false → `trigger.IsEnabled == false` |
+| B8.3.4 | Init reads WhiteListEnabled from provider | Provider.WhiteListEnabled=false → `_whiteList` empty (reflection) |
+| B8.3.5 | Init reads BlackListEnabled from provider | Provider.BlackListEnabled=false → `_blackList` empty (reflection) |
+| B8.3.6 | Provider returns live mutable reference | Mutate provider's config property; re-read reflects change |
+| B8.3.7 | Windows LoadInitialTriggers passes provider | Code review / constructor trace |
+| B8.3.8 | Windows AddTrigger passes provider | Code review / constructor trace |
+| B8.3.9 | Core shim AddTrigger passes provider | Code review + existing B8.2 test |
+| B8.3.10 | MacAutoPickComposition passes provider | Code review |
+| B8.3.11 | `TaskContext.Instance().Config.AutoPickConfig` absent from AutoPickTrigger.cs | `rg` returns zero in non-comment code |
+
+OnCapture offset/engine behavior tests deferred: they require stable fake CaptureContent with OpenCV region pipeline. Not in B8.3 scope.
 
 ---
 
