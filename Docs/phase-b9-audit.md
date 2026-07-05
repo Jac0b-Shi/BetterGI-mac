@@ -154,6 +154,16 @@ Use these in `MacAutoPickComposition` until real macOS OCR backends exist.
 
 ### 3.2 Engine selection stays in OnCapture
 
+The `config.OcrEngine` comparison and two-branch dispatch remains in `AutoPickTrigger.OnCapture`.
+Exactly one recognizer is invoked per frame — never both:
+
+```csharp
+if (config.OcrEngine == nameof(PickOcrEngineEnum.Yap))
+    text = _yapRecognizer.Recognize(textMat);
+else
+    text = _paddleRecognizer.Recognize(textMat);
+```
+
 ```csharp
 if (config.OcrEngine == nameof(PickOcrEngineEnum.Yap))
     text = _yapRecognizer.Recognize(textMat);

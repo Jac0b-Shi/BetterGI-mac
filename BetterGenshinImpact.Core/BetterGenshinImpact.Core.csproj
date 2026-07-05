@@ -136,13 +136,13 @@
     <Compile Include="../BetterGenshinImpact/Core/Abstractions/Runtime/IOcrRuntimeConfigProvider.cs" Link="Core/Abstractions/Runtime/IOcrRuntimeConfigProvider.cs" />
   </ItemGroup>
 
-  <!-- ==================== B9 Text Recognition Interfaces ==================== -->
+  <!-- ==================== B9 Text Recognition Interfaces (linked shared source) ==================== -->
   <ItemGroup>
-    <Compile Include="Abstractions/IAutoPickTextRecognizer.cs" />
-    <Compile Include="Abstractions/IPaddleAutoPickTextRecognizer.cs" />
-    <Compile Include="Abstractions/IYapAutoPickTextRecognizer.cs" />
-    <Compile Include="Abstractions/UnsupportedPaddleAutoPickTextRecognizer.cs" />
-    <Compile Include="Abstractions/UnsupportedYapAutoPickTextRecognizer.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Abstractions/Recognition/IAutoPickTextRecognizer.cs" Link="Core/Abstractions/Recognition/IAutoPickTextRecognizer.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Abstractions/Recognition/IPaddleAutoPickTextRecognizer.cs" Link="Core/Abstractions/Recognition/IPaddleAutoPickTextRecognizer.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Abstractions/Recognition/IYapAutoPickTextRecognizer.cs" Link="Core/Abstractions/Recognition/IYapAutoPickTextRecognizer.cs" />
+    <Compile Include="Adapters/UnsupportedPaddleAutoPickTextRecognizer.cs" />
+    <Compile Include="Adapters/UnsupportedYapAutoPickTextRecognizer.cs" />
   </ItemGroup>
 
   <!-- ==================== macOS Adapters ==================== -->

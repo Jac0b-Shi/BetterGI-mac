@@ -1,5 +1,3 @@
-using BetterGenshinImpact.Core.Recognition;
-
 namespace BetterGenshinImpact.Core.Abstractions.Recognition;
 
 /// <summary>

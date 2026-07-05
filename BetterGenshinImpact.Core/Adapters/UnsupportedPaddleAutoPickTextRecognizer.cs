@@ -1,8 +1,7 @@
 using BetterGenshinImpact.Core.Abstractions.Recognition;
-using BetterGenshinImpact.Core.Recognition;
 using OpenCvSharp;
 
-namespace BetterGenshinImpact.Core.Recognition;
+namespace BetterGenshinImpact.Core.Adapters;
 
 /// <summary>
 /// Fail-fast placeholder for environments without a real Paddle OCR backend.

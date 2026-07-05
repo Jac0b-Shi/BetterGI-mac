@@ -1,6 +1,6 @@
 using OpenCvSharp;
 
-namespace BetterGenshinImpact.Core.Recognition;
+namespace BetterGenshinImpact.Core.Abstractions.Recognition;
 
 /// <summary>
 /// Text region recognition for AutoPick.
