@@ -20,15 +20,22 @@ public class AutoPickAssets : BaseAssets<AutoPickAssets>
     public RecognitionObject SettingsIconRo;
     public RecognitionObject LRo;
 
-    // Config-dependent assets — property-backed with EnsureConfigured guard
+    // Config-dependent assets — property-backed with instance-level guard
     private BgiKey _pickVk = BgiKey.F;
     private RecognitionObject? _pickRo;
     private RecognitionObject? _chatPickRo;
     private bool _configured;
 
-    public BgiKey PickVk { get { EnsureConfigured(); return _pickVk; } set { _pickVk = value; } }
-    public RecognitionObject PickRo { get { EnsureConfigured(); return _pickRo!; } set { _pickRo = value; } }
-    public RecognitionObject ChatPickRo { get { EnsureConfigured(); return _chatPickRo!; } set { _chatPickRo = value; } }
+    private void EnsureThisConfigured()
+    {
+        if (!_configured)
+            throw new InvalidOperationException(
+                "AutoPickAssets has not been configured. Call Configure() before accessing config-dependent fields.");
+    }
+
+    public BgiKey PickVk { get { EnsureThisConfigured(); return _pickVk; } }
+    public RecognitionObject PickRo { get { EnsureThisConfigured(); return _pickRo!; } }
+    public RecognitionObject? ChatPickRo { get { EnsureThisConfigured(); return _chatPickRo; } }
 
     /// <summary>
     /// Template-only initialization. No config reads — all config-dependent work
@@ -135,16 +142,10 @@ public class AutoPickAssets : BaseAssets<AutoPickAssets>
     }
 
     /// <summary>
-    /// Ensure configuration has been applied. Called by property getters and init paths.
+    /// Static convenience: check the current singleton. Instance-level checks use <see cref="EnsureThisConfigured"/>.
     /// </summary>
-    public static void EnsureConfigured()
-    {
-        if (!Instance._configured)
-        {
-            throw new InvalidOperationException(
-                "AutoPickAssets has not been configured. Call Configure() before accessing config-dependent fields.");
-        }
-    }
+    public static void EnsureConfigured() =>
+        Instance.EnsureThisConfigured();
 
     public RecognitionObject LoadCustomPickKey(string key)
     {

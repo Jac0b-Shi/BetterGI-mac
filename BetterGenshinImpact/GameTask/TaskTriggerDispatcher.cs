@@ -62,11 +62,20 @@ namespace BetterGenshinImpact.GameTask
         private DateTime PrevGameUiChangeTime = DateTime.Now; // 上一次UI变化时间
         
 
+        private readonly IAutoPickConfigProvider? _autoPickConfigProvider;
+
         public TaskTriggerDispatcher()
         {
             _instance = this;
             _timer.Elapsed += Tick;
             //_timer.Tick += Tick;
+        }
+
+        public TaskTriggerDispatcher(IAutoPickConfigProvider autoPickConfigProvider)
+        {
+            _instance = this;
+            _timer.Elapsed += Tick;
+            _autoPickConfigProvider = autoPickConfigProvider;
         }
 
         public static TaskTriggerDispatcher Instance()
@@ -137,14 +146,9 @@ namespace BetterGenshinImpact.GameTask
             TaskContext.Instance().Init(hWnd);
 
             // 配置 AutoPickAssets（必须在 LoadInitialTriggers 之前）
-            try
+            if (_autoPickConfigProvider != null)
             {
-                AutoPickAssets.AutoPickAssets.Instance.Configure(
-                    new BetterGenshinImpact.Core.Runtime.Windows.WindowsAutoPickConfigProvider());
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "AutoPickAssets 配置失败");
+                AutoPickAssets.AutoPickAssets.Instance.Configure(_autoPickConfigProvider);
             }
 
             // 初始化触发器(一定要在任务上下文初始化完毕后使用)
