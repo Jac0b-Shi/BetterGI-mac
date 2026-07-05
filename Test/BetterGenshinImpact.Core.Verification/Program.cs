@@ -165,30 +165,51 @@ Console.WriteLine();
 
 // ==== B5: AutoPickTrigger IAutoPickRuntimeState injection ====
 Console.WriteLine("AutoPickTrigger: IAutoPickRuntimeState injection");
-// AutoPickTrigger() calls AutoPickAssets.Instance which reads TaskContext —
-// initialize minimal environment for construction to work
 BetterGenshinImpact.GameTask.TaskContext.Instance().SystemInfo =
     new BetterGenshinImpact.GameTask.MacSystemInfo();
-var state0B5 = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(0);
-var t0 = new AutoPickTrigger(state0B5);
-Assert("AutoPickTrigger with StopCount=0 runs", true, "");
-
-var stateForB5 = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(2);
-var t2 = new AutoPickTrigger(stateForB5);
-// Access the private StopCount via reflection
 var stopCountProp = typeof(BetterGenshinImpact.GameTask.AutoPick.AutoPickTrigger)
     .GetProperty("StopCount", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-var actualStop2 = (int)(stopCountProp?.GetValue(t2) ?? throw new InvalidOperationException());
-Assert("AutoPickTrigger StopCount=2 from state", actualStop2 == 2, $"got {actualStop2}");
+var extField = typeof(BetterGenshinImpact.GameTask.AutoPick.AutoPickTrigger)
+    .GetField("_externalConfig", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+var stateField = typeof(BetterGenshinImpact.GameTask.AutoPick.AutoPickTrigger)
+    .GetField("_runtimeState", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
-// Verify externalConfig + runtimeState don't conflict
+// Test 1: injection with StopCount=0
+var state0B5 = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(0);
+var t0 = new AutoPickTrigger(state0B5);
+var actualStop0 = (int)(stopCountProp?.GetValue(t0) ?? throw new InvalidOperationException());
+Assert("StopCount=0 from state", actualStop0 == 0, $"got {actualStop0}");
+
+// Test 2: injection with StopCount=2
+var stateForB5 = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(2);
+var t2 = new AutoPickTrigger(stateForB5);
+var actualStop2 = (int)(stopCountProp?.GetValue(t2) ?? throw new InvalidOperationException());
+Assert("StopCount=2 from state", actualStop2 == 2, $"got {actualStop2}");
+
+// Test 3: externalConfig-only preserves _externalConfig, no runtime state
 var external = new AutoPickExternalConfig { ForceInteraction = true };
 var t3 = new AutoPickTrigger(external);
-// t3 should still compile and exist — externalConfig path not broken
-Assert("AutoPickTrigger with externalConfig compiles", true, "");
+var ext3 = extField?.GetValue(t3);
+Assert("externalConfig-only preserves _externalConfig",
+    ReferenceEquals(ext3, external), "different reference");
+Assert("externalConfig-only has null _runtimeState",
+    stateField?.GetValue(t3) == null, "got non-null");
 
-// Verify zero RunnerContext call in the new overload path (no need to mock RunnerContext)
-Console.WriteLine();
+// Test 4: combined externalConfig + runtimeState
+var t4 = new AutoPickTrigger(external, stateForB5);
+var ext4 = extField?.GetValue(t4);
+var state4 = stateField?.GetValue(t4);
+Assert("Combined ctor preserves _externalConfig",
+    ReferenceEquals(ext4, external), "different reference");
+Assert("Combined ctor preserves _runtimeState",
+    ReferenceEquals(state4, stateForB5), "different reference");
+
+// Test 5: parameterless ctor has null _externalConfig and null _runtimeState
+var t5 = new AutoPickTrigger();
+Assert("parameterless has null _externalConfig",
+    extField?.GetValue(t5) == null, "got non-null");
+Assert("parameterless has null _runtimeState",
+    stateField?.GetValue(t5) == null, "got non-null");
 
 Console.WriteLine($"=== {passed} passed, {failed} failed ===");
 Environment.Exit(failed > 0 ? 1 : 0);

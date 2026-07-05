@@ -424,4 +424,8 @@ Commit: `17814cd`. Fallback logs, precise assertions, null check.
 
 ## B5 Status: Complete
 
-Commit: pending. AutoPickTrigger injects IAutoPickRuntimeState; Pen guards for macOS.
+Commit: bac0af9 AutoPickTrigger injects IAutoPickRuntimeState; Pen guards for macOS.
+
+## B5.1 Status: Complete
+
+Commit: `bac0af9`. Unified master ctor, precise tests, restore System.Drawing 10.0.7.

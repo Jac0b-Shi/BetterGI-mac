@@ -61,19 +61,27 @@ public partial class AutoPickTrigger : ITaskTrigger
     private int StopCount =>
         _runtimeState?.StopCount ?? RunnerContext.Instance.AutoPickTriggerStopCount;
 
-    public AutoPickTrigger()
+    public AutoPickTrigger() : this(null, null)
+    {
+    }
+
+    public AutoPickTrigger(AutoPickExternalConfig? config) : this(config, null)
+    {
+    }
+
+    public AutoPickTrigger(IAutoPickRuntimeState runtimeState) : this(null, (IAutoPickRuntimeState?)runtimeState)
+    {
+    }
+
+    /// <summary>
+    /// Combined external config and runtime state. macOS trigger factory uses this.
+    /// Master constructor — all overloads delegate here.
+    /// </summary>
+    public AutoPickTrigger(AutoPickExternalConfig? config, IAutoPickRuntimeState? runtimeState)
     {
         _autoPickAssets = AutoPickAssets.Instance;
         _pickRo = _autoPickAssets.PickRo;
-    }
-
-    public AutoPickTrigger(AutoPickExternalConfig? config) : this()
-    {
         _externalConfig = config;
-    }
-
-    public AutoPickTrigger(IAutoPickRuntimeState runtimeState) : this()
-    {
         _runtimeState = runtimeState;
     }
 
