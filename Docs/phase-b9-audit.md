@@ -164,13 +164,6 @@ else
     text = _paddleRecognizer.Recognize(textMat);
 ```
 
-```csharp
-if (config.OcrEngine == nameof(PickOcrEngineEnum.Yap))
-    text = _yapRecognizer.Recognize(textMat);
-else
-    text = _paddleRecognizer.Recognize(textMat);
-```
-
 ### 3.3 Paddle internal routing encapsulated
 
 The current `OcrWithoutDetector` / `Ocr` branch is handled inside `WindowsPaddleAutoPickTextRecognizer`:
