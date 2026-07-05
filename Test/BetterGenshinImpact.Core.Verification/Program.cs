@@ -8,6 +8,7 @@ using BetterGenshinImpact.GameTask.AutoPick;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Platform.Abstractions;
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Threading;
 
@@ -387,7 +388,6 @@ catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperation
 // B7.7: Compose uses provider config (not TaskContext fallback)
 // Reset, then Compose with Enabled = false — verify IsEnabled from provider, not default TaskContext
 resetForVerification.Invoke(null, null);
-AutoPickAssets.DestroyInstance();
 BetterGenshinImpact.GameTask.TaskContext.Instance().Config!.AutoPickConfig!.Enabled = true; // TaskContext says true
 var disabledCfg = new AutoPickConfig { PickKey = "F", Enabled = false };
 var disabledProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
@@ -399,7 +399,6 @@ Assert("B7.7 Init uses provider (not TaskContext): IsEnabled = false",
 
 // B7.8: After ResetForVerification, Compose succeeds again
 resetForVerification.Invoke(null, null);
-AutoPickAssets.DestroyInstance();
 var reProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "F", Enabled = true },
     PaddleOcrModelConfig.V5, "zh-Hans");
@@ -410,7 +409,6 @@ Assert("B7.8 After ResetForVerification, Compose succeeds",
 
 // B7.9: Compose with BlackListEnabled = false — _blackList is empty
 resetForVerification.Invoke(null, null);
-AutoPickAssets.DestroyInstance();
 var blOffCfg = new AutoPickConfig { PickKey = "F", Enabled = true, BlackListEnabled = false };
 var blOffProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     blOffCfg, PaddleOcrModelConfig.V5, "zh-Hans");
@@ -420,7 +418,6 @@ Assert("B7.9 BlackListEnabled=false: _blackList empty", blList.Count == 0, $"got
 
 // B7.10: Compose with WhiteListEnabled = false — _whiteList is empty
 resetForVerification.Invoke(null, null);
-AutoPickAssets.DestroyInstance();
 var wlOffCfg = new AutoPickConfig { PickKey = "F", Enabled = true, WhiteListEnabled = false };
 var wlOffProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     wlOffCfg, PaddleOcrModelConfig.V5, "zh-Hans");
@@ -430,7 +427,6 @@ Assert("B7.10 WhiteListEnabled=false: _whiteList empty", wlList.Count == 0, $"go
 
 // B7.11: Compose(null, validState) throws ArgumentNullException, state stays NotComposed
 resetForVerification.Invoke(null, null);
-AutoPickAssets.DestroyInstance();
 try
 {
     composeMethod.Invoke(null, [null!, b7State, null]);
@@ -450,7 +446,6 @@ Assert("B7.11 After null provider: valid Compose succeeds",
 
 // B7.12: Compose(validProvider, null) throws ArgumentNullException
 resetForVerification.Invoke(null, null);
-AutoPickAssets.DestroyInstance();
 try
 {
     composeMethod.Invoke(null, [b7Provider, null!, null]);
@@ -469,7 +464,6 @@ Assert("B7.12 After null state: valid Compose succeeds",
 
 // B7.13: Concurrent Compose — only one succeeds
 resetForVerification.Invoke(null, null);
-AutoPickAssets.DestroyInstance();
 int successCount = 0;
 int failCount = 0;
 var barrier = new Barrier(2);
@@ -477,7 +471,7 @@ var concProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "F", Enabled = true },
     PaddleOcrModelConfig.V5, "zh-Hans");
 var concState = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(0);
-Exception? lastConcurrentError = null;
+var concurrentErrors = new ConcurrentQueue<Exception>();
 
 void ConcurrentCompose()
 {
@@ -490,12 +484,12 @@ void ConcurrentCompose()
     catch (TargetInvocationException ex)
     {
         Interlocked.Increment(ref failCount);
-        lastConcurrentError = ex.InnerException;
+        concurrentErrors.Enqueue(ex.InnerException);
     }
     catch (Exception ex)
     {
         Interlocked.Increment(ref failCount);
-        lastConcurrentError = ex;
+        concurrentErrors.Enqueue(ex);
     }
 }
 
@@ -503,48 +497,46 @@ var threadA = new Thread(ConcurrentCompose); threadA.Start();
 var threadB = new Thread(ConcurrentCompose); threadB.Start();
 threadA.Join(); threadB.Join();
 Assert("B7.13 Concurrent: exactly 1 success", successCount == 1, $"got {successCount} successes, {failCount} failures");
-Assert("B7.13 Concurrent: other threw InvalidOp", failCount == 1 && lastConcurrentError is InvalidOperationException, $"failCount={failCount}, error={lastConcurrentError?.GetType().Name}");
+Assert("B7.13 Concurrent: other threw InvalidOp", failCount == 1 && concurrentErrors.Count == 1 && concurrentErrors.First() is InvalidOperationException, $"failCount={failCount}, errors={concurrentErrors.Count}");
 
-// B7.14: Compose failure leaves Failed state
+// B7.14: Compose failure enters Failed state; retry requires restart
 resetForVerification.Invoke(null, null);
-AutoPickAssets.DestroyInstance();
-// Simulate failure: pass a provider whose AutoPickConfig.PickKey throws during Configure
-var failCfg = new AutoPickConfig { PickKey = "F", Enabled = true, BlackListEnabled = true };
-var failProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
-    failCfg, PaddleOcrModelConfig.V5, "zh-Hans");
-// To force failure during Init, null out the SystemInfo so Init's blacklist loading can still proceed
-// but this doesn't reliably trigger failure. Instead, we already tested the Failed state implicitly:
-// after the concurrent test, whichever thread lost is in Composed state. Let's explicitly verify
-// Failed state by manipulating state directly via reflection... but that's fragile.
-// Instead: since Configure is single-call, calling ResetForVerification then trying to Compose,
-// then attempting again without reset → should see Composed error. This tests the state machine.
-comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [failProv, concState, null])!;
-// Now state is Composed. Try again:
+var throwingProvider = new ThrowingAutoPickConfigProvider();
+var validState = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(0);
 try
 {
-    composeMethod.Invoke(null, [failProv, concState, null]);
-    Assert("B7.14 Double compose after success should throw", false, "no exception");
+    composeMethod.Invoke(null, [throwingProvider, validState, null]);
+    Assert("B7.14 Failed compose should throw", false, "no exception");
 }
 catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException ioe)
 {
-    Assert("B7.14 Retry after Composed throws restart message",
-        ioe.Message.Contains("already been composed"), ioe.Message);
+    Assert("B7.14 Original Init failure preserved",
+        ioe.Message == "Injected composition failure", ioe.Message);
+}
+// Retry with valid provider should give "Restart the process"
+try
+{
+    composeMethod.Invoke(null, [concProv, concState, null]);
+    Assert("B7.14 Retry after Failed should throw", false, "no exception");
+}
+catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException ioe)
+{
+    Assert("B7.14 Failed state requires restart",
+        ioe.Message.Contains("Restart the process"), ioe.Message);
 }
 
-// B7.15: ResetForVerification restores NotComposed from Composed state
+// B7.15: ResetForVerification restores NotComposed from Failed state
 resetForVerification.Invoke(null, null);
-AutoPickAssets.DestroyInstance();
-var resetProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
+var b715Prov = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "F", Enabled = true },
     PaddleOcrModelConfig.V5, "zh-Hans");
-var resetComp = (MacAutoPickComposition)composeMethod.Invoke(null, [resetProv, concState, null])!;
-Assert("B7.15 After reset: Compose succeeds again",
-    resetComp.Trigger != null, "trigger null");
+var b715Comp = (MacAutoPickComposition)composeMethod.Invoke(null, [b715Prov, concState, null])!;
+Assert("B7.15 From Failed: after ResetForVerification, Compose succeeds",
+    b715Comp.Trigger != null, "trigger null");
 Console.WriteLine();
 
-// Final cleanup: reset and restore configured singleton
+// Final cleanup: restore configured singleton
 resetForVerification.Invoke(null, null);
-AutoPickAssets.DestroyInstance();
 var b7CleanupProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "F" }, PaddleOcrModelConfig.V5, "zh-Hans");
 AutoPickAssets.Instance.Configure(b7CleanupProv);
@@ -579,4 +571,10 @@ class RecordingInputBackend : IInputBackend
     public void LeftButtonUp()    => Calls.Add("LeftButtonUp()");
     public void LeftClick(int screenX, int screenY) => Calls.Add($"LeftClick(X={screenX}, Y={screenY})");
     public void Scroll(int delta) => Calls.Add($"Scroll({delta})");
+}
+
+sealed class ThrowingAutoPickConfigProvider : IAutoPickConfigProvider
+{
+    public AutoPickConfig AutoPickConfig =>
+        throw new InvalidOperationException("Injected composition failure");
 }
