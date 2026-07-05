@@ -53,6 +53,7 @@ namespace BetterGenshinImpact.GameTask
 
         private readonly IAutoPickConfigProvider _autoPickConfigProvider;
         private bool _started;
+        private bool _starting;
 
         public TaskTriggerDispatcher(IAutoPickConfigProvider autoPickConfigProvider)
         {
@@ -122,22 +123,26 @@ namespace BetterGenshinImpact.GameTask
         {
             if (_started)
                 throw new InvalidOperationException("TaskTriggerDispatcher has already been started.");
-            _started = true;
-            // 初始化截图器
-            ChatUiHotkeyGuard.Reset();
-            GameCapture = GameCaptureFactory.Create(mode);
-            // 激活窗口 保证后面能够正常获取窗口信息
-            SystemControl.ActivateWindow(hWnd);
+            if (_starting)
+                throw new InvalidOperationException("TaskTriggerDispatcher is already in the process of starting.");
+            _starting = true;
 
-            // 初始化任务上下文(一定要在初始化触发器前完成)
-            TaskContext.Instance().Init(hWnd);
+            try
+            {
+                ChatUiHotkeyGuard.Reset();
+                GameCapture = GameCaptureFactory.Create(mode);
+                // 激活窗口 保证后面能够正常获取窗口信息
+                SystemControl.ActivateWindow(hWnd);
 
-            // 配置 AutoPickAssets（必须在 LoadInitialTriggers 之前）
-            AutoPickAssets.AutoPickAssets.Instance.Configure(_autoPickConfigProvider);
+                // 初始化任务上下文(一定要在初始化触发器前完成)
+                TaskContext.Instance().Init(hWnd);
 
-            // 初始化触发器(一定要在任务上下文初始化完毕后使用)
-            _triggers = GameTaskManager.LoadInitialTriggers();
-            GameLoadingTrigger.GlobalEnabled = TaskContext.Instance().Config.GenshinStartConfig.AutoEnterGameEnabled;
+                // 配置 AutoPickAssets（必须在 LoadInitialTriggers 之前）
+                AutoPickAssets.AutoPickAssets.Instance.Configure(_autoPickConfigProvider);
+
+                // 初始化触发器(一定要在任务上下文初始化完毕后使用)
+                _triggers = GameTaskManager.LoadInitialTriggers();
+                GameLoadingTrigger.GlobalEnabled = TaskContext.Instance().Config.GenshinStartConfig.AutoEnterGameEnabled;
 
             // if (GraphicsCapture.IsHdrEnabled(hWnd))
             // {
@@ -165,7 +170,14 @@ namespace BetterGenshinImpact.GameTask
             {
                 _timer.Start();
             }
+
+            _started = true;
         }
+        finally
+        {
+            _starting = false;
+        }
+    }
 
         public void Stop()
         {
