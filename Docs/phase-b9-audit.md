@@ -20,7 +20,7 @@ All in `BetterGenshinImpact/GameTask/AutoPick/AutoPickTrigger.cs`, inside `OnCap
 | 316 | `OcrFactory.Paddle.OcrWithoutDetector(textOnlyMat)` | Paddle | Submat of textOnlyMat | Returns string |
 | 337 | `OcrFactory.Paddle.Ocr(textMat)` | Paddle | Submat of SrcMat | Returns string |
 
-**Note:** The Yap branch at line 302 creates `textMat` (a `new Mat(CacheGreyMat, textRect)`) WITHOUT `using`. This is a **Mat leak** — the submat holds a reference to the parent `CacheGreyMat` preventing GC. This is pre-existing upstream behavior, not introduced by extraction work.
+**Note:** The Yap branch at line 302 creates `textMat` (a `new Mat(CacheGreyMat, textRect)`) WITHOUT `using`. B9 must fix this as part of the ownership contract: the caller owns the Mat, so the Yap branch must use `using`. This does NOT change recognition behavior.
 
 ---
 
@@ -72,48 +72,69 @@ Pure static method — no state, no static gateway. It's a utility function that
 
 ### 3.1 AutoPick-specific text recognizer
 
-Rather than injecting the generic `IOcrService` (which has OCR/DET modes and engine abstractions), create a narrow interface that expresses exactly what AutoPickTrigger needs:
+Interface in shared Core — no static gateway dependency:
 
 ```csharp
 namespace BetterGenshinImpact.Core.Recognition;
 
 /// <summary>
-/// AutoPick-specific text recognition.
-/// Single method: recognize text from a greyscale image region.
+/// AutoPick-specific text region recognition.
+/// Borrowed Mat — implementation must NOT dispose or retain the Mat.
+/// Must complete all reading before returning.
 /// </summary>
 public interface IAutoPickTextRecognizer
 {
-    /// <summary>Recognize text from a greyscale Mat. Caller owns the Mat.</summary>
-    string Recognize(Mat greyMat);
+    /// <param name="textRegion">Borrowed Mat region. Yap adapter expects greyscale;
+    /// Paddle adapter expects source-color (BGR).</param>
+    string Recognize(Mat textRegion);
 }
 ```
 
-**Two implementations:**
-- `PaddleAutoPickRecognizer` — wraps `OcrFactory.Paddle.OcrWithoutDetector`/`.Ocr`
-- `YapAutoPickRecognizer` — wraps `TextInferenceFactory.Pick.Value.Inference`
+**Two Windows legacy adapters** (bridge existing static gateways):
 
-**Engine selection** stays in `AutoPickTrigger.OnCapture` based on `config.OcrEngine`:
 ```csharp
-private readonly IAutoPickTextRecognizer _paddleRecognizer;
-private readonly IAutoPickTextRecognizer _yapRecognizer;
+// Windows adapter — wraps OcrFactory.Paddle
+public sealed class WindowsPaddleAutoPickTextRecognizer : IAutoPickTextRecognizer
+{
+    public string Recognize(Mat textRegion)
+    {
+        // preserves existing OcrWithoutDetector/Ocr routing internally
+        ...
+    }
+}
 
+// Windows adapter — wraps TextInferenceFactory.Pick
+public sealed class WindowsYapAutoPickTextRecognizer : IAutoPickTextRecognizer
+{
+    public string Recognize(Mat textRegion)
+    {
+        return TextInferenceFactory.Pick.Value.Inference(textRegion);
+    }
+}
+```
+
+These are Windows-specific adapters, NOT cross-platform Core implementations.
+macOS composition replaces them with platform-appropriate implementations.
+
+### 3.2 Engine selection stays in OnCapture
+
+```csharp
 if (config.OcrEngine == nameof(PickOcrEngineEnum.Yap))
     text = _yapRecognizer.Recognize(textMat);
 else
     text = _paddleRecognizer.Recognize(textMat);
 ```
 
-### 3.2 Paddle-specific sub-paths kept in Paddle recognizer
+### 3.3 Paddle internal routing encapsulated
 
-The current Paddle path has two sub-branches:
-1. Bounding rect found → `OcrWithoutDetector` (line 316)
-2. Bounding rect not found → `Ocr` (line 337)
+The current `OcrWithoutDetector` / `Ocr` branch is handled inside `WindowsPaddleAutoPickTextRecognizer`:
+- If bounding rect found → `OcrWithoutDetector`
+- Else → `Ocr`
+- `TextRectExtractor.GetTextBoundingRect` called internally
 
-These are encapsulated inside `PaddleAutoPickRecognizer.Recognize()`. The trigger doesn't need to know about this internal routing.
+### 3.4 TextRectExtractor stays as static utility
 
-### 3.3 TextRectExtractor stays as utility
-
-`TextRectExtractor.GetTextBoundingRect` is a pure function — leave it as a static helper. The `PaddleAutoPickRecognizer` calls it internally.
+Pure function — no state, no static gateway, no injection needed.
 
 ---
 
@@ -133,25 +154,26 @@ without `using`. This leaks a `Mat` object each time the Yap branch executes.
 
 | Caller | Current | B9 change |
 |--------|---------|-----------|
-| `AutoPickTrigger` ctor | Accesses `TextInferenceFactory.Pick` and `OcrFactory.Paddle` statically | Receives `IAutoPickTextRecognizer` for Paddle and Yap |
-| `GameTaskManager.LoadInitialTriggers` | Windows — static factories resolve from DI | No change — wires recognizers into trigger ctor |
+| `AutoPickTrigger` ctor | No OCR initialization | Receives two required `IAutoPickTextRecognizer` dependencies |
+| `AutoPickTrigger.OnCapture` | Static gateway calls (`OcrFactory.Paddle`, `TextInferenceFactory.Pick`) | Calls `_paddleRecognizer.Recognize()` / `_yapRecognizer.Recognize()` |
+| `GameTaskManager.LoadInitialTriggers` | No change needed | Wires recognizers into trigger ctor |
 | `GameTaskManager.AddTrigger` | Same | Same |
-| `MacAutoPickComposition.Compose` | Same (shim) | Same |
+| `MacAutoPickComposition.Compose` | Same (shim path) | Same |
 | Core shim `AddTrigger` | Same | Same |
-| Tests | `TextInferenceFactory.Pick` may not work without ONNX models | Pass mock/recording recognizer |
+| Tests | Static gateways may not work without models | Pass mock/recording recognizer |
 
 ---
 
 ## 6. macOS OCR Status
 
-| Engine | C# Core availability | Notes |
+| Engine | macOS target status | Notes |
 |--------|---------------------|-------|
-| PaddleOCR | **Unavailable** on macOS arm64 — native PaddleOcr binaries are Windows-only | Must be replaced or run outside process |
-| Yap (SVTR) | **Unavailable** — PickTextInference depends on ONNX Runtime and model files not present on macOS | Could run ONNX on CPU but no model deployed |
+| Paddle | **Not currently wired/verified** | Specific native runtime / NuGet RID support must be checked. The current Paddle OCR package/WinRT bridge may not distribute macOS arm64 binaries. |
+| Yap (SVTR) | **Not currently wired/verified** | ONNX-based (`InferenceSession` is technically cross-platform), but blocked by: `App.ServiceProvider` coupling in `PickTextInference` constructor, lack of model file / dictionary deployment, and absence of composition wiring. |
 
-**Current behavior on macOS:** Both OCR paths will throw at runtime if triggered (missing native libs / model files). The B9 extraction makes them injectable, so a macOS host can provide a stub/placeholder recognizer that returns empty text or logs.
+**B9 does NOT implement a macOS OCR backend.** It only extracts the interface so macOS can provide one later via explicit composition, without touching static gateways.
 
-**B9 does NOT implement a macOS OCR backend.** It only extracts the interface so macOS can provide one later.
+Both engines share the same path forward: the macOS composition root must provide `IAutoPickTextRecognizer` instances that work on macOS — either by wrapping a cross-platform ONNX engine or by delegating to an external process.
 
 ---
 
@@ -160,14 +182,14 @@ without `using`. This leaks a `Mat` object each time the Yap branch executes.
 | Change | Files |
 |--------|-------|
 | Define `IAutoPickTextRecognizer` interface | New file in `Core/Abstractions/` |
-| Create `PaddleAutoPickRecognizer : IAutoPickTextRecognizer` | `Core/Recognition/OCR/Paddle/` |
-| Create `YapAutoPickRecognizer : IAutoPickTextRecognizer` | `Core/Recognition/ONNX/SVTR/` |
-| AutoPickTrigger accepts `IAutoPickTextRecognizer paddle` + `IAutoPickTextRecognizer yap` in ctor | `AutoPickTrigger.cs` |
-| Replace OcrFactory/TextInferenceFactory calls with recognizer.Recognize() | `AutoPickTrigger.cs` lines 303, 316, 337 |
+| Create `WindowsPaddleAutoPickTextRecognizer : IAutoPickTextRecognizer` | `Core/Runtime/Windows/` |
+| Create `WindowsYapAutoPickTextRecognizer : IAutoPickTextRecognizer` | `Core/Runtime/Windows/` |
+| AutoPickTrigger accepts both recognizers as required ctor params | `AutoPickTrigger.cs` |
+| Replace OcrFactory/TextInferenceFactory calls with recognizer.Recognize() | `AutoPickTrigger.cs` lines 300-337 |
+| Yap branch: add `using` to `textMat` allocation (ownership fix) | `AutoPickTrigger.cs` line 302 |
 | Windows DI registers recognizers | `App.xaml.cs` |
-| MacAutoPickComposition passes recognizers | `MacAutoPickComposition.cs` |
-| Verification tests pass mock recognizers | `Program.cs` |
-| Core csproj includes new files | `.csproj` |
+| MacAutoPickComposition passes recognizers (nullable macOS placeholders) | `MacAutoPickComposition.cs` |
+| Verification tests pass recording/mock recognizers | `Program.cs` |
 
 ---
 
@@ -175,8 +197,7 @@ without `using`. This leaks a `Mat` object each time the Yap branch executes.
 
 | NOT in B9 | Reason |
 |-----------|--------|
-| Mat leak fix in Yap branch | Pre-existing upstream issue — document only |
-| macOS OCR backend implementation | Requires platform-specific native work |
+| macOS OCR backend implementation | Requires platform-specific native work — B9 only extracts interface |
 | AutoPickConfig/OcrEngine | B8.3 done — config read stays in trigger |
 | Input / SystemInfo / RuntimeState | B8.1 / B8.2 / B8.3 done |
 | Expand Core shim | B8.2 closeout — explicitly limited |
