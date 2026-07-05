@@ -16,6 +16,7 @@ using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.Placeholder;
 using BetterGenshinImpact.GameTask.QuickSereniteaPot.Assets;
 using BetterGenshinImpact.GameTask.QuickTeleport.Assets;
+using BetterGenshinImpact.Platform.Abstractions;
 using BetterGenshinImpact.View.Drawable;
 using OpenCvSharp;
 using System.Collections.Concurrent;
@@ -36,15 +37,14 @@ internal class GameTaskManager
     /// <summary>
     /// 一定要在任务上下文初始化完毕后使用
     /// </summary>
-    /// <returns></returns>
-    public static List<ITaskTrigger> LoadInitialTriggers()
+    public static List<ITaskTrigger> LoadInitialTriggers(IInputBackend inputBackend)
     {
         ReloadAssets();
         TriggerDictionary = new ConcurrentDictionary<string, ITaskTrigger>();
 
         TriggerDictionary.TryAdd("RecognitionTest", new TestTrigger());
         TriggerDictionary.TryAdd("GameLoading", new GameLoadingTrigger());
-        TriggerDictionary.TryAdd("AutoPick", new AutoPick.AutoPickTrigger());
+        TriggerDictionary.TryAdd("AutoPick", new AutoPick.AutoPickTrigger(null, null, null, inputBackend));
         TriggerDictionary.TryAdd("QuickTeleport", new QuickTeleport.QuickTeleportTrigger());
         TriggerDictionary.TryAdd("AutoSkip", new AutoSkip.AutoSkipTrigger());
         TriggerDictionary.TryAdd("AutoFish", new AutoFishing.AutoFishingTrigger());
@@ -84,7 +84,7 @@ internal class GameTaskManager
     /// </summary>
     /// <param name="name"></param>
     /// <param name="externalConfig"></param>
-    public static bool AddTrigger(string name, object? externalConfig)
+    public static bool AddTrigger(string name, object? externalConfig, IInputBackend inputBackend)
     {
         TriggerDictionary ??= new ConcurrentDictionary<string, ITaskTrigger>();
 
@@ -94,7 +94,7 @@ internal class GameTaskManager
         {
             case "AutoPick":
                 triggerName = "AutoPick";
-                trigger = new AutoPick.AutoPickTrigger(externalConfig as AutoPickExternalConfig);
+                trigger = new AutoPick.AutoPickTrigger(externalConfig as AutoPickExternalConfig, null, null, inputBackend);
                 break;
             case "AutoSkip":
                 triggerName = "AutoSkip";

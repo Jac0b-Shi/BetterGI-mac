@@ -1,4 +1,4 @@
-﻿using BetterGenshinImpact.Core.Script;
+using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 
 using BetterGenshinImpact.View;
@@ -187,7 +187,7 @@ public class TaskRunner
 
         // 还原实时任务触发器
         TaskTriggerDispatcher.Instance().ClearTriggers();
-        TaskTriggerDispatcher.Instance().SetTriggers(GameTaskManager.LoadInitialTriggers());
+        TaskTriggerDispatcher.Instance().ReloadInitialTriggers();
 
         VisionContext.Instance().DrawContent.ClearAll();
         HtmlMaskWindow.CloseAll();

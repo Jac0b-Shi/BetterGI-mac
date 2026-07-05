@@ -4,9 +4,10 @@ using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.ONNX.SVTR;
 using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
+using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Helpers;
+using BetterGenshinImpact.Platform.Abstractions;
 using BetterGenshinImpact.Service;
 using BetterGenshinImpact.View.Windows;
 using Microsoft.Extensions.Logging;
@@ -19,7 +20,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
-using BetterGenshinImpact.GameTask.Model.Area;
 
 namespace BetterGenshinImpact.GameTask.AutoPick;
 
@@ -55,6 +55,7 @@ public partial class AutoPickTrigger : ITaskTrigger
     private AutoPickExternalConfig? _externalConfig;
     private readonly IAutoPickRuntimeState? _runtimeState;
     private readonly IAutoPickConfigProvider? _configProvider;
+    private readonly IInputBackend _inputBackend;
 
     /// <summary>
     /// Unified StopCount: prefer injected runtime state; fall back to RunnerContext for Windows legacy paths.
@@ -62,32 +63,21 @@ public partial class AutoPickTrigger : ITaskTrigger
     private int StopCount =>
         _runtimeState?.StopCount ?? RunnerContext.Instance.AutoPickTriggerStopCount;
 
-    public AutoPickTrigger() : this(null, null)
-    {
-    }
-
-    public AutoPickTrigger(AutoPickExternalConfig? config) : this(config, null)
-    {
-    }
-
-    public AutoPickTrigger(AutoPickExternalConfig? config, IAutoPickRuntimeState? runtimeState)
-        : this(config, runtimeState, null)
-    {
-    }
-
     /// <summary>
-    /// Master constructor. When <paramref name="configProvider"/> is non-null, Init() reads
-    /// AutoPickConfig from the provider instead of TaskContext.Instance().
+    /// Master constructor. IInputBackend is required — no static fallback.
     /// </summary>
     public AutoPickTrigger(
         AutoPickExternalConfig? config,
         IAutoPickRuntimeState? runtimeState,
-        IAutoPickConfigProvider? configProvider)
+        IAutoPickConfigProvider? configProvider,
+        IInputBackend inputBackend)
     {
+        ArgumentNullException.ThrowIfNull(inputBackend);
         _autoPickAssets = AutoPickAssets.Instance;
         _externalConfig = config;
         _runtimeState = runtimeState;
         _configProvider = configProvider;
+        _inputBackend = inputBackend;
         // _pickRo is set in Init() after AutoPickAssets.EnsureConfigured
     }
 
@@ -206,7 +196,7 @@ public partial class AutoPickTrigger : ITaskTrigger
             if (HasScrollIcon(content.CaptureRectArea))
             {
                 // 滚轮下
-                Simulation.SendInput.Mouse.VerticalScroll(2);
+                _inputBackend.Scroll(2);
                 Thread.Sleep(50);
             }
 
@@ -218,7 +208,7 @@ public partial class AutoPickTrigger : ITaskTrigger
         if (_externalConfig is { ForceInteraction: true })
         {
             LogPick(content, "直接拾取");
-            Simulation.SendInput.Keyboard.KeyPress(AutoPickAssets.Instance.PickVk);
+            _inputBackend.KeyPress(AutoPickAssets.Instance.PickVk);
             return;
         }
 
@@ -265,7 +255,7 @@ public partial class AutoPickTrigger : ITaskTrigger
         if (!config.WhiteListEnabled && !config.BlackListEnabled && !isExcludeIcon)
         {
             // 没有黑白名单直接拾取
-            Simulation.SendInput.Keyboard.KeyPress(AutoPickAssets.Instance.PickVk);
+            _inputBackend.KeyPress(AutoPickAssets.Instance.PickVk);
             LogPick(content, "黑名单未启用，直接拾取");
         }
 
@@ -363,7 +353,7 @@ public partial class AutoPickTrigger : ITaskTrigger
             if (config.WhiteListEnabled && _whiteList.Contains(text))
             {
                 LogPick(content, text);
-                Simulation.SendInput.Keyboard.KeyPress(AutoPickAssets.Instance.PickVk);
+                _inputBackend.KeyPress(AutoPickAssets.Instance.PickVk);
                 return;
             }
 
@@ -394,7 +384,7 @@ public partial class AutoPickTrigger : ITaskTrigger
             speedTimer.Record("黑名单判断");
 
             LogPick(content, text);
-            Simulation.SendInput.Keyboard.KeyPress(AutoPickAssets.Instance.PickVk);
+            _inputBackend.KeyPress(AutoPickAssets.Instance.PickVk);
         }
 
         speedTimer.DebugPrint();

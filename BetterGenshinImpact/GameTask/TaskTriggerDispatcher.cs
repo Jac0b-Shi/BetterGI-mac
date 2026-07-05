@@ -64,14 +64,17 @@ namespace BetterGenshinImpact.GameTask
         
 
         private readonly IAutoPickConfigProvider _autoPickConfigProvider;
+        private readonly IInputBackend _inputBackend;
         private bool _started;
         private bool _starting;
         private bool _startFailed;
 
-        public TaskTriggerDispatcher(IAutoPickConfigProvider autoPickConfigProvider)
+        public TaskTriggerDispatcher(IAutoPickConfigProvider autoPickConfigProvider, IInputBackend inputBackend)
         {
             ArgumentNullException.ThrowIfNull(autoPickConfigProvider);
+            ArgumentNullException.ThrowIfNull(inputBackend);
             _autoPickConfigProvider = autoPickConfigProvider;
+            _inputBackend = inputBackend;
             _instance = this;
             _timer.Elapsed += Tick;
         }
@@ -122,7 +125,7 @@ namespace BetterGenshinImpact.GameTask
         {
             lock (_triggerListLocker)
             {
-                if (GameTaskManager.AddTrigger(name, externalConfig))
+                if (GameTaskManager.AddTrigger(name, externalConfig, _inputBackend))
                 {
                     SetTriggers(GameTaskManager.ConvertToTriggerList(true));
                     return true;
@@ -130,6 +133,15 @@ namespace BetterGenshinImpact.GameTask
 
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Reload initial triggers via GameTaskManager, forwarding the injected backend.
+        /// Caller does not need to know about IInputBackend.
+        /// </summary>
+        public void ReloadInitialTriggers()
+        {
+            SetTriggers(GameTaskManager.LoadInitialTriggers(_inputBackend));
         }
 
         public void Start(IntPtr hWnd, CaptureModes mode, int interval = 50)
@@ -158,7 +170,7 @@ namespace BetterGenshinImpact.GameTask
                 AutoPickAssets.AutoPickAssets.Instance.Configure(_autoPickConfigProvider);
 
                 // 初始化触发器(一定要在任务上下文初始化完毕后使用)
-                _triggers = GameTaskManager.LoadInitialTriggers();
+                _triggers = GameTaskManager.LoadInitialTriggers(_inputBackend);
                 GameLoadingTrigger.GlobalEnabled = TaskContext.Instance().Config.GenshinStartConfig.AutoEnterGameEnabled;
 
             // if (GraphicsCapture.IsHdrEnabled(hWnd))

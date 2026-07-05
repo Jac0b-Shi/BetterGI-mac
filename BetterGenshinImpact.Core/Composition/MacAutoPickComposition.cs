@@ -2,6 +2,7 @@ using BetterGenshinImpact.Core.Abstractions.Runtime;
 using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
 using BetterGenshinImpact.GameTask.AutoPick;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
+using BetterGenshinImpact.Platform.Abstractions;
 
 namespace BetterGenshinImpact.Core.Composition;
 
@@ -29,9 +30,11 @@ public sealed class MacAutoPickComposition
     /// <param name="configProvider">AutoPick configuration provider.</param>
     /// <param name="runtimeState">AutoPick runtime state (StopCount coordination).</param>
     /// <param name="externalConfig">Optional script-layer override config.</param>
+    /// <param name="inputBackend">Platform input backend.</param>
     public static MacAutoPickComposition Compose(
         IAutoPickConfigProvider configProvider,
         IAutoPickRuntimeState runtimeState,
+        IInputBackend inputBackend,
         AutoPickExternalConfig? externalConfig = null)
     {
         // Validate arguments BEFORE touching any static state.
@@ -39,6 +42,7 @@ public sealed class MacAutoPickComposition
         // transition the state machine to Failed.
         ArgumentNullException.ThrowIfNull(configProvider);
         ArgumentNullException.ThrowIfNull(runtimeState);
+        ArgumentNullException.ThrowIfNull(inputBackend);
 
         lock (StateLock)
         {
@@ -49,7 +53,7 @@ public sealed class MacAutoPickComposition
         try
         {
             AutoPickAssets.Instance.Configure(configProvider);
-            var trigger = new AutoPickTrigger(externalConfig, runtimeState, configProvider);
+            var trigger = new AutoPickTrigger(externalConfig, runtimeState, configProvider, inputBackend);
             trigger.Init();
 
             lock (StateLock)
