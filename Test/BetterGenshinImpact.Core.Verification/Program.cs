@@ -730,11 +730,13 @@ Console.WriteLine("B9.2: Recognizer injection");
 var b92PaddleField = typeof(AutoPickTrigger).GetField("_paddleRecognizer", BindingFlags.NonPublic | BindingFlags.Instance)!;
 var b92YapField = typeof(AutoPickTrigger).GetField("_yapRecognizer", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
-// Fields wired correctly
+// Fields wired correctly — reference identity, not just type
 var b92PaddleVal = b92PaddleField.GetValue(b83Trigger);
 var b92YapVal = b92YapField.GetValue(b83Trigger);
-Assert("B9.2 _paddleRecognizer is FakePaddle", b92PaddleVal is FakePaddleAutoPickTextRecognizer, $"got {b92PaddleVal?.GetType().Name}");
-Assert("B9.2 _yapRecognizer is FakeYap", b92YapVal is FakeYapAutoPickTextRecognizer, $"got {b92YapVal?.GetType().Name}");
+Assert("B9.2 _paddleRecognizer reference",
+    ReferenceEquals(b92PaddleVal, testPaddle), "different instance");
+Assert("B9.2 _yapRecognizer reference",
+    ReferenceEquals(b92YapVal, testYap), "different instance");
 
 // Source guard: static OCR references removed from AutoPickTrigger.cs
 // (confirmed by rg at commit time — file path not available at runtime)
@@ -746,10 +748,13 @@ try { _ = new AutoPickTrigger(null, null, testConfigProvider, b5Recorder, b5Syst
 catch (ArgumentNullException) { Assert("B9.2 null yap → ArgumentNullException", true, ""); }
 
 // Unsupported placeholders throw
-try { new UnsupportedPaddleAutoPickTextRecognizer().Recognize(new Mat(1, 1, MatType.CV_8UC3)); Assert("UnsupportedPaddle should throw", false, ""); }
-catch (NotSupportedException) { Assert("B9.2 UnsupportedPaddle → NotSupportedException", true, ""); }
-try { new UnsupportedYapAutoPickTextRecognizer().Recognize(new Mat(1, 1, MatType.CV_8UC3)); Assert("UnsupportedYap should throw", false, ""); }
-catch (NotSupportedException) { Assert("B9.2 UnsupportedYap → NotSupportedException", true, ""); }
+using (var mat = new Mat(1, 1, MatType.CV_8UC3))
+{
+    try { new UnsupportedPaddleAutoPickTextRecognizer().Recognize(mat); Assert("UnsupportedPaddle should throw", false, ""); }
+    catch (NotSupportedException) { Assert("B9.2 UnsupportedPaddle → NotSupportedException", true, ""); }
+    try { new UnsupportedYapAutoPickTextRecognizer().Recognize(mat); Assert("UnsupportedYap should throw", false, ""); }
+    catch (NotSupportedException) { Assert("B9.2 UnsupportedYap → NotSupportedException", true, ""); }
+}
 
 Console.WriteLine();
 Console.WriteLine($"=== {passed} passed, {failed} failed ===");

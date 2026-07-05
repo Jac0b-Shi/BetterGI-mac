@@ -51,7 +51,7 @@ internal class GameTaskManager
 
         TriggerDictionary.TryAdd("RecognitionTest", new TestTrigger());
         TriggerDictionary.TryAdd("GameLoading", new GameLoadingTrigger());
-        TriggerDictionary.TryAdd("AutoPick", new AutoPick.AutoPickTrigger(null, null, null, inputBackend, systemInfo, paddleRecognizer, yapRecognizer));
+        TriggerDictionary.TryAdd("AutoPick", new AutoPick.AutoPickTrigger(null, null, autoPickConfigProvider, inputBackend, systemInfo, paddleRecognizer, yapRecognizer));
         TriggerDictionary.TryAdd("QuickTeleport", new QuickTeleport.QuickTeleportTrigger());
         TriggerDictionary.TryAdd("AutoSkip", new AutoSkip.AutoSkipTrigger());
         TriggerDictionary.TryAdd("AutoFish", new AutoFishing.AutoFishingTrigger());
