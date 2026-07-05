@@ -191,21 +191,23 @@ var stateField = typeof(BetterGenshinImpact.GameTask.AutoPick.AutoPickTrigger)
 
 // Test 1: injection with StopCount=0 (via five-param ctor, null config + provider)
 var b5Recorder = new RecordingInputBackend();
+var testConfigProvider = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
+    new AutoPickConfig { PickKey = "F", Enabled = true }, PaddleOcrModelConfig.V5, "zh-Hans");
 var state0B5 = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(0);
-var t0 = new AutoPickTrigger(null, state0B5, null, b5Recorder, b5SystemInfo);
+var t0 = new AutoPickTrigger(null, state0B5, testConfigProvider, b5Recorder, b5SystemInfo);
 var actualStop0 = (int)(stopCountProp?.GetValue(t0) ?? throw new InvalidOperationException());
 Assert("StopCount=0 from state", actualStop0 == 0, $"got {actualStop0}");
 
 // Test 2: injection with StopCount=2
 var b5Recorder2 = new RecordingInputBackend();
 var stateForB5 = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(2);
-var t2 = new AutoPickTrigger(null, stateForB5, null, b5Recorder2, b5SystemInfo);
+var t2 = new AutoPickTrigger(null, stateForB5, testConfigProvider, b5Recorder2, b5SystemInfo);
 var actualStop2 = (int)(stopCountProp?.GetValue(t2) ?? throw new InvalidOperationException());
 Assert("StopCount=2 from state", actualStop2 == 2, $"got {actualStop2}");
 
 // Test 3: explicit null config + state preserves null _externalConfig and _runtimeState
 var b5Recorder3 = new RecordingInputBackend();
-var tNull = new AutoPickTrigger(null, null, null, b5Recorder3, b5SystemInfo);
+var tNull = new AutoPickTrigger(null, null, testConfigProvider, b5Recorder3, b5SystemInfo);
 var extNull = extField?.GetValue(tNull);
 var stateNull = stateField?.GetValue(tNull);
 Assert("AutoPickTrigger(null,null,null,recorder) has null _externalConfig",
@@ -216,7 +218,7 @@ Assert("AutoPickTrigger(null,null,null,recorder) has null _runtimeState",
 // Test 4: externalConfig-only preserves _externalConfig, no runtime state
 var b5Recorder4 = new RecordingInputBackend();
 var external = new AutoPickExternalConfig { ForceInteraction = true };
-var t3 = new AutoPickTrigger(external, null, null, b5Recorder4, b5SystemInfo);
+var t3 = new AutoPickTrigger(external, null, testConfigProvider, b5Recorder4, b5SystemInfo);
 var ext3 = extField?.GetValue(t3);
 Assert("externalConfig-only preserves _externalConfig",
     ReferenceEquals(ext3, external), "different reference");
@@ -225,7 +227,7 @@ Assert("externalConfig-only has null _runtimeState",
 
 // Test 5: combined externalConfig + runtimeState
 var b5Recorder5 = new RecordingInputBackend();
-var t4 = new AutoPickTrigger(external, stateForB5, null, b5Recorder5, b5SystemInfo);
+var t4 = new AutoPickTrigger(external, stateForB5, testConfigProvider, b5Recorder5, b5SystemInfo);
 var ext4 = extField?.GetValue(t4);
 var state4 = stateField?.GetValue(t4);
 Assert("Combined ctor preserves _externalConfig",
@@ -234,8 +236,11 @@ Assert("Combined ctor preserves _runtimeState",
     ReferenceEquals(state4, stateForB5), "different reference");
 
 // Test 6: null inputBackend → ArgumentNullException
-try { _ = new AutoPickTrigger(null, null, null, null!, b5SystemInfo); Assert("null inputBackend should throw", false, ""); }
+try { _ = new AutoPickTrigger(null, null, testConfigProvider, null!, b5SystemInfo); Assert("null inputBackend should throw", false, ""); }
 catch (ArgumentNullException) { Assert("null inputBackend → ArgumentNullException", true, ""); }
+// Also verify null configProvider throws
+try { _ = new AutoPickTrigger(null, null, null!, b5Recorder, b5SystemInfo); Assert("null configProvider should throw", false, ""); }
+catch (ArgumentNullException) { Assert("null configProvider → ArgumentNullException", true, ""); }
 
 // ==== B6: AutoPickAssets.Initialize lifecycle ====
 Console.WriteLine("AutoPickAssets: Initialize lifecycle");
@@ -600,7 +605,7 @@ var inputField = typeof(AutoPickTrigger)
 
 // Recreate trigger with fresh recorder to verify field injection
 var b811Recorder = new RecordingInputBackend();
-var b811Trigger = new AutoPickTrigger(null, null, null, b811Recorder, b5SystemInfo);
+var b811Trigger = new AutoPickTrigger(null, null, testConfigProvider, b811Recorder, b5SystemInfo);
 var injectedBackend = inputField.GetValue(b811Trigger);
 Assert("B8.1.1 _inputBackend field set",
     ReferenceEquals(injectedBackend, b811Recorder), "different reference");
@@ -642,7 +647,7 @@ var assetsBefore = AutoPickAssets.Instance;
 
 // Real AddTrigger call (not pseudo-trigger via new ctor)
 GameTaskManager.ClearTriggers();
-var added = GameTaskManager.AddTrigger("AutoPick", null, b82Recorder, b5SystemInfo);
+var added = GameTaskManager.AddTrigger("AutoPick", null, b82Recorder, b5SystemInfo, testConfigProvider);
 Assert("B8.2 Core shim AddTrigger returns true", added, "returned false");
 Assert("B8.2 Core shim TriggerDictionary contains AutoPick",
     GameTaskManager.TriggerDictionary?.ContainsKey("AutoPick") == true, "not found");

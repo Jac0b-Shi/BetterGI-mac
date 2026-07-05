@@ -55,7 +55,7 @@ public partial class AutoPickTrigger : ITaskTrigger
     // 外部配置
     private AutoPickExternalConfig? _externalConfig;
     private readonly IAutoPickRuntimeState? _runtimeState;
-    private readonly IAutoPickConfigProvider? _configProvider;
+    private readonly IAutoPickConfigProvider _configProvider;
     private readonly IInputBackend _inputBackend;
     private readonly ISystemInfo _systemInfo;
 
@@ -71,10 +71,11 @@ public partial class AutoPickTrigger : ITaskTrigger
     public AutoPickTrigger(
         AutoPickExternalConfig? config,
         IAutoPickRuntimeState? runtimeState,
-        IAutoPickConfigProvider? configProvider,
+        IAutoPickConfigProvider configProvider,
         IInputBackend inputBackend,
         ISystemInfo systemInfo)
     {
+        ArgumentNullException.ThrowIfNull(configProvider);
         ArgumentNullException.ThrowIfNull(inputBackend);
         ArgumentNullException.ThrowIfNull(systemInfo);
         _autoPickAssets = AutoPickAssets.Instance;
@@ -90,8 +91,7 @@ public partial class AutoPickTrigger : ITaskTrigger
     {
         AutoPickAssets.EnsureConfigured();
         _pickRo = _autoPickAssets.PickRo;
-        var config = _configProvider?.AutoPickConfig
-                     ?? TaskContext.Instance().Config.AutoPickConfig;
+        var config = _configProvider.AutoPickConfig;
         IsEnabled = config.Enabled;
 
         if (config.BlackListEnabled)
@@ -218,7 +218,7 @@ public partial class AutoPickTrigger : ITaskTrigger
         }
 
         var scale = _systemInfo.AssetScale;
-        var config = TaskContext.Instance().Config.AutoPickConfig;
+        var config = _configProvider.AutoPickConfig;
 
         // 存在 L 键位是千星奇遇，无需拾取
         using var lKeyRa = content.CaptureRectArea.Find(_autoPickAssets.LRo);

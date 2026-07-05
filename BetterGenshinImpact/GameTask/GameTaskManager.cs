@@ -88,7 +88,7 @@ internal class GameTaskManager
     /// </summary>
     /// <param name="name"></param>
     /// <param name="externalConfig"></param>
-    public static bool AddTrigger(string name, object? externalConfig, IInputBackend inputBackend, ISystemInfo systemInfo)
+    public static bool AddTrigger(string name, object? externalConfig, IInputBackend inputBackend, ISystemInfo systemInfo, IAutoPickConfigProvider autoPickConfigProvider)
     {
         TriggerDictionary ??= new ConcurrentDictionary<string, ITaskTrigger>();
 
@@ -98,8 +98,7 @@ internal class GameTaskManager
         {
             case "AutoPick":
                 triggerName = "AutoPick";
-                // Assets already initialized by LoadInitialTriggers; reuse.
-                trigger = new AutoPick.AutoPickTrigger(externalConfig as AutoPickExternalConfig, null, null, inputBackend, systemInfo);
+                trigger = new AutoPick.AutoPickTrigger(externalConfig as AutoPickExternalConfig, null, autoPickConfigProvider, inputBackend, systemInfo);
                 break;
             case "AutoSkip":
                 triggerName = "AutoSkip";
