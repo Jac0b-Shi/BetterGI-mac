@@ -160,6 +160,10 @@ public partial class App : Application
                 services.AddSingleton<HutaoNamedPipe>();
                 services.AddSingleton<BgiOnnxFactory>();
                 services.AddSingleton<OcrFactory>();
+                // Runtime abstractions (Windows providers — dynamic delegation)
+                services.AddSingleton<Core.Abstractions.Runtime.IAutoPickConfigProvider, Core.Runtime.Windows.WindowsAutoPickConfigProvider>();
+                services.AddSingleton<Core.Abstractions.Runtime.IOcrRuntimeConfigProvider, Core.Runtime.Windows.WindowsOcrRuntimeConfigProvider>();
+                services.AddSingleton<Core.Abstractions.Runtime.IAutoPickRuntimeState, Core.Runtime.Windows.WindowsAutoPickRuntimeState>();
                 services.AddMemoryCache();
                 services.AddSingleton<IAppCache, CachingService>();
                 services.AddSingleton<MemoryFileCache>();
