@@ -491,3 +491,425 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/1
 | Upstream link added? | **No** — upstream is WPF-host-only; not suitable for Core |
 | Core Verification | 112/112 ✅ |
 | Shim count | 17 → **16** ✅ |
+
+---
+
+## 9. B10.6 Audit: RunnerContext
+
+### 9.1 Current shim
+
+| Aspect | Detail |
+|--------|--------|
+| File | `BetterGenshinImpact.Core/Shim/RunnerContext.cs` |
+| Lines | 30 |
+| Namespace | `BetterGenshinImpact.GameTask` |
+| Type kind | `public class RunnerContext` — plain class, no base, no `Singleton<T>` |
+| Instance access | Static singleton with double-checked locking: `private static RunnerContext? _instance` + `object _locker` |
+| Public API | `public static RunnerContext Instance { get; }` (get-only) |
+| Fields | `public volatile int AutoPickTriggerStopCount;` — mutable, volatile, no property wrapper |
+| Constructor | Implicit parameterless |
+| Comment | `"TEMPORARY VERIFICATION SHIM: provides RunnerContext.Instance.AutoPickTriggerStopCount. The real RunnerContext references AutoFight, AutoPathing, CombatScenes, TaskProgress etc. Long-term: split upstream RunnerContext into a Core-facing interface."` |
+| Nullable enabled | Yes (file-scoped `#nullable` not set; project-level `Nullable=enable` applies) |
+
+### 9.2 Upstream/history investigation
+
+#### 9.2.1 Upstream WPF definition
+
+| Aspect | Upstream (`BetterGenshinImpact/GameTask/RunnerContext.cs`) |
+|--------|-----------------------------------------------------------|
+| Lines | 217 |
+| Type | `public class RunnerContext : Singleton<RunnerContext>` |
+| Added | Commit `bf06ba3` ("fixed #3237", 2026-07-03) — original upstream commit |
+| Modifications after creation | **None** — single creation commit, never modified |
+
+Full upstream API surface:
+
+| Member | Kind | Type / Signature | Notes |
+|--------|------|------------------|-------|
+| `Instance` | Static property (inherited) | `Singleton<RunnerContext>.Instance` | Via `LazyInitializer.EnsureInitialized` + `Activator.CreateInstance` |
+| `IsContinuousRunGroup` | Auto-property | `bool` | Read/write |
+| `taskProgress` | Auto-property | `TaskProgress?` | Read/write |
+| `IsSuspend` | Auto-property | `bool` | Read/write |
+| `IsPreExecution` | Auto-property | `bool` | Default `false` |
+| `SuspendableDictionary` | Field (public) | `Dictionary<string, ISuspendable>` | Mutable, allocated in ctor |
+| `isAutoFetchDispatch` | Auto-property | `bool` | Read/write |
+| `PartyName` | Auto-property | `string?` | Nullable, read/write |
+| `AutoPickTriggerStopCount` | Auto-property | `int` | Private set, default `0` |
+| `_combatScenes` | Backing field | `CombatScenes?` | Private, mutable |
+| `GetCombatScenes(CancellationToken)` | Async method | `Task<CombatScenes?>` | Lazy-init with capture call |
+| `TrySyncCombatScenesSilent()` | Method | `CombatScenes?` | Silent capture + init |
+| `ClearCombatScenes()` | Method | `void` | Sets `_combatScenes = null` |
+| `Clear()` | Method | `void` | Resets task-scoped state |
+| `Reset()` | Method | `void` | Resets all state to defaults |
+| `StopAutoPick(int time = -1)` | Method | `void` | Inc stop count, schedule resume |
+| `ResumeAutoPick(int time = 0)` | Method | `void` | Dec stop count (or schedule) |
+| `StopAutoPickRunTask(Func<Task>, int)` | Method | `async Task` | Execute while paused |
+| `stop()` | Method | `void` | Clear combat scenes only |
+
+Upstream dependencies (C# type-level, beyond System):
+
+| Dependency | Type | Purpose |
+|------------|------|---------|
+| `AutoFight.Model.CombatScenes` | WPF task type | Team/character recognition |
+| `AutoPathing.Suspend.ISuspendable` | WPF task type | Suspend dictionary values |
+| `Common.Job.ReturnMainUiTask` | WPF task type | Return-to-main-ui before team scan |
+| `Common.TaskControl.*` | Static gateway | `CaptureToRectArea()`, `Delay()`, `Logger` |
+| `Microsoft.Extensions.Logging.ILogger` | External | Logging |
+| `Model.Singleton<T>` | WPF base | Singleton infrastructure |
+
+#### 9.2.2 Shim origin
+
+| Aspect | Value |
+|--------|-------|
+| Commit | `32590fc` ("macOS arm64 OpenCV native runtime + reproducible build script", 2026-07-04) |
+| Operation | Created new file `BetterGenshinImpact.Core/Shim/RunnerContext.cs` |
+| Author | Jac0b_Shi (macOS port author) |
+| Nature | **Freshly written minimal shim** — not a copy of upstream, not a historical artifact |
+
+The shim was written specifically to satisfy the `RunnerContext.Instance.AutoPickTriggerStopCount` type reference in the linked `AutoPickTrigger.cs`. It was never part of the upstream tree — it is a **compatibility-only compile shim**.
+
+#### 9.2.3 Historical definitions
+
+| Location | Exists? | Status |
+|----------|---------|--------|
+| Current Core shim | ✅ `BetterGenshinImpact.Core/Shim/RunnerContext.cs` | Active (30 lines) |
+| Current upstream WPF | ✅ `BetterGenshinImpact/GameTask/RunnerContext.cs` | Active (217 lines) |
+| Any other definition | ❌ | No -- only two files define `RunnerContext` type |
+| Renamed/moved | ❌ | Never renamed or moved |
+| Split from other type | ❌ | Original single-file type |
+
+#### 9.2.4 Git log
+
+```
+bf06ba3 fixed #3237                                    A      GameTask/RunnerContext.cs
+32590fc macOS arm64 OpenCV native runtime + build script A      Core/Shim/RunnerContext.cs
+```
+
+No modifications, renames, or moves in history. Both files created at their current location.
+
+### 9.3 Preprocessed reference table
+
+All textual references to `RunnerContext` across the repo, evaluated after Core preprocessing (`BGI_PLATFORM_MAC` defined, `BGI_FULL_WINDOWS` not defined):
+
+#### 9.3.1 Core-compiled references (survive preprocessing)
+
+| # | File | Project | Line | Code | Preprocessed? | Notes |
+|---|------|---------|------|------|---------------|-------|
+| 1 | `BetterGenshinImpact.Core/Shim/RunnerContext.cs` | Core | 1–30 | Type definition | ✅ Compiled | The shim itself |
+| 2 | `BetterGenshinImpact/GameTask/AutoPick/AutoPickTrigger.cs` | Core (linked) | 63 | `/// fall back to RunnerContext for Windows legacy paths.` | ✅ Compiled | Comment only |
+| 3 | `BetterGenshinImpact/GameTask/AutoPick/AutoPickTrigger.cs` | Core (linked) | 66 | `_runtimeState?.StopCount ?? RunnerContext.Instance.AutoPickTriggerStopCount;` | ✅ **Compiled reference** | Single production consumer |
+| 4 | `BetterGenshinImpact.Core/Adapters/MacCoreRuntimeAdapter.cs` | Core | 9 | `/// no reference to TaskContext, RunnerContext, or Windows APIs.` | ✅ Compiled | Comment only |
+
+**Total Core production references after preprocessing: 1 (one field access in AutoPickTrigger line 66).**
+
+#### 9.3.2 WPF-only references (not compiled in Core)
+
+| # | File | Lines | Count | Nature |
+|---|------|-------|-------|--------|
+| 1 | `BetterGenshinImpact/GameTask/TaskRunner.cs` | 71,79,89,107 | 4 | Instance lifecycle (Clear, IsContinuousRunGroup) |
+| 2 | `BetterGenshinImpact/GameTask/Common/TaskControl.cs` | 55,56,60,74,89,90 | 6 | Pause/suspend orchestration |
+| 3 | `BetterGenshinImpact/GameTask/Common/Job/SwitchPartyTask.cs` | 197 | 1 | Combat scenes invalidation |
+| 4 | `BetterGenshinImpact/GameTask/SkillCd/SkillCdTrigger.cs` | 218 | 1 | Combat scenes silent init |
+| 5 | `BetterGenshinImpact/GameTask/AutoPathing/PathExecutor.cs` | 135,138,256,267,403,430,431,459,649,675,687,688,699 | 13 | Suspend, PartyName, CombatScenes, Dispatch |
+| 6 | `BetterGenshinImpact/GameTask/AutoPathing/Handler/MiningHandler.cs` | 50 | 1 | GetCombatScenes |
+| 7 | `BetterGenshinImpact/GameTask/AutoPathing/Handler/PickUpCollectHandler.cs` | 54 | 1 | GetCombatScenes |
+| 8 | `BetterGenshinImpact/GameTask/AutoPathing/Handler/LinneaMiningHandler.cs` | 22 | 1 | GetCombatScenes |
+| 9 | `BetterGenshinImpact/GameTask/AutoPathing/Handler/NahidaCollectHandler.cs` | 23 | 1 | GetCombatScenes |
+| 10 | `BetterGenshinImpact/GameTask/AutoPathing/Handler/AutoFightHandler.cs` | 61 | 1 | StopAutoPickRunTask |
+| 11 | `BetterGenshinImpact/GameTask/AutoPathing/Handler/ElementalCollectHandler.cs` | 20 | 1 | GetCombatScenes |
+| 12 | `BetterGenshinImpact/GameTask/AutoPathing/Handler/CombatScriptHandler.cs` | 21 | 1 | GetCombatScenes |
+| 13 | `BetterGenshinImpact/GameTask/AutoLeyLineOutcrop/AutoLeyLineOutcropTask.cs` | 999,1666 | 2 | GetCombatScenes, PartyName |
+| 14 | `BetterGenshinImpact/GameTask/AutoFight/AutoFightJsonTask.cs` | 690,692,758,777,778,779,896,897,898 | 9 | PartyName, CombatScenes |
+| 15 | `BetterGenshinImpact/GameTask/AutoFight/AutoFightTask.cs` | 559,561,634,654,655,656,788,789,790 | 9 | PartyName, CombatScenes |
+| 16 | `BetterGenshinImpact/Service/ScriptService.cs` | 154,171,187,189,247,254,266,268,308,320,367,385,434,439,527,541,547,553 | 18 | IsPreExecution, task orchestration |
+| 17 | `BetterGenshinImpact/ViewModel/Pages/ScriptControlViewModel.cs` | 1988,1994,2432,2443,2485 | 5 | Reset, taskProgress, IsContinuousRunGroup |
+| 18 | `BetterGenshinImpact/ViewModel/Pages/HotKeyPageViewModel.cs` | 378 | 1 | IsSuspend toggle |
+| 19 | `BetterGenshinImpact/Core/Runtime/Windows/WindowsAutoPickRuntimeState.cs` | 7,12 | 2 | Adapter: delegates to RunnerContext.Instance |
+| 20 | `BetterGenshinImpact/Core/Script/Dependence/Genshin.cs` | 301 | 1 | ClearCombatScenes |
+
+**WPF-only total: ~88 textual references across 20 files, all using members absent from the Core shim.**
+
+#### 9.3.3 Verification references
+
+**Zero.** The Verification project has no textual references to `RunnerContext`.
+
+### 9.4 Reachability analysis
+
+#### 9.4.1 Compiled reference graph (after Core preprocessing)
+
+```
+Core compilation closure (BGI_PLATFORM_MAC)
+│
+├── Shim/RunnerContext.cs ───────── definition (self)
+│
+├── AutoPickTrigger.cs (linked) ── line 66:
+│   _runtimeState?.StopCount ?? RunnerContext.Instance.AutoPickTriggerStopCount
+│   │
+│   └── Runtime resolution:
+│       BGI_PLATFORM_MAC → resolves to Shim/RunnerContext.cs
+│       In WPF (BGI_FULL_WINDOWS) → resolves to GameTask/RunnerContext.cs
+│
+└── MacCoreRuntimeAdapter.cs ───── line 9 comment only (no symbol resolution)
+```
+
+#### 9.4.2 Supported Core runtime graph (macOS)
+
+```
+MacAutoPickComposition.Compose(runtimeState, ...)
+  → AutoPickTrigger(externalConfig, runtimeState, ...)
+    → StopCount = _runtimeState.StopCount       ← null-conditional: _runtimeState is NEVER null
+    → ?? RunnerContext.Instance...               ← DEAD BRANCH on macOS
+```
+
+**The `RunnerContext.Instance.AutoPickTriggerStopCount` fallback is unreachable on macOS** because `MacAutoPickComposition.Compose` always provides a non-null `IAutoPickRuntimeState` (`MacAutoPickRuntimeState`). The null-coalescing operator (`??`) only evaluates the right-hand side when the left-hand side (`_runtimeState?.StopCount`) is null, which never occurs in the supported composition path.
+
+#### 9.4.3 Verification graph
+
+```
+Verification (Test/BetterGenshinImpact.Core.Verification)
+  → No RunnerContext references (zero textual, zero compiled)
+  → AutoPickTrigger tests use IAutoPickRuntimeState directly
+```
+
+#### 9.4.4 Windows-only graph (not compiled in Core)
+
+```
+TaskRunner.Run() ───→ RunnerContext.Instance.Clear()
+                    → RunnerContext.Instance.IsContinuousRunGroup
+ScriptService ──────→ RunnerContext.Instance.IsPreExecution (18 refs)
+PathExecutor ───────→ RunnerContext.Instance.SuspendableDictionary, PartyName, GetCombatScenes
+AutoFightTask ──────→ RunnerContext.Instance.PartyName, ClearCombatScenes, GetCombatScenes
+TaskControl ────────→ RunnerContext.Instance.IsSuspend, StopAutoPick, SuspendableDictionary
+SkillCdTrigger ─────→ RunnerContext.Instance.TrySyncCombatScenesSilent()
+HotKeyViewModel ────→ RunnerContext.Instance.IsSuspend toggle
+ScriptControlVM ────→ RunnerContext.Instance.Reset(), taskProgress
+WindowsAutoPickRuntimeState → RunnerContext.Instance.AutoPickTriggerStopCount (adapter)
+```
+
+### 9.5 Semantic comparison: shim vs upstream
+
+| Aspect | Upstream (`RunnerContext : Singleton<RunnerContext>`) | Core shim (`class RunnerContext`) | Delta |
+|--------|------------------------------------------------------|------------------------------------|-------|
+| Base type | `Singleton<RunnerContext>` | None (plain `class`) | Difference in instance creation |
+| Instance init | `LazyInitializer.EnsureInitialized` + `Activator.CreateInstance` | Double-checked lock + `new RunnerContext()` | Similar semantics |
+| `DestroyInstance()` | Inherited: `_instance = null` | **Absent** | Shim missing |
+| `IsContinuousRunGroup` | `bool` auto-property | **Absent** | Shim missing |
+| `taskProgress` | `TaskProgress?` auto-property | **Absent** | Shim missing |
+| `IsSuspend` | `bool` auto-property | **Absent** | Shim missing |
+| `IsPreExecution` | `bool` auto-property (default false) | **Absent** | Shim missing |
+| `SuspendableDictionary` | `Dictionary<string, ISuspendable>` field | **Absent** | Shim missing |
+| `isAutoFetchDispatch` | `bool` auto-property | **Absent** | Shim missing |
+| `PartyName` | `string?` auto-property | **Absent** | Shim missing |
+| `AutoPickTriggerStopCount` | `int` auto-property, private set | `public volatile int` field | Different visibility, different mutability control |
+| `GetCombatScenes(CancellationToken)` | async method → `Task<CombatScenes?>` | **Absent** | Shim missing |
+| `TrySyncCombatScenesSilent()` | method → `CombatScenes?` | **Absent** | Shim missing |
+| `ClearCombatScenes()` | method | **Absent** | Shim missing |
+| `Clear()` | method (partial reset) | **Absent** | Shim missing |
+| `Reset()` | method (full reset to defaults) | **Absent** | Shim missing |
+| `StopAutoPick(int)` | method | **Absent** | Shim missing |
+| `ResumeAutoPick(int)` | method | **Absent** | Shim missing |
+| `StopAutoPickRunTask(Func<Task>,int)` | async method | **Absent** | Shim missing |
+| `stop()` | method | **Absent** | Shim missing |
+| Thread-safety: concurrent access | `LazyInitializer`, no field-level synchronization | `volatile int` field | Partial — volatile only |
+| Semantics on macOS | N/A (not compatible) | Compile shim only | Shim has no runtime effect |
+
+**Critical semantic gaps in the shim:**
+
+| Gap | Implication |
+|-----|-------------|
+| `AutoPickTriggerStopCount` is `public volatile int` field (shim) vs `int` auto-property with `private set` (upstream) | Shim allows unbounded external mutation; upstream encapsulates mutation behind `StopAutoPick`/`ResumeAutoPick` |
+| Static singleton with `new()` default ctor (shim) vs `Activator.CreateInstance` via `Singleton<T>` (upstream) | Equivalent for this case |
+| No `Reset()` | Shim state persists forever — no cleanup mechanism |
+| No `Clear()` | Same |
+| No `DestroyInstance()` | Instance lives for process lifetime |
+
+**What the shim DOES correctly:**
+
+- Provides type resolution for `RunnerContext.Instance.AutoPickTriggerStopCount` in Core
+- Uses Thread-Safe singleton pattern
+- `volatile` ensures cross-thread visibility of the stop count
+
+### 9.6 Architecture classification
+
+#### 9.6.1 Role classification
+
+The upstream `RunnerContext` is a **mutable execution state object + service locator**:
+- **Mutable execution state** (primary): `IsSuspend`, `IsPreExecution`, `IsContinuousRunGroup`, `PartyName`, `AutoPickTriggerStopCount`, `isAutoFetchDispatch`, `SuspendableDictionary`
+- **Service locator / lazy provider** (secondary): `GetCombatScenes(CancellationToken)` wraps `CaptureToRectArea()`, OCR, and team initialization — effectively a service locator for the combat scene
+- **Lifecycle management**: `Clear()` / `Reset()` / `DestroyInstance()`
+
+The Core shim is a **verification-only compile shim** (Category E — keep temporarily):
+- Exists only to satisfy a single compiled type reference in one linked file (`AutoPickTrigger.cs` line 66)
+- Provides a minimal `AutoPickTriggerStopCount` with `volatile` semantics
+- No behavioral relevance on macOS
+- No runtime code path uses the shim's instance on macOS
+
+#### 9.6.2 Question answers
+
+| # | Question | Answer |
+|---|----------|--------|
+| 1 | Who creates it? | The shim is created by its own double-checked-lock singleton getter. On macOS, it is never accessed at runtime (dead branch). On Windows WPF, upstream's `Singleton<RunnerContext>.Instance` creates via `Activator`. |
+| 2 | Who holds it? | Static field `_instance`. WPF `TaskRunner` and `ScriptService` hold references via `Instance` property. |
+| 3 | Who modifies it? | **Upstream**: `TaskRunner`, `ScriptService`, `PathExecutor`, `TaskControl`, `AutoFightTask`, `ScriptControlViewModel`, `HotKeyViewModel`, `AutoPickTrigger` etc. **Shim**: no runtime mutations on macOS (dead branch). |
+| 4 | Lifecycle scope? | **App-level singleton** — exists for entire process lifetime. Not task-scoped despite `Clear()`/`Reset()` methods. |
+| 5 | Required constructor parameter? | Not currently. Its `Instance` property is the universal entry point. |
+| 6 | Should split into narrow interfaces? | **Yes** — upstream's responsibilities (execution state, combat scene provider, pause/suspend, pre-execution flag) are distinct. `IAutoPickRuntimeState` already split the AutoPick stop count. For macOS, only the AutoPick stop count is relevant. |
+| 7 | Belongs in Platform.Abstractions? | No — it's execution state, not a platform capability. |
+| 8 | References Core types? | **Upstream** references `CombatScenes`, `CaptureToRectArea()` — these are WPF business types, not Core contracts. The shim references nothing. |
+| 9 | Should macOS create a corresponding object? | No — the single consumed member (`AutoPickTriggerStopCount`) is already provided via `IAutoPickRuntimeState` / `MacAutoPickRuntimeState`. |
+| 10 | Replaceable by CancellationToken / narrow state interface? | **Yes** — for Core purposes, `IAutoPickRuntimeState.StopCount` already covers the only consumed member. CancellationToken covers cancellation, `IProgress<T>` covers progress. |
+
+#### 9.6.3 Architecture rule compliance
+
+| Rule | RunnerContext violation | Severity |
+|------|------------------------|----------|
+| No static gateway | ✅ Upstream: `Singleton<T>.Instance` is a static gateway by convention. The shim replicates this. | ⚠️ Pre-existing pattern, not introduced by shim |
+| No service locator | ⚠️ Upstream: `GetCombatScenes()` wraps capture+OCR+team init — service locator pattern. The shim does NOT include this. | ⚠️ Upstream issue, shim is clean |
+| No IServiceProvider in business layer | ✅ Neither upstream nor shim exposes IServiceProvider | ✅ |
+| No fallback singleton resolution | ❌ **AutoPickTrigger line 66:** `RunnerContext.Instance.AutoPickTriggerStopCount` is a static singleton fallback for `IAutoPickRuntimeState` | High — violates "required capability must be constructor injection" |
+| Consumer depends on narrow interface | ⚠️ The consumer (`AutoPickTrigger`) already prefers `IAutoPickRuntimeState` but keeps the static fallback | Medium |
+| No null!/dummy/no-op half-valid state | ✅ The shim provides a valid `int` value (0) | ✅ |
+| Must keep upstream WPF behavior | ✅ Shim does not affect WPF behavior | ✅ |
+
+**Specific violations identified:**
+
+1. **Global mutable state**: `RunnerContext.Instance.AutoPickTriggerStopCount` is mutable static state. The upstream at least encapsulates write via `private set`, but the shim uses `public volatile int field` — no write encapsulation.
+
+2. **Hidden lifecycle ownership**: None for the shim — it's never accessed at runtime on macOS.
+
+3. **Implicit cancellation**: No cancellation behavior exists in either version relevant to Core.
+
+4. **Shared state across unrelated tasks**: `AutoPickTriggerStopCount` is global across all triggers. This is a WPF concern, not a Core concern since the Core code path uses injected `IAutoPickRuntimeState`.
+
+5. **Test-only defaults leaking into production**: Not applicable (no tests reference RunnerContext).
+
+6. **Fake initialized state**: The shim's default `AutoPickTriggerStopCount = 0` is correct — "not paused". No fake initialized problem.
+
+7. **No-op control methods**: Not applicable (shim has no control methods).
+
+### 9.7 Recommendation
+
+**Category F — Remove as dead shim (with precondition).**
+
+**Precondition:** Remove the dead `RunnerContext.Instance.AutoPickTriggerStopCount` fallback from `AutoPickTrigger.cs` line 66, then delete the shim.
+
+**Alternative considered (Category B — link upstream):** Rejected because the upstream `RunnerContext` has heavy WPF/task dependencies (`CombatScenes`, `CaptureToRectArea()`, `ISuspendable`, `TaskProgress`) that cannot be linked into Core. Linking would require extracting a narrow contract, which already exists as `IAutoPickRuntimeState`.
+
+**Rationale:**
+
+| Factor | Assessment |
+|--------|-----------|
+| Core production references after preprocessing | **1** — single `AutoPickTrigger.cs` line 66 |
+| Reachable on macOS? | **No** — `_runtimeState` is always non-null on macOS |
+| Reachable via Verification | **No** — zero Verification references |
+| Replacement exists? | **Yes** — `IAutoPickRuntimeState` already provides `StopCount` |
+| Breaks WPF if removed from Core? | **No** — WPF uses its own upstream `GameTask/RunnerContext.cs` |
+| Falls back to null/default | The `??` fallback defaults to `0` (not paused), which is the same default `MacAutoPickRuntimeState` provides |
+
+### 9.8 Neighboring shim relationship
+
+| Shim | Relationship with RunnerContext | Ordering constraint |
+|------|-------------------------------|---------------------|
+| `TaskControl.cs` | Core `Shim/TaskControl.cs` does NOT reference RunnerContext. Upstream `TaskControl.cs` (WPF project) has 6 RunnerContext refs (IsSuspend, StopAutoPick, SuspendableDictionary). | **No dependency** — Core shim is independent |
+| `GameTaskManager.cs` | No RunnerContext reference | Independent |
+| `Global.cs` | No RunnerContext reference | Independent |
+| `PlatformServices.cs` | No RunnerContext reference | Independent |
+| `App.cs` | No RunnerContext reference | Independent |
+| `TaskContext.cs` | Already deleted in B10.5.4 | Already resolved |
+
+**Deletion order:** RunnerContext can be deleted independently of any remaining shim. No circular dependency exists.
+
+### 9.9 Minimal implementation plan (B10.6.1)
+
+#### B10.6.1 — Remove RunnerContext fallback from AutoPickTrigger, delete shim
+
+| Step | File | Change |
+|------|------|--------|
+| 1 | `BetterGenshinImpact/GameTask/AutoPick/AutoPickTrigger.cs` line 66 | Remove `?? RunnerContext.Instance.AutoPickTriggerStopCount`, keep `_runtimeState?.StopCount`. For Core/Mac this is a no-op (dead branch removal). For Windows WPF, the `WindowsAutoPickRuntimeState` adapter delegates to upstream `RunnerContext`. |
+| 2 | `BetterGenshinImpact.Core/Shim/RunnerContext.cs` | Delete file |
+| 3 | `BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj` | Remove `<Compile Include="Shim/RunnerContext.cs" />` line 174 |
+
+**Behavior-preservation evidence:**
+
+| Scenario | Before | After | Delta |
+|----------|--------|-------|-------|
+| macOS, MacAutoPickComposition | `MacAutoPickRuntimeState.StopCount` used (non-null) | Same | ✅ None |
+| macOS, null runtimeState | Falls back to `RunnerContext.Instance.AutoPickTriggerStopCount` (=0) | `_runtimeState?.StopCount` = null → 0 | ✅ Same (null coalesce to 0 via `?.` + `??`, wait — need to verify) |
+
+Wait — careful here. The expression is: `_runtimeState?.StopCount ?? RunnerContext.Instance.AutoPickTriggerStopCount`.
+
+If `_runtimeState` is null, `_runtimeState?.StopCount` evaluates to `null` (int?), then `??` evaluates the RHS = `0` (from shim). If I remove the RHS and keep `_runtimeState?.StopCount`, then when `_runtimeState` is null, the result is `null` (int?), but `StopCount` returns `int`, so there'd be a type mismatch. Actually, looking at it:
+
+```csharp
+private int StopCount =>
+    _runtimeState?.StopCount ?? RunnerContext.Instance.AutoPickTriggerStopCount;
+```
+
+`StopCount` is `int`. `_runtimeState?.StopCount` is `int?` (nullable int). `RunnerContext.Instance.AutoPickTriggerStopCount` is `int`. The `??` unwraps: `int? ?? int → int`.
+
+If I remove the RHS:
+```csharp
+private int StopCount =>
+    _runtimeState?.StopCount ?? 0;
+```
+
+Or better, make `IAutoPickRuntimeState` required (non-nullable):
+```csharp
+private readonly IAutoPickRuntimeState _runtimeState;
+private int StopCount => _runtimeState.StopCount;
+```
+
+But changing the constructor signature (making `runtimeState` required) is a consumer change. The minimal safe change is replacing the RunnerContext fallback with a literal `0`:
+
+```csharp
+_runtimeState?.StopCount ?? 0;
+```
+
+But actually the cleanest approach would be to keep null safety and just remove the RunnerContext ref:
+
+```csharp
+_runtimeState?.StopCount ?? 0;
+```
+
+This preserves the behavior (null runtimeState → 0, same as before since the shim always returned 0). And the `WindowsAutoPickRuntimeState` already provides the correct StopCount for Windows WPF consumers that do inject it.
+
+| Scenario | Before | After | Delta |
+|----------|--------|-------|-------|
+| macOS, composed with MacAutoPickRuntimeState | Uses injected StopCount = 0 | Same | ✅ None |
+| macOS, composed with MacAutoPickRuntimeState(2) | Uses injected StopCount = 2 | Same | ✅ None |
+| Windows WPF, with WindowsAutoPickRuntimeState | Uses injected StopCount from upstream | Same | ✅ None |
+| Windows WPF, null runtimeState (legacy) | Falls back to RunnerContext.Instance.AutoPickTriggerStopCount (0 initially) | Falls back to literal 0 | ✅ Same initial value. If RunnerContext was mutated by other code, previous behavior reflected mutation; new behavior always returns 0. ⚠️ |
+
+Hmm, the last case is important. If on Windows, a null `_runtimeState` is used and the RunnerContext was mutated (e.g., `StopAutoPick()` called), the old code would see the incremented `StopCount`, but the new code would always see 0. However, `WindowsAutoPickRuntimeState` already exists precisely to handle this — Windows WPF should use it. The null runtimeState path was always a legacy compatibility path.
+
+This is worthy of note but acceptable since:
+1. The `WindowsAutoPickRuntimeState` exists and is the correct path for Windows
+2. The null runtimeState path for Windows is a legacy compatibility path that already has a correct alternative
+3. This cleanup is precisely the goal of Phase B
+
+**Gates:**
+
+| Gate | Current | After B10.6.1 | Verification |
+|------|---------|---------------|-------------|
+| Core build | 0 errors | 0 errors | `dotnet build` |
+| Core Verification | 112/112 | 112/112 | `dotnet run` on Verification project |
+| WPF type resolution | Upstream game-task types OK; pre-existing IAutoPickConfigProvider missing-usings backlog unrelated | Unchanged | WPF upstream uses `GameTask/RunnerContext.cs`, not affected |
+| Source guard: RunnerContext in Core closure | -- | Zero production code refs (one comment in MacCoreRuntimeAdapter remains) | `rg '\bRunnerContext\b' BetterGenshinImpact.Core/ --type cs` |
+| Shim count | 16 → **15** | Expected | Count remaining shim files |
+| macOS wiring | Composes with MacAutoPickRuntimeState | Unchanged | No macOS code changes |
+
+### 9.10 Risks
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| Windows WPF path with null `_runtimeState` loses cross-trigger StopCount coordination | **Low** — `WindowsAutoPickRuntimeState` exists and is the correct path | Document that Windows WPF should always inject `WindowsAutoPickRuntimeState`; the null fallback is legacy |
+| Future Windows-only trigger added without IAutoPickRuntimeState injection would need to re-add fallback | **Low** — future concern, easy to add back | Not a current risk |
+| Rebase conflict with upstream changes to AutoPickTrigger | **Low** — only line 66 is touched | Single-line change, easy to rebase |
+| Other shim consumers of RunnerContext emerge during remaining B10 work | **Low** — only Core compilation closure matters | Source guard in implementation step will catch any new refs |
+
+### 9.11 Baseline validation
+
+```
+dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
+```
