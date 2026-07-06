@@ -347,89 +347,82 @@ The upstream file is pure C#, has no WPF/Win32 dependencies, and is already in t
 
 ### 8.2 Upstream comparison
 
-| Member | Upstream (`GameTask/TaskContext.cs`) | Core shim | In Core consumers? |
-|--------|--------------------------------------|-----------|-------------------|
-| `Instance()` | `LazyInitializer.EnsureInitialized` | Double-checked lock | ✅ Yes |
-| `IsInitialized` | `bool` (initially false) | Same | ✅ Yes (BaseAssets) |
-| `SystemInfo` | `ISystemInfo` — set via `Init(hWnd)` → `new SystemInfo(hWnd)` | `ISystemInfo` — defaults to `new MacSystemInfo()` | ✅ Yes (BaseAssets, GameCaptureRegion) |
-| `Config` | `AllConfig` — reads from `ConfigService.Config` (throws if null) | `CoreConfig` — minimal container | ✅ Yes (AutoPickAssets behind `#if`) |
-| `DpiScale` | `float` — set via `Init(hWnd)` → `DpiHelper.ScaleY` | **Missing** | ✅ Yes (GameCaptureRegion lines 29, 46) |
-| `GameHandle` | `IntPtr` — Win32 HWND | **Missing** | ✅ Yes (Region.cs line 99) |
-| `PostMessageSimulator` | Win32 PostMessage wrapper | **Missing** | ✅ Yes (Region.cs line 99) |
-| `LinkedStartGenshinTime` | `DateTime` | **Missing** | ❌ WPF-only |
-| `CurrentScriptProject` | Script grouping | **Missing** | ❌ WPF-only |
-| `GetGenshinGameProcessNameList()` | Process name resolution | **Missing** | ❌ WPF-only |
+| Member | Upstream (`GameTask/TaskContext.cs`) | Core shim | In preprocessed Core compilation? |
+|--------|--------------------------------------|-----------|-----------------------------------|
+| `Instance()` | `LazyInitializer.EnsureInitialized` | Double-checked lock | ✅ Yes (only static entry point) |
+| `IsInitialized` | `bool` | Same | Not in current Core closure |
+| `SystemInfo` | `ISystemInfo` — set via `Init(hWnd)` | `ISystemInfo` — defaults to new MacSystemInfo() | ✅ Yes (BaseAssets default ctor) |
+| `Config` | `AllConfig` — reads ConfigService | `CoreConfig` — minimal container | ❌ Only ref is `#if BGI_FULL_WINDOWS` (AutoPickAssets line 176) |
+| `DpiScale` | `float` — Win32 DPI | **Absent** | ❌ Only refs are inside `#if BGI_FULL_WINDOWS` (GameCaptureRegion) |
+| `GameHandle` | `IntPtr` — Win32 HWND | **Absent** | ❌ WPF-only |
+| `PostMessageSimulator` | Win32 PostMessage wrapper | **Absent** | ❌ Line 99 inside `#if BGI_FULL_WINDOWS` (Region.cs) |
+| `LinkedStartGenshinTime` | `DateTime` | **Absent** | ❌ WPF-only |
+| `CurrentScriptProject` | Script grouping | **Absent** | ❌ WPF-only |
+| `GetGenshinGameProcessNameList()` | Process name resolution | **Absent** | ❌ WPF-only |
 
-**Key risk:** `Region.cs` line 99 calls `TaskContext.Instance().PostMessageSimulator.LeftButtonClickBackground()` — this property is `null` in the Core shim (default of `string`/reference type). On Core, this would produce a **NullReferenceException** if the drawing path is exercised. This is currently masked because the drawing path is only triggered by Windows-specific visual features.
+**Key correction from earlier audit:** Members absent from the Core shim (`DpiScale`, `PostMessageSimulator`) do NOT cause null references or NREs in Core because all call sites in linked files are guarded by `#if BGI_FULL_WINDOWS`, which is not defined in the Core project (`BGI_PLATFORM_MAC` is defined instead).
 
-### 8.3 Core-linked consumers
+### 8.3 Real Core-compiled consumers (after preprocessing)
 
-| File | Line(s) | Accessed member | Current injection status |
-|------|---------|----------------|-------------------------|
-| `BaseAssets.cs` | 21 | `TaskContext.Instance().SystemInfo` | B8.2 added `BaseAssets(ISystemInfo)` constructor but default ctor still uses TaskContext |
-| `GameCaptureRegion.cs` | 29, 46 | `TaskContext.Instance().DpiScale` | **Not injected** — no DpiScale in ISystemInfo or separately injected |
-| `GameCaptureRegion.cs` | 94-111 | `TaskContext.Instance().SystemInfo.CaptureAreaRect`, `.ScaleTo1080PRatio` | B8.2 added ISystemInfo to AutoPickTrigger but NOT to GameCaptureRegion |
-| `Region.cs` | 99 | `TaskContext.Instance().PostMessageSimulator.LeftButtonClickBackground()` | **Not injected** — null on Core |
-| `AutoPickAssets.cs` | 176 | `TaskContext.Instance().Config.KeyBindingsConfig...` | Behind `#if BGI_FULL_WINDOWS` — compiled out on Core ✅ |
+| File | Line | Code | Core consumer? |
+|------|------|------|---------------|
+| `BaseAssets.cs` | 21 | `TaskContext.Instance().SystemInfo` (default ctor) | ✅ **Yes — production** |
+| `AutoPickAssets.cs` | 176 | `TaskContext.Instance().Config.KeyBindingsConfig...` | ❌ Inside `#if BGI_FULL_WINDOWS` |
+| `GameCaptureRegion.cs` | 29,46,94–111 | `TaskContext.Instance().DpiScale` / `.SystemInfo.*` | ❌ Inside `#if BGI_FULL_WINDOWS` |
+| `Region.cs` | 99 | `TaskContext.Instance().PostMessageSimulator` | ❌ Inside `#if BGI_FULL_WINDOWS` |
+| Verification `Program.cs` | 179,181,396 | `TaskContext.Instance().SystemInfo` / `.Config` | ✅ **Yes — test** |
 
-### 8.4 Dependency graph
+**The only Core production consumer is `BaseAssets<T>` default constructor** → `TaskContext.Instance().SystemInfo`.
+
+All other "consumers" identified in the earlier audit are excluded from Core compilation by `#if BGI_FULL_WINDOWS`.
+
+### 8.4 Dependency graph (Core production)
 
 ```
-Verification tests
-  → Shim TaskContext.Instance()
-    → SystemInfo = new MacSystemInfo()    (test setup)
-    → Config (CoreConfig)
+BaseAssets<T>.BaseAssets() default constructor
+  → TaskContext.Instance()          (static singleton — service locator)
+    → ISystemInfo
+  → used by:
+    -> AutoPickAssets (via BaseAssets<AutoPickAssets>)
+    -> AutoSkipAssets (via BaseAssets<AutoSkipAssets>)
+    -> other task-asset types that don't override the constructor
 
-BaseAssets (Core-linked)
-  → TaskContext.Instance().SystemInfo     (default ctor path — B8.2 added alternative param ctor)
-
-GameCaptureRegion (Core-linked)
-  → TaskContext.Instance().DpiScale       (NOT injected)
-  → TaskContext.Instance().SystemInfo.*   (NOT injected — was used by every task, not just AutoPick)
-
-Region.cs (Core-linked)
-  → TaskContext.Instance().PostMessageSimulator  (null on Core — bug risk)
+Verification setup
+  → TaskContext.Instance()          (test infrastructure)
+    → sets SystemInfo = new MacSystemInfo()
+    → later reads AutoPickConfig from .Config
 ```
 
 ### 8.5 Architecture classification
 
-**TaskContext is a service locator / context bag.** It bundles:
-1. SystemInfo (platform capability — now separately injectable via ISystemInfo)
-2. DpiScale (rendering metric)
-3. PostMessageSimulator (Windows input path)
-4. Config (WPF configuration tree)
-5. Process/window state
+**TaskContext is a service locator / context bag:**
+- Bundles SystemInfo, Config, DpiScale, PostMessageSimulator, process state
+- Static `Instance()` accessor violates "no static gateway" principle
+- `BaseAssets<T>` default ctor dependency violates "constructor injection" pattern
 
-The Core shim removes Windows-only members but retains the static `Instance()` singleton pattern and the `Config` bag. This violates:
-- "No static gateway" (B1 principle)
-- "No service locator" (B1 principle)
-- "Required capability must be via constructor injection" (B7-B9 pattern)
+The Core shim trims Windows-only members but retains the static singleton pattern.
 
 ### 8.6 Recommendation
 
-**Category C/D hybrid — Replace TaskContext usage with explicit constructor injection over multiple phases; keep shim temporarily for compilation.**
+**Category C/D hybrid — keep shim temporarily; migrate BaseAssets default ctor first.**
 
-The shim cannot be deleted until all Core-linked consumers stop using `TaskContext.Instance()` for their last remaining dependency.
+The shim cannot be deleted until `BaseAssets<T>` default constructor stops calling `TaskContext.Instance().SystemInfo`.
 
 ### 8.7 Minimal phase plan (not implemented in B10.5)
 
 | Phase | Scope | Files | Gate |
 |-------|-------|-------|------|
-| B10.5.1 | Add `DpiScale` to `ISystemInfo` or inject separately into GameCaptureRegion | `ISystemInfo.cs`, `GameCaptureRegion.cs` | Core Verification 112/112; no new TaskContext uses |
-| B10.5.2 | Remove `PostMessageSimulator` call from Region.cs (guard with `#if` or inject) | `Region.cs` | Same |
-| B10.5.3 | Remove default `BaseAssets()` ctor's TaskContext dependency | `BaseAssets.cs` | Same |
-| B10.5.4 | After all consumers migrated, delete shim + csproj entry | `TaskContext.cs` | Core build 0 errors; Verification 112/112; rg TaskContext zero in Core closure |
+| B10.5.1 | Audit all Core-linked `BaseAssets<T>`-derived types to determine which still use the parameterless constructor instead of `BaseAssets(ISystemInfo)` | `BaseAssets.cs`, all task-`Assets` files | Core builds, 112/112 |
+| B10.5.2 | Remove default `BaseAssets()` ctor's TaskContext dependency for Core-linked types — pass ISystemInfo via constructor or composition | `BaseAssets.cs`, task-`Assets` files | No TaskContext refs in Core BaseAssets-derived production code |
+| B10.5.3 | Remove Verification dependence on TaskContext singleton if any | `Program.cs` | Verification 112/112 without TaskContext |
+| B10.5.4 | Delete TaskContext shim and CoreConfig only after preprocessed Core references reach zero | `TaskContext.cs`, `CoreConfig` | Core build zero errors; 112/112; rg zero in Core closure |
 
-### 8.8 Risks
+**NOT in scope for TaskContext removal:**
+- `DpiScale` injection — all Core references are `#if`-guarded
+- `PostMessageSimulator` handling — all Core references are `#if`-guarded
+- `GameCaptureRegion` migration — not a Core compiled consumer
 
-| Risk | Assessment |
-|------|-----------|
-| `Region.cs` line 99 `PostMessageSimulator` on Core | **Will NRE** if `LeftButtonClickBackground()` is called on Core — currently masked; should be `#if BGI_FULL_WINDOWS` guarded |
-| GameCaptureRegion ISystemInfo injection | Not scoped to AutoPick — affects all tasks; broadest impact |
-| `BaseAssets` default ctor still calls TaskContext | B8.2 added parameterized ctor but default still used by other asset types (AutoSkip, AutoFight, etc.) |
-| TaskContext.Instance() in Verification | Test setup — acceptable for test infrastructure; not production |
-
-### 8.9 Baseline
+### 8.8 Baseline
 
 ```
 dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors
