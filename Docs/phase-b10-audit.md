@@ -207,10 +207,6 @@ This is the clearest expression of "use default options" and avoids confusion ab
 
 **Comparison proof:** For JSON arrays deserialized as `HashSet<string>`, the default overload and the legacy options produce equivalent sets. `PropertyNameCaseInsensitive` and `WriteIndented` have zero effect on string array deserialization.
 
-### 6.4 Conclusion
-
-**Category E — removable after consumer decoupling.** Not a shared-source migration; the single consumer simply stops depending on `ConfigService.JsonOptions`, then the shim is deleted.
-
 ### 6.5 Implementation plan
 
 1. Change line 129: `ConfigService.JsonOptions` → call `JsonSerializer.Deserialize<HashSet<string>>(json)` (no-param overload)
