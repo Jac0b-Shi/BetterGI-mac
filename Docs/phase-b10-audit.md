@@ -5,169 +5,131 @@
 
 ---
 
-## 1. Overview
+## 1. Core Assembly Boundary
 
-20 files in `BetterGenshinImpact.Core/Shim/`, all compiled into the Core assembly:
+`BetterGenshinImpact.Core` compiles the following (per `Core.csproj`, `EnableDefaultCompileItems=false`):
 
-```
-App.cs  BgiKeyMapper.cs  BgiOnnxFactory.cs  BgiOnnxModel.cs
-BvStubs.cs  ConfigService.cs  CoreExtensions.cs  DrawableStubs.cs
-GameTaskManager.cs  GameUiCategory.cs  Global.cs  MacSystemInfo.cs
-PlatformServices.cs  RunnerContext.cs  Simulation.cs  SpeedTimer.cs
-StringUtils.cs  TaskContext.cs  TaskControl.cs  ThemedMessageBox.cs
-```
+| Layer | Count | Source |
+|-------|-------|--------|
+| Linked upstream files | ~60 | `BetterGenshinImpact/` via `<Compile Include=... Link=...>` |
+| Shim files | **20** | `Shim/*.cs` via `<Compile Include="Shim/...">` |
+| Adapters | 4 | `Adapters/` (MacCoreRuntime, MacAutoPick, 2 Unsupported) |
+| Composition | 1 | `Composition/MacAutoPickComposition.cs` |
+
+**NOT compiled into Core:**
+- `BetterGenshinImpact/GameTask/GameTaskManager.cs` (Windows upstream — NOT linked)
+- `BetterGenshinImpact/GameTask/TaskTriggerDispatcher.cs` (Windows — NOT linked)
+- `BetterGenshinImpact/Core/Runtime/Windows/` (Windows DI, adapters, backend — NOT compiled)
+- `BetterGenshinImpact/App.xaml.cs` (DI — NOT compiled)
+
+Therefore:
+
+| Claim | Evidence |
+|-------|----------|
+| TaskTriggerDispatcher calls upstream GameTaskManager | **WPF only** — neither is compiled in Core |
+| Core/MacOS uses upstream GameTaskManager | **False** — Core compiles Shim/GameTaskManager.cs |
+| `LoadInitialTriggers` exists in Core | **False** — only `LoadAssetImage` and `AddTrigger` exist in shim |
+| MacAutoPickComposition bypasses GameTaskManager | **True** — constructs AutoPickTrigger directly |
 
 ---
 
-## 2. Classification
+## 2. Shim Classification (mutually exclusive)
 
-### A. Directly deletable (zero references, no alternative needed)
+### A. Directly deletable — zero references in all Core-compiled files
 
-| File | Reason |
-|------|--------|
-| `BvStubs.cs` | Unreferenced in linked upstream files; no callers in Core |
-| `CoreExtensions.cs` | Unreferenced |
-| `DrawableStubs.cs` | Unreferenced in AutoPick/composition chain |
-| `GameUiCategory.cs` | Unreferenced |
-| `StringUtils.cs` | Unreferenced |
-| `TaskControl.cs` | Unreferenced |
+| File | Type defined | In linked sources? | In Verification? | Risk |
+|------|-------------|-------------------|------------------|------|
+| `BvStubs.cs` | `BvStubs` static class (3 stub `WhichGameUi` methods) | **No** — zero refs in AutoPick, Recognition, Helpers, Model, Config, Area files | **No** | Safe — no impact |
+| `CoreExtensions.cs` | Extension methods | **No** | **No** | Safe |
+| `DrawableStubs.cs` | `DrawContent` stub | **No** (drawn methods guarded by `#if BGI_FULL_WINDOWS`) | **No** | Safe |
+| `GameUiCategory.cs` | `GameUiCategory` enum | **No** | **No** | Safe |
+| `StringUtils.cs` | `StringUtils` static class | **No** | **No** | Safe |
+| `TaskControl.cs` | `TaskControl` static class | **No** | **No** | Safe |
 
-These can be deleted in a single commit — no build or test impact.
+All six produce **zero errors** when deleted from csproj and filesystem. Removal can be done in a single commit.
 
-### B. Should be replaced with linked shared source
+### C. Production compatibility shim — required until upstream dependency removed
 
-| File | Upstream equivalent | Blockers to linking |
-|------|---------------------|---------------------|
-| `BgiKeyMapper.cs` | `Helpers/BgiKeyMapper.cs` | None — pure mapping, no WPF/Win32 dependency |
-| `ConfigService.cs` | `Service/ConfigService.cs` | Upstream has WPF dependencies; shim is a thin stub |
-| `Simulation.cs` | `Core/Simulator/Simulation.cs` | SendInputFacade may still have callers; need to verify |
+| File | Core consumers | Why required |
+|------|---------------|--------------|
+| `App.cs` | `AutoPickTrigger` (logger), `AutoPickAssets` (logger), `OcrFactory` (ServiceProvider) | No WPF-free cross-platform `ILogger` resolver |
+| `BgiOnnxFactory.cs` | `PickTextInference` (via linked `OcrFactory`) | ONNX engine construction |
+| `BgiOnnxModel.cs` | `BgiOnnxFactory` | Model lifecycle |
+| `Global.cs` | `AutoPickTrigger` (3× `ReadAllTextIfExist`) | File I/O abstraction |
+| `Simulation.cs` | Via `KeyboardFacade`/`MouseFacade` — delegates to `PlatformServices.Input` | Wraps IInputBackend as static facade; used by linked files |
+| `SpeedTimer.cs` | `AutoPickTrigger.OnCapture` (debug perf) | Logging helper |
+| `RunnerContext.cs` | `AutoPickTrigger.StopCount` fallback | One field (`AutoPickTriggerStopCount`) |
+| `TaskContext.cs` | Linked `BaseAssets`, `TaskTriggerDispatcher` (via Windows only), `OcrFactory`, `AutoPickAssets` | Provides Config + SystemInfo stub for Core/macOS |
+| `ThemedMessageBox.cs` | `AutoPickTrigger` (3× `.Error()`) | UI dialog stub |
+| `PlatformServices.cs` | `DesktopRegion` (linked — 5 calls), `Simulation` (shim), `Verification` (test setup) | Static IInputBackend gateway; required by DesktopRegion in Core |
 
-### C. Must remain as compatibility shim (upstream has Windows-only dependencies)
+### D. Test-owned — should move to Test project
 
-| File | Upstream equivalent | Why it cannot be directly linked |
-|------|---------------------|----------------------------------|
-| `App.cs` | Root `App` (WPF) | Provides `GetLogger<T>()` and `ServiceProvider`; upstream is WPF Application |
-| `BgiOnnxFactory.cs` | `ONNX/BgiOnnxFactory.cs` | Depends on `App.ServiceProvider` |
-| `BgiOnnxModel.cs` | `ONNX/BgiOnnxModel.cs` | Used by BgiOnnxFactory |
-| `Global.cs` | `Helpers/Global.cs` | Upstream has `Absolute()` etc; shim provides `ReadAllTextIfExist` |
-| `MacSystemInfo.cs` | `Model/SystemInfo.cs` (Windows) | Mac-specific ISystemInfo implementation — no upstream equivalent |
-| `PlatformServices.cs` | None | Static gateway for IInputBackend/DesktopRegion |
-| `RunnerContext.cs` | `GameTask/RunnerContext.cs` | Full upstream has coordination methods; shim provides `AutoPickTriggerStopCount` field |
-| `SpeedTimer.cs` | `Helpers/SpeedTimer.cs` | Used by AutoPickTrigger.OnCapture for debug perf recording |
-| `TaskContext.cs` | `GameTask/TaskContext.cs` | Core/macOS Shim providing `Config` + `SystemInfo` |
-| `ThemedMessageBox.cs` | `View/ThemedMessageBox.cs` (WPF) | UI dialog — cross-platform Core needs stub |
+| File | Production consumer | Notes |
+|------|-------------------|-------|
+| `MacSystemInfo.cs` | None in Core production | `TaskContext` shim sets `SystemInfo = new MacSystemInfo()` for Verification. MacAutoPickComposition receives explicit ISystemInfo — does NOT use this shim. |
 
-### D. Test fakes — should move to Test project
-
-| File | Test use |
-|------|----------|
-| `PlatformServices.cs` | Verification sets `PlatformServices.Input = recorder` |
-| `MacSystemInfo.cs` | Verification uses `new MacSystemInfo()` via Shim/TaskContext |
-
-These are currently in the production Core assembly but only used by Verification.
+**`PlatformServices.cs` is NOT test-owned.** It's referenced by `DesktopRegion.cs` (linked in Core) — a production file.
 
 ---
 
 ## 3. GameTaskManager Deep Dive
 
-### 3.1 Shim vs Upstream
-
-| Aspect | Windows upstream (`BetterGenshinImpact/GameTask/GameTaskManager.cs`) | Core shim (`Shim/GameTaskManager.cs`) |
-|--------|----------------------------------------------------------------------|----------------------------------------|
-| Trigger types | All 12 task types | AutoPick only |
-| `AddTrigger` | Full switch (AutoPick, AutoSkip, AutoEat) | AutoPick only |
-| `LoadInitialTriggers` | Full lifecycle (ReloadAssets + Initialize + all triggers) | **Not present** in shim — only used via Windows GameTaskManager linked in core |
-| `ConvertToTriggerList` | Full + Init + Priority sort | Simple filter |
-| `ReloadAssets` | Destroys all asset singletons | **Not present** |
-| `LoadAssetImage` | Resolution-aware + fallback + resize | Same (B8.2 added) |
-
-### 3.2 Who calls what
-
-| Caller | Target method | Which GameTaskManager? |
-|--------|---------------|------------------------|
-| `TaskTriggerDispatcher.Start()` | `LoadInitialTriggers` | **Windows upstream** (linked from `BetterGenshinImpact/GameTask/`) |
-| `TaskRunner` | `ReloadInitialTriggers` → dispatcher → **Windows upstream** | — |
-| `Verification B8.2 test` | `AddTrigger` | **Core shim** |
-| `AutoPickAssets.InitTemplateAssets` | `LoadAssetImage` | **Core shim** (via linked compile) |
-
-### 3.3 Can shim AddTrigger be eliminated?
-
-The core shim `AddTrigger` is the only shim method used by Verification tests. The production macOS `MacAutoPickComposition` does NOT use `GameTaskManager.AddTrigger` — it creates `AutoPickTrigger` directly via the constructor.
-
-**Recommendation:** Keep the shim `GameTaskManager` for asset loading (`LoadAssetImage`) and verification test access. `AddTrigger` can stay as a narrow verification-friendly entry point. No change needed.
-
----
-
-## 4. Dependency Graph (AutoPick-related)
+### 3.1 Core vs WPF boundary
 
 ```
-MacAutoPickComposition.Compose
-  ├── AutoPickTrigger (required: configProvider, inputBackend, systemInfo, paddle, yap)
-  │     ├── App.GetLogger            → Shim/App.cs (C)
-  │     ├── Global.ReadAllTextIfExist → Shim/Global.cs (C)
-  │     ├── ConfigService.JsonOptions → Shim/ConfigService.cs (C, but can be removed — see §5)
-  │     ├── ThemedMessageBox.Error   → Shim/ThemedMessageBox.cs (C)
-  │     ├── SpeedTimer               → Shim/SpeedTimer.cs (C)
-  │     └── RunnerContext.Instance   → Shim/RunnerContext.cs (C — StopCount fallback)
-  ├── AutoPickAssets.Initialize
-  │     └── App.GetLogger            → Shim/App.cs (C)
-  ├── AutoPickAssets.Instance
-  │     └── GameTaskManager.LoadAssetImage → Shim/GameTaskManager.cs (C)
-  └── TaskContext.Instance (via shim)
-        └── Shim/TaskContext.cs (C — still provides SystemInfo for macOS shim path)
+WPF assembly (BetterGenshinImpact):
+  TaskTriggerDispatcher (native file)
+  → BetterGenshinImpact/GameTask/GameTaskManager.cs (native)
+  → full dispatch lifecycle
+
+Core assembly (BetterGenshinImpact.Core):
+  MacAutoPickComposition.Compose
+  → directly constructs AutoPickTrigger (no GameTaskManager)
+  AutoPickAssets.InitTemplateAssets
+  → Shim/GameTaskManager.LoadAssetImage(...)
+  Verification
+  → Shim/GameTaskManager.AddTrigger(...)
 ```
 
-Key: (C) = Compatibility shim — must remain until upstream dependency removed.
+### 3.2 Shim vs upstream AddTrigger
+
+| Aspect | Windows upstream (WPF) | Core shim |
+|--------|------------------------|-----------|
+| Trigger types | AutoPick + AutoSkip + AutoEat | AutoPick only |
+| `LoadInitialTriggers` | Full lifecycle load | **Not present** |
+| `ConvertToTriggerList` | Init + Priority sort | Simple Value filter |
+| `ReloadAssets` | Destroys + reloads all assets | **Not present** |
+| `AddTrigger("AutoPick")` | Full constructor | Used only by Verification |
+
+The shim `AddTrigger` is **not used by production Core or macOS code**. Only Verification tests call it. It exists to provide a verifiable entry point for the composition chain.
+
+### 3.3 Recommendations
+
+- Keep shim `LoadAssetImage` and `AddTrigger` for their respective consumers
+- Do not attempt to link the Windows upstream `GameTaskManager.cs` — it pulls in 12 task types with dozens of Windows asset dependencies
+- No change needed for B10
 
 ---
 
-## 5. Priority for B10.1 (first deletable batch)
-
-**5 files** can be deleted immediately with zero impact:
-
-| File | Lines | Notes |
-|------|-------|-------|
-| `BvStubs.cs` | ~10 | No references in any linked file |
-| `CoreExtensions.cs` | ~10 | No references |
-| `DrawableStubs.cs` | ~20 | No references (drawing methods guarded with `#if BGI_FULL_WINDOWS`) |
-| `GameUiCategory.cs` | ~10 | Enum not referenced |
-| `StringUtils.cs` | ~10 | Not referenced from AutoPick |
-| `TaskControl.cs` | ~10 | Not referenced from AutoPick |
-
-These can go in one commit. **Core Verification must remain 106/106.**
-
----
-
-## 6. Planned Deletion Order
+## 4. Deletion Plan
 
 | Batch | Scope | Files | Verification |
 |-------|-------|-------|-------------|
-| B10.1 | Pure dead shim | BvStubs, CoreExtensions, DrawableStubs, GameUiCategory, StringUtils, TaskControl | Core Verification 106/106 |
-| B10.2 | `BgiKeyMapper` → link upstream | Shim/BgiKeyMapper.cs → upstream `Helpers/BgiKeyMapper.cs` | Same |
-| B10.3 | `ConfigService` → inline the single consumer | `ConfigService.JsonOptions` in AutoPickTrigger line 129 can be replaced with simple `JsonSerializerOptions` | Same |
-| B10.4 | Evaluate remaining 8 compatibility shims | App, BgiOnnxFactory, BgiOnnxModel, Global, PlatformServices, RunnerContext, SpeedTimer, ThemedMessageBox | Each requires upstream dependency removal first |
+| **B10.1** | Pure dead shim | BvStubs, CoreExtensions, DrawableStubs, GameUiCategory, StringUtils, TaskControl (6 files) | Core Verification 106/106 |
+| B10.2 | Evaluation after B10.1 | Remaining 14 shims — each requires upstream dependency audit | TBD |
+| B10.next | *Future* — not planned in detail | App, Global, ConfigService, ThemedMessageBox, RunnerContext, SpeedTimer | Blocked by AutoPickTrigger upstream dependencies |
+| B10.next | *Future* — BgiKeyMapper | Replace shim with linked `Helpers/BgiKeyMapper.cs` | Verify pure mapping compiles |
+| B10.next | *Future* — MacSystemInfo | Move to Test project if production macOS composition no longer uses TaskContext shim | Verify 106/106 |
 
 ---
 
-## 7. Verification Baseline (for B10.1 impact check)
+## 5. Verification Baseline
 
 | Metric | Current |
 |--------|---------|
-| Core Verification | 106/106 |
-| AutoPickTrigger static OCR refs | Zero (B9) |
-| AutoPickTrigger TaskContext/Config refs | Zero (Init + OnCapture) |
-| AutoPickTrigger remaining shims | App, Global, ConfigService, ThemedMessageBox, RunnerContext (StopCount), SpeedTimer |
+| Core Verification | **106/106** |
 | Core build errors | Zero |
-| WPF B9 type resolution | Zero B9 errors |
-
----
-
-## 8. Out of Scope
-
-| NOT in B10 | Reason |
-|------------|--------|
-| Delete App, Global, ConfigService, ThemedMessageBox, RunnerContext, SpeedTimer, TaskContext | Still have linked callers; require upstream dependency changes |
-| Merge GameTaskManager shim with upstream | Divergent responsibilities — shim is deliberately narrow |
-| Implement real macOS OCR | Future |
-| Full WPF build | Pre-existing backlog |
-| Change AutoPick behavior | B10 is structural cleanup only |
+| WPF B9 type resolution | Zero B9-type errors |
+| Shim files compiled | 20 |
+| Adapter-gate | Not triggered (no adapter file changes) |
