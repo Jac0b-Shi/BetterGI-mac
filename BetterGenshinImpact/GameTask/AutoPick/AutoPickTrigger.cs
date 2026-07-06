@@ -52,31 +52,28 @@ public partial class AutoPickTrigger : ITaskTrigger
 
     // 外部配置
     private AutoPickExternalConfig? _externalConfig;
-    private readonly IAutoPickRuntimeState? _runtimeState;
+    private readonly IAutoPickRuntimeState _runtimeState;
     private readonly IAutoPickConfigProvider _configProvider;
     private readonly IInputBackend _inputBackend;
     private readonly ISystemInfo _systemInfo;
     private readonly IPaddleAutoPickTextRecognizer _paddleRecognizer;
     private readonly IYapAutoPickTextRecognizer _yapRecognizer;
 
-    /// <summary>
-    /// Unified StopCount: prefer injected runtime state; fall back to RunnerContext for Windows legacy paths.
-    /// </summary>
-    private int StopCount =>
-        _runtimeState?.StopCount ?? RunnerContext.Instance.AutoPickTriggerStopCount;
+    private int StopCount => _runtimeState.StopCount;
 
     /// <summary>
     /// Master constructor. All injected dependencies are required — no static fallback.
     /// </summary>
     public AutoPickTrigger(
         AutoPickExternalConfig? config,
-        IAutoPickRuntimeState? runtimeState,
+        IAutoPickRuntimeState runtimeState,
         IAutoPickConfigProvider configProvider,
         IInputBackend inputBackend,
         ISystemInfo systemInfo,
         IPaddleAutoPickTextRecognizer paddleRecognizer,
         IYapAutoPickTextRecognizer yapRecognizer)
     {
+        ArgumentNullException.ThrowIfNull(runtimeState);
         ArgumentNullException.ThrowIfNull(configProvider);
         ArgumentNullException.ThrowIfNull(inputBackend);
         ArgumentNullException.ThrowIfNull(systemInfo);

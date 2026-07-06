@@ -188,8 +188,9 @@ var stopCountProp = typeof(BetterGenshinImpact.GameTask.AutoPick.AutoPickTrigger
     .GetProperty("StopCount", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 var extField = typeof(BetterGenshinImpact.GameTask.AutoPick.AutoPickTrigger)
     .GetField("_externalConfig", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-var stateField = typeof(BetterGenshinImpact.GameTask.AutoPick.AutoPickTrigger)
-    .GetField("_runtimeState", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+// Reusable default runtime state for tests where runtime state is not the focus.
+var defaultRuntimeState = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(0);
 
 // Test 1: injection with StopCount=0 (via five-param ctor, null externalConfig + required provider)
 var b5Recorder = new RecordingInputBackend();
@@ -209,41 +210,46 @@ var t2 = new AutoPickTrigger(null, stateForB5, testConfigProvider, b5Recorder2, 
 var actualStop2 = (int)(stopCountProp?.GetValue(t2) ?? throw new InvalidOperationException());
 Assert("StopCount=2 from state", actualStop2 == 2, $"got {actualStop2}");
 
-// Test 3: explicit null config + state preserves null _externalConfig and _runtimeState
+// Test 3: null runtimeState → ArgumentNullException; externalConfig stays nullable
 var b5Recorder3 = new RecordingInputBackend();
-var tNull = new AutoPickTrigger(null, null, testConfigProvider, b5Recorder3, b5SystemInfo, testPaddle, testYap);
-var extNull = extField?.GetValue(tNull);
-var stateNull = stateField?.GetValue(tNull);
-Assert("AutoPickTrigger(null,null,null,recorder) has null _externalConfig",
-    extNull == null, "got non-null");
-Assert("AutoPickTrigger(null,null,null,recorder) has null _runtimeState",
-    stateNull == null, "got non-null");
+try
+{
+    _ = new AutoPickTrigger(null, null!, testConfigProvider, b5Recorder3, b5SystemInfo, testPaddle, testYap);
+    Assert("AutoPickTrigger should reject null runtimeState", false, "constructor accepted null");
+}
+catch (ArgumentNullException)
+{
+    Assert("AutoPickTrigger rejects null runtimeState", true, "");
+}
+// externalConfig null is still accepted (externalConfig remains nullable)
+var tExtNull = new AutoPickTrigger(null, defaultRuntimeState, testConfigProvider, b5Recorder3, b5SystemInfo, testPaddle, testYap);
+var extNull = extField?.GetValue(tExtNull);
+Assert("AutoPickTrigger accepts null externalConfig", extNull == null, "got non-null");
 
-// Test 4: externalConfig-only preserves _externalConfig, no runtime state
+// Test 4: externalConfig-only preserves _externalConfig with valid runtimeState
 var b5Recorder4 = new RecordingInputBackend();
 var external = new AutoPickExternalConfig { ForceInteraction = true };
-var t3 = new AutoPickTrigger(external, null, testConfigProvider, b5Recorder4, b5SystemInfo, testPaddle, testYap);
+var t3 = new AutoPickTrigger(external, defaultRuntimeState, testConfigProvider, b5Recorder4, b5SystemInfo, testPaddle, testYap);
 var ext3 = extField?.GetValue(t3);
 Assert("externalConfig-only preserves _externalConfig",
     ReferenceEquals(ext3, external), "different reference");
-Assert("externalConfig-only has null _runtimeState",
-    stateField?.GetValue(t3) == null, "got non-null");
+var actualStop3 = (int)(stopCountProp?.GetValue(t3) ?? throw new InvalidOperationException());
+Assert("externalConfig-only sees StopCount from injected state", actualStop3 == 0, $"got {actualStop3}");
 
 // Test 5: combined externalConfig + runtimeState
 var b5Recorder5 = new RecordingInputBackend();
 var t4 = new AutoPickTrigger(external, stateForB5, testConfigProvider, b5Recorder5, b5SystemInfo, testPaddle, testYap);
 var ext4 = extField?.GetValue(t4);
-var state4 = stateField?.GetValue(t4);
 Assert("Combined ctor preserves _externalConfig",
     ReferenceEquals(ext4, external), "different reference");
-Assert("Combined ctor preserves _runtimeState",
-    ReferenceEquals(state4, stateForB5), "different reference");
+var actualStop4 = (int)(stopCountProp?.GetValue(t4) ?? throw new InvalidOperationException());
+Assert("Combined ctor preserves StopCount from state", actualStop4 == 2, $"got {actualStop4}");
 
 // Test 6: null inputBackend → ArgumentNullException
-try { _ = new AutoPickTrigger(null, null, testConfigProvider, null!, b5SystemInfo, testPaddle, testYap); Assert("null inputBackend should throw", false, ""); }
+try { _ = new AutoPickTrigger(null, defaultRuntimeState, testConfigProvider, null!, b5SystemInfo, testPaddle, testYap); Assert("null inputBackend should throw", false, ""); }
 catch (ArgumentNullException) { Assert("null inputBackend → ArgumentNullException", true, ""); }
 // Also verify null configProvider throws
-try { _ = new AutoPickTrigger(null, null, null!, b5Recorder, b5SystemInfo, testPaddle, testYap); Assert("null configProvider should throw", false, ""); }
+try { _ = new AutoPickTrigger(null, defaultRuntimeState, null!, b5Recorder, b5SystemInfo, testPaddle, testYap); Assert("null configProvider should throw", false, ""); }
 catch (ArgumentNullException) { Assert("null configProvider → ArgumentNullException", true, ""); }
 
 // ==== B6: AutoPickAssets.Initialize lifecycle ====
@@ -335,7 +341,9 @@ var resetForVerification = typeof(MacAutoPickComposition)
 var composeMethod = typeof(MacAutoPickComposition)
     .GetMethod("Compose", BindingFlags.Public | BindingFlags.Static)!;
 
-// Reflection helpers for B7 trigger internals (extField/stateField already defined in B5)
+// Reflection helpers for B7 trigger internals (extField already defined in B5)
+var b7RuntimeStateField = typeof(AutoPickTrigger)
+    .GetField("_runtimeState", BindingFlags.NonPublic | BindingFlags.Instance)!;
 var b7ConfigProvField = typeof(AutoPickTrigger)
     .GetField("_configProvider", BindingFlags.NonPublic | BindingFlags.Instance)!;
 var b7BlackListField = typeof(AutoPickTrigger)
@@ -367,7 +375,7 @@ Assert("B7.2 _externalConfig preserved",
 
 // B7.3: Compose preserves runtime state reference
 Assert("B7.3 _runtimeState preserved",
-    ReferenceEquals(stateField.GetValue(comp7.Trigger), b7State), "different reference");
+    ReferenceEquals(b7RuntimeStateField.GetValue(comp7.Trigger), b7State), "different reference");
 
 // B7.4: Init() reads IsEnabled from provider
 Assert("B7.4 IsEnabled from provider (true)", comp7.Trigger.IsEnabled == true, $"got {comp7.Trigger.IsEnabled}");
@@ -608,7 +616,7 @@ var inputField = typeof(AutoPickTrigger)
 
 // Recreate trigger with fresh recorder to verify field injection
 var b811Recorder = new RecordingInputBackend();
-var b811Trigger = new AutoPickTrigger(null, null, testConfigProvider, b811Recorder, b5SystemInfo, testPaddle, testYap);
+var b811Trigger = new AutoPickTrigger(null, defaultRuntimeState, testConfigProvider, b811Recorder, b5SystemInfo, testPaddle, testYap);
 var injectedBackend = inputField.GetValue(b811Trigger);
 Assert("B8.1.1 _inputBackend field set",
     ReferenceEquals(injectedBackend, b811Recorder), "different reference");
@@ -650,7 +658,7 @@ var assetsBefore = AutoPickAssets.Instance;
 
 // Real AddTrigger call (not pseudo-trigger via new ctor)
 GameTaskManager.ClearTriggers();
-var added = GameTaskManager.AddTrigger("AutoPick", null, b82Recorder, b5SystemInfo, testConfigProvider, testPaddle, testYap);
+var added = GameTaskManager.AddTrigger("AutoPick", null, defaultRuntimeState, b82Recorder, b5SystemInfo, testConfigProvider, testPaddle, testYap);
 Assert("B8.2 Core shim AddTrigger returns true", added, "returned false");
 Assert("B8.2 Core shim TriggerDictionary contains AutoPick",
     GameTaskManager.TriggerDictionary?.ContainsKey("AutoPick") == true, "not found");
@@ -672,7 +680,7 @@ var b83ConfigProviderField = typeof(AutoPickTrigger)
 // A. Provider field wiring
 var b83Prov = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "F", Enabled = true }, PaddleOcrModelConfig.V5, "zh-Hans");
-var b83Trigger = new AutoPickTrigger(null, null, b83Prov, b5Recorder, b5SystemInfo, testPaddle, testYap);
+var b83Trigger = new AutoPickTrigger(null, defaultRuntimeState, b83Prov, b5Recorder, b5SystemInfo, testPaddle, testYap);
 var wiredProv = b83ConfigProviderField.GetValue(b83Trigger);
 Assert("B8.3A _configProvider field wired",
     ReferenceEquals(wiredProv, b83Prov), "different reference");
@@ -682,13 +690,13 @@ Assert("B8.3A _configProvider field wired",
 // C. Init reads Enabled from provider
 var b83DisabledProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "F", Enabled = false }, PaddleOcrModelConfig.V5, "zh-Hans");
-var b83DisabledTrigger = new AutoPickTrigger(null, null, b83DisabledProv, b5Recorder, b5SystemInfo, testPaddle, testYap);
+var b83DisabledTrigger = new AutoPickTrigger(null, defaultRuntimeState, b83DisabledProv, b5Recorder, b5SystemInfo, testPaddle, testYap);
 b83DisabledTrigger.Init();
 Assert("B8.3C Init reads Enabled=false", !b83DisabledTrigger.IsEnabled, $"got {b83DisabledTrigger.IsEnabled}");
 
 var b83EnabledProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "F", Enabled = true }, PaddleOcrModelConfig.V5, "zh-Hans");
-var b83EnabledTrigger = new AutoPickTrigger(null, null, b83EnabledProv, b5Recorder, b5SystemInfo, testPaddle, testYap);
+var b83EnabledTrigger = new AutoPickTrigger(null, defaultRuntimeState, b83EnabledProv, b5Recorder, b5SystemInfo, testPaddle, testYap);
 b83EnabledTrigger.Init();
 Assert("B8.3C Init reads Enabled=true", b83EnabledTrigger.IsEnabled, $"got {b83EnabledTrigger.IsEnabled}");
 
@@ -696,7 +704,7 @@ Assert("B8.3C Init reads Enabled=true", b83EnabledTrigger.IsEnabled, $"got {b83E
 var b83BlOffProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     new AutoPickConfig { PickKey = "F", Enabled = true, WhiteListEnabled = false, BlackListEnabled = false },
     PaddleOcrModelConfig.V5, "zh-Hans");
-var b83BlOffTrigger = new AutoPickTrigger(null, null, b83BlOffProv, b5Recorder, b5SystemInfo, testPaddle, testYap);
+var b83BlOffTrigger = new AutoPickTrigger(null, defaultRuntimeState, b83BlOffProv, b5Recorder, b5SystemInfo, testPaddle, testYap);
 b83BlOffTrigger.Init();
 var b83WLField = typeof(AutoPickTrigger).GetField("_whiteList", BindingFlags.NonPublic | BindingFlags.Instance)!;
 var b83BLField = typeof(AutoPickTrigger).GetField("_blackList", BindingFlags.NonPublic | BindingFlags.Instance)!;
@@ -740,9 +748,9 @@ Assert("B9.2 _yapRecognizer reference",
 // (confirmed by rg at commit time — file path not available at runtime)
 
 // null recognizer test
-try { _ = new AutoPickTrigger(null, null, testConfigProvider, b5Recorder, b5SystemInfo, null!, testYap); Assert("null paddle should throw", false, ""); }
+try { _ = new AutoPickTrigger(null, defaultRuntimeState, testConfigProvider, b5Recorder, b5SystemInfo, null!, testYap); Assert("null paddle should throw", false, ""); }
 catch (ArgumentNullException) { Assert("B9.2 null paddle → ArgumentNullException", true, ""); }
-try { _ = new AutoPickTrigger(null, null, testConfigProvider, b5Recorder, b5SystemInfo, testPaddle, null!); Assert("null yap should throw", false, ""); }
+try { _ = new AutoPickTrigger(null, defaultRuntimeState, testConfigProvider, b5Recorder, b5SystemInfo, testPaddle, null!); Assert("null yap should throw", false, ""); }
 catch (ArgumentNullException) { Assert("B9.2 null yap → ArgumentNullException", true, ""); }
 
 // Unsupported placeholders throw

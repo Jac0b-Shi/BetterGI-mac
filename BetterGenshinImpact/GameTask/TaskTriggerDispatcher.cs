@@ -65,6 +65,7 @@ namespace BetterGenshinImpact.GameTask
         
 
         private readonly IAutoPickConfigProvider _autoPickConfigProvider;
+        private readonly IAutoPickRuntimeState _runtimeState;
         private readonly IInputBackend _inputBackend;
         private readonly IPaddleAutoPickTextRecognizer _paddleRecognizer;
         private readonly IYapAutoPickTextRecognizer _yapRecognizer;
@@ -73,14 +74,16 @@ namespace BetterGenshinImpact.GameTask
         private bool _starting;
         private bool _startFailed;
 
-        public TaskTriggerDispatcher(IAutoPickConfigProvider autoPickConfigProvider, IInputBackend inputBackend,
+        public TaskTriggerDispatcher(IAutoPickConfigProvider autoPickConfigProvider, IAutoPickRuntimeState runtimeState, IInputBackend inputBackend,
             IPaddleAutoPickTextRecognizer paddleRecognizer, IYapAutoPickTextRecognizer yapRecognizer)
         {
             ArgumentNullException.ThrowIfNull(autoPickConfigProvider);
+            ArgumentNullException.ThrowIfNull(runtimeState);
             ArgumentNullException.ThrowIfNull(inputBackend);
             ArgumentNullException.ThrowIfNull(paddleRecognizer);
             ArgumentNullException.ThrowIfNull(yapRecognizer);
             _autoPickConfigProvider = autoPickConfigProvider;
+            _runtimeState = runtimeState;
             _inputBackend = inputBackend;
             _paddleRecognizer = paddleRecognizer;
             _yapRecognizer = yapRecognizer;
@@ -138,7 +141,7 @@ namespace BetterGenshinImpact.GameTask
         {
             lock (_triggerListLocker)
             {
-                if (GameTaskManager.AddTrigger(name, externalConfig, _inputBackend, RequireSystemInfo(), _autoPickConfigProvider, _paddleRecognizer, _yapRecognizer))
+                if (GameTaskManager.AddTrigger(name, externalConfig, _runtimeState, _inputBackend, RequireSystemInfo(), _autoPickConfigProvider, _paddleRecognizer, _yapRecognizer))
                 {
                     SetTriggers(GameTaskManager.ConvertToTriggerList(true));
                     return true;
@@ -155,7 +158,7 @@ namespace BetterGenshinImpact.GameTask
         public void ReloadInitialTriggers()
         {
             var si = RequireSystemInfo();
-            SetTriggers(GameTaskManager.LoadInitialTriggers(_inputBackend, si, _autoPickConfigProvider, _paddleRecognizer, _yapRecognizer));
+            SetTriggers(GameTaskManager.LoadInitialTriggers(_inputBackend, si, _runtimeState, _autoPickConfigProvider, _paddleRecognizer, _yapRecognizer));
         }
 
         public void Start(IntPtr hWnd, CaptureModes mode, int interval = 50)
@@ -185,7 +188,7 @@ namespace BetterGenshinImpact.GameTask
 
                 // 初始化触发器(一定要在任务上下文初始化完毕后使用)
                 // LoadInitialTriggers 内部会调用 ReloadAssets + AutoPickAssets.Initialize
-                _triggers = GameTaskManager.LoadInitialTriggers(_inputBackend, _systemInfo, _autoPickConfigProvider, _paddleRecognizer, _yapRecognizer);
+                _triggers = GameTaskManager.LoadInitialTriggers(_inputBackend, _systemInfo, _runtimeState, _autoPickConfigProvider, _paddleRecognizer, _yapRecognizer);
                 GameLoadingTrigger.GlobalEnabled = TaskContext.Instance().Config.GenshinStartConfig.AutoEnterGameEnabled;
 
             // if (GraphicsCapture.IsHdrEnabled(hWnd))

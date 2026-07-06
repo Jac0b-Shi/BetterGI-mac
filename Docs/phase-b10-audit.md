@@ -1061,3 +1061,28 @@ App.xaml.cs existing DI registration (line 166)
 dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
 dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
 ```
+
+### 9.20 B10.6.1 Implementation Result
+
+| Metric | Before | After |
+|--------|--------|-------|
+| `AutoPickTrigger._runtimeState` type | `IAutoPickRuntimeState?` (nullable) | `IAutoPickRuntimeState` (required) |
+| `AutoPickTrigger` constructor param | `IAutoPickRuntimeState?` (nullable) | `IAutoPickRuntimeState` (required) + `ArgumentNullException.ThrowIfNull` |
+| `StopCount` implementation | `_runtimeState?.StopCount ?? RunnerContext.Instance.AutoPickTriggerStopCount` | `_runtimeState.StopCount` |
+| `RunnerContext` reference in AutoPickTrigger | 1 (fallback at line 66) | **0** — removed |
+| Core shim `GameTaskManager.AddTrigger` runtimeState param | `null` hardcoded | Required `IAutoPickRuntimeState` parameter, forwarded to trigger |
+| WPF `GameTaskManager.LoadInitialTriggers` runtimeState param | `null` hardcoded | Required `IAutoPickRuntimeState` parameter, forwarded |
+| WPF `GameTaskManager.AddTrigger` runtimeState param | `null` hardcoded | Required `IAutoPickRuntimeState` parameter, forwarded |
+| `TaskTriggerDispatcher` constructor | No runtime state | `IAutoPickRuntimeState runtimeState` param, stored as `_runtimeState` |
+| `TaskTriggerDispatcher` call sites | Passed no runtime state | All three pass `_runtimeState` to GameTaskManager |
+| `App.xaml.cs` DI registration | `IAutoPickRuntimeState → WindowsAutoPickRuntimeState` (line 166) | **Unchanged** — verified existing, no duplicate added |
+| Verification assertion count | 112 | **112** (2 null-field assertions replaced with 2 required-dependency guard assertions) |
+| `RunnerContext` shim file | `Shim/RunnerContext.cs` | **Retained** (not deleted) |
+| Core csproj shim entry | `<Compile Include="Shim/RunnerContext.cs" />` | **Retained** (not deleted) |
+| Source guard: `AutoPickTriggerStopCount` | Core 1 hit | Zero production hits ✅ |
+| Source guard: `IAutoPickRuntimeState?` | AutoPickTrigger field + ctor | Zero hits ✅ |
+| Source guard: `null` runtimeState in production call | 4 sites | Zero hits ✅ (guard test uses `null!` only) |
+| Core build | 0 errors | **0 errors** ✅ |
+| Core Verification | 112/112 | **112/112** ✅ |
+| WPF build — new errors from this change | — | **Zero** — 4 pre-existing errors (IInputBackend/ISystemInfo resolution, same original unmodified code) remain |
+| Shim count | 16 | **16** (unchanged, RunnerContext shim retained) |

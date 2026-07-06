@@ -1,4 +1,5 @@
 using BetterGenshinImpact.Core.Abstractions.Recognition;
+using BetterGenshinImpact.Core.Abstractions.Runtime;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
@@ -41,17 +42,19 @@ internal class GameTaskManager
     public static List<ITaskTrigger> LoadInitialTriggers(
         IInputBackend inputBackend,
         ISystemInfo systemInfo,
+        IAutoPickRuntimeState runtimeState,
         IAutoPickConfigProvider autoPickConfigProvider,
         IPaddleAutoPickTextRecognizer paddleRecognizer,
         IYapAutoPickTextRecognizer yapRecognizer)
     {
+        ArgumentNullException.ThrowIfNull(runtimeState);
         ReloadAssets();
         AutoPickAssets.AutoPickAssets.Initialize(systemInfo, autoPickConfigProvider);
         TriggerDictionary = new ConcurrentDictionary<string, ITaskTrigger>();
 
         TriggerDictionary.TryAdd("RecognitionTest", new TestTrigger());
         TriggerDictionary.TryAdd("GameLoading", new GameLoadingTrigger());
-        TriggerDictionary.TryAdd("AutoPick", new AutoPick.AutoPickTrigger(null, null, autoPickConfigProvider, inputBackend, systemInfo, paddleRecognizer, yapRecognizer));
+        TriggerDictionary.TryAdd("AutoPick", new AutoPick.AutoPickTrigger(null, runtimeState, autoPickConfigProvider, inputBackend, systemInfo, paddleRecognizer, yapRecognizer));
         TriggerDictionary.TryAdd("QuickTeleport", new QuickTeleport.QuickTeleportTrigger());
         TriggerDictionary.TryAdd("AutoSkip", new AutoSkip.AutoSkipTrigger());
         TriggerDictionary.TryAdd("AutoFish", new AutoFishing.AutoFishingTrigger());
@@ -91,9 +94,10 @@ internal class GameTaskManager
     /// </summary>
     /// <param name="name"></param>
     /// <param name="externalConfig"></param>
-    public static bool AddTrigger(string name, object? externalConfig, IInputBackend inputBackend, ISystemInfo systemInfo, IAutoPickConfigProvider autoPickConfigProvider,
+    public static bool AddTrigger(string name, object? externalConfig, IAutoPickRuntimeState runtimeState, IInputBackend inputBackend, ISystemInfo systemInfo, IAutoPickConfigProvider autoPickConfigProvider,
         IPaddleAutoPickTextRecognizer paddleRecognizer, IYapAutoPickTextRecognizer yapRecognizer)
     {
+        ArgumentNullException.ThrowIfNull(runtimeState);
         TriggerDictionary ??= new ConcurrentDictionary<string, ITaskTrigger>();
 
         ITaskTrigger? trigger = null;
@@ -102,7 +106,7 @@ internal class GameTaskManager
         {
             case "AutoPick":
                 triggerName = "AutoPick";
-                trigger = new AutoPick.AutoPickTrigger(externalConfig as AutoPickExternalConfig, null, autoPickConfigProvider, inputBackend, systemInfo, paddleRecognizer, yapRecognizer);
+                trigger = new AutoPick.AutoPickTrigger(externalConfig as AutoPickExternalConfig, runtimeState, autoPickConfigProvider, inputBackend, systemInfo, paddleRecognizer, yapRecognizer);
                 break;
             case "AutoSkip":
                 triggerName = "AutoSkip";

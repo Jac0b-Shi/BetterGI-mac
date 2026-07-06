@@ -47,16 +47,17 @@ public static class GameTaskManager
         TriggerDictionary?.Clear();
     }
 
-    public static bool AddTrigger(string name, object? externalConfig, IInputBackend inputBackend, ISystemInfo systemInfo, IAutoPickConfigProvider autoPickConfigProvider,
+    public static bool AddTrigger(string name, object? externalConfig, IAutoPickRuntimeState runtimeState, IInputBackend inputBackend, ISystemInfo systemInfo, IAutoPickConfigProvider autoPickConfigProvider,
         IPaddleAutoPickTextRecognizer paddleRecognizer, IYapAutoPickTextRecognizer yapRecognizer)
     {
+        ArgumentNullException.ThrowIfNull(runtimeState);
         TriggerDictionary ??= new ConcurrentDictionary<string, ITaskTrigger>();
 
         ITaskTrigger? trigger = null;
         if (name == "AutoPick")
         {
             trigger = new AutoPick.AutoPickTrigger(
-                externalConfig as AutoPickExternalConfig, null, autoPickConfigProvider, inputBackend, systemInfo, paddleRecognizer, yapRecognizer);
+                externalConfig as AutoPickExternalConfig, runtimeState, autoPickConfigProvider, inputBackend, systemInfo, paddleRecognizer, yapRecognizer);
         }
 
         if (trigger == null) return false;
