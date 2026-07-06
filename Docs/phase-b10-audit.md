@@ -261,3 +261,57 @@ Assert(empty.Count == 0, "empty array → empty set");
 | WPF ConfigService type resolution | — | Zero errors ✅ |
 | Source guard: `ConfigService` in Core closure | — | Zero hits ✅ |
 | Shim count | 19 | **18** ✅ |
+
+---
+
+## 7. B10.4 Audit: SpeedTimer
+
+### 7.1 Current shim
+
+| Aspect | Detail |
+|--------|--------|
+| File | `BetterGenshinImpact.Core/Shim/SpeedTimer.cs` |
+| Namespace | `BetterGenshinImpact.Helpers` |
+| API | `Record(string name)`, `DebugPrint()`, internal `Stopwatch` + `Dictionary<string, long>` |
+| Dependencies | `System.Diagnostics` (Stopwatch) — pure C#, no WPF/Win32/ServiceProvider |
+| Comment | "Linked from upstream (pure C#, no Windows deps)" — but no upstream copy exists |
+
+### 7.2 Consumers
+
+| Consumer | Core-linked? | Usage | Business impact if removed |
+|----------|-------------|-------|---------------------------|
+| `AutoPickTrigger.OnCapture` | ✅ Yes | 7 calls: `new SpeedTimer()` + 6 `Record()` + `DebugPrint()` | **None** — debug timing only, `DebugPrint()` is a no-op |
+| `Feature2DExtensions.cs` | ❌ WPF-only | 3 `SpeedTimer()` | None — debug only |
+| `AutoFight/CombatScenes.cs` | ❌ WPF-only | 1 `SpeedTimer()` | None |
+| `TaskTriggerDispatcher.cs` | ❌ WPF-only | 1 `SpeedTimer()` | None |
+| `Common/Map/*.cs` | ❌ WPF-only | 4 `SpeedTimer()` | None |
+| `Test/*` | ❌ Test project | 5 `SpeedTimer()` | None — tests |
+
+**Only consumer in Core-linked files:** `AutoPickTrigger.OnCapture` — debug performance logging, no business impact.
+
+### 7.3 Upstream comparison
+
+No authoritative upstream `Helpers/SpeedTimer.cs` exists. The shim is the only implementation and is pure C# (Stopwatch + Dictionary + Console). It can serve as the authoritative shared source.
+
+### 7.4 Conclusion
+
+**Category B — can be replaced with authoritative shared linked source** (same pattern as BgiKeyMapper).
+
+The shim is pure C#, no WPF/Win32/ServiceProvider dependencies. Move to `BetterGenshinImpact/Helpers/SpeedTimer.cs`, link from Core csproj, delete Shim copy.
+
+### 7.5 Implementation plan
+
+1. Move `Shim/SpeedTimer.cs` → `BetterGenshinImpact/Helpers/SpeedTimer.cs`
+2. Core csproj: delete `<Compile Include="Shim/SpeedTimer.cs" />`, add `<Compile Include="../BetterGenshinImpact/Helpers/SpeedTimer.cs" Link="Helpers/SpeedTimer.cs" />`
+3. Verify: Core build zero errors, Verification unchanged
+4. WPF: auto-compiled via SDK glob
+5. Shim count: 18 → 17
+
+### 7.6 Risk
+
+| Factor | Assessment |
+|--------|-----------|
+| Core build impact | None — identical code |
+| Behavior change | None — `DebugPrint()` is already a no-op |
+| Business impact | None — debug timing only |
+| WPF build impact | None — now in WPF tree |
