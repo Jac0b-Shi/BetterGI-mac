@@ -1131,10 +1131,212 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/1
 |--------|-------------|-----------|
 | `PlatformServices` class | **Does not exist** in WPF tree | `Shim/PlatformServices.cs` |
 | DesktopRegion input access | Refers to `PlatformServices.Input` (same physical file) | Same — DesktopRegion.cs is authoritative in WPF tree, linked in Core |
+| History | Only commit `32590fc` creates this shim | No upstream, no predecessor |
 
 There is no WPF tree `PlatformServices.cs`. The shim was written for the macOS port to satisfy `DesktopRegion`'s static reference to `PlatformServices.Input`.
 
 **Source file note:** `DesktopRegion.cs` has its authoritative physical source at `BetterGenshinImpact/GameTask/Model/Area/DesktopRegion.cs`. Core compiles it through a linked `<Compile Include=... Link=...>` item. WPF compiles it as its own source file (default SDK glob). PlatformServices has no WPF authoritative definition — WPF currently resolves the public `PlatformServices` type from the referenced Core assembly.
+
+### 10.3 Preprocessed reference table (corrected)
+
+#### 10.3.1 Core-compiled references
+
+After full preprocessing analysis:
+
+| # | File | Line | Preprocessed in Core? | Type |
+|---|------|------|-----------------------|------|
+| 1 | `Shim/PlatformServices.cs` | 1–12 | ✅ Definition | Shim self-definition |
+| 2 | `Shim/Simulation.cs` | 10 | ✅ `PlatformServices.Input` | Shim self-reference |
+| 3 | `DesktopRegion.cs` (Core linked) | 29,41,48,58,63 | ✅ Method bodies compiled | **Defined but NOT called from any Core-linked consumer** |
+| 4 | `GameCaptureRegion.cs` (Core linked) | 92–131 | ❌ `#if BGI_FULL_WINDOWS` | Windows-only |
+| 5 | `Region.BackgroundClick()` | 94–103 | ❌ `#if BGI_FULL_WINDOWS` | Windows-only |
+
+**Key finding: Zero Core production code paths call into PlatformServices.Input on macOS.**
+
+- `Region.ClickTo/MoveTo/Click/Move` — methods are compiled (Region.cs is linked in Core), but **no Core-linked file invokes them**. Zero hits for `.ClickTo(`, `.MoveTo(`, `.Click()`, `.Move()` in any Core-linked file.
+- `GameCaptureRegion.GameRegionClick/Move/MoveBy/1080PPosClick/1080PPosMove` — all inside `#if BGI_FULL_WINDOWS`. Not compiled in Core.
+- `AutoPickTrigger` uses injected `_inputBackend`, not PlatformServices.
+- `MacAutoPickComposition` injects IInputBackend directly.
+
+**Total Core production consumers of PlatformServices.Input: ZERO.**
+
+#### 10.3.2 Verification references
+
+| # | File | Line | Code | Type |
+|---|------|------|------|------|
+| 1 | `Verification/Program.cs` | 22 | `PlatformServices.Input = recorder;` | **Write** — sets the static gateway for DesktopRegion test |
+
+This is the **only** runtime consumer of PlatformServices.Input in the entire Core closure.
+
+#### 10.3.3 Simulation shim consumer analysis (corrected)
+
+| # | File | Simulation ref? | Preprocessed in Core? | Consumer? |
+|---|------|----------------|-----------------------|-----------|
+| 1 | `Shim/Simulation.cs` | Definition | ✅ | Shim self-definition |
+| 2 | `GlobalMethod.cs` | `Simulation.SendInput.*` | ❌ **Not linked in Core** (`rg` in csproj = zero) | WPF-only |
+| 3 | `ClickExtension.cs` | `Simulation.SendInput.*` | ❌ **Not linked in Core** (`rg` in csproj = zero) | WPF-only |
+| 4 | `AutoPickTrigger.cs` | Commented-out line | ✅ Comment, not code | Not a consumer |
+| 5 | `Verification` | — | — | **Zero references** |
+
+**Total Core production consumers of Simulation shim: ZERO.**
+
+The Simulation shim exists only as a compile-time type definition with zero reachable consumers on macOS.
+
+### 10.4 Reachability analysis
+
+```
+Core compilation closure (BGI_PLATFORM_MAC)
+│
+├── Shim/PlatformServices.cs ─────── defined, zero consumers
+├── Shim/Simulation.cs ───────────── defined, zero consumers
+│
+├── DesktopRegion.cs (linked) ───── 5 PlatformServices.Input calls
+│   └── Called from: (nobody in Core-linked files) ← dead code on macOS
+│       Region.ClickTo/MoveTo defined but never called from Core
+│       GameCaptureRegion input helpers: #if BGI_FULL_WINDOWS
+│
+├── AutoPickTrigger.cs ──────────── uses injected _inputBackend, not PlatformServices
+└── MacAutoPickComposition.cs ───── injects IInputBackend directly
+```
+
+**macOS supported runtime path:**
+```
+MacAutoPickComposition.Compose(inputBackend, ...)
+  → AutoPickTrigger._inputBackend.KeyPress(...)     ← direct injection
+  → NO PlatformServices usage
+```
+
+**Verification-only path:**
+```
+Program.cs
+  → PlatformServices.Input = recorder
+  → DesktopRegion.DesktopRegionMove(...)     ← test-only
+```
+
+### 10.5 Semantic analysis
+
+#### Classification: **Category B/A transitional — dead on Core, needed only for Verification**
+
+| Check | Result |
+|-------|--------|
+| Is it a static gateway? | **Yes** — but it's only accessed by Verification, not production |
+| Core production consumers? | **Zero** — all earlier "7 references" are dead code on macOS |
+| Verification consumer? | **One** — sets `PlatformServices.Input = recorder` |
+| Can be deleted from Core? | **Yes** — once Verification is updated to use direct IInputBackend |
+
+#### Architecture violations re-evaluated
+
+The violation still exists (static gateway pattern), but it's confined to the shim file itself since zero Core production paths reach it. This is the same situation as `RunnerContext` before B10.6.1: a compile-only shim kept alive by one Verification write-site.
+
+**IInputBackend is already a narrow interface in Platform.Abstractions** — no new abstraction needed.
+
+### 10.6 DesktopRegion and Region input API on macOS
+
+| Method | In Core-linked file? | Called from any Core-linked file? | macOS reachable? |
+|--------|---------------------|-----------------------------------|------------------|
+| `Region.Click()` | ✅ Region.cs | ❌ Zero callers in Core-linked files | **No** |
+| `Region.ClickTo(x,y)` | ✅ Region.cs | ❌ Zero callers in Core-linked files | **No** |
+| `Region.MoveTo(x,y)` | ✅ Region.cs | ❌ Zero callers in Core-linked files | **No** |
+| `Region.Move()` | ✅ Region.cs | ❌ Zero callers in Core-linked files | **No** |
+| `Region.DoubleClick()` | ✅ Region.cs | ❌ Zero callers in Core-linked files | **No** |
+| `Region.BackgroundClick()` | ✅ Region.cs | ❌ `#if BGI_FULL_WINDOWS` | **No** |
+| `DesktopRegion.DesktopRegionClick/Move/MoveBy` | ✅ DesktopRegion.cs | ❌ Not called from Core consumer | **No** |
+| `GameCaptureRegion.GameRegionClick/Move` | ✅ GCRegion.cs | ❌ `#if BGI_FULL_WINDOWS` | **No** |
+
+**Conclusion:** The entire Region/DesktopRegion input API surface is defined in Core-linked files but is unreachable from the macOS AutoPick runtime. No migration is needed for these methods — they are dead code on macOS.
+
+### 10.7 Simulation shim consumer closure
+
+| Consumer | In Core-linked file? | Consumer? |
+|----------|---------------------|-----------|
+| `GlobalMethod.cs` | ❌ Not linked | WPF-only script API |
+| `ClickExtension.cs` | ❌ Not linked | WPF-only |
+| `AutoPickTrigger.cs` (commented) | ✅ Comment only | Not a consumer |
+| Verification | Zero refs | — |
+
+**Conclusion:** The Simulation shim has zero production consumers. It exists only as a compile-time type definition.
+
+### 10.8 Relation to neighboring shims
+
+| Shim | Relationship | Ordering |
+|------|-------------|----------|
+| `Simulation.cs` | Defines `SendInputFacade`, `KeyboardFacade`, `MouseFacade` — no production consumers | Delete with PlatformServices |
+| `DesktopRegion.cs` | Not a shim — authoritative source in WPF tree | No change needed |
+| `Global.cs` | No reference | Independent |
+| `App.cs` | No reference | Independent |
+
+### 10.9 Recommendation
+
+**Category A — Remove as dead shim (with one precondition).**
+
+Precondition: Remove the single Verification `PlatformServices.Input = recorder;` assignment and update the 2 test `DesktopRegion.DesktopRegionMove()` calls to accept `IInputBackend` directly.
+
+This is the same pattern as B10.6: the shim is kept alive only by a Verification write-site. Once that's fixed, the shim has zero consumers.
+
+No Region input API migration needed. No Simulation consumer migration needed. No GlobalMethod migration needed.
+
+### 10.10 Implementation phases (corrected — radically simpler)
+
+#### B10.7.1: Update Verification to not depend on PlatformServices
+
+Only change: Replace `PlatformServices.Input = recorder;` + 2 `DesktopRegion.DesktopRegionMove()` calls with direct `IInputBackend` parameter passing.
+
+**Option A (recommended):** Change the 2 static calls:
+```csharp
+// Before:
+PlatformServices.Input = recorder;
+...
+DesktopRegion.DesktopRegionMove(960, 540);
+
+// After:
+recorder.MoveMouseTo(960, 540);
+```
+Verification already has `recorder` (a `RecordingInputBackend`). Just call `MoveMouseTo` directly.
+
+Remove `PlatformServices.Input = recorder;` and the `using BetterGenshinImpact;` import if it becomes unused.
+
+**Verification assertion impact:** Zero — both calls test the input backend, not the static gateway.
+
+**Gate:** Core build 0 errors, Verification 112/112.
+
+#### B10.7.2: Delete PlatformServices and Simulation shims
+
+After B10.7.1:
+- Delete `BetterGenshinImpact.Core/Shim/PlatformServices.cs`
+- Delete `BetterGenshinImpact.Core/Shim/Simulation.cs`
+- Remove both csproj entries
+- Source guard: `rg '\bPlatformServices\b' BetterGenshinImpact.Core Test/ --type cs` → zero (MacCoreRuntimeAdapter comment remains)
+- Source guard: `rg '\bSimulation\b' BetterGenshinImpact.Core Test/BetterGenshinImpact.Core.Verification --type cs` → zero
+- Core build 0 errors
+- Verification 112/112
+- Shim count: 15 → **13**
+
+### 10.11 Verification strategy
+
+| Current code | Replacement | Impact |
+|-------------|-------------|--------|
+| `PlatformServices.Input = recorder;` (line 22) | Remove entirely | No assertion change |
+| `DesktopRegion.DesktopRegionMove(960, 540)` (line 53) | `recorder.MoveMouseTo(960, 540)` | Same RecordingInputBackend test, no assertion change |
+| `DesktopRegion.DesktopRegionMove(1920, 1080)` (line 65) | `recorder.MoveMouseTo(1920, 1080)` | Same |
+| `DesktopRegion.DisplayWidth = 1920` (line 23) | Keep — used by DesktopRegion constructor test | Unchanged |
+| `new DesktopRegion(1920, 1080)` + `Derive()` (line 78-80) | Keep — tests DesktopRegion as geometry object | Unchanged |
+
+**Assertion count:** 112 (unchanged).
+
+### 10.12 Risks
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| WPF DesktopRegion still references PlatformServices | **Low** — WPF resolves the type via Core assembly reference | WPF's own `Simulation.SendInput` is the normal input path; PlatformServices in WPF is used only if some WPF code calls `DesktopRegion.DesktopRegionClick/Move` statically, which still works through the assembly reference |
+| Deleting Simulation shim breaks future consumers | **Low** — if a future linked source needs Simulation, it can conditionally compile or use its own IInputBackend | Document removal in commit message |
+| Region.ClickTo/MoveTo are compiled in Core but dead code | **Low** — no behavioral impact. If a future macOS trigger needs them, IInputBackend injection should be added explicitly | This audit serves as documentation |
+
+### 10.13 Baseline validation
+
+```
+dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
+```
 
 ### 10.3 Preprocessed reference table
 
