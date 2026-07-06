@@ -39,7 +39,7 @@ Source guard searches included all linked upstream files compiled via `BetterGen
 
 | File | Symbol(s) | Consumer(s) in linked sources | Deletable? |
 |------|-----------|-------------------------------|-----------|
-| `BvStubs.cs` | `Bv.ImRead()` | `PaddleOcrService.cs` (linked), `Feature2DExtensions.cs` (linked) | **No** — Bv.ImRead used by 2 linked files |
+| `BvStubs.cs` | `Bv.ImRead()` | `PaddleOcrService.cs` — Core-linked, calls Bv.ImRead in pre-heat | **No** |
 | `CoreExtensions.cs` | `ClampTo()`, `ToScalar()` | `ImageRegion.cs` [ClampTo], `RecognitionObject.cs` [ToScalar] | **No** — extension methods used by 2 linked files |
 | `DrawableStubs.cs` | `DrawContent`, `VisionContext` | `Region.cs` [DrawContent ctor/PutRect/PutLine], `ImageRegion.cs` [RemoveRect, VisionContext] | **No** — drawing types used by 3 linked files |
 | `GameUiCategory.cs` | `GameUiCategory` enum | `ITaskTrigger.cs` [SupportedGameUiCategory prop], `CaptureContent.cs` [field type] | **No** — enum used by 2 linked files |
@@ -56,30 +56,35 @@ B10 is not closed. Each remaining shim requires individual dependency evidence b
 
 ---
 
-## 3. Current Shim Dependency Map (20 files, all active)
+## 3. Current Shim Inventory and Known Consumers
 
-| Shim | Supports | Category |
-|------|----------|----------|
-| `App.cs` | Logger, ServiceProvider | Cross-platform adapter |
-| `BgiKeyMapper.cs` | AutoPickAssets | Key mapping |
-| `BgiOnnxFactory.cs` | ONNX | Model factory |
-| `BgiOnnxModel.cs` | ONNX | Model type |
-| `BvStubs.cs` | Bv.ImRead (OCR/Recognition), Bv.WhichGameUi/Bv.DetectChatUi (WPF-only) | Cross-platform stub |
-| `ConfigService.cs` | AutoPickTrigger | JSON options |
-| `CoreExtensions.cs` | ImageRegion, RecognitionObject | Extension methods |
-| `DrawableStubs.cs` | Region, ImageRegion | Drawing overlay types |
-| `GameTaskManager.cs` | AutoPickAssets (LoadAssetImage), Verification (AddTrigger) | Asset loading |
-| `GameUiCategory.cs` | ITaskTrigger, CaptureContent | UI category enum |
-| `Global.cs` | AutoPickTrigger | File I/O |
-| `MacSystemInfo.cs` | TaskContext shim | System info implementation |
-| `PlatformServices.cs` | DesktopRegion, Simulation, Verification | Input backend gateway |
-| `RunnerContext.cs` | AutoPickTrigger.StopCount | Runtime state |
-| `Simulation.cs` | SendInputFacade | Input facade |
-| `SpeedTimer.cs` | AutoPickTrigger | Debug perf |
-| `StringUtils.cs` | ImageRegion | String extensions |
-| `TaskContext.cs` | BaseAssets, OcrFactory, AutoPickAssets | Config + SystemInfo stub |
-| `TaskControl.cs` | Region, ImageRegion | Logger + capture helper |
-| `ThemedMessageBox.cs` | AutoPickTrigger | UI dialog stub |
+| Shim | Known consumers | Evidence status |
+|------|----------------|-----------------|
+| `App.cs` | Logger, ServiceProvider | Known direct consumer |
+| `BgiKeyMapper.cs` | AutoPickAssets | Known direct consumer |
+| `BgiOnnxFactory.cs` | ONNX | Known direct consumer |
+| `BgiOnnxModel.cs` | ONNX | Known direct consumer |
+| `BvStubs.cs` | Bv.ImRead (PaddleOcrService — Core-linked) | **Verified required** (B10.1) |
+| `ConfigService.cs` | AutoPickTrigger (JsonOptions) | Known direct consumer |
+| `CoreExtensions.cs` | ImageRegion (ClampTo), RecognitionObject (ToScalar) | **Verified required** (B10.1) |
+| `DrawableStubs.cs` | Region, ImageRegion (DrawContent, VisionContext) | **Verified required** (B10.1) |
+| `GameTaskManager.cs` | AutoPickAssets (LoadAssetImage), Verification | Known direct consumer |
+| `GameUiCategory.cs` | ITaskTrigger, CaptureContent (enum) | **Verified required** (B10.1) |
+| `Global.cs` | AutoPickTrigger (ReadAllTextIfExist) | Known direct consumer |
+| `MacSystemInfo.cs` | TaskContext shim (default SystemInfo) | Known direct consumer |
+| `PlatformServices.cs` | DesktopRegion (5 calls), Simulation, Verification | Known direct consumer |
+| `RunnerContext.cs` | AutoPickTrigger (StopCount fallback) | Known direct consumer |
+| `Simulation.cs` | SendInputFacade | Known direct consumer |
+| `SpeedTimer.cs` | AutoPickTrigger (debug perf) | Known direct consumer |
+| `StringUtils.cs` | ImageRegion (RemoveAllSpace) | **Verified required** (B10.1) |
+| `TaskContext.cs` | BaseAssets, OcrFactory, AutoPickAssets | Known direct consumer |
+| `TaskControl.cs` | Region, ImageRegion (Logger, CaptureToRectArea) | **Verified required** (B10.1) |
+| `ThemedMessageBox.cs` | AutoPickTrigger (error dialogs) | Known direct consumer |
+
+**Key to Evidence status:**
+- **Verified required (B10.1):** Trial deletion failed; direct symbol reference confirmed in Core-linked consumer
+- **Known direct consumer:** Known caller exists but no trial deletion has been attempted
+- Not yet audited means the file is assumed required until proven otherwise
 
 **What "deletion" would require:** For any shim to be removable, ALL the linked upstream files compiled in Core must stop depending on its types/namespace. This typically requires either:
 - Upstream code modification (replacing static calls with injected dependencies)
