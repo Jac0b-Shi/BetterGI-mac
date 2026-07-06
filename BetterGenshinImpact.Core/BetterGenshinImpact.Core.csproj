@@ -123,6 +123,7 @@
     <Compile Include="../BetterGenshinImpact/Helpers/Extensions/RectExtension.cs" Link="Helpers/Extensions/RectExtension.cs" />
     <Compile Include="../BetterGenshinImpact/Helpers/Extensions/RectCutExtension.cs" Link="Helpers/Extensions/RectCutExtension.cs" />
     <Compile Include="../BetterGenshinImpact/Helpers/BgiKeyMapper.cs" Link="Helpers/BgiKeyMapper.cs" />
+    <Compile Include="../BetterGenshinImpact/Helpers/SpeedTimer.cs" Link="Helpers/SpeedTimer.cs" />
   </ItemGroup>
 
   <!-- Model -->
@@ -172,7 +173,6 @@
     <Compile Include="Shim/PlatformServices.cs" />
     <Compile Include="Shim/RunnerContext.cs" />
     <Compile Include="Shim/Simulation.cs" />
-    <Compile Include="Shim/SpeedTimer.cs" />
     <Compile Include="Shim/StringUtils.cs" />
     <Compile Include="Shim/TaskContext.cs" />
     <Compile Include="Shim/TaskControl.cs" />

@@ -304,13 +304,21 @@ The upstream file is pure C#, has no WPF/Win32 dependencies, and is already in t
 
 **This is NOT a case of "shim becomes authoritative source."** The authoritative source is the **upstream `Helpers/SpeedTimer.cs`**, which already exists and has real `DebugPrint` output. The shim is an inferior copy that should be replaced.
 
-### 7.4 Implementation plan
+### 7.4 Implementation result
 
-1. Core csproj: delete `<Compile Include="Shim/SpeedTimer.cs" />`, add `<Compile Include="../BetterGenshinImpact/Helpers/SpeedTimer.cs" Link="Helpers/SpeedTimer.cs" />`
-2. Delete `BetterGenshinImpact.Core/Shim/SpeedTimer.cs`
-3. Verify: Core build zero errors, Verification unchanged
-4. WPF: unchanged — upstream file already compiled by default glob
-5. Shim count: 18 → 17
+| Metric | Before | After |
+|--------|--------|-------|
+| Core SpeedTimer source | `Shim/SpeedTimer.cs` (inferior no-op copy) | Linked `Helpers/SpeedTimer.cs` (upstream) ✅ |
+| Core csproj shim item | `<Compile Include="Shim/SpeedTimer.cs" />` | Deleted ✅ |
+| Core csproj linked item | — | `<Compile Include="../BetterGenshinImpact/Helpers/SpeedTimer.cs" Link="Helpers/SpeedTimer.cs" />` ✅ |
+| Core production behavior | Unchanged | Unchanged ✅ |
+| Core diagnostic behavior | Cumulative ms + no-op | Per-stage TimeSpan + Debug.WriteLine ✅ |
+| WPF diagnostic behavior | Real output | Unchanged (same upstream file) ✅ |
+| Core Verification | 112/112 | 112/112 ✅ |
+| Source guard: SpeedTimer definitions | — | **1** (`BetterGenshinImpact/Helpers/SpeedTimer.cs`) ✅ |
+| Source guard: shim reference | — | Zero csproj hits ✅ |
+| WPF SpeedTimer type resolution | — | Zero errors ✅ |
+| Shim count | 18 | **17** ✅ |
 
 ### 7.5 Behavior impact
 
