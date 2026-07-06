@@ -162,3 +162,72 @@ This eliminates one shim file, uses the existing shared-source pattern (same as 
 | WPF BgiKeyMapper type resolution | — | Zero errors ✅ |
 | Source guard — only one definition | — | `BetterGenshinImpact/Helpers/BgiKeyMapper.cs` only ✅ |
 | Source guard — old shim reference | — | Zero csproj hits ✅ |
+
+---
+
+## 6. B10.3 Audit: ConfigService
+
+### 6.1 Current shim
+
+| Aspect | Detail |
+|--------|--------|
+| File | `BetterGenshinImpact.Core/Shim/ConfigService.cs` |
+| API | `public static readonly JsonSerializerOptions JsonOptions` |
+| Options | `PropertyNameCaseInsensitive = true`, `WriteIndented = true` |
+| Namespace | `BetterGenshinImpact.Service` |
+
+### 6.2 Consumers in Core-linked files
+
+| File | Line | Usage | Options required? |
+|------|------|-------|-------------------|
+| `AutoPickTrigger.cs` (linked) | 129 | `JsonSerializer.Deserialize<HashSet<string>>(json, ConfigService.JsonOptions)` | **No** — deserializing a JSON array of strings; `PropertyNameCaseInsensitive` and `WriteIndented` have zero effect on `HashSet<string>` deserialization |
+
+**No other Core-linked file references `ConfigService` or its `JsonOptions`.**
+
+### 6.3 Upstream comparison
+
+| Aspect | WPF upstream (`Service/ConfigService.cs`) | Core shim |
+|--------|-------------------------------------------|-----------|
+| Type | Instance class `ConfigService : IConfigService` | Static class |
+| `JsonOptions` settings | Same: `PropertyNameCaseInsensitive = true`, `WriteIndented = true` | Same |
+| Additional API | Config file I/O, `AllConfig` management, `IConfigService` | None |
+| WPF-only deps | File paths, DI, WPF types | None |
+
+The shim's `JsonOptions` settings are identical to the upstream static field.
+
+### 6.4 Conclusion
+
+**Category B — can be replaced by inlining in the single consumer.** The options are not needed for `HashSet<string>` deserialization. Two valid approaches:
+
+**Option 1 (minimal):** Replace with `null` (default options):
+```csharp
+return JsonSerializer.Deserialize<HashSet<string>>(json, null) ?? [];
+```
+
+**Option 2 (future-proof):** Define a local `JsonSerializerOptions` in `AutoPickTrigger`:
+```csharp
+private static readonly JsonSerializerOptions PickJsonOptions = new()
+{
+    PropertyNameCaseInsensitive = true,
+    WriteIndented = true
+};
+```
+
+**Recommendation:** Option 1 — simplest, proven equivalent for `HashSet<string>`. If a future JSON target type needs those options, Option 2 can be adopted then.
+
+### 6.5 Implementation plan
+
+1. Change `ConfigService.JsonOptions` to `null` in `AutoPickTrigger.ReadJson()` line 129
+2. Delete `BetterGenshinImpact.Core/Shim/ConfigService.cs`
+3. Remove `<Compile Include="Shim/ConfigService.cs" />` from Core csproj
+4. Verification: Core build zero errors, 106/106
+5. Shim count: 19 → 18
+
+### 6.6 Risk
+
+| Factor | Assessment |
+|--------|-----------|
+| Behavior change | **None** — `PropertyNameCaseInsensitive` and `WriteIndented` have zero effect on `HashSet<string>` deserialization |
+| Future proof | Could miss options if a non-string type needs them later; low risk |
+| Verification | 106/106 — no JSON deserialization test covers this path |
+| Source guard | Only one consumer site to change |
