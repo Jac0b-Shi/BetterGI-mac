@@ -293,7 +293,7 @@ Both engines share the same path forward: the macOS composition root must provid
 | `e542bf3` | B9.1 verification (WPF type resolution confirmed) |
 | `5cb9676` | B9.2: AutoPickTrigger injection + full construction chain |
 | `b51937f` | B9.2a: fix LoadInitialTriggers null configProvider + assertion fixes |
-| *(this commit)* | Verification + closeout |
+| `f381378` | Verification + closeout |
 
 ### Source guards
 
