@@ -46,7 +46,22 @@ Therefore:
 | `StringUtils.cs` | `StringUtils` static class | **No** | **No** | Safe |
 | `TaskControl.cs` | `TaskControl` static class | **No** | **No** | Safe |
 
-All six produce **zero errors** when deleted from csproj and filesystem. Removal can be done in a single commit.
+All six candidates have **zero references** in Core-linked upstream files (AutoPick, Recognition, Helpers, Model, Config, Area) and Verification. Local trial deletion produced zero Core build/test errors. B10.1 commit must re-run the authoritative gates:
+
+```
+dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...
+rg '\\b(BvStubs|CoreExtensions|DrawableStubs|GameUiCategory|StringUtils|TaskControl)\\b' BetterGenshinImpact.Core/ BetterGenshinImpact/GameTask/AutoPick/ BetterGenshinImpact/Core/Recognition/ BetterGenshinImpact/Core/Config/ BetterGenshinImpact/Helpers/ BetterGenshinImpact/Model/ Test/
+```
+
+**B10.1 gate:**
+1. Delete 6 files
+2. Delete 6 `<Compile Include="Shim/..." />` from csproj
+3. Core build — zero errors
+4. Verification — 106/106
+5. `rg` on all 6 type names — zero hits across Core-compiled closure
+6. No other shim modifications
+7. No AutoPick behavior changes
 
 ### C. Production compatibility shim — required until upstream dependency removed
 
@@ -59,17 +74,14 @@ All six produce **zero errors** when deleted from csproj and filesystem. Removal
 | `Simulation.cs` | Via `KeyboardFacade`/`MouseFacade` — delegates to `PlatformServices.Input` | Wraps IInputBackend as static facade; used by linked files |
 | `SpeedTimer.cs` | `AutoPickTrigger.OnCapture` (debug perf) | Logging helper |
 | `RunnerContext.cs` | `AutoPickTrigger.StopCount` fallback | One field (`AutoPickTriggerStopCount`) |
-| `TaskContext.cs` | Linked `BaseAssets`, `TaskTriggerDispatcher` (via Windows only), `OcrFactory`, `AutoPickAssets` | Provides Config + SystemInfo stub for Core/macOS |
+| `TaskContext.cs` | Linked `BaseAssets`, `OcrFactory`, `AutoPickAssets` (Core-compiled); `TaskTriggerDispatcher` (WPF-only) | Provides Config + SystemInfo stub for Core/macOS |
 | `ThemedMessageBox.cs` | `AutoPickTrigger` (3× `.Error()`) | UI dialog stub |
 | `PlatformServices.cs` | `DesktopRegion` (linked — 5 calls), `Simulation` (shim), `Verification` (test setup) | Static IInputBackend gateway; required by DesktopRegion in Core |
+| `MacSystemInfo.cs` | Shim `TaskContext.cs` constructs it: `SystemInfo = new MacSystemInfo()` | Not test-owned — TaskContext shim is a production Core assembly dependency. Cannot move to Test until: TaskContext no longer default-constructs it, ISystemInfo is injected by host/composition, and all Core-compiled callers are migrated. |
 
 ### D. Test-owned — should move to Test project
 
-| File | Production consumer | Notes |
-|------|-------------------|-------|
-| `MacSystemInfo.cs` | None in Core production | `TaskContext` shim sets `SystemInfo = new MacSystemInfo()` for Verification. MacAutoPickComposition receives explicit ISystemInfo — does NOT use this shim. |
-
-**`PlatformServices.cs` is NOT test-owned.** It's referenced by `DesktopRegion.cs` (linked in Core) — a production file.
+*(Currently empty — no shim is purely test-owned. MacSystemInfo appears test-owned but is constructed by production Shim/TaskContext.cs.)*
 
 ---
 
