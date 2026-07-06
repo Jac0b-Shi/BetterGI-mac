@@ -21,22 +21,16 @@ public class CaptureContent : IDisposable
     
     public GameUiCategory CurrentGameUiCategory;
 
+#if BGI_FULL_WINDOWS
     public CaptureContent(Mat image, int frameIndex, double interval)
     {
         FrameIndex = frameIndex;
         TimerInterval = interval;
-
-#if BGI_FULL_WINDOWS
         var systemInfo = TaskContext.Instance().SystemInfo;
-
         var gameCaptureRegion = systemInfo.DesktopRectArea.Derive(image, systemInfo.CaptureAreaRect.X, systemInfo.CaptureAreaRect.Y);
         CaptureRectArea = gameCaptureRegion.DeriveTo1080P();
-#else
-        // CaptureContent construction is platform-specific.
-        // On Core/macOS, the capture pipeline provides ImageRegion directly.
-        CaptureRectArea = null!;
-#endif
     }
+#endif
 
     /// <summary>
     /// 用于兼容新的 ImageRegion

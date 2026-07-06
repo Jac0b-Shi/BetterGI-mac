@@ -484,7 +484,7 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/1
 | Core TaskContext shim | `Shim/TaskContext.cs` — deleted ✅ |
 | CoreConfig | Deleted with shim (defined in same file) ✅ |
 | Core csproj entry | `<Compile Include="Shim/TaskContext.cs" />` — removed ✅ |
-| CaptureContent.cs | Guarded `TaskContext.Instance()` with `#if BGI_FULL_WINDOWS` |
+| CaptureContent(Mat, frameIndex, interval) | Entire constructor compiled only under `#if BGI_FULL_WINDOWS`; Core retains only `CaptureContent(ImageRegion)`, preserving non-null `CaptureRectArea` contract |
 | Core production references | Zero (comments only) ✅ |
 | Verification references | Zero (one comment) ✅ |
 | WPF | Continues using upstream `GameTask/TaskContext.cs` ✅ |
