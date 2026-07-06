@@ -310,14 +310,13 @@ The upstream file is pure C#, has no WPF/Win32 dependencies, and is already in t
 2. Delete `BetterGenshinImpact.Core/Shim/SpeedTimer.cs`
 3. Verify: Core build zero errors, Verification unchanged
 4. WPF: unchanged — upstream file already compiled by default glob
-5. Core consumers gain real `DebugPrint` output — additive only, no regression
-6. Shim count: 18 → 17
+5. Shim count: 18 → 17
 
 ### 7.5 Behavior impact
 
 | Layer | Impact |
 |-------|--------|
-| Core runtime behavior | Identical source; `DebugPrint()` now outputs to `Debug.WriteLine` (additive) |
-| Production business logic | No effect — timing is debug-only |
+| Core production behavior | **Unchanged** — no timing value is consumed by decision/state logic |
+| Core diagnostic behavior | **Changed to match upstream:** Record() becomes per-stage timing via Stopwatch.Restart(); stored value changes from cumulative `long` ms to `TimeSpan`; DebugPrint() restores `Debug.WriteLine` output; DebugPrint() stops the stopwatch |
 | WPF diagnostic behavior | **Unchanged** — uses the same upstream file as before |
-| AutoPickTrigger | `DebugPrint()` now produces output on Core as well — consistent behavior |
+| AutoPickTrigger semantics | Uses sequential `Record()` calls across named pipeline stages. Upstream restart-after-record behavior is the **intended per-stage timing semantics**; the shim's cumulative timing and no-op output were drift from upstream behavior |
