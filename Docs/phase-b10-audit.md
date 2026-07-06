@@ -328,3 +328,112 @@ The upstream file is pure C#, has no WPF/Win32 dependencies, and is already in t
 | Core diagnostic behavior | **Changed to match upstream:** Record() becomes per-stage timing via Stopwatch.Restart(); stored value changes from cumulative `long` ms to `TimeSpan`; DebugPrint() restores `Debug.WriteLine` output; DebugPrint() stops the stopwatch |
 | WPF diagnostic behavior | **Unchanged** — uses the same upstream file as before |
 | AutoPickTrigger semantics | Uses sequential `Record()` calls across named pipeline stages. Upstream restart-after-record behavior is the **intended per-stage timing semantics**; the shim's cumulative timing and no-op output were drift from upstream behavior |
+
+---
+
+## 8. B10.5 Audit: TaskContext
+
+### 8.1 Current shim
+
+| Aspect | Detail |
+|--------|--------|
+| File | `BetterGenshinImpact.Core/Shim/TaskContext.cs` |
+| Namespace | `BetterGenshinImpact.GameTask` |
+| Type | Instance class with double-checked-locking singleton |
+| Properties | `IsInitialized` (bool), `SystemInfo` (ISystemInfo, defaults to `new MacSystemInfo()`), `Config` (CoreConfig, defaults to `new()`) |
+| Methods | `Instance()` (static singleton), `Init(GameWindowMetrics)` (sets MacSystemInfo), `DestroyInstance()` |
+| `CoreConfig` | Contains `AutoPickConfig` + `OtherConfig` — minimal subset of upstream `AllConfig` |
+| Comment | "Thin facade: provides TaskContext.Instance() for cross-platform Core. Windows-specific fields excluded." |
+
+### 8.2 Upstream comparison
+
+| Member | Upstream (`GameTask/TaskContext.cs`) | Core shim | In Core consumers? |
+|--------|--------------------------------------|-----------|-------------------|
+| `Instance()` | `LazyInitializer.EnsureInitialized` | Double-checked lock | ✅ Yes |
+| `IsInitialized` | `bool` (initially false) | Same | ✅ Yes (BaseAssets) |
+| `SystemInfo` | `ISystemInfo` — set via `Init(hWnd)` → `new SystemInfo(hWnd)` | `ISystemInfo` — defaults to `new MacSystemInfo()` | ✅ Yes (BaseAssets, GameCaptureRegion) |
+| `Config` | `AllConfig` — reads from `ConfigService.Config` (throws if null) | `CoreConfig` — minimal container | ✅ Yes (AutoPickAssets behind `#if`) |
+| `DpiScale` | `float` — set via `Init(hWnd)` → `DpiHelper.ScaleY` | **Missing** | ✅ Yes (GameCaptureRegion lines 29, 46) |
+| `GameHandle` | `IntPtr` — Win32 HWND | **Missing** | ✅ Yes (Region.cs line 99) |
+| `PostMessageSimulator` | Win32 PostMessage wrapper | **Missing** | ✅ Yes (Region.cs line 99) |
+| `LinkedStartGenshinTime` | `DateTime` | **Missing** | ❌ WPF-only |
+| `CurrentScriptProject` | Script grouping | **Missing** | ❌ WPF-only |
+| `GetGenshinGameProcessNameList()` | Process name resolution | **Missing** | ❌ WPF-only |
+
+**Key risk:** `Region.cs` line 99 calls `TaskContext.Instance().PostMessageSimulator.LeftButtonClickBackground()` — this property is `null` in the Core shim (default of `string`/reference type). On Core, this would produce a **NullReferenceException** if the drawing path is exercised. This is currently masked because the drawing path is only triggered by Windows-specific visual features.
+
+### 8.3 Core-linked consumers
+
+| File | Line(s) | Accessed member | Current injection status |
+|------|---------|----------------|-------------------------|
+| `BaseAssets.cs` | 21 | `TaskContext.Instance().SystemInfo` | B8.2 added `BaseAssets(ISystemInfo)` constructor but default ctor still uses TaskContext |
+| `GameCaptureRegion.cs` | 29, 46 | `TaskContext.Instance().DpiScale` | **Not injected** — no DpiScale in ISystemInfo or separately injected |
+| `GameCaptureRegion.cs` | 94-111 | `TaskContext.Instance().SystemInfo.CaptureAreaRect`, `.ScaleTo1080PRatio` | B8.2 added ISystemInfo to AutoPickTrigger but NOT to GameCaptureRegion |
+| `Region.cs` | 99 | `TaskContext.Instance().PostMessageSimulator.LeftButtonClickBackground()` | **Not injected** — null on Core |
+| `AutoPickAssets.cs` | 176 | `TaskContext.Instance().Config.KeyBindingsConfig...` | Behind `#if BGI_FULL_WINDOWS` — compiled out on Core ✅ |
+
+### 8.4 Dependency graph
+
+```
+Verification tests
+  → Shim TaskContext.Instance()
+    → SystemInfo = new MacSystemInfo()    (test setup)
+    → Config (CoreConfig)
+
+BaseAssets (Core-linked)
+  → TaskContext.Instance().SystemInfo     (default ctor path — B8.2 added alternative param ctor)
+
+GameCaptureRegion (Core-linked)
+  → TaskContext.Instance().DpiScale       (NOT injected)
+  → TaskContext.Instance().SystemInfo.*   (NOT injected — was used by every task, not just AutoPick)
+
+Region.cs (Core-linked)
+  → TaskContext.Instance().PostMessageSimulator  (null on Core — bug risk)
+```
+
+### 8.5 Architecture classification
+
+**TaskContext is a service locator / context bag.** It bundles:
+1. SystemInfo (platform capability — now separately injectable via ISystemInfo)
+2. DpiScale (rendering metric)
+3. PostMessageSimulator (Windows input path)
+4. Config (WPF configuration tree)
+5. Process/window state
+
+The Core shim removes Windows-only members but retains the static `Instance()` singleton pattern and the `Config` bag. This violates:
+- "No static gateway" (B1 principle)
+- "No service locator" (B1 principle)
+- "Required capability must be via constructor injection" (B7-B9 pattern)
+
+### 8.6 Recommendation
+
+**Category C/D hybrid — Replace TaskContext usage with explicit constructor injection over multiple phases; keep shim temporarily for compilation.**
+
+The shim cannot be deleted until all Core-linked consumers stop using `TaskContext.Instance()` for their last remaining dependency.
+
+### 8.7 Minimal phase plan (not implemented in B10.5)
+
+| Phase | Scope | Files | Gate |
+|-------|-------|-------|------|
+| B10.5.1 | Add `DpiScale` to `ISystemInfo` or inject separately into GameCaptureRegion | `ISystemInfo.cs`, `GameCaptureRegion.cs` | Core Verification 112/112; no new TaskContext uses |
+| B10.5.2 | Remove `PostMessageSimulator` call from Region.cs (guard with `#if` or inject) | `Region.cs` | Same |
+| B10.5.3 | Remove default `BaseAssets()` ctor's TaskContext dependency | `BaseAssets.cs` | Same |
+| B10.5.4 | After all consumers migrated, delete shim + csproj entry | `TaskContext.cs` | Core build 0 errors; Verification 112/112; rg TaskContext zero in Core closure |
+
+### 8.8 Risks
+
+| Risk | Assessment |
+|------|-----------|
+| `Region.cs` line 99 `PostMessageSimulator` on Core | **Will NRE** if `LeftButtonClickBackground()` is called on Core — currently masked; should be `#if BGI_FULL_WINDOWS` guarded |
+| GameCaptureRegion ISystemInfo injection | Not scoped to AutoPick — affects all tasks; broadest impact |
+| `BaseAssets` default ctor still calls TaskContext | B8.2 added parameterized ctor but default still used by other asset types (AutoSkip, AutoFight, etc.) |
+| TaskContext.Instance() in Verification | Test setup — acceptable for test infrastructure; not production |
+
+### 8.9 Baseline
+
+```
+dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112
+```
+
+No code modified during this audit.
