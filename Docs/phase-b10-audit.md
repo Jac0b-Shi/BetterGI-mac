@@ -1130,10 +1130,11 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/1
 | Aspect | WPF upstream | Core shim |
 |--------|-------------|-----------|
 | `PlatformServices` class | **Does not exist** in WPF tree | `Shim/PlatformServices.cs` |
-| DesktopRegion input access | Refers to `PlatformServices.Input` (same linked file) | Same — `DesktopRegion.cs` is linked shared source |
-| History | Only commit `32590fc` creates this shim | No upstream, no predecessor |
+| DesktopRegion input access | Refers to `PlatformServices.Input` (same physical file) | Same — DesktopRegion.cs is authoritative in WPF tree, linked in Core |
 
-There is no WPF tree `PlatformServices.cs`. The shim was written for the macOS port to satisfy `DesktopRegion`'s static reference to `PlatformServices.Input`. The WPF project has a different mechanism (`Simulation.SendInput`) for input dispatch, but nevertheless the same linked `DesktopRegion.cs` (which references `PlatformServices.Input`) compiles in WPF because WPF references the Core project which provides the shim.
+There is no WPF tree `PlatformServices.cs`. The shim was written for the macOS port to satisfy `DesktopRegion`'s static reference to `PlatformServices.Input`.
+
+**Source file note:** `DesktopRegion.cs` has its authoritative physical source at `BetterGenshinImpact/GameTask/Model/Area/DesktopRegion.cs`. Core compiles it through a linked `<Compile Include=... Link=...>` item. WPF compiles it as its own source file (default SDK glob). PlatformServices has no WPF authoritative definition — WPF currently resolves the public `PlatformServices` type from the referenced Core assembly.
 
 ### 10.3 Preprocessed reference table
 
@@ -1143,11 +1144,11 @@ There is no WPF tree `PlatformServices.cs`. The shim was written for the macOS p
 |---|------|------|------|------|
 | 1 | `Shim/PlatformServices.cs` | 1–12 | Type definition | Definition |
 | 2 | `Shim/Simulation.cs` | 10 | `public static IInputBackend InputBackend => PlatformServices.Input;` | **Consumer** — delegates Simulation to PlatformServices.Input |
-| 3 | `GameTask/Model/Area/DesktopRegion.cs` (linked) | 29 | `var input = PlatformServices.Input;` | **Consumer** |
-| 4 | `GameTask/Model/Area/DesktopRegion.cs` (linked) | 41 | `PlatformServices.Input.MoveMouseTo(...)` | **Consumer** |
-| 5 | `GameTask/Model/Area/DesktopRegion.cs` (linked) | 48 | `var input = PlatformServices.Input;` | **Consumer** |
-| 6 | `GameTask/Model/Area/DesktopRegion.cs` (linked) | 58 | `PlatformServices.Input.MoveMouseTo(...)` | **Consumer** |
-| 7 | `GameTask/Model/Area/DesktopRegion.cs` (linked) | 63 | `PlatformServices.Input.MoveMouseBy(...)` | **Consumer** |
+| 3 | `GameTask/Model/Area/DesktopRegion.cs` | Core (linked from WPF tree) | 29 | `var input = PlatformServices.Input;` | **Consumer** |
+| 4 | `GameTask/Model/Area/DesktopRegion.cs` | Core (linked from WPF tree) | 41 | `PlatformServices.Input.MoveMouseTo(...)` | **Consumer** |
+| 5 | `GameTask/Model/Area/DesktopRegion.cs` | Core (linked from WPF tree) | 48 | `var input = PlatformServices.Input;` | **Consumer** |
+| 6 | `GameTask/Model/Area/DesktopRegion.cs` | Core (linked from WPF tree) | 58 | `PlatformServices.Input.MoveMouseTo(...)` | **Consumer** |
+| 7 | `GameTask/Model/Area/DesktopRegion.cs` | Core (linked from WPF tree) | 63 | `PlatformServices.Input.MoveMouseBy(...)` | **Consumer** |
 
 **Total Core production references: 7** — all reading `PlatformServices.Input`. No Core production code writes to `PlatformServices` (initialize/set).
 
@@ -1159,11 +1160,11 @@ There is no WPF tree `PlatformServices.cs`. The shim was written for the macOS p
 
 #### 10.3.3 WPF-only references
 
-The WPF project does not reference `PlatformServices` directly. However, the linked `DesktopRegion.cs` (same file, compiled in both Core and WPF via `<Compile Include=... Link=...>`) also uses `PlatformServices.Input`. In WPF, the type resolves because the Core project (which contains the shim) is referenced by WPF. This means:
+The WPF project does not reference `PlatformServices` directly. However, `DesktopRegion.cs` (authoritative physical source in the WPF tree) uses `PlatformServices.Input`. WPF resolves the `PlatformServices` type from the referenced Core assembly. This means:
 
-- WPF DesktopRegion also uses the Core shim's `PlatformServices`
-- WPF has its own `Simulation.cs` which uses `SendInput` (not `PlatformServices`)
-- The upstream WPF does NOT have its own PlatformServices — it depends on the Core shim for type resolution of DesktopRegion
+- WPF DesktopRegion relies on the Core shim's `PlatformServices` for type resolution
+- WPF has its own `Simulation.cs` which uses `InputSimulator` (Win32 SendInput, not `PlatformServices`)
+- There is no WPF authoritative `PlatformServices` definition — it is entirely a Core shim artifact
 
 ### 10.4 Reachability analysis
 
@@ -1221,105 +1222,197 @@ Verification explicitly sets PlatformServices.Input before desktop-region tests.
 
 ### 10.5 Semantic analysis
 
-#### Classification: **Static gateway / service locator (anti-pattern)**
+#### Classification: **Category B — replace static PlatformServices usage with explicit IInputBackend dependency**
 
 | Check | Result |
 |-------|--------|
 | Is it a static gateway? | **Yes** — `PlatformServices.Input` is a mutable static property |
-| Is it a service locator? | **Partial** — holds one required service (IInputBackend) and one unused service (IUserInteractionService) |
-| Is it a DI escape hatch? | **Yes** — bypasses constructor injection; consumers grab `PlatformServices.Input` from anywhere |
-| Does it hide required dependencies? | **Yes** — DesktopRegion's 5 methods silently require PlatformServices.Input to be set; there's no compile-time or constructor guard |
-| Does it allow business logic to access platform capabilities statically? | **Yes** — `DesktopRegion.DesktopRegionClick(double, double)` is a public static method that reads Input |
-| Does it propagate IServiceProvider? | **No** |
-| Does it provide dummy/no-op default? | **Yes** — `= null!` means accessing Input before initialization throws NullReferenceException at runtime, not at compile time |
-| Does it let incomplete wiring seem runnable? | **Partially** — code compiles fine but crashes at first desktop interaction |
-| Is it thread-safe? | **No** — mutable static with no synchronization |
-| Can it be replaced with constructor injection? | **Yes** — `IInputBackend` is the only consumed capability |
-| Platform.Abstractions candidate? | **No** — the pattern (static gateway) is an anti-pattern, not an abstraction |
+| Is it a service locator? | **Partial** — holds two services; only Input is consumed |
+| Does it hide required dependencies? | **Yes** — every consumer silently requires PlatformServices.Input to be set |
+| Does it provide null!/dummy default? | **Yes** — `= null!` means uninitialized access => NullReferenceException at runtime |
+| Can it be replaced with constructor injection? | **Yes** — `IInputBackend` already exists in `Platform.Abstractions` |
+| Need a new narrow interface? | **No** — `IInputBackend` is exactly the right contract |
 
-#### Architecture rule violations
+**Not Category C — no new abstraction needed. Not Category A — 7 Core production references exist.**
 
-| Rule | Violation | Severity |
-|------|-----------|----------|
-| No static gateway | ✅ `static class` with mutable static `Input` property | **High** — pattern violation |
-| No service locator | ⚠️ Holds 2 services; only Input is consumed | Medium |
-| Required capability must be constructor injection | ❌ `IInputBackend` is consumed via static — DesktopRegion gets it from `PlatformServices.Input` instead of constructor param | **High** |
-| Consumer should depend on narrow interface | ✅ `IInputBackend` is already a narrow interface | Low |
-| No `null!`/dummy half-valid state | ❌ `Input { get; set; } = null!;` — accessing before init crashes at runtime | **Medium** |
+### 10.6 DesktopRegion external consumer closure
 
-### 10.6 Consumer analysis
+DesktopRegion is a **geometry + input execution object**, not pure geometry. The authoritative source is `BetterGenshinImpact/GameTask/Model/Area/DesktopRegion.cs`. Core links it via `<Compile Include=... Link=...>`; WPF compiles it as its own source file. PlatformServices has no WPF authoritative definition — WPF resolves it from the referenced Core assembly.
 
-#### DesktopRegion.cs (linked shared source, 5 calls)
+#### 10.6.1 Direct DesktopRegion static method calls
 
-Each call is a simple read of `PlatformServices.Input` followed by `MoveMouseTo`, `LeftButtonDown`, etc. DesktopRegion has two groups of consumers:
+| # | Caller | Project | Preprocessed? | Method | Notes |
+|---|--------|---------|---------------|--------|-------|
+| 1 | `Region.BackgroundClick()` (line 101) | Core (linked) `#if BGI_FULL_WINDOWS` | ❌ WPF-only | `DesktopRegion.DesktopRegionMove(...)` | Not in Core |
+| 2 | `Region.ClickTo()` (line 154) | Core (linked) | ✅ Core | `res.TargetRegion.DesktopRegionClick(...)` | Via ConvertRes<DesktopRegion> |
+| 3 | `Region.MoveTo()` (line 189) | Core (linked) | ✅ Core | `res.TargetRegion.DesktopRegionMove(...)` | Via ConvertRes<DesktopRegion> |
+| 4 | `GameCaptureRegion.cs` (lines 97, 105, 113) | Core (linked) | ✅ Core | `DesktopRegion.DesktopRegionClick/Move/MoveBy` | 3 call sites |
+| 5 | `Verification Program.cs` (line 53, 65) | Test | None | `DesktopRegion.DesktopRegionMove(...)` | 2 call sites |
 
-**Instance methods** (DesktopRegionClick/Move with rect params): Called via `DesktopRegion.ClickTo()` or similar patterns. These could be refactored to accept `IInputBackend` via constructor.
+**Indirect consumers through Region.ClickTo/MoveTo:** Every `region.ClickTo(x,y)` or `region.MoveTo(x,y)` call in the codebase (100+ WPF call sites, ~5 Core call sites) reaches `DesktopRegionClick/Move` through `ConvertRes<T>.ConvertPositionToTargetRegion`.
 
-**Static methods** (DesktopRegionClick/Move/MoveBy with pixel coords): Called via `DesktopRegion.DesktopRegionMove(x, y)`. These are static convenience methods. They could be changed to instance methods with injected Input or remain static but accept Input as parameter.
+#### 10.6.2 DesktopRegion constructor and ISystemInfo.DesktopRectArea
 
-#### Simulation.cs (Core shim, 1 call)
+| # | Caller | File | Constructor | Has IInputBackend? |
+|---|--------|------|-------------|-------------------|
+| 1 | `MacSystemInfo.cs:35,49` | Core shim | `new DesktopRegion()` | **No** — uses static DisplayWidth/Height |
+| 2 | `SystemInfo.cs:68` (WPF upstream) | Core (linked) | `new DesktopRegion()` | **No** — same pattern |
+| 3 | `FakeSystemInfo.cs:18` | UnitTest | `new DesktopRegion(w, h)` | **No** |
+| 4 | `GridScreen.cs:464,491` | WPF | `new DesktopRegion(this.input.Mouse)` | **Yes** — passes IInputBackend implicitly via `IMouseSimulator` → ... actually this is a different code path |
 
-`Simulation.InputBackend => PlatformServices.Input` — the entire Simulation facade delegates to PlatformServices. This was built as a verification-compatibility layer matching the WPF `Simulation.SendInput` API shape. It's used by Verification tests and any production code that calls `Simulation.SendInput.Keyboard.KeyPress(...)`.
+The `DesktopRegion` is held by `ISystemInfo.DesktopRectArea` property (`{ get; }`). Both `MacSystemInfo` and upstream `SystemInfo` create it with the parameterless constructor. It is then used as the root region for `Derive()` operations and `ClickTo`/`MoveTo` chain.
 
-### 10.7 Relation to neighboring shims
+#### 10.6.3 Key architectural question answers
+
+| # | Question | Answer |
+|---|----------|--------|
+| 1 | Is DesktopRegion a pure value/geometry object? | **No** — it combines geometry with input execution (`PlatformServices.Input`) |
+| 2 | Would adding `IInputBackend` to constructor pollute all derived region objects? | **Yes** — `GameCaptureRegion : Region`, `ImageRegion : Region` would inherit. But DesktopRegion is where input execution happens; subclasses use `ConvertRes<DesktopRegion>` to delegate input back |
+| 3 | Should input capability belong in DesktopRegion itself? | **No** — the current design mixes two concerns. A cleaner split: DesktopRegion remains geometry; input execution is injected or a separate helper |
+| 4 | How should static convenience methods be handled? | Preferred: accept `IInputBackend input` as explicit parameter (`DesktopRegion.DesktopRegionMove(input, cx, cy)`). This avoids both the static gateway and the "inject into every region" problem |
+
+### 10.7 Simulation consumer closure
+
+Two distinct Simulation types exist:
+
+| Aspect | WPF authoritative (`Core/Simulator/Simulation.cs`) | Core shim (`Shim/Simulation.cs`) |
+|--------|----------------------------------------------------|----------------------------------|
+| Input dispatch | `InputSimulator` (Win32 SendInput via Fischless) | `PlatformServices.Input` |
+| Static API | `public static InputSimulator SendInput { get; }` | `public static SendInputFacade SendInput { get; }` |
+| Key/Mouse facades | Real Win32 implementation | Delegates to `Simulation.InputBackend` (= `PlatformServices.Input`) |
+| `ReleaseAllKey()` | Real implementation | Throws `NotSupportedException` |
+
+#### 10.7.1 Simulation consumers in Core closure
+
+| # | Caller | File | Line(s) | Preprocessed? | Has own IInputBackend? |
+|---|--------|------|---------|---------------|------------------------|
+| 1 | `GlobalMethod.cs` (linked) | `BetterGenshinImpact/Core/Script/Dependence/` | 41–250 | ✅ Core (no `#if`) | **No** — uses `Simulation.SendInput.Mouse.LeftButtonDown()` etc. |
+| 2 | `AutoLeyLineOutcropTask.cs` | `BetterGenshinImpact` | 928, 949, ... | ❌ WPF-only | Uses WPF authoritative Simulation |
+
+**Verification consumers of Core simulation shim:** Zero. Verification uses `RecordingInputBackend` directly and tests through `AutoPickTrigger`, not through the Simulation facade.
+
+**Key finding:** The only Core production consumer of the Simulation shim is `GlobalMethod.cs` (linked shared source). `AutoLeyLineOutcropTask` references the WPF authoritative Simulation, not the Core shim.
+
+### 10.8 Relation to neighboring shims
 
 | Shim | Relationship | Ordering |
 |------|-------------|----------|
-| `Simulation.cs` | **Depends on** `PlatformServices.Input` | Must be fixed together or before |
-| `DesktopRegion.cs` | **Depends on** `PlatformServices.Input` | Linked source — must fix DesktopRegion to use injection |
+| `Simulation.cs` | **Depends on** `PlatformServices.Input` — its entire facade delegates through this static | Must be resolved before or with PlatformServices deletion |
+| `DesktopRegion.cs` | **Depends on** `PlatformServices.Input` — 5 internal calls | Must be resolved before or with PlatformServices deletion |
+| `MacSystemInfo.cs` | Creates `new DesktopRegion()` — no `IInputBackend` passed | Must be updated when DesktopRegion constructor changes |
+| `Global.cs` | No direct reference to PlatformServices | Independent |
 | `App.cs` | No direct reference | Independent |
-| `Global.cs` | No direct reference | Independent |
-| `GameTaskManager.cs` | Receives `IInputBackend` via parameter (no PlatformServices usage) | Independent |
-| `MacSystemInfo.cs` | No reference | Independent |
+| `GameTaskManager.cs` | Receives `IInputBackend` via parameter | Independent |
 | `TaskControl.cs` | No reference | Independent |
+| `GlobalMethod.cs` | Uses `Simulation.SendInput` — transitively via Simulation shim -> PlatformServices | Must be resolved as part of Simulation migration |
 
-**Key insight:** PlatformServices is the **only** place where the `IInputBackend` is stored as a static. If DesktopRegion and Simulation were refactored to receive `IInputBackend` via constructor/injection, PlatformServices could be deleted. The `IInputBackend` is already threaded through the composition (MacAutoPickComposition accepts it, GameTaskManager forwards it). Only DesktopRegion and Simulation bypass this chain via the static gateway.
+### 10.9 Recommendation
 
-### 10.8 Recommendation
+**Category B — replace static PlatformServices usage with explicit IInputBackend dependency.**
 
-**Category B/C: Replace static PlatformServices.Input usage with explicit IInputBackend injection.**
+`IInputBackend` already exists in `Platform.Abstractions`. No new interface needed. The challenge is the migration scope: DesktopRegion is used extensively as the terminal input dispatch point in the `Region.ClickTo() -> ConvertRes<DesktopRegion> -> DesktopRegionClick -> PlatformServices.Input` chain.
 
-Not Category A (dead shim) — 7 Core production references exist.
-Not Category E (link authoritative source) — no upstream PlatformServices exists.
-Not Category D (keep temporarily) — the pattern is actively harmful (static `null!` gateway).
+### 10.10 Revised minimal implementation plan
 
-The `IInputBackend` is already a narrow interface in `Platform.Abstractions`. The macOS composition already injects it. The only gap is that DesktopRegion and Simulation reach for the static gateway instead of accepting the already-injected instance.
+#### B10.7.1: Add IInputBackend parameter to DesktopRegion static methods
 
-### 10.9 Minimal implementation plan
+Replace:
+```csharp
+public static void DesktopRegionMove(double cx, double cy) =>
+    PlatformServices.Input.MoveMouseTo(...);
+```
+With:
+```csharp
+public static void DesktopRegionMove(IInputBackend input, double cx, double cy) =>
+    input.MoveMouseTo(...);
+```
 
-#### B10.7.1: Remove Verification's dependency on PlatformServices.Input setter
+Same for `DesktopRegionClick(double, double)` and `DesktopRegionMoveBy(double, double)`.
 
-Move desktop-region tests to use a helper that sets PlatformServices privately, OR refactor DesktopRegion test helpers to accept IInputBackend directly. This is a test-only change.
+**Consumers to update in this step:**
+- `GameCaptureRegion.cs` (3 sites, Core linked) — passes its caller's injected `_inputBackend` or forward from Region
+- `Region.cs` `ClickTo`/`MoveTo` (2 sites, Core linked) — needs `input` from call chain
+- `Verification Program.cs` (2 sites) — passes `recorder` directly
 
-#### B10.7.2: Add IInputBackend to DesktopRegion constructor; migrate static callers
+**API signature decision:**
+- DesktopRegion retains `IInputBackend` parameter — no static gateway, no instance field pollution
+- All callers are explicit about which input backend they use
+- The parameter is always available: `GameCaptureRegion` callers have `_inputBackend` from their trigger/task context
 
-- DesktopRegion instance already has a constructor taking `(int w, int h)`. Add `IInputBackend input.`
-- Static methods (`DesktopRegionMove`, `DesktopRegionClick`, `DesktopRegionMoveBy`) become instance methods or accept `IInputBackend input` parameter.
-- All 5 internal `PlatformServices.Input` references replaced with field or parameter.
-- Update all callers in WPF and Core to pass the injected Input.
+**Impact:**
+- Core: 5 call sites updated
+- WPF: ~100+ indirect `ClickTo`/`MoveTo` call sites — but those flow through `Region.ClickTo()` which calls `ConvertRes<DesktopRegion>`, which calls `TargetRegion.DesktopRegionClick`. `TargetRegion` is a `DesktopRegion` instance. The instance methods (`DesktopRegionClick(int,int,int,int)`) would need `IInputBackend` too.
+- Verification: 2 static call sites updated
 
-#### B10.7.3: Replace Simulation.InputBackend delegation
+**Gate:** Core build 0 errors, Verification 112/112.
 
-Simulation shim currently delegates `InputBackend => PlatformServices.Input`. Change to accept `IInputBackend` via constructor or static setter (but not via PlatformServices). In the `MacAutoPickComposition`, the `IInputBackend` is already available.
+#### B10.7.2: Add IInputBackend to DesktopRegion instance methods
 
-#### B10.7.4: Delete PlatformServices shim
+The instance methods `DesktopRegionClick(int x, int y, int w, int h)` and `DesktopRegionMove(int x, int y, int w, int h)` also use `PlatformServices.Input`. These are called through the `Region.ClickTo()` / `Region.MoveTo()` chain.
 
-After B10.7.1–3 produce zero references to `PlatformServices.Input`:
-- Delete `BetterGenshinImpact.Core/Shim/PlatformServices.cs`
-- Remove csproj entry
-- Remove `PlatformServices.Input = recorder;` from Verification (replaced with direct injection)
-- Shim count: 15 → **14**
+**Option (recommended):** Keep instance methods but add `IInputBackend input` parameter:
+```csharp
+public void DesktopRegionClick(IInputBackend input, int x, int y, int w, int h)
+```
+Update `Region.ClickTo()` to accept and forward `IInputBackend` from its caller.
 
-### 10.10 Risks
+This avoids requiring DesktopRegion constructor to hold IInputBackend (which would cascade into ISystemInfo.DesktopRectArea construction and every `new DesktopRegion()` call site in the codebase).
+
+**Consumers to update:** Region.cs ClickTo/MoveTo call sites.
+
+**Gate:** Core build 0 errors, Verification 112/112.
+
+#### B10.7.3: Replace Simulation shim InputBackend delegation
+
+`GlobalMethod.cs` (linked, Core closure) is the only Core production consumer of `Simulation.SendInput`. Each call does:
+```csharp
+Simulation.SendInput.Mouse.LeftButtonDown();
+```
+
+Each such call can be replaced with the caller's existing `IInputBackend` (if available) or an equivalent `_inputBackend.LeftButtonDown()`.
+
+If the caller does not already have `IInputBackend`, inject it — this follows the same required-dependency pattern established in B10.6.1.
+
+The Simulation shim itself then has no production consumers and can be deleted alongside PlatformServices.
+
+**Gate:** Core build 0 errors, Verification 112/112, zero Simulation references in Core production.
+
+#### B10.7.4: Delete PlatformServices + Simulation shims after zero-reference guard
+
+When B10.7.1–3 produce:
+- `rg '\bPlatformServices\b' BetterGenshinImpact.Core Test/ --type cs` → zero production refs (MacCoreRuntimeAdapter comment remains)
+- `rg '\bSimulation\b' BetterGenshinImpact.Core Test/BetterGenshinImpact.Core.Verification --type cs` → zero production refs
+- Verification no longer sets `PlatformServices.Input = recorder`
+
+Then delete:
+- `BetterGenshinImpact.Core/Shim/PlatformServices.cs`
+- `BetterGenshinImpact.Core/Shim/Simulation.cs`
+- Both csproj entries
+- `PlatformServices.Input = recorder;` from Verification (replaced with direct `IInputBackend` parameter)
+
+**Shim count reduction:** 15 → **13**.
+
+**Gate:** Core build 0 errors, Verification 112/112, WPF check shows no new errors.
+
+### 10.11 Key architecture constraints
+
+| Constraint | Rule |
+|------------|------|
+| No static gateway wrapper | Verification must NOT use a helper that still sets PlatformServices privately |
+| No constructor cascade | DesktopRegion constructor should NOT gain IInputBackend — too many construction sites (`ISystemInfo.DesktopRectArea`, `new DesktopRegion()` everywhere) |
+| No new static in Simulation | Simulation shim consumers migrate to their existing `_inputBackend` field, not to a new Simulation static setter |
+| DesktopRegion source | Physical source is `BetterGenshinImpact/GameTask/Model/Area/DesktopRegion.cs`. Core links it. WPF compiles it as own source. WPF currently resolves PlatformServices symbol from the Core assembly reference. |
+
+### 10.12 Risks
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| DesktopRegion is linked shared source — changes affect both Core and WPF | **Medium** — must verify WPF DesktopRegion callers | Audit all DesktopRegion callers in WPF project; they also use PlatformServices and must be migrated together |
-| Static DesktopRegion methods are convenience API called from many places in WPF (`PathExecutor`, `AutoFightTask`, etc.) | **High** — large refactor surface in WPF | Consider keeping static overloads that accept IInputBackend as a parameter (new signature) while deprecating parameterless ones |
-| Simulation facade is used by Verification tests and potentially WPF code | **Medium** — must maintain backward-compatible API | Migration from `Simulation.InputBackend` to direct `_inputBackend` in test code |
-| IUserInteractionService is currently unused in Core | **Low** — can be removed with the shim, no behavioral impact | Track in deletion checklist |
+| DesktopRegion instance methods called from ~100+ WPF call sites via Region.ClickTo() | **High** — large migration surface | Parameterize methods with IInputBackend; WPF callers have their own IInputBackend from composition |
+| Region.ClickTo() and Region.MoveTo() are deep in Region class hierarchy | **Medium** — changes propagate | Add IInputBackend parameter; Region doesn't own DesktopRegion instances but calls `ConvertRes<DesktopRegion>` which returns a DesktopRegion reference |
+| Simulation facade migration requires updating GlobalMethod.cs (linked) | **Low** — single file, mechanical | Replace `Simulation.SendInput.Mouse.X()` with `_inputBackend.X()`; IInputBackend already available in scope |
+| UnitTest `DesktopRegion(FakeMouseSimulator)` exists | **Low** — not in Core closure | UnitTest targets WPF, not Core; handled in WPF migration path |
 
-### 10.11 Baseline validation
+### 10.13 Baseline validation
 
 ```
 dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
