@@ -453,7 +453,7 @@ If a reachable consumer is found, design required constructor injection for that
 
 | Change | File | Detail |
 |--------|------|--------|
-| BaseAssets parameterless ctor | `BaseAssets.cs` | Guarded with `#if BGI_FULL_WINDOWS` — Core path throws `PlatformNotSupportedException` instead of calling `TaskContext.Instance()` |
+| BaseAssets parameterless ctor | `BaseAssets.cs` | Entire ctor wrapped in `#if BGI_FULL_WINDOWS` — absent from Core compilation; Core now enforces ISystemInfo injection at compile time for BaseAssets-derived types |
 | AutoPickAssets legacy ctor | `AutoPickAssets.cs` | Guarded with `#if BGI_FULL_WINDOWS` — not compiled in Core |
 | Core Verification | — | 112/112 ✅ |
 | WPF behavior | — | Unchanged — both parameterless ctors still compiled under `BGI_FULL_WINDOWS` ✅ |

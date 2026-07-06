@@ -16,15 +16,12 @@ public class BaseAssets<T> : Singleton<T> where T : class
 {
     protected readonly ISystemInfo systemInfo;
 
+#if BGI_FULL_WINDOWS
     protected BaseAssets()
     {
-#if BGI_FULL_WINDOWS
         this.systemInfo = TaskContext.Instance().SystemInfo;
-#else
-        throw new PlatformNotSupportedException(
-            "BaseAssets parameterless construction requires ISystemInfo injection on this platform.");
-#endif
     }
+#endif
 
     protected BaseAssets(ISystemInfo systemInfo)
     {
