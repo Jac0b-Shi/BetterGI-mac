@@ -275,3 +275,79 @@ Both engines share the same path forward: the macOS composition root must provid
 | Expand Core shim | B8.2 closeout — explicitly limited |
 | Full WPF build | Manual/stage-closeout only |
 | Shim deletion | B10 |
+
+---
+
+## 9. B9 Closeout
+
+### Commit chain
+
+| Commit | Description |
+|--------|-------------|
+| `12c336d` | B9 audit (initial) |
+| `adcb554` | Correction: Windows adapter layering, Mat contract, macOS status |
+| `69a9446` | v3: required non-nullable recognizers, Unsupported placeholders, Windows chain |
+| `8108f83` | v4: role interfaces (IPaddle/IYap) for DI safety |
+| `5fb93b4` | B9.1: interfaces + Windows adapters + macOS placeholders |
+| `4268a26` | Shared-source boundary fix (interfaces in WPF tree, Core links) |
+| `e542bf3` | B9.1 verification (WPF type resolution confirmed) |
+| `5cb9676` | B9.2: AutoPickTrigger injection + full construction chain |
+| `b51937f` | B9.2a: fix LoadInitialTriggers null configProvider + assertion fixes |
+| *(this commit)* | Verification + closeout |
+
+### Source guards
+
+```bash
+rg 'OcrFactory\.Paddle|TextInferenceFactory\.Pick|TextRectExtractor'
+  BetterGenshinImpact/GameTask/AutoPick/AutoPickTrigger.cs
+# → zero results
+```
+
+All `new AutoPickTrigger(...)` calls verified:
+- **GameTaskManager.LoadInitialTriggers**: 3rd arg is `autoPickConfigProvider` ✅
+- **GameTaskManager.AddTrigger**: 3rd arg is `autoPickConfigProvider` ✅
+- **MacAutoPickComposition.Compose**: passes all 7 params ✅
+- **Core shim AddTrigger**: passes all 7 params ✅
+
+### Verification
+
+| Gate | Result |
+|------|--------|
+| Core Verification | **106/106** |
+| WPF type resolution | B9 types: zero errors; pre-existing `IAutoPickConfigProvider` missing-using only |
+| adapter-gate | Not triggered (no adapter file changes) |
+
+### B9 assertions (6 new)
+
+| Label | Verifies |
+|-------|----------|
+| B9.2 _paddleRecognizer reference | `ReferenceEquals(value, testPaddle)` |
+| B9.2 _yapRecognizer reference | `ReferenceEquals(value, testYap)` |
+| B9.2 null paddle → ArgumentNullException | |
+| B9.2 null yap → ArgumentNullException | |
+| B9.2 UnsupportedPaddle → NotSupportedException | |
+| B9.2 UnsupportedYap → NotSupportedException | |
+
+### What B9 achieves
+
+| Boundary | Status |
+|----------|--------|
+| AutoPickTrigger OCR via injected recognizers (no static gateways) | ✅ |
+| `IAutoPickTextRecognizer` / `IPaddle` / `IYap` role interfaces | ✅ |
+| `WindowsPaddleAutoPickTextRecognizer` (bounding-rect + OcrWithoutDetector/Ocr) | ✅ |
+| `WindowsYapAutoPickTextRecognizer` (wraps TextInferenceFactory.Pick) | ✅ |
+| Windows DI: unambiguous role-interface registration | ✅ |
+| TaskTriggerDispatcher → GameTaskManager → AutoPickTrigger full chain | ✅ |
+| MacAutoPickComposition explicit recognizer params | ✅ |
+| Core shim AddTrigger forwards recognizers | ✅ |
+| Yap Mat leak fixed (`using var textMat`) | ✅ |
+| UnsupportedPaddle/Yap fail-fast placeholders | ✅ |
+| Test fakes (FakePaddle, FakeYap) with ReferenceEquals identity | ✅ |
+
+### What B9 does NOT cover
+
+| Gap | Phase |
+|-----|-------|
+| Real macOS OCR backend | Future — macOS host composition |
+| Full WPF build | Pre-existing backlog (IAutoPickConfigProvider missing usings) |
+| Shim deletion (17 files) | B10 |
