@@ -2145,3 +2145,74 @@ Not actionable in current B10 scope. `Global.Absolute` is the central path-resol
 dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
 dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
 ```
+
+---
+
+## 17. B10.14 Re-Audit: PlatformServices
+
+### 17.1 Current state (unchanged since B10.7)
+
+```
+PlatformServices (static class)
+  Input: IInputBackend { get; set; } = null!;
+  UserInteraction: IUserInteractionService? { get; set; }
+```
+
+| Reference | Count | Source |
+|-----------|-------|--------|
+| Core-preprocessed `PlatformServices.Input` | 5 | `DesktopRegion.cs:29,41,48,58,63` — shared linked source |
+| Verification `PlatformServices.Input = recorder` | 1 | `Program.cs:22` |
+| WPF-only (DesktopRegion.cs, same physical file) | 5 | Same file, authoritative WPF source |
+| `UserInteraction` consumers | **0** | Dead member |
+| Supported macOS runtime calls to Input | **0** | Dead code on macOS (no Core-linked file calls DesktopRegion input methods) |
+
+### 17.2 Key changes since B10.7
+
+| Factor | B10.7 (first audit) | B10.14 (re-audit) |
+|--------|---------------------|-------------------|
+| `Simulation` shim (depended on PlatformServices) | Present | **Deleted** in B10.7.1 |
+| `ThemedMessageBox` (depended on UserInteraction) | Present | **Deleted** in B10.10.1 |
+| PlatformServices remaining consumer | DesktopRegion (5 refs) + Simulation (1 ref) = 6 | **DesktopRegion only (5 refs)** |
+| UserInteraction consumers | 0 (shim only) | **0** — UserInteraction is now a dead member |
+
+### 17.3 Per-member classification
+
+| Member | Core refs | Runtime reachable | Classification |
+|--------|-----------|------------------|----------------|
+| `Input` | 5 (DesktopRegion) | ❌ Dead code on macOS | **D** — compiled but unreachable, shared source constraint |
+| `UserInteraction` | **0** | ❌ | **A** — dead member, can remove from shim now |
+
+### 17.4 UserInteraction: now safe to remove
+
+`UserInteraction` was set by `ThemedMessageBox` shim (deleted in B10.10.1) and `PlatformServices.UserInteraction` itself. Zero consumers anywhere in Core, Verification, or WPF. Can be removed from `PlatformServices.cs` immediately.
+
+### 17.5 Input: still Category D
+
+`DesktopRegion.cs` remains the blocker. It's a shared source with 5 `PlatformServices.Input` references. All input-execution methods are dead code on macOS but still compiled. Removing PlatformServices.Input would break Core AND WPF builds.
+
+**Timeline:** PlatformServices.Input can be deleted only when DesktopRegion's input methods are:
+1. Guarded with `#if BGI_PLATFORM_MAC` → `IInputBackend` parameter (like StringUtils/Sleep pattern), OR
+2. The entire Region/DesktopRegion input-execution API is refactored out of the geometry model
+
+Both are outside the current B10 scope.
+
+### 17.6 Verification impact
+
+`Program.cs:22` (`PlatformServices.Input = recorder`) is the only test setup for DesktopRegion input tests. As long as DesktopRegion input methods exist and are tested, this line stays. When PlatformServices is eventually deleted, this line is removed as part of B10.7.4.
+
+### 17.7 Implementation plan (minimal)
+
+#### B10.14.1: Remove dead `UserInteraction` member
+
+Delete from `PlatformServices.cs`. Zero consumers confirmed. No behavioral impact.
+
+#### B10.14.2–4: Postponed (previously B10.7.2–4)
+
+PlatformServices.Input deletion deferred. DesktopRegion input methods remain Category D.
+
+### 17.8 Baseline validation
+
+```
+dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
+```
