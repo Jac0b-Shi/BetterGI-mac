@@ -1282,3 +1282,154 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/1
 | Core Verification | 112/112 | **112/112** ✅ |
 | WPF build — new errors from Simulation deletion | — | **Zero** — same 4 pre-existing errors remain; no Simulation/namespace/type ambiguity errors added ✅ |
 | Shim count | 15 | **14** ✅ |
+
+**B10.7 status:** B10.7.1 complete. PlatformServices remains Category D. B10.7.2–4 postponed until a dedicated input-execution strategy for the shared Region/DesktopRegion hierarchy is established. No immediate work scheduled on PlatformServices.
+
+---
+
+## 11. B10.8 Audit: StringUtils
+
+### 11.1 Current shim
+
+| Aspect | Detail |
+|--------|--------|
+| File | `BetterGenshinImpact.Core/Shim/StringUtils.cs` |
+| Lines | 8 |
+| Namespace | `BetterGenshinImpact.Helpers` |
+| Type kind | `public static class StringUtils` |
+| Public API | 3 extension methods |
+
+| Member | Signature | Implementation |
+|--------|-----------|----------------|
+| `IsNullOrEmpty` | `this string? s → bool` | `string.IsNullOrEmpty(s)` |
+| `IsNotNullOrEmpty` | `this string? s → bool` | `!string.IsNullOrEmpty(s)` |
+| `RemoveAllSpace` | `this string s → string` | `s.Replace(" ", "").Replace("\t", "").Replace("\n", "").Replace("\r", "")` |
+
+Created in commit `32590fc` (macOS port). No predecessor, no WPF upstream analog.
+
+### 11.2 Upstream/history investigation
+
+| Aspect | WPF authoritative (`BetterGenshinImpact/Helpers/StringUtils.cs`) | Core shim |
+|--------|----------------------------------------------------------------|-----------|
+| Lines | 159 | 8 |
+| Type keyword | `public partial class` | `public static class` |
+| Extension methods? | **No** — all regular static | **Yes** — all `this string` extension |
+| `IsNullOrEmpty` | **Not present** | ✅ Provided by shim |
+| `IsNotNullOrEmpty` | **Not present** | ✅ Provided by shim |
+| `RemoveAllSpace` | ✅ Removes ` ` + `\t` only (2 chars) | Removes ` ` + `\t` + `\n` + `\r` (4 chars — **different behavior**) |
+| `RemoveAllEnter` | ✅ Removes `\n` + `\r` | ✅ But combined into RemoveAllSpace |
+| `ExtractChinese`, `ConvertFullWidthNumToHalfWidth`, `TryParseInt`, `TryExtractPositiveInt`, `IsPureEnglish`, etc. | ✅ Full suite (11 methods total) | **Not present** |
+
+**Key semantic difference:** The shim's `RemoveAllSpace` removes spaces, tabs, AND newlines. The WPF version only removes spaces and tabs (newlines are handled by separate `RemoveAllEnter`). This means Core consumers using the shim get more aggressive stripping than WPF consumers of the same-named method.
+
+### 11.3 Three-layer reference classification
+
+| Layer | Textual refs | Core-preprocessed | macOS runtime reachable |
+|-------|-------------|-------------------|------------------------|
+| `IsNullOrEmpty` | 0 | 0 | 0 |
+| `IsNotNullOrEmpty` | 0 | 0 | 0 |
+| `RemoveAllSpace` | 4 (ImageRegion 2, CraftMaterialTask 1 commented, AutoFishingTrigger 1 comment) | **2** (ImageRegion.cs:209,309) | ✅ Called from ImageRegion which is used in OCR processing path on macOS |
+
+#### Consumer detail
+
+| # | File | Project | Preprocessed? | Member | Runtime reachable on macOS? |
+|---|------|---------|---------------|--------|----------------------------|
+| 1 | `ImageRegion.cs:209` | Core (linked) | ✅ | `RemoveAllSpace(result.Text)` | ✅ Called from `ITaskTrigger.OnCapture` OCR processing |
+| 2 | `ImageRegion.cs:309` | Core (linked) | ✅ | `RemoveAllSpace(result.Text)` | ✅ Called from `ImageRegion.Text()` OCR method |
+| 3 | `AutoFishingTrigger.cs:186` | WPF | ❌ Comment only | `RemoveAllSpace` | Not code |
+| 4 | `RectArea.cs:302` | WPF | ❌ Comment only | `RemoveAllSpace` | Not code |
+| 5–15 | `CombatScenes.cs`, `Avatar.cs`, etc. | WPF | ❌ Not linked | Various members | WPF-only |
+
+**Core consumers:** 2 calls to `RemoveAllSpace`, both in the macOS OCR processing path.
+
+### 11.4 Trial deletion result
+
+Temporary removal of shim + csproj entry:
+
+| Error | File | Line | Message |
+|-------|------|------|---------|
+| CS0103 | `ImageRegion.cs` | 209 | `'StringUtils' does not exist in current context` |
+| CS0103 | `ImageRegion.cs` | 309 | `'StringUtils' does not exist in current context` |
+
+**Result:** Not directly deletable — 2 Core-compiled consumers exist. The shim is not dead.
+
+### 11.5 Standard library replacement analysis
+
+| Shim member | Standard equivalent | Replaceable? |
+|-------------|-------------------|--------------|
+| `IsNullOrEmpty(this string? s)` → `string.IsNullOrEmpty(s)` | `string.IsNullOrEmpty(s)` | ✅ Direct — just call `string.IsNullOrEmpty()` directly in consumer |
+| `IsNotNullOrEmpty(this string? s)` → `!string.IsNullOrEmpty(s)` | `!string.IsNullOrEmpty(s)` | ✅ Direct — just call `!string.IsNullOrEmpty()` directly |
+| `RemoveAllSpace(this string s)` → 4 `Replace` calls | `s.Replace(" ", "").Replace("\t", "").Replace("\n", "").Replace("\r", "")` | ✅ Direct — inline in consumer |
+
+**All 3 shim methods are thin wrappers expressible as standard C# expressions.** None require shim-level indirection.
+
+### 11.6 Architecture classification
+
+**Category B — Replace consumers with standard primitives, then delete shim.**
+
+Not Category A — 2 Core-compiled consumers exist.
+Not Category C — no shared utility logic to extract; standard APIs suffice.
+Not Category D — shim is a thin wrapper, not a substantive implementation.
+Not Category E — linking upstream adds `RegexHelper` dependency (used by `TryExtractPositiveInt` which Core doesn't need).
+
+### 11.7 Neighboring shim relationship
+
+| Shim | StringUtils reference? | Notes |
+|------|-----------------------|-------|
+| `App.cs` | No | Independent |
+| `Global.cs` | No | Independent |
+| `TaskControl.cs` | No | Independent |
+| `ThemedMessageBox.cs` | No | Independent |
+| `PlatformServices.cs` | No | Independent |
+| `MacSystemInfo.cs` | No | Independent |
+
+No ordering constraints. StringUtils is a utility leaf node with no inter-shim dependencies.
+
+### 11.8 Implementation phases
+
+#### B10.8.1: Replace 2 `StringUtils.RemoveAllSpace()` calls in ImageRegion.cs with inline
+
+**ImageRegion.cs line 209:**
+```csharp
+// Before:
+var text = StringUtils.RemoveAllSpace(result.Text);
+// After:
+var text = result.Text.Replace(" ", "").Replace("\t", "").Replace("\n", "").Replace("\r", "");
+```
+
+**ImageRegion.cs line 309:**
+```csharp
+// Before:
+var text = StringUtils.RemoveAllSpace(result.Text);
+// After:
+var text = result.Text.Replace(" ", "").Replace("\t", "").Replace("\n", "").Replace("\r", "");
+```
+
+**Behavior preservation:** Identical — the shim's `RemoveAllSpace` does exactly these 4 `Replace` calls.
+
+#### B10.8.2: Delete StringUtils shim + csproj entry
+
+After B10.8.1:
+- Delete `BetterGenshinImpact.Core/Shim/StringUtils.cs`
+- Remove `<Compile Include="Shim/StringUtils.cs" />` from Core csproj
+- Source guard: `rg '\bStringUtils\b' BetterGenshinImpact.Core/ --type cs` → zero (MacCoreRuntimeAdapter comment may mention)
+- Core build 0 errors
+- Verification 112/112
+- Shim count: 14 → **13**
+
+**The 2 unused extension methods (`IsNullOrEmpty`, `IsNotNullOrEmpty`) are removed without replacement — they have zero consumers in any Core-linked file.**
+
+### 11.9 Risks
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| `RemoveAllSpace` inline code duplicates logic across 2 call sites | **Low** — 2 sites, intentional for B10's "no abstraction" principle | Acceptable tradeoff; a shared helper can be extracted later if needed |
+| WPF `StringUtils` partial class keyword may cause confusion if another partial exists | **Low** — only one WPF file uses `partial`; no other partial found | No action needed |
+| TryExtractPositiveInt references RegexHelper — would prevent linking upstream StringUtils into Core | **Low** — we chose inline replacement, not linking | Correct by design |
+
+### 11.10 Baseline validation
+
+```
+dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
+```
