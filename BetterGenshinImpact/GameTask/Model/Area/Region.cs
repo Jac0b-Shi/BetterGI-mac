@@ -117,7 +117,11 @@ public class Region : IDisposable
     {
         // 相对自己是 0, 0 坐标
         ClickTo(0, 0, Width, Height);
+#if BGI_PLATFORM_MAC
+        Thread.Sleep(60);
+#else
         TaskControl.Sleep(60);
+#endif
         ClickTo(0, 0, Width, Height);
         return this;
     }

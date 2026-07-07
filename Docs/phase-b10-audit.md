@@ -1679,3 +1679,18 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/1
 | Logger / Sleep in shim | Retained | **Retained** (Category D) ✅ |
 | Shim count | 13 | **12** ✅ |
 | B10.9.1 status | — | **Complete** ✅ |
+
+### 12.12 B10.9.2 Implementation Result
+
+| Metric | Before | After |
+|--------|--------|-------|
+| `TaskControl.Sleep` ref in Region.cs | Unconditional `TaskControl.Sleep(60)` | `#if BGI_PLATFORM_MAC` → `Thread.Sleep(60)` / `#else` → `TaskControl.Sleep(60)` ✅ |
+| Core behavior (`BGI_PLATFORM_MAC` branch) | Via shim: `Thread.Sleep(60)` | Direct `Thread.Sleep(60)` — same ✅ |
+| WPF behavior (`#else` branch) | Via authoritative: suspend+activate+Thread.Sleep | Same — continues using `TaskControl.Sleep(60)` ✅ |
+| Remaining TaskControl refs in Core closure | 2 (Sleep + Logger) | **1** (Logger only) ✅ |
+| Core build | 0 errors | **0 errors** ✅ |
+| Core Verification | 112/112 | **112/112** ✅ |
+| WPF build — new errors | — | **Zero** (same 4 pre-existing) ✅ |
+| Shim count | 12 | **12** (unchanged) ✅ |
+| B10.9.2 status | — | **Complete** ✅ |
+| Remaining TaskControl shim members | `Logger` (Category D) | **Unchanged** ✅ |
