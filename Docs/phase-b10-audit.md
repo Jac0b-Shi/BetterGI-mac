@@ -1911,3 +1911,115 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/1
 | Core build | 0 errors | **0 errors** ✅ |
 | Core Verification | 112/112 | **112/112** ✅ |
 | Shim count | 11 | **10** ✅ |
+
+---
+
+## 14. B10.11 Audit: BvStubs
+
+### 14.1 Current shim
+
+| Aspect | Detail |
+|--------|--------|
+| File | `BetterGenshinImpact.Core/Shim/BvStubs.cs` |
+| Lines | 13 |
+| Namespace | `BetterGenshinImpact.GameTask.Common.BgiVision` |
+| Type kind | `public static class Bv` |
+
+| Member | Signature | Implementation | Type |
+|--------|-----------|----------------|------|
+| `WhichGameUi(ImageRegion)` | `→ GameUiCategory` | `=> GameUiCategory.Unknown` | Stub — always Unknown |
+| `WhichGameUi()` | `→ GameUiCategory` | `=> GameUiCategory.Unknown` | Stub — always Unknown |
+| `WhichGameUiForTriggers(ImageRegion)` | `→ GameUiCategory` | `=> GameUiCategory.Unknown` | Stub — always Unknown |
+| `DetectChatUi(ImageRegion)` | `→ bool` | `=> false` | Stub — always false |
+| `ImRead(string, ImreadModes)` | `→ Mat` | `=> Cv2.ImRead(path, mode)` | Real passthrough |
+
+### 14.2 Upstream/history
+
+WPF authoritative: `BetterGenshinImpact/GameTask/Common/BgiVision/` contains 6 `partial class Bv` files:
+- `BvImage.cs`, `BvSkill.cs`, `BvOcr.cs`, `BvChatUi.cs`, `BvStatus.cs`, `BvSimpleOperation.cs`
+
+Core shim provides only 5 members vs. WPF's ~30+. Created in commit `32590fc`.
+
+### 14.3 Reference classification
+
+| Member | Core-preprocessed refs | WPF-only refs | Verification refs | macOS reachable? |
+|--------|----------------------|---------------|-------------------|------------------|
+| `WhichGameUi` | **0** | Many | 0 | ❌ |
+| `WhichGameUiForTriggers` | **0** | Many | 0 | ❌ |
+| `DetectChatUi` | **0** | Many | 0 | ❌ |
+| `ImRead` | **1** (`PaddleOcrService.cs:256`) | Many | 0 | ✅ Pre-heat OCR loading |
+
+**Total Core-preprocessed references: 1** — `Bv.ImRead(...)` in `PaddleOcrService.cs`.
+
+### 14.4 Semantic comparison: Bv.ImRead
+
+| Implementation | Code | Encoding fallback | File I/O |
+|----------------|------|-------------------|----------|
+| Core shim | `Cv2.ImRead(path, mode)` | OpenCV internal | OpenCV native |
+| WPF authoritative | `Mat.FromStream(File.OpenRead(fileName), flags)` | .NET → OpenCV | .NET FileStream |
+
+### 14.5 Trial deletion result
+
+| Error | File | Line | Message |
+|-------|------|------|---------|
+| CS0103 | `PaddleOcrService.cs` | 256 | `'Bv' does not exist in current context` |
+
+**1 compiled symbol reference prevents deletion.**
+
+### 14.6 Per-member classification
+
+| Member | Classification | Rationale |
+|--------|---------------|-----------|
+| `WhichGameUi` | **A** — dead member | Zero Core consumers |
+| `WhichGameUiForTriggers` | **A** — dead member | Zero Core consumers |
+| `DetectChatUi` | **A** — dead member | Zero Core consumers |
+| `ImRead` | **D** — keep temporarily | 1 Core consumer in linked PaddleOcrService.cs |
+
+### 14.7 Options for Bv.ImRead
+
+PaddleOcrService.cs is a linked shared source (authoritative in WPF tree, linked in Core). The shim `Cv2.ImRead` and WPF authoritative `Mat.FromStream(File.OpenRead(...))` have different implementations.
+
+**A — Guard with `#if BGI_PLATFORM_MAC`:**
+```csharp
+#if BGI_PLATFORM_MAC
+using var preHeatImageMat = Cv2.ImRead(modelType.PreHeatImagePath);
+#else
+using var preHeatImageMat = Bv.ImRead(modelType.PreHeatImagePath);
+#endif
+```
+- Core: uses `Cv2.ImRead` (same as current shim)
+- WPF: continues using `Bv.ImRead` (authoritative implementation)
+- Risk: low, matches established pattern
+
+**B — Keep shim temporarily (Category D):**
+- No change, shim stays
+- Risk: lowest
+
+**C — Replace unconditionally with `Cv2.ImRead`:**
+- Changes WPF behavior from `Mat.FromStream` to `Cv2.ImRead`
+- Risk: unnecessary WPF behavior change
+
+**Recommendation: Option A.** The `#if BGI_PLATFORM_MAC` pattern has been proven for StringUtils, Sleep, and Logger.
+
+### 14.8 Implementation plan
+
+#### B14.8.1: Guard Bv.ImRead in PaddleOcrService.cs
+
+Replace `Bv.ImRead(...)` with `#if BGI_PLATFORM_MAC` / `Cv2.ImRead(...)` / `#else Bv.ImRead(...)`.
+
+Remove 4 dead members from shim (WhichGameUi × 2, WhichGameUiForTriggers, DetectChatUi) — they have zero Core consumers and can be deleted without any migration.
+
+#### B14.8.2: Delete BvStubs shim
+
+After B14.8.1:
+- Delete `BetterGenshinImpact.Core/Shim/BvStubs.cs`
+- Remove csproj entry
+- Core build 0 errors, Verification 112/112
+- Shim count: 10 → **9**
+
+### 14.9 Baseline validation
+
+```
+dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
+```
