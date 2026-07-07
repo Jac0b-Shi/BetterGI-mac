@@ -1476,3 +1476,192 @@ var text = NormalizeOcrText(result.Text);
 | WPF build — new errors from this change | — | **Zero** — only same 4 pre-existing errors remain ✅ |
 | Shim count | 14 | **13** ✅ |
 | B10.8 status | — | **Complete** ✅ |
+
+---
+
+## 12. B10.9 Audit: TaskControl
+
+### 12.1 Current shim
+
+| Aspect | Detail |
+|--------|--------|
+| File | `BetterGenshinImpact.Core/Shim/TaskControl.cs` |
+| Lines | 11 |
+| Namespace | `BetterGenshinImpact.GameTask` |
+| Type kind | `public static class TaskControl` |
+| Created | Commit `32590fc` (macOS port) |
+
+| Member | Signature | Implementation | Nature |
+|--------|-----------|----------------|--------|
+| `Logger` | `static ILogger Logger { get; }` | `NullLogger.Instance` | Silent no-op logger |
+| `CaptureToRectArea()` | `static ImageRegion()` | `new ImageRegion(new Mat(), 0, 0)` | Empty Mat placeholder — zero pixels, zero channels effectively |
+| `Sleep(int)` | `static void Sleep(int ms)` | `Thread.Sleep(ms)` | Standard blocking sleep |
+
+### 12.2 Upstream/history investigation
+
+| Aspect | WPF authoritative (`GameTask/Common/TaskControl.cs`) | Core shim |
+|--------|------------------------------------------------------|-----------|
+| Lines | 313 | 11 |
+| Type keyword | `class` (instance + static members) | `static class` |
+| `Logger` | `App.GetLogger<TaskControl>()` — real ILogger from DI | `NullLogger.Instance` — silent |
+| `CaptureToRectArea()` | Real capture via `IGameCapture` pipeline | `new ImageRegion(new Mat(), 0, 0)` — empty placeholder |
+| `Sleep(int)` | `TrySuspend()` + `CheckAndActivateGameWindow()` + `Thread.Sleep` | `Thread.Sleep` only — no suspend/window activation |
+| Other members (not in shim) | `TaskSemaphore`, `CheckAndSleep`, `Delay`, `TrySuspend`, `CheckAndActivateGameWindow`, `CaptureGameImage`, `NewRetry`, etc. | **Not present** |
+
+Only commit `32590fc` creates the shim. No prior history.
+
+### 12.3 Reference classification (three layers)
+
+#### 12.3.1 Pre-coreprocessing textual references
+
+| Member | Textual refs | Core-preprocessed | Supported-runtime reachable |
+|--------|-------------|-------------------|---------------------------|
+| `Logger` | ~40 (WPF) + 1 (Core-linked) | **1** (ImageRegion.cs:163) | ✅ — ImageRegion.Find() calls Logger on error |
+| `CaptureToRectArea()` | ~30 (WPF) | **0** | ❌ — Only in WPF-linked (HotKeyViewModel, QuickBuyTask, etc.) |
+| `Sleep(int)` | ~15 (WPF) + 1 (Core-linked) | **1** (Region.cs:120) | ✅ — Region.Click() calls Sleep(60) |
+
+#### 12.3.2 Core-compiled consumers
+
+| # | File | Line | Member | Preprocessed? | macOS reachable? |
+|---|------|------|--------|---------------|------------------|
+| 1 | `ImageRegion.cs` (linked) | 163 | `TaskControl.Logger.LogError(...)` | ✅ Compiled | ✅ OCR error path in `Find()` |
+| 2 | `Region.cs` (linked) | 120 | `TaskControl.Sleep(60)` | ✅ Compiled | ✅ `Region.Click()` → `DoubleClick()` path |
+
+**Note:** Both files are shared sources (authoritative in WPF tree, linked in Core). Unconditional changes affect both targets.
+
+#### 12.3.3 Verification references
+
+**Zero.** Verification does not reference TaskControl.
+
+#### 12.3.4 WPF-only refs (not compiled in Core)
+
+~70+ refs across WPF using various TaskControl members. Not in scope.
+
+### 12.4 Individual member analysis
+
+#### 12.4.1 TaskControl.Logger (ImageRegion.cs:163)
+
+```csharp
+TaskControl.Logger.LogError("在图像{W1}x{H1}中查找模板...");
+```
+
+Called when a template match's region-of-interest exceeds the source image boundaries. This is an edge-case error log in `ImageRegion.Find()`. The caller already has no other logger available — ImageRegion is a model class without DI injection.
+
+**Shim value:** `NullLogger.Instance` — message is silently discarded on macOS.
+**Upstream value:** Real DI-resolved ILogger — message appears in log.
+
+**Classification:** Category D/B — keep temporarily. Logger injection into ImageRegion would be a large refactor (shared source, impacts all region types). The `NullLogger` behavior means macOS loses diagnostic info, but doesn't crash or misbehave.
+
+#### 12.4.2 TaskControl.CaptureToRectArea() (no Core consumers)
+
+Zero Core-preprocessed consumers. Only WPF files call this member. The shim's implementation (empty Mat placeholder) is never invoked from Core.
+
+**Classification:** Category A — dead member in Core. But it cannot be removed from the shim because the shim must provide the type for WPF compilation... Wait — WPF has its own authoritative TaskControl. WPF doesn't use the shim.
+
+Actually, WPF resolves its own `GameTask/Common/TaskControl.cs`. The Core shim is only compiled in Core. So this member has zero consumers in both targets' closures. It can be removed from the shim without affecting anything.
+
+**Classification:** Category A — dead member in the shim. Remove it from the shim.
+
+#### 12.4.3 TaskControl.Sleep(int) (Region.cs:120)
+
+```csharp
+TaskControl.Sleep(60);
+```
+
+Called in `Region.DoubleClick()` which calls `ClickTo()` then sleeps, then `ClickTo()` again. On macOS, this is dead code — no Core-linked consumer calls `Region.DoubleClick()` (confirmed in B10.7 audit). However, the method body is compiled and would be called if any trigger calls `DoubleClick()` in the future.
+
+Wait — `Region.DoubleClick()` calls `TaskControl.Sleep(60)` directly. If no Core-linked code calls `DoubleClick()`, then the `Sleep` call is unreachable at runtime but exists in compiled code.
+
+**Shim value:** `Thread.Sleep(ms)` — blocking sleep, no cancellation.
+**Upstream value:** `TrySuspend()` + `CheckAndActivateGameWindow()` + `Thread.Sleep(ms)` — includes platform window management.
+
+**Classification:** Category D/B — keep temporarily. The Sleep reference is in shared Region.cs. Adding `#if` guard or replacing with `Thread.Sleep` inline would be needed to remove the shim dependency.
+
+### 12.5 Trial deletion result
+
+Removing shim + csproj entry:
+
+| Error | File | Line | Message |
+|-------|------|------|---------|
+| CS0103 | `Region.cs` | 120 | `'TaskControl' does not exist` |
+| CS0103 | `ImageRegion.cs` | 163 | `'TaskControl' does not exist` |
+
+**2 compiled symbol references prevent deletion.** Both in shared source files.
+
+### 12.6 Per-member classification
+
+| Member | Classification | Rationale |
+|--------|---------------|-----------|
+| `Logger` | **Category D** — keep temporarily. Replace with injected ILogger when ImageRegion gets DI support. | Single log call, edge case. NullLogger silences it on macOS (acceptable for B10). |
+| `CaptureToRectArea()` | **Category A** — dead member in shim. Zero consumers in Core closure. | Remove from shim immediately. |
+| `Sleep(int)` | **Category D** — keep temporarily. Remove when Region.DoubleClick() consumer pattern is clarified in Core. | Shared source, single call, dead on supported path. |
+
+### 12.7 Neighboring shim relationship
+
+| Shim | TaskControl ref? | Notes |
+|------|------------------|-------|
+| `App.cs` | No | Independent |
+| `Global.cs` | No | Independent |
+| `PlatformServices.cs` | No | Independent |
+| `MacSystemInfo.cs` | No | Independent |
+| `ThemedMessageBox.cs` | No | Independent |
+
+No ordering constraints.
+
+### 12.8 Implementation phases
+
+#### B10.9.1: Remove dead `CaptureToRectArea()` from shim
+
+Delete the method and its `using OpenCvSharp;` (if it becomes unused). Zero consumers confirmed.
+
+**Gate:** Core build 0 errors, Verification 112/112.
+
+#### B10.9.2: Guard or replace `TaskControl.Sleep` in Region.cs
+
+Two options:
+- **A (recommended):** Replace `TaskControl.Sleep(60)` with `Thread.Sleep(60)` directly, then add `using System.Threading;` if needed.
+- **B:** Guard with `#if BGI_PLATFORM_MAC` exclusive inline `Thread.Sleep`, keep `#else` branch calling `TaskControl.Sleep`.
+
+Both preserve behavior since the shim's `Sleep` is just `Thread.Sleep`. Option A is simpler.
+
+**Gate:** Core build 0 errors, Verification 112/112. WPF: `#else` branch or unconditional change must be evaluated for shared-source impact.
+
+#### B10.9.3: Guard or replace `TaskControl.Logger` in ImageRegion.cs
+
+Replace `TaskControl.Logger.LogError(...)` with `#if BGI_PLATFORM_MAC` that skips logging (or uses a local `NullLogger` instance), or replaces with a standard `ILogger` if available.
+
+Since ImageRegion has no DI, the simplest option is:
+```csharp
+#if !BGI_PLATFORM_MAC
+TaskControl.Logger.LogError(...);
+#endif
+```
+
+This removes the dependency from Core while preserving WPF diagnostic logging.
+
+**Gate:** Core build 0 errors, Verification 112/112.
+
+#### B10.9.4: Delete TaskControl shim
+
+After B10.9.1–3, Core-preprocessed references to TaskControl are zero:
+- Delete `BetterGenshinImpact.Core/Shim/TaskControl.cs`
+- Remove csproj entry
+- Core build 0 errors
+- Verification 112/112
+- Shim count: 13 → **12**
+
+### 12.9 Risks
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| `CaptureToRectArea()` removal from shim won't affect WPF | **None** — WPF has its own authoritative implementation | Not a risk |
+| `Region.cs` shared source — replacing `TaskControl.Sleep` with `Thread.Sleep` is same behavior on both targets | **Low** — identical semantics (both just call `Thread.Sleep`) | Verified by code inspection |
+| Losing `Logger.LogError` on macOS reduces diagnostic visibility | **Low** — edge case log, no behavioral impact | Acceptable for B10 phase |
+| ImageRegion.cs and Region.cs are shared sources — all changes affect both | **Medium** — verify WPF behavior is preserved (use `#if` when semantics diverge) | Test plan covers both |
+
+### 12.10 Baseline validation
+
+```
+dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
+```
