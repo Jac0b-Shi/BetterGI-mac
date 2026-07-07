@@ -1694,3 +1694,85 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/1
 | Shim count | 12 | **12** (unchanged) ✅ |
 | B10.9.2 status | — | **Complete** ✅ |
 | Remaining TaskControl shim members | `Logger` (Category D) | **Unchanged** ✅ |
+
+### 12.13 B10.9.3 Audit: TaskControl.Logger
+
+#### 12.13.1 Current state
+
+Only one Core-preprocessed consumer remains in `ImageRegion.cs:163`:
+
+```csharp
+TaskControl.Logger.LogError("在图像{W1}x{H1}中查找模板,名称：{Name},ROI位置{X2}x{Y2},区域{H2}x{W2},边界溢出！",
+    roi.Width, roi.Height, ro.Name, ro.RegionOfInterest.X, ro.RegionOfInterest.Y,
+    ro.RegionOfInterest.Width, ro.RegionOfInterest.Height);
+```
+
+| Attribute | Value |
+|-----------|-------|
+| Consumer file | `BetterGenshinImpact/GameTask/Model/Area/ImageRegion.cs` |
+| Source ownership | Authoritative WPF source, linked in Core |
+| Method | `ImageRegion.Find()` — template match with ROI bounds check |
+| Triggered when | ROI exceeds source image dimensions (edge case) |
+| Core shim provides | `NullLogger.Instance` — message silently discarded |
+| WPF authoritative provides | `App.GetLogger<TaskControl>()` — real DI ILogger |
+| Verification | Zero references |
+
+#### 12.13.2 Consumer analysis
+
+| Check | Answer |
+|-------|--------|
+| Does ImageRegion already have an ILogger? | **No** — ImageRegion is a model class with no DI |
+| Is call inside `#if` block? | **No** — unconditional |
+| Is call reachable from AutoPickTrigger? | ✅ Yes — `Find()` is called in OCR processing path, but the ROI-bounds error is an edge case |
+| Would silencing the log cause behavioral issues? | **No** — it's a diagnostic message only |
+| Is there an alternative ILogger available from the call chain? | `AutoPickTrigger` has `ILogger<AutoPickTrigger>` via `App.GetLogger`, but ImageRegion doesn't receive it |
+| WPF-only approach possible? | Partially — ImageRegion is shared source, so a `#if` would be needed |
+
+#### 12.13.3 Options
+
+**A — Guard with `#if !BGI_PLATFORM_MAC` (recommended):**
+```csharp
+#if !BGI_PLATFORM_MAC
+TaskControl.Logger.LogError("在图像{W1}x{H1}中查找模板...", ...);
+#endif
+```
+- Core: removes the log (no diagnostic, no crash)
+- WPF: unchanged — continues using authoritative TaskControl.Logger
+- Risk: lowest
+
+**B — Inject ILogger into ImageRegion constructor:**
+- Requires adding `ILogger` parameter to ImageRegion
+- Propagates to all Region subclasses (GameCaptureRegion, DesktopRegion, etc.)
+- Risk: highest — large API change, shared source impact
+
+**C — Use a local static NullLogger instance:**
+```csharp
+private static readonly ILogger _log = NullLogger.Instance;
+```
+- Core: uses NullLogger explicitly (no TaskControl dependency)
+- WPF: still NullLogger — loses real DI logging
+- Risk: WPF diagnostic regression
+
+**D — Keep current shim (Category D):**
+- No change
+- Risk: lowest, but prolongs shim lifetime
+
+**Recommendation: Option A** — matches the `#if BGI_PLATFORM_MAC` pattern used for StringUtils and Sleep. Minimal change, preserves both target behaviors.
+
+#### 12.13.4 Implementation plan (B10.9.4 — combined with shim deletion)
+
+After the `#if !BGI_PLATFORM_MAC` guard is applied:
+- Core-preprocessed `TaskControl` refs: **zero**
+- Delete `BetterGenshinImpact.Core/Shim/TaskControl.cs`
+- Remove csproj entry
+- Core build 0 errors
+- Verification 112/112
+- WPF: Logger code via `#else` branch — unchanged
+- Shim count: 12 → **11**
+
+#### 12.13.5 Risk
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| Losing diagnostic log on macOS reduces debuggability | **Low** — edge case error that doesn't affect core behavior | Acceptable for B10 phase; can be addressed by full DI injection later |
+| WPF behavior unaffected | ✅ Verifiable by inspection — `#if !BGI_PLATFORM_MAC` ensures WPF continues using authoritative TaskControl.Logger | Not a risk |
