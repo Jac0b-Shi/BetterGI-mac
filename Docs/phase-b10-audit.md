@@ -2453,13 +2453,46 @@ B9 introduced `IOcrRuntimeConfigProvider` injection into OcrFactory's constructo
 | **B — Replace OcrFactory.Paddle with instance** | Change OcrFactory from static-gateway + constructor to instance-only; have callers receive IOcrService via DI | Large — all OcrFactory.Paddle callers need updating |
 | **C — Provide minimal ServiceProvider for Core** | Make `App.ServiceProvider` return a real but minimal DI container for Core that can resolve OcrFactory and BgiOnnxFactory | Medium — requires Core composition root, risk of service locator anti-pattern |
 
-### 21.5 Recommendation
+### 21.5 Fix options
 
-**Option C (short-term)** — Provide a minimal service provider in Core that can resolve BgiOnnxFactory and OcrFactory with IOcrRuntimeConfigProvider. This is the smallest change that prevents the runtime crash.
+| Option | Scope | Risk |
+|--------|-------|------|
+| **A — Inject into ImageRegion** | Pass `IOcrService` to `ImageRegion.Find()` instead of calling static `OcrFactory.Paddle` | Large — ImageRegion is shared source, propagates through all Find() callers |
+| **B — Replace OcrFactory.Paddle with instance** | Change OcrFactory from static-gateway + constructor to instance-only; have callers receive IOcrService via DI | Large — all OcrFactory.Paddle callers need updating |
+| ~~C — Provide minimal ServiceProvider for Core~~ | ~~Make App.ServiceProvider return a real DI container~~ | **Rejected** — creates new global service locator, violates B10 principles |
 
-**Long-term:** Migrate callers off the static `OcrFactory.Paddle` gateway to injected `IOcrService` instances (Option A/B). This is outside current B10 scope.
+**Recommendation: Option B** — `OcrFactory.Paddle` should be removed as a static gateway. `OcrFactory` already has a valid constructor that accepts `IOcrRuntimeConfigProvider`. The callers should receive an `IOcrService` instance (PaddleOcrService) through constructor injection instead of resolving via `App.ServiceProvider`.
 
-### 21.6 Baseline validation
+### 21.6 Verified B9 injection path (already exists but unused)
+
+The B9 injection is correct:
+```
+MacCoreRuntimeAdapter(IOcrRuntimeConfigProvider)
+  → new OcrFactory(logger, runtimeConfig)   ← works, tested
+  → PaddleOcrService(bgiOnnxFactory, type)   ← works via BgiOnnxFactory shim
+```
+
+What's missing: the production code uses `App.ServiceProvider` path instead of this injection path. The fix is to thread the already-injected `IOcrService` (or `OcrFactory`) through the existing AutoPickComposition.
+
+### 21.7 PickTextInference fix
+
+```csharp
+// Current (crashes on macOS):
+public PickTextInference()
+{
+    _session = App.ServiceProvider.GetRequiredService<BgiOnnxFactory>().CreateInferenceSession(...);
+}
+
+// Fixed:
+public PickTextInference(BgiOnnxFactory onnxFactory)
+{
+    _session = onnxFactory.CreateInferenceSession(...);
+}
+```
+
+`PickTextInference` is created by `TextInferenceFactory` which can receive `BgiOnnxFactory` at construction time. The `App.ServiceProvider` call is unnecessary — `BgiOnnxFactory` is already available at composition root.
+
+### 21.8 Baseline validation
 
 ```
 dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
