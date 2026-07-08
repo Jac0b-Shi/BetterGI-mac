@@ -2764,3 +2764,59 @@ WPF does **not** compile or link this file. No "shared source" relationship. The
 3. **BgiOnnxModel** — runtime OCR model deployment blocker documented but not resolved (may be acceptable as deferred item)
 
 **B10 status: Remaining-file inventory complete; B10 closure not yet approved.** The structural audit (classification of all 20 original shim files, deletion of 4 shims + dead members) is substantially finished. Three items require resolution before B10 can close: App.GetLogger<T> consumer migration, GameTaskManager completeness verification, and formal acceptance of BgiOnnxModel as a deferred blocker.
+
+---
+
+## 24. B10.18.1 Audit: MatchTemplateHelper Logger Ownership
+
+### 24.1 Type shape
+
+| Aspect | Detail |
+|--------|--------|
+| Class | `public class MatchTemplateHelper` (but all 8 methods are `public static`) |
+| Instance fields | **None** (only `static readonly ILogger` field) |
+| Constructors | **None** (implicit default only) |
+| `new MatchTemplateHelper()` in codebase | **Zero** — class has no instance lifecycle |
+| Core callers | `ImageRegion.cs:173,408` — static method calls, no instance needed |
+
+**The class is a static utility with no constructor injection channel.**
+
+### 24.2 Logger usage
+
+| Line | Call | Context |
+|------|------|---------|
+| 14 | `App.GetLogger<MatchTemplateHelper>()` | Static field initializer |
+| 58 | `_logger.LogError(ex.Message)` | `MatchTemplate()` catch block |
+| 59 | `_logger.LogDebug(ex, ex.Message)` | Same |
+| 101 | `_logger.LogError(ex.Message)` | `MatchTemplateMulti()` catch block |
+| 102 | `_logger.LogDebug(ex, ex.Message)` | Same |
+
+All 4 calls are catch-block diagnostics. No business logic or control flow impact.
+
+### 24.3 Previous rejected attempts
+
+| Commit | Approach | Reason rejected |
+|--------|----------|-----------------|
+| `a8c50f4` | Replace `App.GetLogger` with `NullLogger<T>.Instance` | Permanently lost WPF logging; no explicit DI |
+| `8cdc9f3` | `#if BGI_PLATFORM_MAC` for logger field | Core still had hidden static NullLogger |
+
+### 24.4 Recommended plan
+
+Since the class is a static utility with zero instance construction:
+
+1. Guard the 4 log lines with `#if !BGI_PLATFORM_MAC`
+2. Remove the `_logger` field entirely
+3. Remove unused `using Microsoft.Extensions.Logging;`
+
+**Result:**
+- **Core**: no logger at all (acceptable — edge-case diagnostics, no crash risk, no hidden NullLogger)
+- **WPF**: retains `App.GetLogger<MatchTemplateHelper>()` via `#else` — production logging preserved
+
+This is not constructor injection (the class has no constructor). But it removes the `App.GetLogger` dependency from Core preprocessing cleanly, without creating a hidden static NullLogger.
+
+### 24.5 Baseline validation
+
+```
+dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
+```
