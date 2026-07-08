@@ -2540,21 +2540,57 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/1
 
 **Neither is a linked shared source.** Both Core files are independent copies/subset implementations.
 
-### 22.2 BgiOnnxModel: critical differences
+### 22.2 BgiOnnxModel: model registry comparison
 
 | Aspect | Core shim | WPF authoritative |
 |--------|-----------|-------------------|
 | Property setters | `{ get; set; }` — public mutable | `{ get; private init; }` — immutable after construction |
 | `ModalPath` | `=> ModelRelativePath` (raw relative) | `=> Global.Absolute(ModelRelativePath)` |
 | `CachePath` | `=> CacheRelativePath` (raw relative) | `=> Global.Absolute(CacheRelativePath)` |
-| `RegisteredModels` | **Not present** | Static registry, model caching, `Register()` method |
+| `RegisteredModels` / `Register()` | **Not present** | Static registry with auto-directory creation |
 | `IsModelExist()` | **Not present** | File existence check via `ModalPath` |
-| Model paths | `Assets\Model\PaddleOcr\ppocr_det_v4.onnx` (flat, CamelCase Ocr) | `Assets\Model\PaddleOCR\Det\V4\PP-OCRv4...\slim.onnx` (nested, mixed case) |
-| Model set | OCR + Yap only (8 models) | Full: OCR + Yap + Fish + Tree + World + Mine + Avatar + QClassify + Vad (17 models) |
 
-**The WPF `BgiOnnxFactory.CreateInferenceSession` uses `model.ModalPath` (which calls `Global.Absolute`). The Core shim uses `model.ModelRelativePath` directly.** This means Core's `CreateInferenceSession` resolves model paths relative to the process working directory, not the project root. Whether this works depends on where the process is launched — a potential runtime defect if model files are not at the expected relative location.
+**Model instances (11 Core vs 18 WPF):**
 
-### 22.3 BgiOnnxFactory: member classification
+| Model | Core shim | WPF authoritative |
+|-------|-----------|-------------------|
+| `YapModelTraining` | ✅ `Assets\Model\Yap\model_training.onnx` | ✅ Same path |
+| `PaddleOcrDetV4` | ✅ `Assets\Model\PaddleOcr\ppocr_det_v4.onnx` | ✅ `Assets\Model\PaddleOCR\Det\V4\PP-OCRv4_mobile_det_infer\slim.onnx` |
+| `PaddleOcrDetV5` | ✅ `Assets\Model\PaddleOcr\ppocr_det_v5.onnx` | ✅ `Assets\Model\PaddleOCR\Det\V5\PP-OCRv5_mobile_det_infer\slim.onnx` |
+| `PaddleOcrDetV6` | ✅ `Assets\Model\PaddleOcr\ppocr_det_v6.onnx` | ✅ `Assets\Model\PaddleOCR\Det\V6\PP-OCRv6_small_det_infer\slim.onnx` |
+| `PaddleOcrRecV4` | ✅ `Assets\Model\PaddleOcr\ppocr_rec_v4.onnx` | ✅ `Assets\Model\PaddleOCR\Rec\V4\PP-OCRv4_mobile_rec_infer\slim.onnx` |
+| `PaddleOcrRecV4En` | ✅ `Assets\Model\PaddleOcr\ppocr_rec_v4_en.onnx` | ✅ `Assets\Model\PaddleOCR\Rec\V4\en_PP-OCRv4_mobile_rec_infer\slim.onnx` |
+| `PaddleOcrRecV5` | ✅ `Assets\Model\PaddleOcr\ppocr_rec_v5.onnx` | ✅ `Assets\Model\PaddleOCR\Rec\V5\PP-OCRv5_mobile_rec_infer\slim.onnx` |
+| `PaddleOcrRecV5Latin` | ✅ `Assets\Model\PaddleOcr\ppocr_rec_v5_latin.onnx` | ✅ `Assets\Model\PaddleOCR\Rec\V5\latin_PP-OCRv5_mobile_rec_infer\slim.onnx` |
+| `PaddleOcrRecV5Eslav` | ✅ `Assets\Model\PaddleOcr\ppocr_rec_v5_eslav.onnx` | ✅ `Assets\Model\PaddleOCR\Rec\V5\eslav_PP-OCRv5_mobile_rec_infer\slim.onnx` |
+| `PaddleOcrRecV5Korean` | ✅ `Assets\Model\PaddleOcr\ppocr_rec_v5_korean.onnx` | ✅ `Assets\Model\PaddleOCR\Rec\V5\korean_PP-OCRv5_mobile_rec_infer\slim.onnx` |
+| `PaddleOcrRecV6` | ✅ `Assets\Model\PaddleOcr\ppocr_rec_v6.onnx` | ✅ `Assets\Model\PaddleOCR\Rec\V6\PP-OCRv6_small_rec_infer\slim.onnx` |
+| `BgiFish` | ❌ | ✅ `Assets\Model\Fish\bgi_fish.onnx` |
+| `BgiTree` | ❌ | ✅ `Assets\Model\Domain\bgi_tree.onnx` |
+| `BgiWorld` | ❌ | ✅ `Assets\Model\World\bgi_world.onnx` |
+| `BgiMine` | ❌ | ✅ `Assets\Model\Mine\bgi_mine.onnx` |
+| `BgiAvatarSide` | ❌ | ✅ `Assets\Model\Common\avatar_side_classify_sim.onnx` |
+| `BgiQClassify` | ❌ | ✅ `Assets\Model\Common\q_classify_sim.onnx` |
+| `SileroVad` | ❌ | ✅ `Assets\Model\Vad\silero_vad.onnx` |
+
+**Core has 11 models; WPF has 18.** Paths differ: Core uses flat `PaddleOcr` directory, WPF uses nested `PaddleOCR/Det|Rec/V{n}/...slim.onnx`.
+
+### 22.3 Runtime path validation
+
+**Zero `.onnx` model files exist in the repository** (confirmed by `find . -type f -name '*.onnx'`). Model files are external artifacts not committed to git. Neither `.gitignore` nor csproj ItemGroups reference model files.
+
+`CreateInferenceSession(model.ModelRelativePath)` is called from 3 Core-linked files (Rec.cs:22, Det.cs:14, PickTextInference.cs:28). Each call will fail at runtime with `FileNotFoundException` unless model files are placed at the expected paths relative to the process working directory.
+
+| Factor | Current state |
+|--------|---------------|
+| `.onnx` files committed to repo? | **No** — zero model files exist |
+| Working directory guarantee? | **Unknown** — Core shim uses raw `ModelRelativePath`, not `Global.Absolute` |
+| Verification covers model loading? | **No** — 112/112 tests validate wiring only; zero `InferenceSession` creations in Verification |
+| Core OCR production readiness | **Blocked** — model files must be deployed at expected relative paths |
+
+**Existing 112/112 verification coverage is not evidence that model loading works.** Verification tests construct `OcrFactory` and `PickTextInference` but don't call `CreateInferenceSession`.
+
+### 22.4 BgiOnnxFactory: member classification
 
 | Member | Core-preprocessed refs | Runtime reachable on macOS? | Classification |
 |--------|----------------------|---------------------------|----------------|
@@ -2566,26 +2602,31 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/1
 | `GetPpOcrV5RecModel()` | **0** | ❌ | **Dead** |
 | `GetSVTRPickModel()` | **0** | ❌ | **Dead** |
 
-**6 dead members** (not 7). Only `CreateInferenceSession` is live.
+**6 dead members** (5 `GetPpOcr*` + 1 `GetSVTRPickModel`). Only `CreateInferenceSession` is live.
 
-### 22.4 Classification
+### 22.5 Classification
 
 | File | Classification | Rationale |
 |------|---------------|-----------|
-| `BgiOnnxFactory` | **Core/macOS ONNX runtime implementation** | CPU-only `CreateInferenceSession` with real production consumers. Not a shim — provides macOS ONNX Runtime capability. Move-out-of-Shim candidate. |
-| `BgiOnnxModel` | **Core model registry / compatibility copy** | Reduced subset of WPF model registry. Different paths, no `Global.Absolute`, no `RegisteredModels`. Not a shim but not identical to authoritative source. Category D pending path/model reconciliation. |
+| `BgiOnnxFactory` | **Core/macOS ONNX runtime implementation** | CPU-only `CreateInferenceSession` with real production consumers. Move-out-of-Shim candidate. |
+| `BgiOnnxModel` | **Category D compatibility model registry** | Reduced 11-model subset of WPF authoritative. Different paths, no `Global.Absolute`, no `RegisteredModels`. Not linked/shared source. |
 
-### 22.5 Implementation plan
+### 22.6 Implementation plan
 
 #### B10.17.1: Delete 6 dead getters from BgiOnnxFactory
 
 Remove `GetPpOcrV3DetModel`, `GetPpOcrV4DetModel`, `GetPpOcrV3RecModel`, `GetPpOcrV4RecModel`, `GetPpOcrV5RecModel`, `GetSVTRPickModel`. Keep `CreateInferenceSession`. Core build 0 errors, Verification 112/112.
 
-#### BgiOnnxModel: keep (no immediate action)
+#### BgiOnnxModel: keep, path validation deferred
 
-Model path reconciliation (`ModalPath` vs raw `ModelRelativePath`) is tied to the `Global.Absolute` path resolution strategy, which is a separate concern. No action in current B10 scope.
+Model files are external to the repository. Before the ONNX OCR pipeline can function on macOS, someone must:
+1. Place `.onnx` files at the 11 paths specified in Core `BgiOnnxModel`
+2. Confirm the process working directory allows relative path resolution (or switch to `Global.Absolute`)
+3. Add model-loading coverage to Verification
 
-### 22.6 Baseline validation
+These steps are outside current B10 scope. Documented as a known gap, not a defect.
+
+### 22.7 Baseline validation
 
 ```
 dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
