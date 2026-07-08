@@ -2632,3 +2632,112 @@ These steps are outside current B10 scope. Documented as a known runtime blocker
 dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
 dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
 ```
+
+---
+
+## 23. B10.18 Audit: Remaining File Classification and B10 Closure Evaluation
+
+### 23.1 GameUiCategory.cs
+
+| Aspect | Detail |
+|--------|--------|
+| File | `Shim/GameUiCategory.cs` (13 lines) |
+| Type | `public enum GameUiCategory` — 4 values: `Unknown, Main, Talk, BigMap` |
+| WPF authoritative | `GameTask/Common/BgiVision/BvStatus.cs` — same enum, same values |
+| Core csproj | `<Compile Include="Shim/GameUiCategory.cs" />` — not linked, Core-local |
+| Core-preprocessed consumers | `ITaskTrigger.cs:40` (property type), `CaptureContent.cs:22` (field type) |
+| WPF/Win32 dependency? | **None** |
+| Mutable static state? | **None** — pure enum |
+| Classification | **Shared domain enum** — not a shim |
+| Action | **Keep.** Cannot delete — required by `ITaskTrigger` and `CaptureContent` type signatures in Core-linked files. |
+
+### 23.2 CoreExtensions.cs
+
+| Aspect | Detail |
+|--------|--------|
+| File | `Shim/CoreExtensions.cs` (22 lines) |
+| Type | `public static class CoreOpenCvExtensions` |
+| Members | `ToScalar(Color)`, `ClampTo(Rect, Rect)`, `ClampTo(Rect, Mat)` |
+| WPF authoritative | **None** — same file serves both targets, no separate WPF version |
+| Core-preprocessed consumers | B10.1 confirmed: `ImageRegion.cs` (ClampTo), `RecognitionObject.cs` (ToScalar) |
+| WPF/Win32 dependency? | **None** — pure OpenCV + System.Drawing interop |
+| Mutable static state? | **None** — pure functions |
+| Classification | **Core utility extensions** — not a shim |
+| Action | **Keep.** Used by Core-linked files for OpenCV coordinate manipulation. |
+
+### 23.3 App.cs remaining member audit
+
+| Member | Signature | Core-preprocessed refs | WPF-only refs | Runtime reachable on macOS? |
+|--------|-----------|----------------------|---------------|---------------------------|
+| `Initialize(ILoggerFactory)` | `void` | 1 (Verification setup) | 0 | ✅ Test-only |
+| `GetLogger<T>()` | `ILogger<T>` | **3** (AutoPickTrigger, AutoPickAssets, MatchTemplateHelper) | Many | ✅ OCR/recognition pipeline |
+| `ServiceProvider` | `IServiceProvider` | **0** (preprocessed out via `#if !BGI_PLATFORM_MAC`) | Many | ❌ WPF-only compatibility |
+
+**GetLogger<T> callers in Core closure:**
+
+| Caller | File | Logger obtained | Would fail without GetLogger? |
+|--------|------|----------------|-------------------------------|
+| `AutoPickTrigger` | `GameTask/AutoPick/` | `ILogger<AutoPickTrigger>` | ✅ Required for error logging |
+| `AutoPickAssets` | `GameTask/AutoPick/Assets/` | `ILogger<AutoPickAssets>` | ✅ Required for diagnostic logging |
+| `MatchTemplateHelper` | `Core/Recognition/OpenCv/` | `ILogger<MatchTemplateHelper>` | ✅ Required for debug logging |
+
+**All 3 Core-linked callers depend on `App.GetLogger<T>()` providing a logger at runtime.** On Core, if `App.Initialize()` is not called, `GetLogger<T>()` returns a `NullLogger` (silent discard). This is not a crash risk, but means diagnostic logging is suppressed until a logger factory is provided.
+
+**ServiceProvider:** `OcrFactory.cs:24` retains `App.ServiceProvider` inside `#if !BGI_PLATFORM_MAC` guard. The physical reference exists in shared source but is excluded from Core preprocessing.
+
+**Classification: Partially classified (B10.16.1 removed GetService<T>). Remaining members are live but acceptable.**
+
+| Member | Classification | Action |
+|--------|---------------|--------|
+| `Initialize(ILoggerFactory)` | **D** — required by Verification | Keep |
+| `GetLogger<T>()` | **D** — 3 Core consumers, NullLogger fallback acceptable | Keep |
+| `ServiceProvider` | **D** — WPF-only in `#if` guard | Keep |
+
+### 23.4 Complete remaining-file inventory
+
+| # | File | Classification | Keep/Delete | B10 status | Exit condition | Runtime blocker? |
+|---|------|---------------|-------------|------------|----------------|------------------|
+| 1 | `App.cs` | Partially classified: D | Keep | **Open** | None needed | No |
+| 2 | `BgiOnnxFactory.cs` | Core ONNX runtime implementation | Keep | **Open** | Move out of Shim/ | No |
+| 3 | `BgiOnnxModel.cs` | Category D compatibility model registry | Keep | **Open** | Path reconciliation | **Yes** — OCR model deployment unresolved |
+| 4 | `BvStubs.cs` | Core ONNX Bv stub (1 live member) | Keep | **Open** | None needed | No |
+| 5 | `CoreExtensions.cs` | Core utility extensions | Keep | **Closed** | N/A | No |
+| 6 | `DrawableStubs.cs` | Category D — Region drawing coupling | Keep | **Open** | Region API refactor | No |
+| 7 | `GameTaskManager.cs` | Core trigger management (partial) | Keep | **Open** | Verify completeness | No |
+| 8 | `GameUiCategory.cs` | Shared domain enum | Keep | **Closed** | N/A | No |
+| 9 | `Global.cs` | Category D — path resolution backbone | Keep | **Open** | None needed | No |
+| 10 | `MacSystemInfo.cs` | macOS ISystemInfo implementation | Keep | **Closed** | Move out of Shim/ | No |
+| 11 | `PlatformServices.cs` | Category D — Input member | Keep | **Open** | Region API refactor | No |
+
+### 23.5 B10 closure evaluation
+
+| Criteria | Status |
+|----------|--------|
+| All remaining files classified? | ✅ **Yes** (23.4 above) |
+| No un-audited files? | ✅ **Yes** |
+| No Category A dead shims remaining? | ✅ **Yes** (all candidate dead shims removed in earlier phases) |
+| All Category D entries have retention reason + exit condition? | ⚠️ **Mostly** — BgiOnnxModel, PlatformServices, DrawableStubs have clear exit conditions; Global, App, GameTaskManager are "keep indefinitely" |
+| Core build 0 errors? | ✅ **Yes** |
+| Verification 112/112? | ✅ **Yes** |
+| No fake success / empty fallback? | ✅ **Yes** (OcrFactory Paddle now throws on Core for unsupported paths) |
+| No unrecorded service locator / static gateway? | ✅ **Yes** (App.cs ServiceProvider is the last — guarded in WPF-only branch) |
+| Known runtime blockers documented? | ⚠️ **BgiOnnxModel** — model deployment / path resolution unresolved. Core OCR production blocked. |
+| Structural audit complete? | ✅ **Yes** — all 11 remaining files classified, architecture analysis for each file on record |
+
+**B10 structural audit is complete.** All files in `Shim/` have been individually examined and classified. No dead shims remain (all Category A shims — Simulation, StringUtils, TaskControl, ThemedMessageBox — were deleted in earlier phases). Remaining files are either platform implementations, Core infrastructure, or Category D compatibility layers with documented retention reasons.
+
+**Known open items (not B10 blockers):**
+- `BgiOnnxModel` model paths need deployment resolution before OCR works on macOS
+- `PlatformServices.Input` tied to DesktopRegion input coupling (Region API refactor)
+- `DrawableStubs` tied to Region drawing coupling (Region API refactor)
+- `App.GetLogger<T>()` returns NullLogger until `Initialize()` is called
+- `GameTaskManager.cs`, `Global.cs` basic/bone implementations acceptable for Core
+
+**B10 closure:** **B10 structural audit complete.** Not "Core OCR production-ready." Not "all runtime blockers resolved." The audit scope (architecture classification, dependency analysis, shim removal/migration) is finished. Remaining work falls outside B10's defined scope.
+
+### 23.6 Baseline validation
+
+```
+dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
+```
