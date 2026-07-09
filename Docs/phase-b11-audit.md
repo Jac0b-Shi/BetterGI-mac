@@ -61,7 +61,7 @@ All 3 callers are Core-linked and runtime-reachable from the macOS OCR pipeline.
 
 ### 1.5 Failure mode
 
-`InferenceSession` construction will fail when the model path cannot be resolved. The exact exception type (`OnnxRuntimeException` or `FileNotFoundException`) has not been verified — no test in the current 112/112 suite creates an `InferenceSession` or loads an `.onnx` file.
+`InferenceSession` construction will fail when the model path cannot be resolved. The exact exception type has not been verified — no test in the current 112/112 suite creates an `InferenceSession` or loads an `.onnx` file.
 
 | Scenario | Result |
 |----------|--------|
@@ -70,78 +70,136 @@ All 3 callers are Core-linked and runtime-reachable from the macOS OCR pipeline.
 | macOS .NET host with published app | Same — no copy rule includes `.onnx` files |
 | Swift host calling into .NET runtime | Same — model files not bundled |
 
-### 1.6 Resolution options
+### 1.6 macOS path separator constraint
 
-| Option | Description | Impact on WPF | Core build | Verification | Swift host | Preferred? |
-|--------|-------------|---------------|------------|--------------|------------|------------|
-| **A** — Add `Global.Absolute` to Core BgiOnnxModel | Change `ModalPath` from `ModelRelativePath` to `Global.Absolute(ModelRelativePath)` matching WPF | None (different file) | Minimal — `Global` already exists in Core | Unchanged (doesn't load models) | Requires model files at project-relative paths | ✅ **Recommended** |
-| **B** — Add copy rules to Core csproj | Copy `.onnx` glob pattern to output directory | None | Adds dependency on model file availability | Model files needed in test output | Same issue | Not without model files |
-| **C** — macOS bundle resources | Model files in `.app/Contents/Resources`; Swift host passes resource root | None | No change | No change | Must pass resource root | Phase 2 |
-| **D** — Download/verify script | Script pulls models from upstream release | None | Requires network | Same | Same | Prerequisite for all |
+Current `ModelRelativePath` values use Windows backslashes: `Assets\Model\PaddleOcr\ppocr_det_v4.onnx`. On Unix/macOS, `\` is NOT a directory separator — it's an ordinary filename character. `Path.Combine("/root", @"Assets\Model\...")` produces `/root/Assets\Model\...` — a path that does not exist.
 
-### 1.7 Recommended plan (B11.1.1)
-
-**Step 1: Change Core BgiOnnxModel.ModalPath to use Global.Absolute**
-
-This mirrors the WPF authoritative behavior. `Global.Absolute()` already exists in the Core shim and resolves paths relative to the project root by walking up the directory tree.
+**Any path resolution strategy must normalize backslashes first:**
 
 ```csharp
-// Before:
-public string ModalPath => ModelRelativePath;
-// After:
-public string ModalPath => Global.Absolute(ModelRelativePath);
+relativePath.Replace('\\', Path.DirectorySeparatorChar)
 ```
 
-Same for `CachePath`.
+Or store registry paths with forward slashes or as path segments, not as Windows-specific literals. This applies regardless of whether the resolver uses `Global.Absolute`, `Path.Combine`, or injected model root.
 
-**Impact:**
-- `BgiOnnxFactory.CreateInferenceSession(model)` currently uses `model.ModelRelativePath`, not `model.ModalPath`. If the change is to `ModalPath`, the factory call site must also change from `model.ModelRelativePath` to `model.ModalPath`.
-- Core build: 0 errors expected — `Global` namespace already imported
-- Verification: 112/112 — model files not loaded
-- WPF: None — Core shim is a separate file
+### 1.7 Resolution options
 
-**Step 2: Change BgiOnnxFactory.CreateInferenceSession to use model.ModalPath**
+| Option | Description | Core static dependency? | Host/composition control? | Cross-platform path? | Preferred? |
+|--------|-------------|------------------------|--------------------------|---------------------|------------|
+| **A** — `Global.Absolute` in BgiOnnxModel | Reuse `Global.Absolute()` to resolve ModalPath (mimics WPF) | ✅ Yes — static `Global` | ❌ No — hidden from composition | ⚠️ Needs normalization for `\` | ❌ **Not recommended** — re-introduces static path dependency B10 just removed |
+| **B** — `IOnnxModelPathResolver` injection | New interface + implementation injected into BgiOnnxFactory | ❌ No — explicit constructor param | ✅ Yes — composition provides model root | ✅ Normalizes in resolver | ✅ **Recommended** |
+| **C** — macOS bundle resources | Model files in `.app/Contents/Resources`; Swift host passes resource root | ❌ No | ✅ Yes | ✅ | Phase 2 |
+| **D** — Download/verify script | Script pulls models from upstream release | N/A | N/A | N/A | Prerequisite for all |
 
-In `Shim/BgiOnnxFactory.cs`:
+### 1.8 Recommended plan (B11.1.1): explicit ONNX model path resolver
+
+**Step 1: Define `IOnnxModelPathResolver` interface**
+
 ```csharp
-// Before:
-return new InferenceSession(model.ModelRelativePath);
-// After:
-return new InferenceSession(model.ModalPath);
+// In BetterGenshinImpact.Core (new file, e.g. Core/Abstractions/Runtime/IOnnxModelPathResolver.cs)
+namespace BetterGenshinImpact.Core.Abstractions.Runtime;
+
+public interface IOnnxModelPathResolver
+{
+    string ResolveModelPath(BgiOnnxModel model);
+    string ResolveCachePath(BgiOnnxModel model);
+}
 ```
 
-This ensures the session constructor receives an absolute path resolved by `Global.Absolute()`.
+**Step 2: Implement `ModelRootPathResolver`**
 
-**Step 3: Add model download/availability to Verification**
+```csharp
+public sealed class ModelRootPathResolver : IOnnxModelPathResolver
+{
+    private readonly string _modelRoot;
 
-Not in current B11.1 scope. Verification continues to validate wiring only; model loading remains uncovered.
+    public ModelRootPathResolver(string modelRoot)
+    {
+        ArgumentNullException.ThrowIfNull(modelRoot);
+        _modelRoot = modelRoot;
+    }
 
-### 1.8 Risks
+    public string ResolveModelPath(BgiOnnxModel model)
+    {
+        var normalized = model.ModelRelativePath
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
+        return Path.GetFullPath(Path.Combine(_modelRoot, normalized));
+    }
+
+    public string ResolveCachePath(BgiOnnxModel model)
+    {
+        var normalized = model.CacheRelativePath
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
+        return Path.GetFullPath(Path.Combine(_modelRoot, normalized));
+    }
+}
+```
+
+**`_modelRoot` semantics:** The model root is the directory containing the `Assets` folder. This matches the `Global.Absolute` convention where the project root contains `Assets\Model\...`. If model files are moved to a flatter structure, the root changes accordingly — the resolver hides this from the registry.
+
+**Step 3: Modify `BgiOnnxFactory` to accept `IOnnxModelPathResolver`**
+
+```csharp
+public class BgiOnnxFactory
+{
+    private readonly IOnnxModelPathResolver _pathResolver;
+
+    public BgiOnnxFactory(IOnnxModelPathResolver pathResolver)
+    {
+        _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
+    }
+
+    public InferenceSession CreateInferenceSession(BgiOnnxModel model, bool ocr = false)
+    {
+        var modelPath = _pathResolver.ResolveModelPath(model);
+        return new InferenceSession(modelPath);
+    }
+}
+```
+
+This replaces the parameterless constructor. The `GetPpOcr*` dead methods were already removed in B10.17.1.
+
+**Step 4: Wire through composition**
+
+- **macOS production (MacAutoPickComposition):** Pass `new ModelRootPathResolver(systemModelRoot)` where `systemModelRoot` comes from the Swift host or app configuration
+- **Verification:** Pass a resolver pointing to a test model directory, or create a resolver that throws `NotSupportedException` when called (tests that don't load models)
+- **WPF:** Unchanged — WPF uses its own authoritative `BgiOnnxFactory` with `Global.Absolute`
+
+**Step 5: Update Verification**
+
+No change to existing 112/112 assertions. Add a new test verifying that `IOnnxModelPathResolver.ResolveModelPath` normalizes backslashes on all platforms (fast, no model file needed). Model loading itself remains uncovered.
+
+### 1.9 Comparison: explicit resolver vs Global.Absolute
+
+| Concern | Global.Absolute approach | IOnnxModelPathResolver approach |
+|----------|-------------------------|----------------------------------|
+| Static dependency | ✅ Yes — re-introduces `Global` static | ❌ No — explicit constructor param |
+| Composition control | ❌ Hidden from host | ✅ Model root passed explicitly |
+| Testability | ❌ Requires `Global.Absolute` behavior | ✅ Test resolver can throw or use test dir |
+| macOS path normalize | ⚠️ Need `\` fix in resolver anyway | ✅ Built into resolver |
+| WPF behavior change | None (different file) | None (WPF uses own factory) |
+
+### 1.10 Risks
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| `Global.Absolute` may resolve to wrong path in published/swift-hosted scenarios | **Medium** — `Global.Absolute` walks up from `BaseDirectory` looking for `BetterGenshinImpact` directory, which may not exist in a published app | Document as known limitation; Option C (bundle resources) addresses it |
-| Model files still absent — path resolution fix alone doesn't make OCR work | **High** — models are external artifacts | Separate from path resolution. Document as known blocker. |
-| `Global.Absolute` uses `\` path separator on Windows — may not work on macOS if backslashes are hardcoded in ModelRelativePath | **Low** — `Global.Absolute` calls `Path.Combine` which handles both separators. `ModelRelativePath` uses `\` but `Path.Combine` normalizes on macOS. Verified by existing `Global.Absolute(@"Assets\Model\PaddleOcr\...")` pattern. | Confirm with test. |
+| Model files still absent — path resolver alone doesn't make OCR work | **High** — models are external artifacts | Document as separate blocker. Path resolution and model deployment are independent. |
+| `ModelRootPathResolver` adds complexity for what `Global.Absolute` already does in dev mode | **Low** — 30-line implementation; explicit contract enables testability and host control | Acceptable tradeoff; removes static dependency B10 just eliminated |
+| WPF backslash path normalization not needed (WPF always runs on Windows) | **None** — Core's resolver normalizes; WPF's authoritative factory never uses Core's resolver | Separate implementations, no cross-impact |
 
-### 1.9 Call site changes required
+### 1.11 Items deferred outside B11.1
 
-| File | Current | After |
-|------|---------|-------|
-| `Shim/BgiOnnxFactory.cs:20` | `new InferenceSession(model.ModelRelativePath)` | `new InferenceSession(model.ModalPath)` |
-| `Shim/BgiOnnxModel.cs:12` | `public string ModalPath => ModelRelativePath` | `public string ModalPath => Global.Absolute(ModelRelativePath)` |
-| `Shim/BgiOnnxModel.cs:14` | `public string CachePath => CacheRelativePath` | `public string CachePath => Global.Absolute(CacheRelativePath)` |
+- Actual `.onnx` model file deployment (externally managed)
+- Model loading coverage in Verification (beyond resolver unit test)
+- macOS bundle resource strategy
+- WPF model path alignment (`PaddleOcr` vs `PaddleOCR/Det|Rec/V{n}/...` directory structure)
+- `BgiOnnxFactory` signature change propagation to all 3 `CreateInferenceSession` callers (Det.cs, Rec.cs, PickTextInference.cs) — requires factory injection into those types
 
-### 1.10 Baseline validation
+### 1.12 Baseline validation
 
 ```
 dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
 dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
 ```
-
-### 1.11 Items deferred outside B11.1
-
-- Actual `.onnx` model file deployment (externally managed)
-- Model loading coverage in Verification
-- macOS bundle resource strategy (Option C)
-- WPF model path alignment (`PaddleOcr` vs `PaddleOCR/Det|Rec/V{n}/...` directory structure)
