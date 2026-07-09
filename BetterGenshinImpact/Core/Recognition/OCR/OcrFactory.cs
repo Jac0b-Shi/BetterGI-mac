@@ -136,12 +136,8 @@ public class OcrFactory : IDisposable
                 new PaddleOcrService(_onnxFactory,
                     PaddleOcrService.PaddleOcrModelType.V4, resourceResolver: _resourceResolver),
             PaddleOcrModelConfig.V4En =>
-#if BGI_PLATFORM_MAC
-                throw new NotSupportedException("V4En PaddleOCR model type is not registered in Core"),
-#else
                 new PaddleOcrService(_onnxFactory,
                     PaddleOcrService.PaddleOcrModelType.V4En, resourceResolver: _resourceResolver),
-#endif
             PaddleOcrModelConfig.V5Korean =>
                 new PaddleOcrService(_onnxFactory,
                     PaddleOcrService.PaddleOcrModelType.V5Korean, resourceResolver: _resourceResolver),

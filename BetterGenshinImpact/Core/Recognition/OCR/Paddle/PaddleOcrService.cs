@@ -35,7 +35,8 @@ public class PaddleOcrService : IOcrService, IDisposable
         BgiOnnxModel RecognitionModel,
         OcrVersionConfig RecognitionVersion,
         Func<IReadOnlyList<string>> RecLabel,
-        String PreHeatImagePath
+        String PreHeatImagePath,
+        String PreHeatImageRelativePath
     )
     {
 #if !BGI_PLATFORM_MAC
@@ -80,7 +81,8 @@ public class PaddleOcrService : IOcrService, IDisposable
             BgiOnnxModel recognitionModel,
             OcrVersionConfig recognitionVersion,
             String? preHeatImagePath = null,
-            Func<IReadOnlyList<string>>? recLabel = null
+            Func<IReadOnlyList<string>>? recLabel = null,
+            String? preHeatImageRelativePath = null
         )
         {
             return new PaddleOcrModelType(
@@ -90,15 +92,23 @@ public class PaddleOcrService : IOcrService, IDisposable
                 recognitionVersion,
 #if !BGI_PLATFORM_MAC
                 recLabel ?? (() => DefaultRecLabelFunc(recognitionModel)),
-                preHeatImagePath ?? TestImagePath
+                preHeatImagePath ?? TestImagePath,
+                preHeatImageRelativePath ?? @"Assets\Model\PaddleOCR\test_pp_ocr.png"
 #else
                 recLabel ?? (() => throw new NotSupportedException("Core PaddleOCR label loading requires IOcrResourcePathResolver")),
-                preHeatImagePath ?? ""
+                preHeatImagePath ?? "",
+                preHeatImageRelativePath ?? @"Assets\Model\PaddleOCR\test_pp_ocr.png"
 #endif
                 );
         }
 
-        public (Det, Rec) Build(BgiOnnxFactory onnxFactory, IOcrResourcePathResolver? resourceResolver = null)
+        public (Det, Rec) Build(BgiOnnxFactory onnxFactory
+#if !BGI_PLATFORM_MAC
+            , IOcrResourcePathResolver? resourceResolver = null
+#else
+            , IOcrResourcePathResolver resourceResolver
+#endif
+            )
         {
             return (
                 new Det(DetectionModel, DetectionVersion, onnxFactory),
@@ -125,6 +135,13 @@ public class PaddleOcrService : IOcrService, IDisposable
             BgiOnnxModel.PaddleOcrRecV4En,
             OcrVersionConfig.PpOcrV4,
             TestNumberImagePath);
+#else
+        public static readonly PaddleOcrModelType V4En = Create(
+            BgiOnnxModel.PaddleOcrDetV4,
+            OcrVersionConfig.PpOcrV4,
+            BgiOnnxModel.PaddleOcrRecV4En,
+            OcrVersionConfig.PpOcrV4,
+            preHeatImageRelativePath: @"Assets\Model\PaddleOCR\test_pp_ocr_number.png");
 #endif
 
         public static readonly PaddleOcrModelType V5 = Create(
@@ -232,11 +249,7 @@ public class PaddleOcrService : IOcrService, IDisposable
                 {
                     if (name.Equals("en"))
                     {
-#if BGI_PLATFORM_MAC
-                        return V5;
-#else
                         return V4En;
-#endif
                     }
                     else if (name.Equals("zh-hant") || name.Equals("zh-tw") || name.Equals("zh-hk"))
                     {
@@ -265,9 +278,9 @@ public class PaddleOcrService : IOcrService, IDisposable
         _localDetModel = modelsDet;
         _localRecModel = modelsRec;
 
-        // 预热模型 — use resolver for preheat path in Core
+        // 预热模型 — use resolver for preheat relative path in Core
 #if BGI_PLATFORM_MAC
-        var preHeatPath = resourceResolver.ResolveSidecarPath(@"Assets\Model\PaddleOCR\test_pp_ocr.png");
+        var preHeatPath = resourceResolver.ResolveSidecarPath(modelType.PreHeatImageRelativePath);
 #else
         var preHeatPath = modelType.PreHeatImagePath;
 #endif
