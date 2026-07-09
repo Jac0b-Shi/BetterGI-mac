@@ -1,17 +1,12 @@
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-
 namespace BetterGenshinImpact;
 
+/// <summary>
+/// Core compatibility shim. Only ServiceProvider remains for WPF backward-compatible code paths
+/// inside `#if !BGI_PLATFORM_MAC` branches. The logging gateway (GetLogger<T>) has been removed —
+/// all consumers migrated to explicit constructor injection.
+/// </summary>
 public static class App
 {
-    private static ILoggerFactory? _factory;
-
-    public static void Initialize(ILoggerFactory factory) => _factory = factory;
-
-    public static ILogger<T> GetLogger<T>() =>
-        (_factory ?? NullLoggerFactory.Instance).CreateLogger<T>();
-
     public static IServiceProvider ServiceProvider =>
         throw new NotSupportedException("App.ServiceProvider not available in Core.");
 }
