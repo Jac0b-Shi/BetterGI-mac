@@ -12,7 +12,7 @@ namespace BetterGenshinImpact.GameTask.AutoPick.Assets;
 
 public class AutoPickAssets : BaseAssets<AutoPickAssets>
 {
-    private readonly ILogger<AutoPickAssets> _logger = App.GetLogger<AutoPickAssets>();
+    private readonly ILogger<AutoPickAssets> _logger;
 
     // Template-only assets (no config dependency)
     public RecognitionObject FRo;
@@ -33,17 +33,18 @@ public class AutoPickAssets : BaseAssets<AutoPickAssets>
     /// <summary>
     /// Sole initialization entry point. Must be called once before any Instance access.
     /// </summary>
-    public static void Initialize(ISystemInfo systemInfo, IAutoPickConfigProvider configProvider)
+    public static void Initialize(ISystemInfo systemInfo, IAutoPickConfigProvider configProvider, ILogger<AutoPickAssets> logger)
     {
         ArgumentNullException.ThrowIfNull(systemInfo);
         ArgumentNullException.ThrowIfNull(configProvider);
+        ArgumentNullException.ThrowIfNull(logger);
         lock (InitializationLock)
         {
             if (_instance != null)
                 throw new InvalidOperationException(
                     "AutoPickAssets is already initialized. Call DestroyInstance() first.");
 
-            var instance = new AutoPickAssets(systemInfo);
+            var instance = new AutoPickAssets(systemInfo, logger);
             instance.Configure(configProvider);
             _instance = instance;
         }
@@ -79,21 +80,12 @@ public class AutoPickAssets : BaseAssets<AutoPickAssets>
     // ── Constructors ──
 
     /// <summary>
-    /// Legacy parameterless ctor (source compat only). Not called by Initialize() or hidden Instance.
+    /// Parameterized ctor used by <see cref="Initialize"/>. Receives ISystemInfo and ILogger explicitly.
     /// </summary>
-#if BGI_FULL_WINDOWS
-    private AutoPickAssets()
-    {
-        InitTemplateAssets();
-    }
-#endif
-
-    /// <summary>
-    /// Parameterized ctor used by <see cref="Initialize"/>. Receives ISystemInfo explicitly.
-    /// </summary>
-    private AutoPickAssets(ISystemInfo systemInfo)
+    private AutoPickAssets(ISystemInfo systemInfo, ILogger<AutoPickAssets> logger)
         : base(systemInfo)
     {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         InitTemplateAssets();
     }
 

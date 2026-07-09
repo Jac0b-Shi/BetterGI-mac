@@ -49,7 +49,7 @@ internal class GameTaskManager
     {
         ArgumentNullException.ThrowIfNull(runtimeState);
         ReloadAssets();
-        AutoPickAssets.AutoPickAssets.Initialize(systemInfo, autoPickConfigProvider);
+        AutoPickAssets.AutoPickAssets.Initialize(systemInfo, autoPickConfigProvider, App.GetLogger<AutoPickAssets.AutoPickAssets>());
         TriggerDictionary = new ConcurrentDictionary<string, ITaskTrigger>();
 
         TriggerDictionary.TryAdd("RecognitionTest", new TestTrigger());
