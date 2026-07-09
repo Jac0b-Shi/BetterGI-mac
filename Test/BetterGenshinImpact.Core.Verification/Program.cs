@@ -139,9 +139,11 @@ Console.WriteLine();
 
 // ==== OcrFactory config injection tests ====
 Console.WriteLine("OcrFactory: IOcrRuntimeConfigProvider injection");
+var onnxResolver = new BetterGenshinImpact.Core.Adapters.ModelRootPathResolver(
+    System.IO.Path.GetTempPath());
 using var ocrFactory = new BetterGenshinImpact.Core.Recognition.OCR.OcrFactory(
     Microsoft.Extensions.Logging.Abstractions.NullLogger<BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory>.Instance,
-    new BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory(),
+    new BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory(onnxResolver),
     adapter);
 
 // Use reflection to verify injected values were adopted
@@ -158,7 +160,7 @@ Assert("OcrFactory GameCultureInfoName zh-Hans", actualCulture == "zh-Hans", $"g
 var deadProvider = new DeadProvider();
 using var fallbackFactory = new BetterGenshinImpact.Core.Recognition.OCR.OcrFactory(
     Microsoft.Extensions.Logging.Abstractions.NullLogger<BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory>.Instance,
-    new BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory(),
+    new BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory(onnxResolver),
     deadProvider);
 var fallbackModel = (PaddleOcrModelConfig)(modelField?.GetValue(fallbackFactory) ?? throw new InvalidOperationException());
 var fallbackCultureField = typeof(BetterGenshinImpact.Core.Recognition.OCR.OcrFactory)
@@ -173,10 +175,23 @@ Assert("Fallback culture matches default", fallbackCulture == expectedCulture, $
 var whiteProvider = new CultureOnlyProvider("   ");
 using var whitespaceFactory = new BetterGenshinImpact.Core.Recognition.OCR.OcrFactory(
     Microsoft.Extensions.Logging.Abstractions.NullLogger<BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory>.Instance,
-    new BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory(),
+    new BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory(onnxResolver),
     whiteProvider);
 var whiteCulture = (string)(fallbackCultureField?.GetValue(whitespaceFactory) ?? throw new InvalidOperationException());
 Assert("Whitespace culture falls back to default", whiteCulture == expectedCulture, $"got {whiteCulture}");
+Console.WriteLine();
+
+// ==== IOnnxModelPathResolver ====
+Console.WriteLine("IOnnxModelPathResolver: path normalization");
+var normRoot = System.IO.Path.GetTempPath();
+var normResolver = new BetterGenshinImpact.Core.Adapters.ModelRootPathResolver(normRoot);
+var normResult = normResolver.ResolveModelPath(new BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel
+{
+    Name = "Test",
+    ModelRelativePath = @"Assets\Model\PaddleOcr\ppocr_det_v5.onnx"
+});
+var normExpected = System.IO.Path.GetFullPath(System.IO.Path.Combine(normRoot, "Assets", "Model", "PaddleOcr", "ppocr_det_v5.onnx"));
+Assert("IOnnxModelPathResolver normalizes backslashes", normResult == normExpected, $"expected {normExpected}, got {normResult}");
 Console.WriteLine();
 
 // ==== B5: AutoPickTrigger IAutoPickRuntimeState injection ====

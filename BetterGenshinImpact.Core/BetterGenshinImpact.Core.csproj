@@ -136,6 +136,7 @@
     <Compile Include="../BetterGenshinImpact/Core/Abstractions/Runtime/IAutoPickConfigProvider.cs" Link="Core/Abstractions/Runtime/IAutoPickConfigProvider.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Abstractions/Runtime/IAutoPickRuntimeState.cs" Link="Core/Abstractions/Runtime/IAutoPickRuntimeState.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Abstractions/Runtime/IOcrRuntimeConfigProvider.cs" Link="Core/Abstractions/Runtime/IOcrRuntimeConfigProvider.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Abstractions/Runtime/IOnnxModelPathResolver.cs" Link="Core/Abstractions/Runtime/IOnnxModelPathResolver.cs" />
   </ItemGroup>
 
   <!-- ==================== B9 Text Recognition Interfaces (linked shared source) ==================== -->
@@ -151,6 +152,7 @@
   <ItemGroup>
     <Compile Include="Adapters/MacCoreRuntimeAdapter.cs" />
     <Compile Include="Adapters/MacAutoPickRuntimeState.cs" />
+    <Compile Include="Adapters/ModelRootPathResolver.cs" />
   </ItemGroup>
 
   <!-- ==================== macOS Composition ==================== -->
