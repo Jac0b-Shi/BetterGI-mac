@@ -225,7 +225,36 @@ No change to existing 112/112 assertions. Add a new test verifying that `IOnnxMo
 
 ```
 dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
-dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 115/115 ✅
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 118/118 ✅
+```
+
+---
+
+## 4. B11.4 Registry Path Alignment
+
+### 4.1 Implementation (commit 8225fa1 + correction)
+
+| Change | Detail |
+|--------|--------|
+| Updated 10 PaddleOCR registry paths | `PaddleOcr` lowercase-c → `PaddleOCR` uppercase-C with `Det/` and `Rec/` subdirectories |
+| Unchanged | `YapModelTraining` path (`Assets\Model\Yap\...`) |
+| Layout model | `PaddleOCR/Det/V{n}/ppocr_det_v{n}.onnx` for detection; `PaddleOCR/Rec/V{n}/ppocr_rec_v{n}.onnx` for recognition |
+| Rec directory significance | `ResolveModelDirectory(PaddleOcrRecV5)` returns `<root>/Assets/Model/PaddleOCR/Rec/V5`, compatible with `+ "inference.yml"` |
+| Verification | DetV5 path test, RecV5 directory test, case-sensitivity guard (`PaddleOCR` present, `PaddleOcr` absent) |
+| Assertion count | 118 → **121** (+3 Rec directory + case guard) |
+| Artifacts delivered? | **No** — registry alignment only |
+| Real `InferenceSession` created? | **No** |
+| Core OCR production-ready? | **False** |
+
+### 4.2 Next phase
+
+**B11.5 Artifact manifest** — Create a manifest file listing all expected artifact relative paths. Validate resolution without model files. Do not download artifacts.
+
+### 4.3 Baseline validation
+
+```
+dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 121/121 ✅
 ```
 
 ---

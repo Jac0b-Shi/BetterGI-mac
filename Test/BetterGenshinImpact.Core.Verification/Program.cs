@@ -215,6 +215,15 @@ Assert("OcrResourcePathResolver resolves model directory", ocrDir == ocrDirExpec
 var sidecarResult = ocrResolver.ResolveSidecarPath(@"Assets\Model\PaddleOCR\inference.yml");
 var sidecarExpected = System.IO.Path.GetFullPath(System.IO.Path.Combine(ocrRoot, "Assets", "Model", "PaddleOCR", "inference.yml"));
 Assert("OcrResourcePathResolver normalizes sidecar backslash path", sidecarResult == sidecarExpected, $"expected {sidecarExpected}, got {sidecarResult}");
+
+// ==== Rec model directory + case-sensitivity guard ====
+var recDir = ocrResolver.ResolveModelDirectory(BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.PaddleOcrRecV5);
+var recDirExpected = System.IO.Path.GetFullPath(System.IO.Path.Combine(ocrRoot, "Assets", "Model", "PaddleOCR", "Rec", "V5"));
+Assert("OcrResourcePathResolver RecV5 directory", recDir == recDirExpected, $"expected {recDirExpected}, got {recDir}");
+var recPath = ocrResolver.ResolveModelPath(BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.PaddleOcrRecV5);
+var recPathNorm = recPath.Replace('\\', '/');
+Assert("RecV5 path uses PaddleOCR", recPathNorm.Contains("/PaddleOCR/"), recPathNorm);
+Assert("RecV5 path does not use PaddleOcr", !recPathNorm.Contains("/PaddleOcr/"), recPathNorm);
 Console.WriteLine();
 
 // ==== B5: AutoPickTrigger IAutoPickRuntimeState injection ====
