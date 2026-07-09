@@ -192,6 +192,10 @@ var normResult = normResolver.ResolveModelPath(new BetterGenshinImpact.Core.Reco
 });
 var normExpected = System.IO.Path.GetFullPath(System.IO.Path.Combine(normRoot, "Assets", "Model", "PaddleOcr", "ppocr_det_v5.onnx"));
 Assert("IOnnxModelPathResolver normalizes backslashes", normResult == normExpected, $"expected {normExpected}, got {normResult}");
+try { _ = new BetterGenshinImpact.Core.Adapters.ModelRootPathResolver(""); Assert("empty root should reject", false, "accepted empty"); }
+catch (ArgumentException) { Assert("ModelRootPathResolver rejects empty root", true, ""); }
+try { _ = new BetterGenshinImpact.Core.Adapters.ModelRootPathResolver("   "); Assert("whitespace root should reject", false, "accepted whitespace"); }
+catch (ArgumentException) { Assert("ModelRootPathResolver rejects whitespace root", true, ""); }
 Console.WriteLine();
 
 // ==== B5: AutoPickTrigger IAutoPickRuntimeState injection ====

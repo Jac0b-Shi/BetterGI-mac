@@ -13,8 +13,9 @@ public sealed class ModelRootPathResolver : IOnnxModelPathResolver
 
     public ModelRootPathResolver(string modelRoot)
     {
-        ArgumentNullException.ThrowIfNull(modelRoot);
-        _modelRoot = modelRoot;
+        if (string.IsNullOrWhiteSpace(modelRoot))
+            throw new ArgumentException("Model root must be non-empty.", nameof(modelRoot));
+        _modelRoot = Path.GetFullPath(modelRoot);
     }
 
     public string ResolveModelPath(BgiOnnxModel model)

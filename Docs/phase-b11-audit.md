@@ -198,9 +198,32 @@ No change to existing 112/112 assertions. Add a new test verifying that `IOnnxMo
 
 **Not deferred** — `BgiOnnxFactory` signature change propagation to Det.cs, Rec.cs, PickTextInference.cs is **in B11.1.1 implementation scope**. If `BgiOnnxFactory` gains a required `IOnnxModelPathResolver` constructor, all construction/call sites must be updated in the same commit.
 
-### 1.12 Baseline validation
+### 1.12 B11.1.1 Implementation Result
+
+| Component | Status |
+|-----------|--------|
+| `IOnnxModelPathResolver` interface | Added to `Core/Abstractions/Runtime/` (WPF tree, Core linked) ✅ |
+| `ModelRootPathResolver` implementation | Added to `Adapters/` — normalizes `\` and `/` to `Path.DirectorySeparatorChar` ✅ |
+| `ModelRootPathResolver` root validation | Rejects empty/whitespace; stores `Path.GetFullPath(modelRoot)` — no cwd fallback ✅ |
+| `BgiOnnxFactory` constructor | Required `IOnnxModelPathResolver` — no more `model.ModelRelativePath` / `Global.Absolute` / cwd ✅ |
+| Verification resolver test | Backslash normalization + empty/whitespace rejection + fully-qualified path ✅ |
+| Verification assertion count | 112 → **115** (+3 resolver validation assertions) |
+| Core build | 0 errors ✅ |
+| WPF authoritative `BgiOnnxFactory` | **Unchanged** ✅ |
+
+### 1.13 Remaining blockers (not in B11.1.1 scope)
+
+| Blocker | Detail |
+|---------|--------|
+| `.onnx` model files absent | External artifacts — not committed, not deployed |
+| Real InferenceSession test | Verification creates no InferenceSession; wiring-only |
+| Core OCR production-ready | **False** — model files missing, sidecar paths unresolved |
+| PaddleOCR sidecar files | `inference.yml`, label files, preheat images — still use `Global.Absolute` / raw `ModalPath` |
+| macOS bundle resource strategy | Not addressed |
+
+### 1.14 Baseline validation
 
 ```
 dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
-dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 115/115 ✅
 ```
