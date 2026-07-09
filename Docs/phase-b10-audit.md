@@ -2902,3 +2902,41 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/1
 dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
 dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
 ```
+
+---
+
+## 26. B10.18.3 Audit: AutoPickTrigger Logger
+
+### 26.1 Current state
+
+| Aspect | Detail |
+|--------|--------|
+| Field | `ILogger<AutoPickTrigger> _logger = App.GetLogger<AutoPickTrigger>()` (line 26) |
+| Logger usage | 4 calls: `LogError` (catch blocks), `LogInformation` (diagnostic) |
+| Constructor | Already has 8 parameters including `IAutoPickRuntimeState`, `IAutoPickConfigProvider`, `IInputBackend`, etc. |
+| Construction sites | 18 total (B10.6 audit) — 4 Core, 2 Core shim, 2 WPF, 10 Verification |
+
+### 26.2 Assessment
+
+This is the most straightforward of the 3 logger migrations. AutoPickTrigger already has a multi-parameter constructor with injected dependencies. Adding `ILogger<AutoPickTrigger>` follows the same pattern as `IAutoPickRuntimeState` (made required in B10.6.1). No static utility constraints, no parameterless constructor, no inherited singleton paths.
+
+### 26.3 Construction site breakdown
+
+| Group | Count | Logger source after migration |
+|-------|-------|------------------------------|
+| `MacAutoPickComposition` | 1 | From Compose parameter |
+| `GameTaskManager` (WPF) | 2 | From WPF DI |
+| `GameTaskManager` shim (Core) | 1 | From AddTrigger parameter |
+| `TaskTriggerDispatcher` | 1 | WPF, passes through |
+| Verification | 11 | `NullLogger<AutoPickTrigger>.Instance` |
+
+### 26.4 Role
+
+Last remaining `App.GetLogger` consumer in Core closure. After migration, `App.GetLogger` has zero Core-preprocessed references, enabling `App._factory`, `App.Initialize()`, and `App.GetLogger<T>()` to be removed from Core `App.cs`.
+
+### 26.5 Baseline validation
+
+```
+dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
+```
