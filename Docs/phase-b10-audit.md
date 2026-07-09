@@ -2940,3 +2940,79 @@ Last remaining `App.GetLogger` consumer in Core closure. After migration, `App.G
 dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
 dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
 ```
+
+---
+
+## 27. B10.19 Final Closure Audit
+
+### 27.1 App.cs logging gateway status
+
+| Artifact | Status |
+|----------|--------|
+| `_factory` field | **Removed** from Core App.cs ✅ |
+| `App.Initialize(ILoggerFactory)` | **Removed** from Core App.cs ✅ |
+| `App.GetLogger<T>()` | **Removed** from Core App.cs ✅ |
+| `using Microsoft.Extensions.Logging` | **Removed** from Core App.cs ✅ |
+| Core `App.cs` remaining | Only `ServiceProvider` stub (WPF `#if` branch) ✅ |
+| `rg "App\.GetLogger"` Core-preprocessed | **Zero** ✅ |
+| WPF call-site `App.GetLogger` in `GameTaskManager.cs` | Acceptable compatibility pattern (dependency enters at boundary, not hidden inside consumer) ✅ |
+
+### 27.2 Logger migration verification
+
+| Consumer | Previous | Migrated to | Core-preprocessed App.GetLogger? |
+|----------|----------|-------------|----------------------------------|
+| `MatchTemplateHelper` | `App.GetLogger` field | `#if !BGI_PLATFORM_MAC` guard (WPF-only) | **Zero** |
+| `AutoPickAssets` | `App.GetLogger` field | Constructor injection via `Initialize(..., ILogger<>)` | **Zero** |
+| `AutoPickTrigger` | `App.GetLogger` field | Constructor injection via required param | **Zero** |
+
+### 27.3 Remaining-file re-evaluation
+
+| # | File | Classification | B10 status | Closure decision |
+|---|------|---------------|------------|------------------|
+| 1 | `App.cs` | WPF-only ServiceProvider stub | **Closed** | ✅ No further action |
+| 2 | `BgiOnnxFactory.cs` | Core ONNX runtime implementation | **Closed** (directory relocation deferred) | ✅ Not a blocker |
+| 3 | `BgiOnnxModel.cs` | Category D compatibility model registry | **Open — deferred blocker** | ⚠️ Model deployment + cwd resolution unresolved. Core OCR blocked. Deferred outside B10. |
+| 4 | `BvStubs.cs` | Core Bv stub (ImRead only) | **Closed** | ✅ |
+| 5 | `CoreExtensions.cs` | Core utility extensions | **Closed** | ✅ |
+| 6 | `DrawableStubs.cs` | Category D — Region drawing coupling | **Open — deferred** | 🔄 Region API refactor needed |
+| 7 | `GameTaskManager.cs` | Core trigger management shim | **Open — deferred** | 🔄 Completeness verification needed |
+| 8 | `GameUiCategory.cs` | Shared domain enum | **Closed** | ✅ |
+| 9 | `Global.cs` | Category D — path resolution backbone | **Closed** | ✅ |
+| 10 | `MacSystemInfo.cs` | macOS ISystemInfo implementation | **Closed** (directory relocation deferred) | ✅ |
+| 11 | `PlatformServices.cs` | Category D — Input member | **Open — deferred** | 🔄 Region API refactor needed |
+
+**Closed: 7** (App.cs, BgiOnnxFactory, BvStubs, CoreExtensions, GameUiCategory, Global, MacSystemInfo)
+**Deferred: 4** (BgiOnnxModel — runtime blocker; DrawableStubs — Region coupling; GameTaskManager — completeness; PlatformServices — Input coupling)
+
+### 27.4 B10 closure criteria
+
+| Criteria | Status |
+|----------|--------|
+| All dead shims deleted? | ✅ **Yes** — Simulation, StringUtils, TaskControl, ThemedMessageBox deleted |
+| All remaining files classified? | ✅ **Yes** |
+| No un-audited files? | ✅ **Yes** |
+| App static logging gateway resolved? | ✅ **Yes** — removed from Core |
+| PlatformServices.Input is known deferred? | ✅ **Yes** — Region coupling documented |
+| BgiOnnxModel runtime blocker documented? | ✅ **Yes** — model deployment unresolved |
+| Core build 0 errors? | ✅ **Yes** |
+| Verification 112/112? | ✅ **Yes** |
+| Core OCR production-ready? | ❌ **No** — BgiOnnxModel blocker |
+
+### 27.5 B10 closure decision
+
+**B10 structural shim cleanup may close.** The original scope — architecture classification, dependency analysis, shim removal, static gateway elimination — is substantially complete:
+
+- 20 original shim files → 11 remaining (7 classified closed, 4 deferred with documented reasons)
+- 4 full shims deleted: Simulation, StringUtils, TaskControl, ThemedMessageBox
+- 6 dead members removed across PlatformServices, BvStubs, BgiOnnxFactory, App.cs
+- All `App.GetLogger<T>()` static gateway consumers migrated to explicit injection
+- `App._factory`, `App.Initialize()`, `App.GetLogger<T>()` removed from Core
+
+**Not "Core OCR production-ready."** Not "all runtime blockers resolved." BgiOnnxModel model deployment, DrawableStubs/PlatformServices Region coupling, and GameTaskManager completeness are deferred outside B10 structural cleanup scope.
+
+### 27.6 Baseline validation
+
+```
+dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 112/112 ✅
+```
