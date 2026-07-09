@@ -366,51 +366,55 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 118/1
 
 ## 3. B11.3 Audit: Model Artifact Contract and macOS Bundle Strategy
 
-### 3.1 Case sensitivity blocker: PaddleOcr vs PaddleOCR
+### 3.1 Two separate problems
 
-The codebase uses TWO different directory name conventions for Paddle models:
+The codebase has TWO independent issues with Paddle model paths:
 
-| Source | Convention | Example path |
-|--------|-----------|--------------|
-| Core `BgiOnnxModel` registry (ONNX files) | `PaddleOcr` (lowercase c) | `Assets\Model\PaddleOcr\ppocr_det_v4.onnx` |
-| WPF authoritative `BgiOnnxModel` registry | `PaddleOCR` (uppercase C) | `Assets\Model\PaddleOCR\Det\V4\PP-OCRv4...\slim.onnx` |
-| Core preheat image sidecar path | `PaddleOCR` (uppercase C) | `Assets\Model\PaddleOCR\test_pp_ocr.png` |
-| Core `V4En` preheat relative path | `PaddleOCR` (uppercase C) | `Assets\Model\PaddleOCR\test_pp_ocr_number.png` |
+**Problem 1 — Case convention:** Core `BgiOnnxModel` registry uses `PaddleOcr` (lowercase c); sidecar paths and WPF authoritative use `PaddleOCR` (uppercase C). On macOS case-sensitive APFS these are different directories.
 
-**On macOS case-sensitive APFS, `PaddleOcr` and `PaddleOCR` are different directories.** A unified artifact tree must pick one convention.
+**Problem 2 — Layout convention:** Core registry uses flat paths (`Assets\Model\PaddleOcr\ppocr_rec_v5.onnx`). WPF authoritative uses nested paths (`Assets\Model\PaddleOCR\Rec\V5\...\slim.onnx`). These are different layouts; case unification alone does not solve the sidecar layout.
 
-**Recommendation:** Use `PaddleOCR` (matching WPF authoritative convention) for both ONNX model paths and sidecar paths. This means Core `BgiOnnxModel` registry paths must change from `PaddleOcr` to `PaddleOCR`, and the directory structure must flatten or match WPF's nested layout.
+### 3.2 Layout options
 
-### 3.2 Required artifact inventory
+| Option | Description | `ResolveModelDirectory(recModel) + inference.yml` compatibility | Recommendation |
+|--------|-------------|----------------------------------------------------------------|----------------|
+| **A — Flat layout** | All .onnx files in `Assets/Model/PaddleOCR/` | ❌ Not compatible — multiple rec models share one directory, can't have per-model inference.yml | Not recommended |
+| **B — Per-model directory layout** | Each model in its own subdirectory with inference.yml alongside | ✅ Each rec model has its own directory + inference.yml + dict files | ✅ **Recommended** |
+| **C — Flat registry + resolver mapping** | Registry flat; resolver maps model to directory | ❌ Hidden mapping complexity, registry no longer reflects real path | Not recommended |
 
-#### ONNX models (11 files)
+**Recommendation: Option B.** Per-model directory layout, with Core `BgiOnnxModel.ModelRelativePath` updated later to match the real artifact tree.
 
-| Registry key | Relative path | Used by |
-|-------------|---------------|---------|
-| `YapModelTraining` | `Assets\Model\Yap\model_training.onnx` | PickTextInference (AutoPick OCR) |
-| `PaddleOcrDetV4` | `Assets\Model\PaddleOCR\ppocr_det_v4.onnx` | PaddleOCR Det |
-| `PaddleOcrDetV5` | `Assets\Model\PaddleOCR\ppocr_det_v5.onnx` | PaddleOCR Det |
-| `PaddleOcrDetV6` | `Assets\Model\PaddleOCR\ppocr_det_v6.onnx` | PaddleOCR Det |
-| `PaddleOcrRecV4` | `Assets\Model\PaddleOCR\ppocr_rec_v4.onnx` | PaddleOCR Rec |
-| `PaddleOcrRecV4En` | `Assets\Model\PaddleOCR\ppocr_rec_v4_en.onnx` | PaddleOCR Rec (V4En) |
-| `PaddleOcrRecV5` | `Assets\Model\PaddleOCR\ppocr_rec_v5.onnx` | PaddleOCR Rec |
-| `PaddleOcrRecV5Latin` | `Assets\Model\PaddleOCR\ppocr_rec_v5_latin.onnx` | PaddleOCR Rec |
-| `PaddleOcrRecV5Eslav` | `Assets\Model\PaddleOCR\ppocr_rec_v5_eslav.onnx` | PaddleOCR Rec |
-| `PaddleOcrRecV5Korean` | `Assets\Model\PaddleOCR\ppocr_rec_v5_korean.onnx` | PaddleOCR Rec |
-| `PaddleOcrRecV6` | `Assets\Model\PaddleOCR\ppocr_rec_v6.onnx` | PaddleOCR Rec |
+### 3.3 Required artifact inventory
 
-Paths above assume `PaddleOcr`→`PaddleOCR` unification.
+#### Case convention
+Unify to `PaddleOCR` (uppercase C, matching WPF authoritative and sidecar paths). Core `BgiOnnxModel` registry paths must change from `PaddleOcr` to `PaddleOCR`.
+
+#### Per-model inventory
+
+| Registry key | Core type | Current path | Recommended path | inference.yml needed? | Dict files needed? |
+|-------------|-----------|-------------|------------------|-----------------------|--------------------|
+| `YapModelTraining` | Yap OCR | `Assets\Model\Yap\model_training.onnx` | Same (no change) | ❌ | ❌ |
+| `PaddleOcrDetV4` | Det only | `Assets\Model\PaddleOcr\ppocr_det_v4.onnx` | `Assets\Model\PaddleOCR\Det\V4\ppocr_det_v4.onnx` | ❌ | ❌ |
+| `PaddleOcrDetV5` | Det only | `Assets\Model\PaddleOcr\ppocr_det_v5.onnx` | `Assets\Model\PaddleOCR\Det\V5\ppocr_det_v5.onnx` | ❌ | ❌ |
+| `PaddleOcrDetV6` | Det only | `Assets\Model\PaddleOcr\ppocr_det_v6.onnx` | `Assets\Model\PaddleOCR\Det\V6\ppocr_det_v6.onnx` | ❌ | ❌ |
+| `PaddleOcrRecV4` | Rec | `Assets\Model\PaddleOcr\ppocr_rec_v4.onnx` | `Assets\Model\PaddleOCR\Rec\V4\ppocr_rec_v4.onnx` | ✅ | ✅ |
+| `PaddleOcrRecV4En` | Rec | `Assets\Model\PaddleOcr\ppocr_rec_v4_en.onnx` | `Assets\Model\PaddleOCR\Rec\V4En\ppocr_rec_v4_en.onnx` | ✅ | ✅ |
+| `PaddleOcrRecV5` | Rec | `Assets\Model\PaddleOcr\ppocr_rec_v5.onnx` | `Assets\Model\PaddleOCR\Rec\V5\ppocr_rec_v5.onnx` | ✅ | ✅ |
+| `PaddleOcrRecV5Latin` | Rec | `Assets\Model\PaddleOcr\ppocr_rec_v5_latin.onnx` | `Assets\Model\PaddleOCR\Rec\V5Latin\ppocr_rec_v5_latin.onnx` | ✅ | ✅ |
+| `PaddleOcrRecV5Eslav` | Rec | `Assets\Model\PaddleOcr\ppocr_rec_v5_eslav.onnx` | `Assets\Model\PaddleOCR\Rec\V5Eslav\ppocr_rec_v5_eslav.onnx` | ✅ | ✅ |
+| `PaddleOcrRecV5Korean` | Rec | `Assets\Model\PaddleOcr\ppocr_rec_v5_korean.onnx` | `Assets\Model\PaddleOCR\Rec\V5Korean\ppocr_rec_v5_korean.onnx` | ✅ | ✅ |
+| `PaddleOcrRecV6` | Rec | `Assets\Model\PaddleOcr\ppocr_rec_v6.onnx` | `Assets\Model\PaddleOCR\Rec\V6\ppocr_rec_v6.onnx` | ✅ | ✅ |
 
 #### Sidecar resources
 
-| File | Core path (resolved) | Used by |
-|------|---------------------|---------|
-| Preheat image | `Assets\Model\PaddleOCR\test_pp_ocr.png` | PaddleOcrService warmup |
-| Preheat image (number) | `Assets\Model\PaddleOCR\test_pp_ocr_number.png` | PaddleOcrService warmup (V4En) |
-| `inference.yml` | Per-model directory via `ResolveModelDirectory(recModel)` | Character dict / labels |
-| Character dict files | Listed in `inference.yml` `PostProcess.character_dict` | PaddleOCR Rec label decoding |
+| File | Placement rule | Used by |
+|------|---------------|---------|
+| `inference.yml` | Same directory as each Rec .onnx | Character dict / labels via `DefaultRecLabelFunc` → `LoadLabelsFromModel` |
+| Character dict files | Same directory as each Rec .onnx (paths listed in `inference.yml PostProcess.character_dict`) | PaddleOCR Rec label decoding |
+| `test_pp_ocr.png` | `Assets\Model\PaddleOCR\` | PaddleOcrService warmup (all models except V4En) |
+| `test_pp_ocr_number.png` | `Assets\Model\PaddleOCR\` | PaddleOcrService warmup (V4En) |
 
-### 3.3 Required artifact tree
+### 3.4 Required artifact tree
 
 ```
 <modelRoot>/
@@ -419,73 +423,70 @@ Paths above assume `PaddleOcr`→`PaddleOCR` unification.
       Yap/
         model_training.onnx
       PaddleOCR/
-        ppocr_det_v4.onnx
-        ppocr_det_v5.onnx
-        ppocr_det_v6.onnx
-        ppocr_rec_v4.onnx
-        ppocr_rec_v4_en.onnx
-        ppocr_rec_v5.onnx
-        ppocr_rec_v5_latin.onnx
-        ppocr_rec_v5_eslav.onnx
-        ppocr_rec_v5_korean.onnx
-        ppocr_rec_v6.onnx
         test_pp_ocr.png
         test_pp_ocr_number.png
+        Det/
+          V4/  ppocr_det_v4.onnx
+          V5/  ppocr_det_v5.onnx
+          V6/  ppocr_det_v6.onnx
+        Rec/
+          V4/       ppocr_rec_v4.onnx  + inference.yml + <dict files>
+          V4En/     ppocr_rec_v4_en.onnx  + inference.yml + <dict files>
+          V5/       ppocr_rec_v5.onnx  + inference.yml + <dict files>
+          V5Latin/  ppocr_rec_v5_latin.onnx  + inference.yml + <dict files>
+          V5Eslav/  ppocr_rec_v5_eslav.onnx  + inference.yml + <dict files>
+          V5Korean/ ppocr_rec_v5_korean.onnx  + inference.yml + <dict files>
+          V6/       ppocr_rec_v6.onnx  + inference.yml + <dict files>
 ```
 
-### 3.4 Artifact source strategy comparison
+The `ResolveModelDirectory(recModel)` for `PaddleOcrRecV5` returns `<modelRoot>/Assets/Model/PaddleOCR/Rec/V5/`, and `inference.yml` is `<modelRoot>/Assets/Model/PaddleOCR/Rec/V5/inference.yml`. Each Rec model's character dict is local to its directory.
+
+### 3.5 Artifact source strategy comparison
 
 | Option | Repo impact | Reproducibility | macOS bundle | CI | Recommendation |
 |--------|-------------|----------------|--------------|-----|---------------|
-| **A. Download script** | Zero (script only) | ✅ Deterministic with pinned version | Download at build/install time | ✅ CI can cache | ✅ **Recommended for dev/test** |
-| **B. Git LFS** | Large (100s MB) | ✅ | LFS checkout | ✅ Needs LFS configured | ❌ Too large for code repo |
-| **C. Build-time copy from upstream** | Zero | ⚠️ Depends on upstream availability | Copy as build step | ⚠️ Upstream dependency | Acceptable for CI |
+| **A. Download script** | Zero (script only) | ✅ Deterministic with pinned version | Download at build/install time | ✅ CI can cache | ✅ **Dev/test** |
+| **B. Git LFS** | Large (100s MB) | ✅ | LFS checkout | ✅ Needs LFS | ❌ Too large |
+| **C. Build-time copy from upstream** | Zero | ⚠️ Upstream availability | Copy as build step | ⚠️ | Acceptable for CI |
 | **D. macOS app bundle Resources** | Zero | ✅ | Part of `.app` packaging | N/A | ✅ **Final distribution** |
 
-### 3.5 Recommended strategy
+### 3.6 Recommended strategy
 
-**Two-layer approach:**
-
-1. **Dev / test / CI:** Download script pulls a pinned-version artifact archive to a local path. Model root is configured via environment variable or `ModelRootPathResolver` argument. No check-in, no LFS.
-
-2. **macOS distribution:** Artifacts bundled into `.app/Contents/Resources/BetterGI/`. Swift host passes this absolute path as model root to the .NET runtime. `MacAutoPickComposition` receives it and constructs resolvers.
-
-**Model registry path alignment:** Core `BgiOnnxModel` `ModelRelativePath` values must change from `PaddleOcr` to `PaddleOCR` to match sidecar conventions and case-sensitive file systems. This requires updating 10 path strings in `Shim/BgiOnnxModel.cs`.
-
-### 3.6 macOS bundle root contract
-
-```
-.app/Contents/Resources/BetterGI/        ← modelRoot passed to resolvers
-  Assets/Model/Yap/model_training.onnx
-  Assets/Model/PaddleOCR/ppocr_det_v4.onnx
-  Assets/Model/PaddleOCR/test_pp_ocr.png
-  ... (full tree per §3.3)
-```
-
-The `ModelRootPathResolver(".../BetterGI/")` + `ResolveModelPath(model)` produces:
-`.../BetterGI/Assets/Model/PaddleOCR/ppocr_det_v4.onnx`
+1. **Dev/test/CI:** Download script pulls pinned-version artifacts to local model root. No check-in, no LFS.
+2. **macOS distribution:** Artifacts bundled into `.app/Contents/Resources/BetterGI/`. Swift host passes absolute path to resolvers.
+3. **Registry update:** After layout decision is stable, update Core `BgiOnnxModel.ModelRelativePath` values to match `PaddleOCR/Det|Rec/V{n}/` layout.
 
 ### 3.7 Validation plan
 
 | Check | Method | Artifacts required? |
 |-------|--------|---------------------|
-| Path resolution matches existing file | `File.Exists(resolver.ResolveModelPath(model))` per registry entry | ✅ Yes |
-| Sidecar path resolves | `File.Exists(resolver.ResolveSidecarPath(path))` | ✅ Yes |
-| FileNotFound error on missing model | Catch `FileNotFoundException` from `InferenceSession` constructor | ✅ Yes |
+| Path resolution matches registry | `Path.GetFullPath(resolver.ResolveModelPath(model))` per registry entry | ❌ No |
+| Sidecar path resolves | `resolver.ResolveSidecarPath(relativePath)` | ❌ No |
+| Missing ONNX failure shape | When artifacts are intentionally absent, capture and document actual exception type from `InferenceSession` construction | ✅ Yes |
 | Case-sensitivity on APFS | Verify `PaddleOCR` directory resolves correctly on case-sensitive volume | Manual |
 | Real ONNX inference | `InferenceSession.Run()` with sample input | ✅ Yes |
 
-All validation deferred outside B11 scope. Current Verification (118/118) tests path resolution without requiring artifact files.
+Do not assert `FileNotFoundException` until the actual exception type has been verified from a real `InferenceSession` constructor call.
 
 ### 3.8 Out-of-scope items
 
 - Writing the download script
-- Committing `.onnx` / `.yml` / `.png` files
+- Committing `.onnx` / `.yml` / `.png` / dict files
 - Implementing macOS bundle copy rules in Swift/Xcode
 - Real `InferenceSession` inference test
-- WPF artifact handling (WPF continues to use existing `Global.Absolute` path)
+- WPF artifact handling (continues using existing `Global.Absolute` path)
 
-### 3.9 Baseline validation
+### 3.9 Recommended implementation sequence
+
+| Phase | Scope | Artifacts required? |
+|-------|-------|---------------------|
+| **B11.4** — Registry path alignment | Update Core `BgiOnnxModel.ModelRelativePath` to match chosen `PaddleOCR/Det|Rec/V{n}/` layout. Update Verification expected path tests. | ❌ No |
+| **B11.5** — Artifact manifest | Create manifest file listing all expected artifact relative paths. Validate path resolution without model files. | ❌ No |
+| **B11.6** — Download script / bundle strategy | Implement download script and macOS bundle packaging. | ✅ Yes |
+
+Each phase builds on the previous one. Registry must reflect real artifact layout before manifest can be authored.
+
+### 3.10 Baseline validation
 
 ```
 dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
