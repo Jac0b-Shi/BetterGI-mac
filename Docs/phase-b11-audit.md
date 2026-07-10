@@ -386,7 +386,8 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 121/1
 | `bdab13b` | Initial | Manifest JSON + DTO classes + basic parse test. 11 ONNX + 2 preheat entries. 130/130. |
 | `65e814f` | Correction 1 | Added loader, 11-entry full registry validation, dynamicSidecars (incorrect — assumed external dict files). 259/259. |
 | `f683f87` | Correction 2 | Removed false dynamicSidecars; Rec inference.yml contract; leaveOpen stream. 281/281. |
-| `181ba56` | **Final correction** | Strict inference.yml filename assertions; documentation cleanup; restored deleted B11.2/B11.3. **288/288** |
+| `181ba56` | Final code/verification correction | Added strict `inference.yml` filename assertions; docs cleanup accidentally removed B11.2/B11.3. Local Verification: 288/288. |
+| `33f0893` | Docs closure | Restored B11.2/B11.3, corrected inline `character_dict` documentation, updated top-level status and final B11.5 record. No production-code changes. |
 
 ### 5.2 Final state
 
