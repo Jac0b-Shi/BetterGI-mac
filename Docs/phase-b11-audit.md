@@ -425,18 +425,73 @@ All B11.1–B11.5 infrastructure is complete:
 - **Registry alignment**: 11 ONNX paths match per-model `PaddleOCR/Det|Rec/V{n}/` layout
 - **Manifest contract**: `model-artifacts.manifest.json` defines expected artifact tree (288/288 validation)
 
-**Core OCR not production-ready** — no real artifact files exist in the repository or at any deployable path. The key blockers are:
+**Core OCR not production-ready** — artifact files are not tracked in the repository and have not been delivered to a configured `modelRoot`. The key blockers are:
 
 | Blocker | Detail |
 |---------|--------|
-| `.onnx` model files absent | 11 ONNX files required — 0 on disk |
-| `inference.yml` sidecars absent | 7 Rec label configs required — 0 on disk |
-| Preheat PNG images absent | 2 PNG files required — 0 on disk |
-| Real InferenceSession test | Deferred — requires artifacts to be present |
+| `.onnx` model files absent | 11 ONNX files required — not delivered to a configured modelRoot |
+| `inference.yml` sidecars absent | 7 Rec label configs required — not delivered |
+| Preheat PNG images absent | 2 PNG files required — not delivered |
+| Real InferenceSession test | Deferred — requires validated artifact set |
 | macOS bundle strategy | Not implemented |
 | Swift host path definition | Not defined |
+| Artifact provenance | Not audited — source, license, redistribution status unknown |
 
-### 6.2 Artifact source strategy candidates
+### 6.2 modelRoot contract (corrected)
+
+The resolver input `modelRoot` is the directory containing `Assets/`. Manifest `relativePath` values are relative to `modelRoot`.
+
+**Correct example:**
+```
+modelRoot = /Users/dev/project/artifacts/model-root/
+artifact  = modelRoot/Assets/Model/PaddleOCR/Rec/V5/ppocr_rec_v5.onnx
+```
+
+**Incorrect (would double up):**
+```
+modelRoot = /Users/dev/project/Assets/Model/
+artifact  = modelRoot/Assets/Model/...  ← WRONG: double Assets/Model/
+```
+
+#### Recommended development staging
+
+Download target:
+```
+<repo>/artifacts/model-root/
+  Assets/
+    Model/
+      Yap/model_training.onnx
+      PaddleOCR/Det|Rec/...
+```
+
+Command semantics:
+```
+download-artifacts.sh --model-root <repo>/artifacts/model-root
+```
+
+CI example:
+```
+<workspace>/artifacts/model-root/
+```
+
+macOS bundle:
+```
+BetterGI.app/Contents/Resources/BetterGI/   ← this IS the modelRoot
+  Assets/
+    Model/
+      ...
+```
+
+#### Git staging policy
+
+- Repo root `/artifacts/` is already git-ignored (`.gitignore`)
+- Dev/CI download location: `<repo>/artifacts/model-root/`
+- **Do NOT** use `<repo>/Assets/Model/` — that is the source tree and is tracked by git
+- The downloader must never modify the tracked source tree
+- Bundle packaging copies from staging root: `<stagingRoot>/Assets` → `<app>/Contents/Resources/BetterGI/Assets`
+- No `*.onnx`, `inference.yml`, or model `*.png` is ever committed to git
+
+### 6.3 Artifact source strategy candidates
 
 #### Option A: Git LFS
 - Store artifacts in a separate LFS-enabled repository
@@ -448,7 +503,7 @@ All B11.1–B11.5 infrastructure is complete:
 
 #### Option B: Pinned external artifact archive
 - Published as a release asset (e.g., GitHub Release `.tar.gz`/`.zip`)
-- Download script (`download-artifacts.ps1` / `download-artifacts.sh`) fetches and extracts to correct layout
+- Download script fetches and extracts to correct layout
 - Checksum verification after download
 - Script runs at dev setup and CI time
 - **Pros**: No repo bloat, CI-controllable, clear licensing boundary
@@ -457,113 +512,149 @@ All B11.1–B11.5 infrastructure is complete:
 
 #### Option C: macOS app bundle Resources
 - Artifacts placed in `.app/Contents/Resources/BetterGI/` by a build/post-build step
-- Swift host resolves `bundleRoot` from `Bundle.main.resourceURL`
-- .NET host resolves model root from the same path passed by Swift
+- Swift host resolves root from `Bundle.main.resourceURL`
+- .NET host receives path from Swift
 - **Pros**: Self-contained app, no setup for end user
 - **Cons**: Requires packaging infrastructure
 - **Verdict**: Recommended for distribution — separate from dev/CI setup
 
 #### Option D: Three-in-one hybrid
-- **Dev**: `download-artifacts.sh` → `Assets/Model/` under a configurable `modelRoot`
-- **CI**: Same script, but CI caches `Assets/Model/` between runs
+- **Dev/CI**: `download-artifacts.sh --model-root <repo>/artifacts/model-root`
 - **macOS package**: `post-build` step copies artifact tree into `BetterGI.app/Contents/Resources/BetterGI/`
-- Each environment explicitly passes its `modelRoot` to resolvers (no cwd/static fallback)
+- Each environment explicitly passes its `modelRoot` to resolvers
 - **Verdict**: **Recommended** — covers all environments without straying from the resolver contract
 
-### 6.3 Recommended strategy: hybrid download + bundle copy
+### 6.4 Destination manifest vs source lock
 
-| Layer | Mechanism | modelRoot example |
-|-------|-----------|-------------------|
-| Dev | `download-artifacts.sh --output <repo>/Assets/Model` | `<repo>/Assets/Model` |
-| CI | Same script; cache between runs | `<workspace>/Assets/Model` |
-| macOS dev app | Same script; or pre-bundled | `<repo>/Assets/Model` |
-| macOS distributed `.app` | post-build copy | `BetterGI.app/Contents/Resources/BetterGI` |
+**`model-artifacts.manifest.json`** (existing — B11.5) is a **destination contract**:
+- Defines expected artifact IDs, target relative paths, registry mapping, sidecars
+- Does NOT contain source URL, checksum, or license
+- Downloader cannot use it alone as a source of truth
 
-**Key rules:**
-1. The resolver input `modelRoot` must contain `Assets/Model/` at its second level
-2. No environment assumes a default `modelRoot` — it's always passed explicitly
-3. No static path fallback, no `Global.Absolute`, no cwd
-4. The download script must produce the exact tree from `model-artifacts.manifest.json`
+**`model-artifacts.source-lock.json`** (proposed — B11.6.1) is a **source contract**:
+- Pins a specific artifact set version to an immutable archive
+- Records verifiable provenance and redistribution constraints
+- Allows download script to have a deterministic, auditable input
 
-### 6.4 macOS bundle root contract
+#### Proposed source-lock schema
 
-Recommended bundle structure:
-
+```json
+{
+  "schemaVersion": 1,
+  "artifactSetVersion": "<verified upstream version>",
+  "archive": {
+    "url": "<verified immutable download URL>",
+    "sha256": "<verified lowercase hex>",
+    "format": "tar.gz | zip",
+    "contentRoot": "Assets/Model/",
+    "sizeBytes": 0
+  },
+  "contentMapping": {
+    "remapPrefix": "",
+    "type": "exact | remap | missing",
+    "remapRules": []
+  },
+  "provenance": {
+    "project": "<source project name>",
+    "release": "<upstream tag/version>",
+    "sourcePage": "<authoritative project page>",
+    "license": "<verified SPDX identifier or unverified>",
+    "licenseFileInArchive": "<path or null>",
+    "redistributionStatus": "allowed | restricted | unverified"
+  }
+}
 ```
-BetterGI.app/
-  Contents/
-    Info.plist
-    MacOS/                         ← Swift executable
-    Resources/
-      BetterGI/                    ← modelRoot passed to resolvers
-        Assets/
-          Model/
-            Yap/model_training.onnx
-            PaddleOCR/
-              Det/{V4,V5,V6}/*.onnx
-              Rec/{V4,V4En,V5,...}/*.onnx + inference.yml
-              test_pp_ocr.png
-              test_pp_ocr_number.png
-      dotnet/                       ← .NET runtime + assemblies (if bundled)
-```
 
-Swift host startup:
-1. `Bundle.main.resourceURL` → `/path/to/BetterGI.app/Contents/Resources`
-2. Append `BetterGI` → model root
-3. Pass as string to .NET `MacAutoPickComposition` or composition root
-4. .NET side creates `ModelRootPathResolver(modelRoot)` + `OcrResourcePathResolver(modelRoot)`
+**This audit only defines the schema.** Actual values will be filled in during B11.6.1 provenance audit. No placeholder URL, checksum, or license may be committed.
 
-### 6.5 Case sensitivity requirement
+#### Archive-to-destination mapping
 
-The download script and macOS bundle must produce `PaddleOCR` (uppercase C), not `PaddleOcr` (lowercase c). On macOS case-sensitive APFS, these differ. The resolver case guard (`/PaddleOCR/` must be present) will catch regressions.
+Two possible patterns (to be determined during provenance audit):
 
-Current registry uses `PaddleOCR` — consistent with the chosen convention.
+**Pattern A — Archive matches manifest layout:**
+- Archive already contains `Assets/Model/Yap/...`, `Assets/Model/PaddleOCR/...`
+- Extract directly under modelRoot
+- No mapping table needed
+- `contentRoot` in source-lock is `Assets/Model/`
 
-### 6.6 Download script requirements (not yet implemented)
+**Pattern B — Upstream uses different layout:**
+- Archive has non-matching directory structure or filenames
+- Downloader needs an explicit remap table
+- Each destination `relativePath` maps to an archive member
+- Cannot be guessed from registry key
+- Must be verified during provenance audit
 
-A future B11.6.x implementation must:
+### 6.5 Provenance and license audit — prerequisite
 
-1. Read `model-artifacts.manifest.json` to know which files to fetch
-2. Accept `--output <dir>` as the model root (default not allowed)
-3. Fetch from a pinned release archive URL
-4. Verify checksum (SHA-256) after download
-5. Extract to produce the exact directory tree from the manifest
-6. Normalize paths — produce `Assets/Model/PaddleOCR/...` (forward slash, uppercase C)
-7. **Not** check files into git
-8. **Not** modify source code
+License/copyright review **cannot** be deferred to after download/packaging implementation. It is a prerequisite for B11.6.2+.
 
-### 6.7 Validation plan
+B11.6.1 must:
+- Identify the authoritative source for each artifact category (ONNX models, inference.yml, preheat PNGs)
+- Identify exact upstream release/tag/commit
+- Verify immutable download URL (not a latest/redirectable link)
+- Calculate and record SHA-256
+- Inspect archive member tree to determine content layout
+- Identify license(s) for ONNX models, inference.yml config files, and PNG images
+- Determine whether redistribution inside macOS `.app` is allowed
+- Determine required LICENSE/NOTICE attribution (must be bundled in `.app` if required)
+- If redistribution status is **unverified** or **restricted**:
+  - Pause downloader implementation
+  - Pause bundle packaging
+  - Do not self-upload as GitHub Release mirror
+  - Document as blocker
 
-| Phase | Validation | Artifact files required? |
-|-------|-----------|--------------------------|
-| B11.5 | Manifest `288/288` — path string validation | No |
-| B11.6.1 | `File.Exists` after download — every artifact from manifest checked | Yes |
-| B11.6.2 | `InferenceSession` smoke test (one model) | Yes |
-| B11.6.3 | macOS bundle structure verification | Yes |
+### 6.6 Failure semantics (per layer)
 
-Validation must fail hard (`FileNotFoundException`) when artifact files are missing — no silent fallback, no placeholder return.
+| Layer | Failure mode |
+|-------|-------------|
+| Shell downloader | Non-zero exit code; detailed stderr; download into `mktemp` dir; cleanup on failure; no partially installed tree |
+| .NET artifact validator (B11.6.3) | May throw `FileNotFoundException` with complete missing-path list |
+| `InferenceSession` smoke test (B11.6.6) | Record actual exception type — do **not** assume `FileNotFoundException` until verified |
 
-### 6.8 Out of scope
+### 6.7 Downloader safety requirements (pre-design)
 
-- Actual artifact download implementation (deferred to B11.6.1+)
-- macOS `.app` bundle packaging script
-- Swift host code changes
+When B11.6.2 download script is implemented, it must satisfy:
+
+- `set -euo pipefail`
+- `curl --fail --location` (no `--silent` that hides errors)
+- Required `--model-root <dir>`, no default value
+- Canonicalize and print absolute model root before starting
+- Download into `mktemp` directory (not directly into final location)
+- Verify archive SHA-256 against source-lock **before** extraction
+- Reject absolute archive member paths and `..` traversal members
+- Do not extract directly into model root — use a staging temp tree
+- Validate all manifest destinations exist in staged tree before install
+- Atomic install (`mv` or `rsync` with temp dir, then swap)
+- Cleanup trap on exit (remove temp download and extraction dirs)
+- Idempotent: re-running with same model root and version is a no-op
+- Explicit `--force` flag to overwrite existing artifacts
+- No `sudo`
+- Never modify tracked source tree (no writes under repo root except `artifacts/`)
+- No silent network fallback (no unversioned `/latest` URLs)
+- `--version` flag to print artifact set version from source-lock
+
+### 6.8 Phase sequence (corrected)
+
+| Phase | Scope | Artifacts needed? |
+|-------|-------|-------------------|
+| **B11.6.1** | **Provenance and source-lock audit** — find authoritative sources, verify license/redistribution, map archive members, record immutable URL and checksum. Downloader design only until values verified. | **At inspection time only** |
+| B11.6.2 | Implement `download-artifacts.sh` — consumes source-lock; `--model-root` required; SHA-256 verification; atomic install; no default root | No (script logic; tested against mock archive) |
+| B11.6.3 | Add opt-in .NET artifact validator — verify 11 ONNX + 7 inference.yml + 2 PNG exist under modelRoot; no InferenceSession yet | Yes |
+| B11.6.4 | macOS bundle post-build copy step | Yes (from modelRoot staging) |
+| B11.6.5 | Swift host passes `Bundle.main.resourceURL`/`BetterGI` as model root | No (path string only) |
+| B11.6.6 | Gated real `InferenceSession` smoke test | Yes |
+
+### 6.9 Out of scope
+
+- Actual artifact download implementation (deferred to B11.6.2)
+- macOS `.app` bundle packaging script (B11.6.4)
+- Swift host code changes (B11.6.5)
 - CI workflow definition
-- License/copyright review of model files
 - `character_dict_path` support (not currently implemented)
 
-### 6.9 Baseline (pre-implementation)
+### 6.10 Baseline (pre-implementation)
 
 ```
 dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
 dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 288/288 ✅
 ```
-
-### 6.10 Next phases
-
-| Phase | Scope |
-|-------|-------|
-| B11.6.1 | Implement `download-artifacts.sh` — read manifest, fetch release archive, verify checksum, extract to layout |
-| B11.6.2 | Add `File.Exists` validation stage to Verification (opt-in, artifact-guarded) |
-| B11.6.3 | Define macOS bundle post-build copy step |
-| B11.6.x | Swift host model-root passing; real InferenceSession smoke test
