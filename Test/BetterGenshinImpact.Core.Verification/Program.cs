@@ -303,7 +303,7 @@ foreach (var entry in manifest.Artifacts)
     Assert($"B11.5 Resolved {entry.RegistryKey} matches manifest", resolved == manifestPathFull, $"resolved={resolved} manifest={manifestPathFull}");
 }
 // Verify Rec sidecar contract: each Rec has exactly 1 inference.yml in its model directory
-var recEntries = manifest.Artifacts.Where(a => a.RegistryKey.Contains("Rec")).ToList();
+var recEntries = manifest.Artifacts.Where(a => a.RegistryKey.StartsWith("PaddleOcrRec", StringComparison.Ordinal)).ToList();
 Assert("B11.5 Rec entries count is 7", recEntries.Count == 7, $"got {recEntries.Count}");
 foreach (var entry in recEntries)
 {
@@ -324,7 +324,9 @@ foreach (var entry in recEntries)
     Assert($"B11.5 {entry.Id} sidecar resolves", scResolved == scExpected, $"got {scResolved}, expected {scExpected}");
 }
 // Verify 3 Det have no sidecars
-foreach (var entry in manifest.Artifacts.Where(a => a.RegistryKey.Contains("Det")))
+var detEntries = manifest.Artifacts.Where(a => a.RegistryKey.StartsWith("PaddleOcrDet", StringComparison.Ordinal)).ToList();
+Assert("B11.5 Det entries count is 3", detEntries.Count == 3, $"got {detEntries.Count}");
+foreach (var entry in detEntries)
 {
     Assert($"B11.5 {entry.Id} no sidecars", entry.Sidecars.Count == 0, $"got {entry.Sidecars.Count}");
 }
@@ -341,7 +343,8 @@ Assert("B11.5 Yap sidecar path correct", yapSidecar == "Assets/Model/Yap/index_2
 var yapSidecarName = yapSidecar.Replace('\\', '/').Split('/').Last();
 Assert("B11.5 Yap sidecar filename is index_2_word.json", yapSidecarName == "index_2_word.json", $"got {yapSidecarName}");
 var yapSidecarDir = yapSidecar.Substring(0, yapSidecar.LastIndexOf('/'));
-Assert("B11.5 Yap sidecar dir matches model", yapSidecarDir == "Assets/Model/Yap", $"got {yapSidecarDir}");
+var yapModelDir = yapEntry.RelativePath[..yapEntry.RelativePath.LastIndexOf('/')];
+Assert("B11.5 Yap sidecar dir matches model", yapSidecarDir == yapModelDir, $"sidecar dir={yapSidecarDir}, model dir={yapModelDir}");
 var yapScResolved = ocrResolver.ResolveSidecarPath(yapSidecar);
 var yapScExpected = System.IO.Path.GetFullPath(
     System.IO.Path.Combine(ocrRoot, yapSidecar.Replace('/', System.IO.Path.DirectorySeparatorChar)));
