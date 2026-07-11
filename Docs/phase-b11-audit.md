@@ -1,6 +1,6 @@
 # B11 Audit: Platform Capability Wiring
 
-**Status:** B11.1–B11.4 complete; B11.5 reopened (Yap runtime dictionary omitted from manifest); B11.2.2 open (Yap dictionary path uses Global.Absolute); B11.6.1 provenance NO-GO. Core OCR production-ready remains false.
+**Status:** B11.1–B11.5 complete (B11.5.1 added Yap dictionary to manifest); B11.2.2 remains open (Yap dictionary path uses Global.Absolute); B11.6.1 provenance NO-GO. Core OCR production-ready remains false.
 **Predecessor:** B10 structural shim cleanup complete
 
 ---
@@ -417,6 +417,7 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 121/1
 | `f683f87` | Correction 2 | Removed false dynamicSidecars; Rec inference.yml contract; leaveOpen stream. 281/281. |
 | `181ba56` | Final code/verification correction | Added strict `inference.yml` filename assertions; docs cleanup accidentally removed B11.2/B11.3. Local Verification: 288/288. |
 | `33f0893` | Docs closure | Restored B11.2/B11.3, corrected inline `character_dict` documentation, updated top-level status and final B11.5 record. No production-code changes. |
+| `15ae5f2` | B11.5.1 | Added `Assets/Model/Yap/index_2_word.json` to destination manifest; Yap dictionary path/resolver contract validated; physical file count 20→21. No real artifacts delivered. |
 
 ### 5.2 State before B11.5.1 reopening
 
@@ -442,7 +443,7 @@ The B11.5 manifest was validated at 288/288, but this only covers 20 of the 21 r
 - 288/288 validated the incomplete manifest only
 - B11.5 is **reopened** for correction
 
-### 5.4 Required B11.5.1 correction
+### 5.4 Required B11.5.1 correction (completed in 15ae5f2)
 
 - Add `Assets/Model/Yap/index_2_word.json` to destination manifest
 - Add path/resolver Verification for the Yap dictionary
@@ -462,7 +463,7 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 288/2
 
 ### 6.1 Current status
 
-B11.1–B11.4 and the PaddleOCR portion of B11.5 are implemented. B11.5 is reopened because the Yap runtime dictionary (`index_2_word.json`) was omitted from the manifest. B11.2.2 remains open because `PickTextInference` still resolves that dictionary through `Global.Absolute`.
+B11.1–B11.4 and the PaddleOCR portion of B11.5 are implemented. B11.5.1 (15ae5f2) added the Yap runtime dictionary to the destination manifest, closing B11.5 again. B11.2.2 remains open because `PickTextInference` still resolves that dictionary through `Global.Absolute`.
 
 **Core OCR not production-ready** — artifact files are not tracked in the repository and have not been delivered to a configured `modelRoot`. The key blockers are:
 
@@ -745,7 +746,7 @@ See detailed report: [`Docs/b11.6.1-artifact-provenance.md`](b11.6.1-artifact-pr
 - [ ] Yap model SHA-256 not compared with BetterGI
 - [ ] GPL-3.0 coverage of Yap model weights unclarified
 - [ ] `index_2_word.json` uses `Global.Absolute` in Core (B11.2.2)
-- [ ] B11.5 manifest missing `index_2_word.json` (B11.5.1)
+- ~~B11.5 manifest missing `index_2_word.json`~~ → **resolved** by B11.5.1 (15ae5f2)
 - [ ] Preheat PNG provenance unknown
 - [ ] inference.yml format unverified
 - [ ] Paddle→ONNX conversion pipeline undocumented
