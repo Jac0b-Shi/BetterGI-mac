@@ -257,11 +257,6 @@ B11.1.1 fixed `BgiOnnxFactory.CreateInferenceSession` to use `IOnnxModelPathReso
 | Preheat path model-specific via `PreHeatImageRelativePath` | Each model variant has its own preheat image |
 | V4En available in Core | Not disabled — model selection preserved |
 
-```
-dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
-dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 288/288 ✅
-```
-
 ### 2.4 Implementation result (B11.2.1)
 
 - `IOcrResourcePathResolver` interface + `OcrResourcePathResolver` implementation added
@@ -324,17 +319,35 @@ Note: This is the total Verification baseline (288/288) for the PaddleOCR path r
       PaddleOCR/
         test_pp_ocr.png
         test_pp_ocr_number.png
-        Det/ V4/ppocr_det_v4.onnx
-            V5/ppocr_det_v5.onnx
-            V6/ppocr_det_v6.onnx
+        Det/
+          V4/
+            ppocr_det_v4.onnx
+          V5/
+            ppocr_det_v5.onnx
+          V6/
+            ppocr_det_v6.onnx
         Rec/
-          V4/       ppocr_rec_v4.onnx + inference.yml
-          V4En/     ppocr_rec_v4_en.onnx + inference.yml
-          V5/       ppocr_rec_v5.onnx + inference.yml
-          V5Latin/  ppocr_rec_v5_latin.onnx + inference.yml
-          V5Eslav/  ppocr_rec_v5_eslav.onnx + inference.yml
-          V5Korean/ ppocr_rec_v5_korean.onnx + inference.yml
-          V6/       ppocr_rec_v6.onnx + inference.yml
+          V4/
+            ppocr_rec_v4.onnx
+            inference.yml
+          V4En/
+            ppocr_rec_v4_en.onnx
+            inference.yml
+          V5/
+            ppocr_rec_v5.onnx
+            inference.yml
+          V5Latin/
+            ppocr_rec_v5_latin.onnx
+            inference.yml
+          V5Eslav/
+            ppocr_rec_v5_eslav.onnx
+            inference.yml
+          V5Korean/
+            ppocr_rec_v5_korean.onnx
+            inference.yml
+          V6/
+            ppocr_rec_v6.onnx
+            inference.yml
 ```
 
 ### 3.5 Artifact source strategy
@@ -419,20 +432,24 @@ dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 121/1
 | `File.Exists` / `InferenceSession`? | **No** |
 | Core OCR production-ready | **False** |
 
-### 5.3 State before B11.5.1 reopening
+### 5.3 Reopening reason
 
 The B11.5 manifest was validated at 288/288, but this only covers 20 of the 21 required physical files. The Yap runtime dictionary (`Assets/Model/Yap/index_2_word.json`) was not modeled in the manifest.
-
-### 5.4 B11.5.1 Reopening
 
 - Manifest currently models **20** physical files
 - Missing: `Assets/Model/Yap/index_2_word.json`
 - Destination contract is therefore incomplete
 - 288/288 validated the incomplete manifest only
 - B11.5 is **reopened** for correction
-- Next implementation must add Yap JSON entry and update Verification count
 
-### 5.5 Baseline validation (historical — pre-reopening)
+### 5.4 Required B11.5.1 correction
+
+- Add `Assets/Model/Yap/index_2_word.json` to destination manifest
+- Add path/resolver Verification for the Yap dictionary
+- Update artifact counts from 20 to 21
+- No real artifact files required — manifest/Verification only
+
+### 5.5 Historical baseline (pre-reopening)
 
 ```
 dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
@@ -513,7 +530,11 @@ BetterGI.app/Contents/Resources/BetterGI/   ← this IS the modelRoot
 - **Do NOT** use `<repo>/Assets/Model/` — that is the source tree and is tracked by git
 - The downloader must never modify the tracked source tree
 - Bundle packaging copies from staging root: `<stagingRoot>/Assets` → `<app>/Contents/Resources/BetterGI/Assets`
-- No `*.onnx`, `inference.yml`, or model `*.png` is ever committed to git
+- No runtime model artifact is committed to git, including:
+- `*.onnx`
+- `inference.yml`
+- PaddleOCR preheat PNGs
+- `Assets/Model/Yap/index_2_word.json`
 
 ### 6.3 Artifact source strategy candidates
 
@@ -556,7 +577,7 @@ BetterGI.app/Contents/Resources/BetterGI/   ← this IS the modelRoot
 - Downloader cannot use it alone as a source of truth
 
 **`model-artifacts.source-lock.json`** (proposed — B11.6.1) is a **source contract**:
-- Pins a specific artifact set version to an immutable archive
+- Pins an artifact set to one or more immutable sources
 - Records verifiable provenance and redistribution constraints
 - Allows download script to have a deterministic, auditable input
 
@@ -601,7 +622,7 @@ BetterGI.app/Contents/Resources/BetterGI/   ← this IS the modelRoot
 - No placeholder lock file or URL may be committed
 - Pattern A (archive matches manifest layout) must be verified, not assumed
 
-**This audit only defines the schema.** Actual values will be filled in during B11.6.1 provenance audit. No placeholder URL, checksum, or license may be committed.
+**This audit only defines the schema.** Actual values remain deferred until B11.6.1.x delivery-container inspection and provenance follow-up resolves immutable URLs, hashes, mappings, and redistribution status. No placeholder URL, checksum, or license may be committed.
 
 #### Archive-to-destination mapping
 
