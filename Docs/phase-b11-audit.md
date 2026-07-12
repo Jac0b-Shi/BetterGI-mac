@@ -267,6 +267,17 @@ B11.1.1 fixed `BgiOnnxFactory.CreateInferenceSession` to use `IOnnxModelPathReso
 - No real artifact files delivered
 - Core OCR production-ready remains false
 
+### 2.5 Baseline validation
+
+```
+dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
+dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 288/288 ✅
+```
+
+Note: At this historical B11.2.1 baseline, the Yap dictionary contract was not yet covered; B11.2.2 later closed it.
+
+---
+
 ### 2.6 B11.2.2 Yap dictionary path implementation
 
 | Item | Detail |
@@ -286,7 +297,7 @@ B11.1.1 fixed `BgiOnnxFactory.CreateInferenceSession` to use `IOnnxModelPathReso
 | Test | Result |
 |------|--------|
 | Core build | Passed |
-| B11.2.2 section assertions | 19/19 passed |
+| B11.2.2 section assertions | 18/18 passed |
 | Constructor exact contract | Single ctor, (BgiOnnxFactory, IOcrResourcePathResolver), both non-optional |
 | Factory exact contract | Single Create overload, 3 required params, resolver at position 3 |
 | PickTextInference null-resolver fail-fast | ArgumentNullException with ParamName "resourceResolver" before session creation |
@@ -294,17 +305,6 @@ B11.1.1 fixed `BgiOnnxFactory.CreateInferenceSession` to use `IOnnxModelPathReso
 | Manifest constant binding | PickTextInference.YapDictionaryRelativePath matches manifest sidecar |
 | Full Verification rerun | Incomplete — stopped by pre-existing OpenCV native loading failure later in suite |
 | Full-suite N/N | Not claimed |
-
-### 2.5 Baseline validation
-
-```
-dotnet build BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj  → zero errors ✅
-dotnet run --project Test/BetterGenshinImpact.Core.Verification/...    → 288/288 ✅
-```
-
-Note: At this historical B11.2.1 baseline, the Yap dictionary contract was not yet covered; B11.2.2 later closed it.
-
----
 
 ## 3. B11.3 Audit: Model Artifact Contract and macOS Bundle Strategy
 
