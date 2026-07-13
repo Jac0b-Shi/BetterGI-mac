@@ -182,7 +182,9 @@
     <None Include="Manifest/model-artifacts.manifest.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="Manifest/model-artifacts.source-lock.json" />
+    <None Include="Manifest/model-artifacts.source-lock.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

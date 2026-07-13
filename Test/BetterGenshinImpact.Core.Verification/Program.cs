@@ -423,6 +423,70 @@ catch (ArgumentNullException ex)
 }
 Console.WriteLine();
 
+// ==== B11.6.1.4 Source-lock schema validation ====
+Console.WriteLine("B11.6.1.4: Source-lock schema validation");
+var lockPath = System.IO.Path.Combine(
+    System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!,
+    "Manifest",
+    "model-artifacts.source-lock.json");
+var lockJson = System.IO.File.ReadAllText(lockPath);
+var lockDoc = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(lockJson);
+// Basic structure
+Assert("B11.6.1.4 Lock has version", lockDoc.TryGetProperty("schemaVersion", out _), "");
+Assert("B11.6.1.4 Lock has artifactSetVersion", lockDoc.TryGetProperty("artifactSetVersion", out _), "");
+Assert("B11.6.1.4 Lock has sources", lockDoc.TryGetProperty("sources", out var sourcesArray) && sourcesArray.GetArrayLength() > 0, "");
+Assert("B11.6.1.4 Lock has artifacts", lockDoc.TryGetProperty("artifacts", out var artifactsArray), "");
+var lockArtifactsCount = artifactsArray.GetArrayLength();
+Assert("B11.6.1.4 Lock has 21 artifacts", lockArtifactsCount == 21, $"got {lockArtifactsCount}");
+// Validate each artifact
+var lockDests = new HashSet<string>(StringComparer.Ordinal);
+var lockHashes = new HashSet<string>(StringComparer.Ordinal);
+foreach (var art in artifactsArray.EnumerateArray())
+{
+    var dest = art.GetProperty("destinationRelativePath").GetString()!;
+    var mp = art.GetProperty("memberPath").GetString()!;
+    var sha = art.GetProperty("sha256").GetString()!;
+    var size = art.GetProperty("sizeBytes").GetInt64();
+    var trans = art.GetProperty("transformation").GetString()!;
+    // Destination is unique
+    Assert($"B11.6.1.4 dest unique {dest}", lockDests.Add(dest), $"duplicate {dest}");
+    // SHA-256 is 64 hex chars
+    Assert($"B11.6.1.4 sha256 length {dest}", sha.Length == 64 && sha.All(c => "0123456789abcdef".Contains(c)), $"sha={sha[..8]}...");
+    Assert($"B11.6.1.4 sha256 unique {dest}", lockHashes.Add(sha), $"duplicate hash {sha[..8]}...");
+    // Size > 0
+    Assert($"B11.6.1.4 sizeBytes > 0 {dest}", size > 0, $"size={size}");
+    // MemberPath non-empty and starts with BetterGI/
+    Assert($"B11.6.1.4 memberPath non-empty {dest}", !string.IsNullOrEmpty(mp), "");
+    Assert($"B11.6.1.4 memberPath starts with BetterGI/ {dest}", mp.StartsWith("BetterGI/"), mp);
+    // Transformation is valid enum
+    Assert($"B11.6.1.4 transformation valid {dest}", trans == "relocate" || trans == "relocate-and-rename", trans);
+    // Destination matches manifest
+    var manifestDest = manifest.Artifacts
+        .FirstOrDefault(a => a.RelativePath == dest)
+        ?.RelativePath;
+    var manifestSidecarDest = manifest.Artifacts
+        .SelectMany(a => a.Sidecars)
+        .FirstOrDefault(s => s == dest);
+    var manifestGlobalDest = manifest.SidecarArtifacts
+        .FirstOrDefault(s => s.RelativePath == dest)
+        ?.RelativePath;
+    Assert($"B11.6.1.4 dest matches manifest {dest}",
+        manifestDest != null || manifestSidecarDest != null || manifestGlobalDest != null,
+        $"not found in manifest");
+    // LicenseEvidence exists with redistributionStatus
+    Assert($"B11.6.1.4 licenseEvidence exists {dest}", art.TryGetProperty("licenseEvidence", out _), "");
+    var licStatus = art.GetProperty("licenseEvidence").GetProperty("redistributionStatus").GetString();
+    Assert($"B11.6.1.4 redistributionStatus non-empty {dest}", !string.IsNullOrEmpty(licStatus), "");
+}
+Assert("B11.6.1.4 21 unique destinations", lockDests.Count == 21, $"got {lockDests.Count}");
+Assert("B11.6.1.4 21 unique hashes", lockHashes.Count == 21, $"got {lockHashes.Count}");
+// Verify source has url and sha256
+var source = sourcesArray[0];
+Assert("B11.6.1.4 source has url", source.TryGetProperty("url", out var srcUrl) && !string.IsNullOrEmpty(srcUrl.GetString()), "");
+Assert("B11.6.1.4 source has sha256", source.TryGetProperty("sha256", out var srcSha) && srcSha.GetString()!.Length == 64, "");
+Assert("B11.6.1.4 source has provenance.commitSha", source.GetProperty("provenance").TryGetProperty("commitSha", out _), "");
+Console.WriteLine();
+
 // ==== B5: AutoPickTrigger IAutoPickRuntimeState injection ====
 Console.WriteLine("AutoPickTrigger: IAutoPickRuntimeState injection");
 var b5SystemInfo = new BetterGenshinImpact.GameTask.MacSystemInfo();
