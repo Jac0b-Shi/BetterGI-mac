@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "artifactSetVersion": "0.62.0",
+  "sources": [
+    {
+      "id": "bettergi-release-0.62.0-portable-7z",
+      "type": "archive",
+      "url": "https://github.com/babalae/better-genshin-impact/releases/download/0.62.0/BetterGI_v0.62.0.7z",
+      "sha256": "11ccb62b7580dfdf15950300415cbde57181e5352dd817040bef2f9bc58bbb89",
+      "format": "7z",
+      "sizeBytes": 424052950,
+      "memberCount": 1725,
+      "provenance": {
+        "project": "babalae/better-genshin-impact",
+        "releaseTag": "0.62.0",
+        "commitSha": "92b8beab53da3a1f86d625914c10d180fb05b0cd",
+        "publishedAt": "2026-07-05T02:40:50Z",
+        "license": "GPL-3.0 (project code); model artifacts: Apache-2.0 (PaddleOCR), GPL-3.0 (Yap), project-assets (PNGs)"
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "destinationRelativePath": "Assets/Model/Yap/model_training.onnx",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/Yap/model_training.onnx",
+      "sha256": "8165c70435c9adb94f3b9dbed8572b3bb1900da0db71a34cb7a38032864b5669",
+      "transformation": "none"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/Yap/index_2_word.json",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/Yap/index_2_word.json",
+      "sha256": "5f771b7815ebb74165ed02d3aea769b7a27773437e5cf1498a5619a4044248ec",
+      "transformation": "none"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Det/V4/ppocr_det_v4.onnx",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Det/V4/PP-OCRv4_mobile_det_infer/slim.onnx",
+      "sha256": "c0f2e256776e81d9e38f49e7cc2a37864a326ee8097e84adf30a8e0ebcc0b24b",
+      "transformation": "relocate-and-rename"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Det/V5/ppocr_det_v5.onnx",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Det/V5/PP-OCRv5_mobile_det_infer/slim.onnx",
+      "sha256": "fd4d9b7b107ef959c5358ae567ce1ce1c6b8d61f01b6102ea42f763babb2ebda",
+      "transformation": "relocate-and-rename"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Det/V6/ppocr_det_v6.onnx",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Det/V6/PP-OCRv6_small_det_infer/slim.onnx",
+      "sha256": "90e16c434f7fce924addfb6f5e362bc6126cf2e5258c8619f278b1744a16cae0",
+      "transformation": "relocate-and-rename"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Rec/V4/ppocr_rec_v4.onnx",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Rec/V4/PP-OCRv4_mobile_rec_infer/slim.onnx",
+      "sha256": "df79157f86aa181ee0daa43364203cfc892f98e2a1b425614a1c98e0b96d7393",
+      "transformation": "relocate-and-rename"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Rec/V4/inference.yml",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Rec/V4/PP-OCRv4_mobile_rec_infer/inference.yml",
+      "sha256": "018c94645678dc492754754291705c4999f35c6e5be854a42b4f918fefd06ab4",
+      "transformation": "relocate"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Rec/V4En/ppocr_rec_v4_en.onnx",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Rec/V4/en_PP-OCRv4_mobile_rec_infer/slim.onnx",
+      "sha256": "0f9c8d8f6980b04d1008e20850d8a6b6f77e02e92deb133dbe4055252ac730a7",
+      "transformation": "relocate-and-rename"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Rec/V4En/inference.yml",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Rec/V4/en_PP-OCRv4_mobile_rec_infer/inference.yml",
+      "sha256": "17a9ade9217ae533fd0083b0a43308fed773205bae4eb4d284b09d58f9596521",
+      "transformation": "relocate"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Rec/V5/ppocr_rec_v5.onnx",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Rec/V5/PP-OCRv5_mobile_rec_infer/slim.onnx",
+      "sha256": "3080c7ee62a4455bf2a46601928ed3c1d165ce3b3b613f4a86582c6f1c2be58a",
+      "transformation": "relocate-and-rename"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Rec/V5/inference.yml",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Rec/V5/PP-OCRv5_mobile_rec_infer/inference.yml",
+      "sha256": "bd3e5a58a90d720345edc48dbb30b16bc39c23dac4a90aae1349bec679b0a7ab",
+      "transformation": "relocate"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Rec/V5Latin/ppocr_rec_v5_latin.onnx",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Rec/V5/latin_PP-OCRv5_mobile_rec_infer/slim.onnx",
+      "sha256": "e32d6f046c8a94a0260e3da4f7744beda40d08394f0ef3e3c558b89fdcda3e16",
+      "transformation": "relocate-and-rename"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Rec/V5Latin/inference.yml",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Rec/V5/latin_PP-OCRv5_mobile_rec_infer/inference.yml",
+      "sha256": "dceffeba9f21a7c6cd94a8fd1bc069392176db096872fb54cd1e472fea91e31c",
+      "transformation": "relocate"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Rec/V5Eslav/ppocr_rec_v5_eslav.onnx",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Rec/V5/eslav_PP-OCRv5_mobile_rec_infer/slim.onnx",
+      "sha256": "0be9af94742a48011f0137e290f73cf60b43b55041f679a1becf45e6afb3c327",
+      "transformation": "relocate-and-rename"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Rec/V5Eslav/inference.yml",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Rec/V5/eslav_PP-OCRv5_mobile_rec_infer/inference.yml",
+      "sha256": "3f59efe8b80379cc66dbccba5c661ce89c6e254b26fde33d3ae08abcbf0c1a86",
+      "transformation": "relocate"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Rec/V5Korean/ppocr_rec_v5_korean.onnx",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Rec/V5/korean_PP-OCRv5_mobile_rec_infer/slim.onnx",
+      "sha256": "a0292045892e758c8b03feba062bcce505ee4f0ab7ac8a31758cfae6a7010f84",
+      "transformation": "relocate-and-rename"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Rec/V5Korean/inference.yml",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Rec/V5/korean_PP-OCRv5_mobile_rec_infer/inference.yml",
+      "sha256": "60723ce943ecc524b5b32e07b8527a9b75f27c79c6fccf9c13e401304633b025",
+      "transformation": "relocate"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Rec/V6/ppocr_rec_v6.onnx",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Rec/V6/PP-OCRv6_small_rec_infer/slim.onnx",
+      "sha256": "7cfaa39ba785d4308a3985e4c9c4e04a610e5345f6db865e8041091130478d5c",
+      "transformation": "relocate-and-rename"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/Rec/V6/inference.yml",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/Rec/V6/PP-OCRv6_small_rec_infer/inference.yml",
+      "sha256": "d089d74d2cf3bf3c944f76bf8ecdd3d3d04dd319b4f7639620e6d8dd2f81c218",
+      "transformation": "relocate"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/test_pp_ocr.png",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/test_pp_ocr.png",
+      "sha256": "583caa82c158da88cbeb0bdb209ada6a7658fd43df306c2a2aa846700a4de376",
+      "transformation": "none"
+    },
+    {
+      "destinationRelativePath": "Assets/Model/PaddleOCR/test_pp_ocr_number.png",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/PaddleOCR/test_pp_ocr_number.png",
+      "sha256": "a18fbc226a0d25663017c64139e7f5e331579570cc240eca4de0a24915a8bb52",
+      "transformation": "none"
+    }
+  ]
+}

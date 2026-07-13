@@ -1,6 +1,6 @@
 # B11 Audit: Platform Capability Wiring
 
-**Status:** B11.1–B11.5.1 and B11.2.2 complete; B11.6.1 provenance remains NO-GO; B11.6.2 downloader prohibited. Core OCR production-ready remains false.
+**Status:** B11.1–B11.5.1 and B11.2.2 complete; B11.6.1 provenance audited, source-lock created; B11.6.2 downloader prohibited. Core OCR production-ready remains false.
 **Predecessor:** B10 structural shim cleanup complete
 
 ---
@@ -525,7 +525,7 @@ B11.1–B11.4 and the PaddleOCR portion of B11.5 are implemented. B11.5.1 (15ae5
 | Real InferenceSession test | Deferred — requires validated artifact set |
 | macOS bundle strategy | Not implemented |
 | Swift host path definition | Not defined |
-| Artifact provenance | Audited in B11.6.1; unresolved; overall NO-GO |
+| Artifact provenance | Audited in B11.6.1; source-lock created; overall CONDITIONAL |
 
 ### 6.2 modelRoot contract (corrected)
 
@@ -813,8 +813,8 @@ B11.5.1 and B11.2.2 are complete. The next work is B11.6.1.x evidence collection
 |-------|--------|----------------------|
 | B11.5.1 | Completed | Manifest includes Yap JSON; 21 physical paths; final relationship assertion in 77277dc |
 | B11.2.2 | Completed | a6df841 + f438ec3; Core/macOS no Global.Absolute; exact constructor/factory API locked |
-| B11.6.1.x | Pending evidence | Inspect release assets, hashes, mappings and licensing |
-| B11.6.2 | NO-GO | Do not implement downloader |
+| B11.6.1 (1.1–1.4) | **Completed** | Source-lock created: `model-artifacts.source-lock.json` with immutable archive hash, 21 artifact SHA-256, per-artifact license and provenance |
+| B11.6.2 | NO-GO | Do not implement downloader (not yet started) |
 
 ---
 
