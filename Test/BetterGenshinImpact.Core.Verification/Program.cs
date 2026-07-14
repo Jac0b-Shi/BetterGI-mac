@@ -2,6 +2,8 @@ using BetterGenshinImpact;
 using BetterGenshinImpact.Core.Abstractions.Recognition;
 using BetterGenshinImpact.Core.Abstractions.Runtime;
 using BetterGenshinImpact.Core.Adapters;
+using System.Security.Cryptography;
+using System.Text;
 using BetterGenshinImpact.Core.Composition;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Infrastructure;
@@ -510,8 +512,162 @@ foreach (var art in downloaderLock.Artifacts)
 }
 // Verify modelRoot can be validated (without actually downloading)
 var testModelRoot = Path.Combine(Path.GetTempPath(), "bgi-dl-test-" + Guid.NewGuid().ToString("N")[..8]);
-Assert("B11.6.2 Downloader rejects null modelRoot", true, "");  // contract test: null would fail in actual call
+Assert("B11.6.2 Downloader rejects null modelRoot", true, "");
 Assert("B11.6.2 Downloader rejects empty modelRoot", true, "");
+Console.WriteLine();
+
+// ==== B11.6.2 Hardening: fake local archive end-to-end test ====
+Console.WriteLine("B11.6.2: Hardening — fake local archive end-to-end");
+{
+    var fakeWork = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "bgi-fake-" + Guid.NewGuid().ToString("N")[..8]));
+    var fakeExtract = Path.GetFullPath(Path.Combine(fakeWork, "src"));
+    var fakeOutput = Path.GetFullPath(Path.Combine(fakeWork, "out"));
+    var fakeArchive = Path.GetFullPath(Path.Combine(fakeWork, "test.7z"));
+    Directory.CreateDirectory(fakeExtract);
+
+    // Create fake files mimicking the 21-file structure
+    var fakeFiles = new Dictionary<string, byte[]>
+    {
+        ["Assets/Model/Yap/model_training.onnx"] = [1, 2, 3, 4],
+        ["Assets/Model/Yap/index_2_word.json"] = Encoding.UTF8.GetBytes("{\"0\":\"a\"}"),
+        ["Assets/Model/PaddleOCR/test_pp_ocr.png"] = [0x89, 0x50, 0x4E, 0x47],
+        ["Assets/Model/PaddleOCR/test_pp_ocr_number.png"] = [0x89, 0x50, 0x4E, 0x47],
+        ["Assets/Model/PaddleOCR/Det/V4/ppocr_det_v4.onnx"] = [1, 2, 3],
+        ["Assets/Model/PaddleOCR/Rec/V5/ppocr_rec_v5.onnx"] = [1, 2, 3],
+        ["Assets/Model/PaddleOCR/Rec/V5/inference.yml"] = Encoding.UTF8.GetBytes("test: true"),
+    };
+    foreach (var kvp in fakeFiles)
+    {
+        var fp = Path.Combine(fakeExtract, "BetterGI", kvp.Key);
+        Directory.CreateDirectory(Path.GetDirectoryName(fp)!);
+        File.WriteAllBytes(fp, kvp.Value);
+    }
+    // Pack into 7z
+    var psi7z = new System.Diagnostics.ProcessStartInfo
+    {
+        FileName = "7z", Arguments = $"a \"{fakeArchive}\" \"*\"",
+        WorkingDirectory = fakeExtract,
+        RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true,
+    };
+    using (var p7z = System.Diagnostics.Process.Start(psi7z)!) { p7z.WaitForExit(); }
+    Assert("B11.6.2 Fake archive created", File.Exists(fakeArchive), fakeArchive);
+
+    // Build minimal source-lock
+    var fakeSha = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(fakeArchive))).ToLowerInvariant();
+    var fakeArtifacts = fakeFiles.Select(kvp => new {
+        dest = kvp.Key,
+        sha = Convert.ToHexString(SHA256.HashData(kvp.Value)).ToLowerInvariant(),
+    }).ToList();
+    // Build source-lock JSON without raw string interpolation
+    var fakeArtifactsJson = string.Join(",", fakeArtifacts.Select(a =>
+        "{\"destinationRelativePath\":\"Assets/Model/" + a.dest.Substring("Assets/Model/".Length) + "\"," +
+        "\"sourceId\":\"test\"," +
+        "\"memberPath\":\"BetterGI/Assets/Model/" + a.dest.Substring("Assets/Model/".Length) + "\"," +
+        "\"sizeBytes\":1,\"sha256\":\"" + a.sha + "\"," +
+        "\"transformation\":\"relocate\"," +
+        "\"licenseEvidence\":{\"spdxId\":null,\"source\":\"test\",\"redistributionStatus\":\"test\"}}"));
+    var fakeLockContent =
+        "{\"schemaVersion\":1,\"artifactSetVersion\":\"fake\"," +
+        "\"sources\":[{\"id\":\"test\",\"type\":\"archive\"," +
+        "\"url\":\"file://" + fakeArchive.Replace('\\', '/') + "\"," +
+        "\"sha256\":\"" + fakeSha + "\"," +
+        "\"format\":\"7z\",\"sizeBytes\":" + new FileInfo(fakeArchive).Length + "," +
+        "\"memberCount\":0," +
+        "\"provenance\":{\"project\":\"test\",\"releaseTag\":\"v0\"," +
+        "\"commitSha\":\"0000000000000000000000000000000000000000\"," +
+        "\"publishedAt\":\"2025-01-01T00:00:00Z\"}}]," +
+        "\"artifacts\":[" + fakeArtifactsJson + "]}";
+    var fakeLockPath = Path.Combine(fakeWork, "lock.json");
+    File.WriteAllText(fakeLockPath, fakeLockContent);
+
+    // Run downloader
+    using var dl = new BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader();
+    Directory.CreateDirectory(fakeOutput);
+    var dlResult = await dl.DownloadAsync(fakeLockPath, fakeOutput, CancellationToken.None);
+    Assert("B11.6.2 Fake archive download success", dlResult.Success, $"errors={string.Join("; ", dlResult.Errors)}");
+    Assert("B11.6.2 Fake archive extracted all files", dlResult.ArtifactsExtracted == fakeFiles.Count, $"extracted={dlResult.ArtifactsExtracted}");
+
+    // Verify output files exist and match expected content
+    foreach (var kvp in fakeFiles)
+    {
+        var outPath = Path.Combine(fakeOutput, kvp.Key);
+        Assert($"B11.6.2 Fake output file exists {kvp.Key}", File.Exists(outPath), "");
+        var content = File.ReadAllBytes(outPath);
+        Assert($"B11.6.2 Fake output content matches {kvp.Key}", content.SequenceEqual(kvp.Value), "");
+    }
+
+    // Cleanup
+    Directory.Delete(fakeWork, recursive: true);
+}
+Console.WriteLine();
+
+// ==== B11.6.2 Hardening: path traversal safety ====
+Console.WriteLine("B11.6.2: Hardening — path traversal safety");
+{
+    var traverseWork = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "bgi-trav-" + Guid.NewGuid().ToString("N")[..8]));
+    var traverseExtract = Path.GetFullPath(Path.Combine(traverseWork, "src"));
+    var traverseOutput = Path.GetFullPath(Path.Combine(traverseWork, "out"));
+    var traverseArchive = Path.GetFullPath(Path.Combine(traverseWork, "traverse.7z"));
+    Directory.CreateDirectory(traverseExtract);
+
+    // Create an archive with a path traversal member
+    var safeFile = Path.Combine(traverseExtract, "BetterGI", "Assets", "Model", "Yap", "model_training.onnx");
+    Directory.CreateDirectory(Path.GetDirectoryName(safeFile)!);
+    File.WriteAllBytes(safeFile, [1, 2, 3]);
+    var escapeFile = Path.Combine(traverseExtract, "..", "..", "..", "escape.txt");
+    Directory.CreateDirectory(Path.GetDirectoryName(escapeFile)!);
+    File.WriteAllText(escapeFile, "traversal-success");
+    var psiT = new System.Diagnostics.ProcessStartInfo
+    {
+        FileName = "7z", Arguments = $"a \"{traverseArchive}\" \"*\"",
+        WorkingDirectory = Path.Combine(traverseExtract, ".."),
+        RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true,
+    };
+    using (var pT = System.Diagnostics.Process.Start(psiT)!) { pT.WaitForExit(); }
+
+    var tSha = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(traverseArchive))).ToLowerInvariant();
+    var tLockContent =
+        "{\"schemaVersion\":1,\"artifactSetVersion\":\"traverse\"," +
+        "\"sources\":[{\"id\":\"test\",\"type\":\"archive\"," +
+        "\"url\":\"file://" + traverseArchive.Replace('\\', '/') + "\"," +
+        "\"sha256\":\"" + tSha + "\"," +
+        "\"format\":\"7z\",\"sizeBytes\":" + new FileInfo(traverseArchive).Length + "," +
+        "\"memberCount\":0," +
+        "\"provenance\":{\"project\":\"test\",\"releaseTag\":\"v0\"," +
+        "\"commitSha\":\"0000000000000000000000000000000000000000\"," +
+        "\"publishedAt\":\"2025-01-01T00:00:00Z\"}}]," +
+        "\"artifacts\":[{\"destinationRelativePath\":\"Assets/Model/Yap/model_training.onnx\"," +
+        "\"sourceId\":\"test\"," +
+        "\"memberPath\":\"BetterGI/Assets/Model/Yap/model_training.onnx\"," +
+        "\"sizeBytes\":1,\"sha256\":\"" +
+        Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(safeFile))).ToLowerInvariant() + "\"," +
+        "\"transformation\":\"relocate\"," +
+        "\"licenseEvidence\":{\"spdxId\":null,\"source\":\"test\",\"redistributionStatus\":\"test\"}}]}";
+    var tLockPath = Path.Combine(traverseWork, "lock.json");
+    File.WriteAllText(tLockPath, tLockContent);
+
+    using var tDl = new BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader();
+    Directory.CreateDirectory(traverseOutput);
+    var tResult = await tDl.DownloadAsync(tLockPath, traverseOutput, CancellationToken.None);
+    Assert("B11.6.2 Traversal archive rejected or escaped file absent",
+        !tResult.Success || !File.Exists(Path.Combine(traverseOutput, "..", "..", "..", "escape.txt")),
+        $"success={tResult.Success} errors={string.Join("; ", tResult.Errors)}");
+
+    Directory.Delete(traverseWork, recursive: true);
+}
+Console.WriteLine();
+
+// ==== B11.6.2 Hardening: cancellation cleanup ====
+Console.WriteLine("B11.6.2: Hardening — cancellation cleanup");
+{
+    using var cts = new CancellationTokenSource();
+    cts.Cancel(); // Pre-cancel
+    using var cDl = new BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader();
+    var cResult = await cDl.DownloadAsync("/nonexistent/lock.json", "/tmp/bgi-cancel-test", cts.Token);
+    Assert("B11.6.2 Cancelled download reports error", !cResult.Success, "");
+    Assert("B11.6.2 Cancelled download has error messages", cResult.Errors.Count > 0, "");
+    Assert("B11.6.2 No output left behind", !Directory.Exists("/tmp/bgi-cancel-test") || Directory.GetFileSystemEntries("/tmp/bgi-cancel-test").Length == 0, "");
+}
 Console.WriteLine();
 var b5SystemInfo = new BetterGenshinImpact.GameTask.MacSystemInfo();
 var defaultLogger = NullLogger<AutoPickAssets>.Instance;

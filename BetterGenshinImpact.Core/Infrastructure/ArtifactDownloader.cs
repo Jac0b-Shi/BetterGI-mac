@@ -178,7 +178,18 @@ public sealed class ArtifactDownloader : IDisposable
             }
             Console.WriteLine($"Archive SHA-256 verified: {archiveHash[..16]}...");
 
-            // 4. Extract archive to temp
+            // 4. Validate archive member safety before extraction
+            var memberCheck = await ListArchiveMembersAsync(archivePath);
+            foreach (var member in memberCheck)
+            {
+                if (member.Contains("..") || Path.IsPathRooted(member))
+                {
+                    result.Errors.Add($"Unsafe archive member path: {member}");
+                    return result;
+                }
+            }
+
+            // 5. Extract archive to temp
             var extractDir = Path.Combine(tempDir, "extracted");
             Directory.CreateDirectory(extractDir);
             await Extract7zAsync(archivePath, extractDir);
@@ -251,6 +262,13 @@ public sealed class ArtifactDownloader : IDisposable
 
     private async Task DownloadFileAsync(string url, string path, CancellationToken ct)
     {
+        if (url.StartsWith("file://"))
+        {
+            var localPath = url["file://".Length..];
+            File.Copy(localPath, path, overwrite: true);
+            return;
+        }
+
         using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
 
@@ -264,6 +282,42 @@ public sealed class ArtifactDownloader : IDisposable
         await using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         var hash = await SHA256.HashDataAsync(fs);
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static async Task<List<string>> ListArchiveMembersAsync(string archivePath)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "7z",
+            Arguments = $"l -slt \"{archivePath}\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        using var process = System.Diagnostics.Process.Start(psi)!;
+        await process.WaitForExitAsync();
+        if (process.ExitCode != 0)
+            return [];
+
+        var output = await process.StandardOutput.ReadToEndAsync();
+        var members = new List<string>();
+        foreach (var line in output.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith("Path = ") && !trimmed.Contains("Does not exist"))
+            {
+                var memberPath = trimmed.Substring("Path = ".Length).Trim();
+                // Skip the archive file itself (absolute path) and directories
+                if (!string.IsNullOrEmpty(memberPath)
+                    && !Path.IsPathRooted(memberPath)
+                    && !memberPath.EndsWith("/"))
+                {
+                    members.Add(memberPath);
+                }
+            }
+        }
+        return members;
     }
 
     private static async Task Extract7zAsync(string archivePath, string extractDir)
