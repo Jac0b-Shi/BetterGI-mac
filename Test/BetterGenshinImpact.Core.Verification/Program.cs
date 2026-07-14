@@ -799,6 +799,92 @@ Console.WriteLine("B12.1: Path chain verification — Downloader → Resolver �
     Directory.Delete(chainWork, recursive: true);
 }
 Console.WriteLine();
+
+// ==== B12.2 Real ONNX InferenceSession load test ====
+Console.WriteLine("B12.2: Real ONNX InferenceSession load test");
+{
+    // Use the provenance-audit extraction as real modelRoot
+    var realExtractBase = Path.GetFullPath(Path.Combine(
+        Directory.GetCurrentDirectory(),
+        "artifacts/provenance-audit/release-0.62.0/extracted/BetterGI"));
+
+    if (!Directory.Exists(realExtractBase))
+    {
+        Console.WriteLine("B12.2: SKIPPED — real extracted model directory not found at " + realExtractBase);
+    }
+    else
+    {
+        // modelRoot = BetterGI/ (contains Assets/)
+        var realModelRoot = realExtractBase;
+        var realOnnxResolver = new BetterGenshinImpact.Core.Adapters.ModelRootPathResolver(realModelRoot);
+
+        // Create a BgiOnnxFactory with the real resolver
+        var realFactory = new BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory(realOnnxResolver);
+
+        // Test each real ONNX file via InferenceSession
+        var testModels = new[]
+        {
+            ("YapModelTraining", BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.YapModelTraining),
+            ("PaddleOcrDetV4", BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.PaddleOcrDetV4),
+            ("PaddleOcrRecV4En", BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.PaddleOcrRecV4En),
+        };
+
+        int sessionCount = 0;
+        foreach (var (name, model) in testModels)
+        {
+            var modelPath = realOnnxResolver.ResolveModelPath(model);
+            if (!File.Exists(modelPath))
+            {
+                Assert($"B12.2 {name} file exists", false, $"not found: {modelPath}");
+                continue;
+            }
+
+            try
+            {
+                using var session = realFactory.CreateInferenceSession(model);
+                sessionCount++;
+                Assert($"B12.2 {name} InferenceSession created", true, "");
+
+                // Read input metadata
+                var inputNames = session.InputMetadata.Keys.ToList();
+                Assert($"B12.2 {name} has inputs", inputNames.Count > 0, $"inputs={inputNames.Count}");
+                foreach (var inputName in inputNames)
+                {
+                    var inputType = session.InputMetadata[inputName].ElementType;
+                    Console.WriteLine($"  {name} input '{inputName}': type={inputType}");
+                }
+
+                // Read output metadata
+                var outputNames = session.OutputMetadata.Keys.ToList();
+                Assert($"B12.2 {name} has outputs", outputNames.Count > 0, $"outputs={outputNames.Count}");
+                foreach (var outputName in outputNames)
+                {
+                    var outputType = session.OutputMetadata[outputName].ElementType;
+                    Console.WriteLine($"  {name} output '{outputName}': type={outputType}");
+                }
+            }
+            catch (Microsoft.ML.OnnxRuntime.OnnxRuntimeException ex)
+            {
+                // ONNX graph/model parsing issue — distinct from native library missing
+                Assert($"B12.2 {name} InferenceSession", false, $"OnnxRuntimeException: {ex.Message[..Math.Min(200, ex.Message.Length)]}");
+            }
+            catch (DllNotFoundException ex)
+            {
+                // Native ONNX Runtime library not found
+                Console.WriteLine($"  {name}: DllNotFoundException — native library missing: {ex.Message}");
+                Assert($"B12.2 {name} InferenceSession", false, $"native library missing: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                // Other failure (provider init, graph unsupported, etc.)
+                Assert($"B12.2 {name} InferenceSession", false, $"{ex.GetType().Name}: {ex.Message[..Math.Min(200, ex.Message.Length)]}");
+            }
+        }
+
+        Console.WriteLine($"B12.2: {sessionCount}/{testModels.Length} InferenceSessions created successfully");
+    }
+}
+Console.WriteLine();
 var b5SystemInfo = new BetterGenshinImpact.GameTask.MacSystemInfo();
 var defaultLogger = NullLogger<AutoPickAssets>.Instance;
 var triggerLogger = NullLogger<AutoPickTrigger>.Instance;
