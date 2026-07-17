@@ -20,6 +20,7 @@ public sealed class MacOverlayDrawPlatform(
     }
 
     public void RemoveRectangles(string name) => Emit(name, "removeRectangles", Array.Empty<object>());
+    public void ClearAll() => Emit(string.Empty, "clearAll", Array.Empty<object>());
 
     private void Emit(string name, string operation, object rectangles)
     {

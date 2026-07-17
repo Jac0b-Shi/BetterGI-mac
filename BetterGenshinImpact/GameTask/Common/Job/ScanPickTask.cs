@@ -5,14 +5,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Recognition.ONNX;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.Model.Area;
-using BetterGenshinImpact.View.Drawable;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.Common.Job;
@@ -25,7 +22,6 @@ public class ScanPickTask
 {
     private readonly BgiYoloPredictor _predictor = App.ServiceProvider.GetRequiredService<BgiOnnxFactory>().CreateYoloPredictor(BgiOnnxModel.BgiWorld);
     private readonly double _dpi = TaskContext.Instance().DpiScale;
-    private readonly RECT _realCaptureRect = TaskContext.Instance().SystemInfo.CaptureAreaRect.ToWindowsRect();
 
 
     public async Task Start(CancellationToken ct)
@@ -41,7 +37,7 @@ public class ScanPickTask
         }
         finally
         {
-            VisionContext.Instance().DrawContent.ClearAll();
+            Core.Recognition.OverlayDrawPlatform.Current.ClearAll();
         }
     }
 
@@ -51,7 +47,7 @@ public class ScanPickTask
         Stopwatch timeoutStopwatch = Stopwatch.StartNew();
         TimeSpan finishTime = TimeSpan.FromSeconds(sec);
 
-        Simulation.SendInput.SimulateAction(GIActions.Drop);
+        TaskControlPlatform.Current.SimulateAction(GIActions.Drop, KeyType.KeyPress);
         await ResetCamera(ct);
 
         while (!ct.IsCancellationRequested && timeoutStopwatch.Elapsed < finishTime)
@@ -60,14 +56,14 @@ public class ScanPickTask
             // Logger.LogInformation("存在可拾取物品: {0}", hasItems);
             if (!hasItems)
             {
-                Simulation.ReleaseAllKey();
+                TaskControlPlatform.Current.ReleasePressedInputs();
                 await ResetCamera(ct);
                 for (var i = 0; i < 10; i++)
                 {
-                    Simulation.SendInput.Mouse.MoveMouseBy(400, 0);
+                    TaskControlPlatform.Current.MoveMouseBy(400, 0);
                     if (i > 5) //前期不考虑移动扫描
                         await WalkByDirection(ct, GIActions.MoveForward, 100);
-                    Simulation.SendInput.SimulateAction(GIActions.Drop);
+                    TaskControlPlatform.Current.SimulateAction(GIActions.Drop, KeyType.KeyPress);
                     await Delay(300, ct);
                     (hasItems, pickItems) = DetectPickableItems();
                     if (hasItems) break;
@@ -87,11 +83,11 @@ public class ScanPickTask
             MoveTowardsItem(toPickItem);
 
             await Delay(200, ct);
-            Simulation.SendInput.SimulateAction(GIActions.Drop);
+            TaskControlPlatform.Current.SimulateAction(GIActions.Drop, KeyType.KeyPress);
         }
         Logger.LogInformation("超时或视野内没有可拾取物品，结束扫描");
-        Simulation.ReleaseAllKey();
-        Simulation.SendInput.SimulateAction(GIActions.Drop);
+        TaskControlPlatform.Current.ReleasePressedInputs();
+        TaskControlPlatform.Current.SimulateAction(GIActions.Drop, KeyType.KeyPress);
     }
 
     /// <summary>
@@ -106,35 +102,35 @@ public class ScanPickTask
         {
             if (toPickItem.X < 760)
             {
-                Simulation.SendInput.SimulateAction(GIActions.MoveRight, KeyType.KeyUp);
-                Simulation.SendInput.SimulateAction(GIActions.MoveLeft, KeyType.KeyDown);
+                TaskControlPlatform.Current.SimulateAction(GIActions.MoveRight, KeyType.KeyUp);
+                TaskControlPlatform.Current.SimulateAction(GIActions.MoveLeft, KeyType.KeyDown);
             }
             else if (toPickItem.X > 1040)
             {
-                Simulation.SendInput.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
-                Simulation.SendInput.SimulateAction(GIActions.MoveRight, KeyType.KeyDown);
+                TaskControlPlatform.Current.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
+                TaskControlPlatform.Current.SimulateAction(GIActions.MoveRight, KeyType.KeyDown);
             }
             else
             {
-                Simulation.SendInput.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
-                Simulation.SendInput.SimulateAction(GIActions.MoveRight, KeyType.KeyUp);
+                TaskControlPlatform.Current.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
+                TaskControlPlatform.Current.SimulateAction(GIActions.MoveRight, KeyType.KeyUp);
             }
         }
 
         if (toPickItem.Bottom < 770)
         {
-            Simulation.SendInput.SimulateAction(GIActions.MoveBackward, KeyType.KeyUp);
-            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+            TaskControlPlatform.Current.SimulateAction(GIActions.MoveBackward, KeyType.KeyUp);
+            TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
         }
         else if (toPickItem.Bottom > 900)
         {
-            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
-            Simulation.SendInput.SimulateAction(GIActions.MoveBackward, KeyType.KeyDown);
+            TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+            TaskControlPlatform.Current.SimulateAction(GIActions.MoveBackward, KeyType.KeyDown);
         }
         else
         {
-            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
-            Simulation.SendInput.SimulateAction(GIActions.MoveBackward, KeyType.KeyUp);
+            TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+            TaskControlPlatform.Current.SimulateAction(GIActions.MoveBackward, KeyType.KeyUp);
         }
     }
 
@@ -154,17 +150,17 @@ public class ScanPickTask
 
     private static async Task WalkByDirection(CancellationToken ct, GIActions act, int ms = 1000)
     {
-        Simulation.SendInput.SimulateAction(act, KeyType.KeyDown);
+        TaskControlPlatform.Current.SimulateAction(act, KeyType.KeyDown);
         await Delay(ms, ct);
-        Simulation.SendInput.SimulateAction(act, KeyType.KeyUp);
+        TaskControlPlatform.Current.SimulateAction(act, KeyType.KeyUp);
     }
 
     // 回正 并下移视角
     private async Task ResetCamera(CancellationToken ct)
     {
-        Simulation.SendInput.Keyboard.Mouse.MiddleButtonClick();
+        TaskControlPlatform.Current.MiddleButtonClick();
         await Delay(500, ct);
-        Simulation.SendInput.Keyboard.Mouse.MoveMouseBy(0, (int)(500 * _dpi));
+        TaskControlPlatform.Current.MoveMouseBy(0, (int)(500 * _dpi));
         await Delay(100, ct);
     }
 }

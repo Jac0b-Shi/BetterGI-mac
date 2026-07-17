@@ -1928,6 +1928,7 @@ sealed class RecordingOverlayDrawPlatform : IOverlayDrawPlatform
     public void SetRectangles(string name, ImageRegion source, IReadOnlyList<Rect> rectangles) =>
         Commands.Add($"set:{name}:{rectangles.Count}");
     public void RemoveRectangles(string name) => Commands.Add($"remove:{name}");
+    public void ClearAll() => Commands.Add("clearAll");
 }
 
 sealed class VerificationSystemInfo : BetterGenshinImpact.GameTask.Model.ISystemInfo
@@ -2104,6 +2105,7 @@ sealed class RecordingTaskControlPlatform : ITaskControlPlatform
     public void MiddleButtonUp() { }
     public void MiddleButtonClick() { }
     public void VerticalScroll(int scrollAmountInClicks) { }
+    public void PressKey(int windowsVirtualKey) { }
     public void PressEscape() { }
     public ImageRegion CaptureToRectArea(bool forceNew) => throw new NotSupportedException();
 }

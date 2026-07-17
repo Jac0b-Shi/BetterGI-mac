@@ -25,6 +25,7 @@ public interface ITaskControlPlatform
     void MiddleButtonUp();
     void MiddleButtonClick();
     void VerticalScroll(int scrollAmountInClicks);
+    void PressKey(int windowsVirtualKey);
     void PressEscape();
     ImageRegion CaptureToRectArea(bool forceNew);
 }

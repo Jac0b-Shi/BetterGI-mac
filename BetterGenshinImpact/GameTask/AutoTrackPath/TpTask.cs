@@ -1,7 +1,6 @@
 ﻿using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Core.Script.Dependence;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.AutoPathing;
@@ -30,7 +29,6 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.AutoTrackPath;
@@ -122,7 +120,7 @@ public class TpTask
             };
             var waypointForTrack = new WaypointForTrack(waypoint, nameof(MapTypes.Teyvat), _mapMatchingMethod);
             await new PathExecutor(ct).MoveTo(waypointForTrack);
-            Simulation.SendInput.SimulateAction(GIActions.Drop);
+            TaskControlPlatform.Current.SimulateAction(GIActions.Drop, KeyType.KeyPress);
         }
 
         await Delay((int)(_tpConfig.HpRestoreDuration * 1000), ct);
@@ -190,7 +188,7 @@ public class TpTask
             try
             {
                 // 打开地图前释放所有按键
-                Simulation.ReleaseAllKey();
+                TaskControlPlatform.Current.ReleasePressedInputs();
                 await Delay(20, ct);
                 await CheckInBigMapUi();
                 return;
@@ -425,7 +423,7 @@ public class TpTask
         var ra1 = CaptureToRectArea();
         if (!Bv.IsInBigMapUi(ra1))
         {
-            Simulation.SendInput.SimulateAction(GIActions.OpenMap);
+            TaskControlPlatform.Current.SimulateAction(GIActions.OpenMap, KeyType.KeyPress);
             await Delay(1000, ct);
             for (int i = 0; i < 3; i++)
             {
@@ -460,7 +458,7 @@ public class TpTask
             catch (TpPointNotActivate e)
             {
                 // 传送点未激活或不存在 按ESC回到大地图界面
-                Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                TaskControlPlatform.Current.PressEscape();
                 await Delay(300, ct);
                 // throw; // 不抛出异常，继续重试
                 Logger.LogWarning(e.Message + "  重试");
@@ -740,7 +738,7 @@ public class TpTask
             (rect.Width / 2d + Random.Shared.Next(-rect.Width / 6, rect.Width / 6),
                 rect.Height / 2d + Random.Shared.Next(-rect.Height / 6, rect.Height / 6)));
 
-        Simulation.SendInput.Mouse.LeftButtonDown();
+        TaskControlPlatform.Current.LeftButtonDown();
         for (var i = 0; i < steps; i++)
         {
             var i1 = i;
@@ -749,7 +747,7 @@ public class TpTask
             GameCaptureRegion.GameRegionMoveBy((_, scale) => (stepX[i1] * scale, stepY[i1] * scale));
         }
 
-        Simulation.SendInput.Mouse.LeftButtonUp();
+        TaskControlPlatform.Current.LeftButtonUp();
     }
 
     private int[] GenerateSteps(int delta, int steps)
@@ -822,7 +820,7 @@ public class TpTask
                 if (rect == default)
                 {
                     // 滚轮调整后再次识别
-                    Simulation.SendInput.Mouse.VerticalScroll(2);
+                    TaskControlPlatform.Current.VerticalScroll(2);
                     Sleep(500);
                     throw new RetryException("识别大地图位置失败");
                 }

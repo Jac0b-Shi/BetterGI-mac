@@ -301,7 +301,20 @@ try
             BetterGenshinImpact.Core.Simulator.Extensions.GIActions.MoveForward),
         "TaskControl did not return the real platform key state.");
     await taskControlResponder;
-    Console.WriteLine("Shared TaskControl passed: hold action retained game action, focus check, key-up ordering and platform key-state query.");
+    var rawKeyResponder = Task.Run(async () =>
+    {
+        var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
+            ?? throw new EndOfStreamException("TaskControl raw-key callback channel ended unexpectedly.");
+        Require(callback.Method == "input.dispatch" &&
+                callback.Params?.Value<string>("action") == "keyPress" &&
+                callback.Params?.Value<int>("windowsVirtualKey") == 0x75,
+            "TaskControl did not preserve the requested F6 virtual key.");
+        await callbackConnection.WriteResponseAsync(
+            RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+    }, cancellation.Token);
+    TaskControlPlatform.Current.PressKey(0x75);
+    await rawKeyResponder;
+    Console.WriteLine("Shared TaskControl passed: hold action, focus check, key-up ordering, raw key and platform key-state query.");
 
     var pathingPlatformResponder = Task.Run(async () =>
     {
@@ -644,4 +657,5 @@ sealed class VerificationOverlayDrawPlatform : IOverlayDrawPlatform
 {
     public void SetRectangles(string name, ImageRegion source, IReadOnlyList<OpenCvSharp.Rect> rectangles) { }
     public void RemoveRectangles(string name) { }
+    public void ClearAll() { }
 }

@@ -72,6 +72,8 @@ public sealed class WindowsTaskControlPlatform : ITaskControlPlatform
     public void MiddleButtonClick() => Simulation.SendInput.Mouse.MiddleButtonClick();
     public void VerticalScroll(int scrollAmountInClicks) =>
         Simulation.SendInput.Mouse.VerticalScroll(scrollAmountInClicks);
+    public void PressKey(int windowsVirtualKey) =>
+        Simulation.SendInput.Keyboard.KeyPress((User32.VK)windowsVirtualKey);
     public void PressEscape() => Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
 
     public ImageRegion CaptureToRectArea(bool forceNew)

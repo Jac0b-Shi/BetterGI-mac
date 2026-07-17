@@ -1,5 +1,4 @@
 using BetterGenshinImpact.Core.Recognition.ONNX;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
@@ -17,7 +16,6 @@ using static BetterGenshinImpact.GameTask.Common.TaskControl;
 using BetterGenshinImpact.GameTask.Common.Job;
 using OpenCvSharp;
 using BetterGenshinImpact.Helpers;
-using Vanara;
 using Microsoft.Extensions.DependencyInjection;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.AutoPathing.Handler;
@@ -252,7 +250,9 @@ public class AutoFightTask : ISoloTask
         // 命令用到的角色名 筛选交集
         var commandAvatarNames = combatCommands.Select(c => c.Name).Distinct()
             .Select(n => combatScenes.SelectAvatar(n)?.Name)
-            .WhereNotNull().ToList();
+            .Where(n => n is not null)
+            .Select(n => n!)
+            .ToList();
         // 过滤不可执行的脚本，Task里并不支持"当前角色"。
         combatCommands = combatCommands
             .Where(c => commandAvatarNames.Contains(c.Name))
@@ -287,7 +287,9 @@ public class AutoFightTask : ISoloTask
         
         // 可以跳过的角色名,配置中有的和命令中有的取交
         var canBeSkippedAvatarNames = combatScenes.UpdateActionSchedulerByCd(_taskParam.ActionSchedulerByCd)
-            .Where(s => commandAvatarNames.Contains(s)).WhereNotNull().ToList();
+            .Where(s => s is not null && commandAvatarNames.Contains(s))
+            .Select(s => s!)
+            .ToList();
         
         //所有角色是否都可被跳过
         var allCanBeSkipped = commandAvatarNames.All(a => canBeSkippedAvatarNames.Contains(a));
@@ -328,7 +330,9 @@ public class AutoFightTask : ISoloTask
                     if (allCanBeSkipped)
                     {
                         //获取最低cd
-                        var minCoolDown = commandAvatarNames.Select(a => combatScenes.SelectAvatar(a)).WhereNotNull()
+                        var minCoolDown = commandAvatarNames.Select(a => combatScenes.SelectAvatar(a))
+                            .Where(a => a is not null)
+                            .Select(a => a!)
                             .Select(a => a.GetSkillCdSeconds()).Min();
                         if (minCoolDown > 0)
                         {
@@ -494,7 +498,7 @@ public class AutoFightTask : ISoloTask
             }
             finally
             {
-                Simulation.ReleaseAllKey();
+                TaskControlPlatform.Current.ReleasePressedInputs();
                 FightStatusFlag = false;
             }
         }, cts2.Token);
@@ -568,7 +572,7 @@ public class AutoFightTask : ISoloTask
 
                 for (int attempt = 0; attempt < 6; attempt++)
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                    TaskControlPlatform.Current.SimulateAction(GIActions.OpenPartySetupScreen, KeyType.KeyPress);
                     var enterGameAppear = await NewRetry.WaitForElementAppear(
                         ElementAssets.Instance.PartyBtnChooseView,
                         () => { },
@@ -769,7 +773,7 @@ public class AutoFightTask : ISoloTask
                                 }
                             }
                             
-                            Simulation.ReleaseAllKey();
+                            TaskControlPlatform.Current.ReleasePressedInputs();
                         }
                     }
                 }
@@ -848,7 +852,7 @@ public class AutoFightTask : ISoloTask
         // Logger.LogInformation("打开编队界面检查战斗是否结束，延时{detectDelayTime}毫秒检查", detectDelayTime);
         Logger.LogInformation("打开编队界面检查战斗是否结束");
         // 最终方案确认战斗结束
-        Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+        TaskControlPlatform.Current.SimulateAction(GIActions.OpenPartySetupScreen, KeyType.KeyPress);
         await Delay(detectDelayTime, _ct);
         
         using var ra = CaptureToRectArea();
@@ -857,7 +861,7 @@ public class AutoFightTask : ISoloTask
         
         var b3 = ra.SrcMat.At<Vec3b>(50, 790); //进度条颜色
         var whiteTile = ra.SrcMat.At<Vec3b>(50, 768); //白块
-        Simulation.SendInput.SimulateAction(GIActions.Drop);
+        TaskControlPlatform.Current.SimulateAction(GIActions.Drop, KeyType.KeyPress);
         if (IsWhite(whiteTile.Item2, whiteTile.Item1, whiteTile.Item0) &&
             IsYellow(b3.Item2, b3.Item1,
                 b3.Item0) /* AreDifferencesWithinBounds(_finishDetectConfig.BattleEndProgressBarColor, (b3.Item0, b3.Item1, b3.Item2), _finishDetectConfig.BattleEndProgressBarColorTolerance)*/
@@ -865,7 +869,7 @@ public class AutoFightTask : ISoloTask
         {
             Logger.LogInformation("识别到战斗结束");
             //取消正在进行的换队
-            Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+            TaskControlPlatform.Current.SimulateAction(GIActions.OpenPartySetupScreen, KeyType.KeyPress);
             return true;
         }
 

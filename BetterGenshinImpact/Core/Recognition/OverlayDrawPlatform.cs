@@ -10,6 +10,7 @@ public interface IOverlayDrawPlatform
 {
     void SetRectangles(string name, ImageRegion source, IReadOnlyList<Rect> rectangles);
     void RemoveRectangles(string name);
+    void ClearAll();
 }
 
 public static class OverlayDrawPlatform
