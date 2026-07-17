@@ -31,7 +31,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight.Model;
 /// <summary>
 /// 战斗场景
 /// </summary>
-public class CombatScenes : IDisposable, ICombatCommandScene
+public class CombatScenes : IDisposable, ICombatScriptScene
 {
     /// <summary>
     /// 当前配队
@@ -118,6 +118,8 @@ public class CombatScenes : IDisposable, ICombatCommandScene
     ICombatCommandAvatar? ICombatCommandScene.SelectAvatar(string name) => SelectAvatar(name);
 
     ICombatCommandAvatar ICombatCommandScene.SelectAvatar(int avatarIndex) => SelectAvatar(avatarIndex);
+
+    IReadOnlyCollection<ICombatCommandAvatar> ICombatScriptScene.GetAvatars() => GetAvatars();
 
 
     /// <summary>

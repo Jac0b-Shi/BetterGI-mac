@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -8,6 +9,13 @@ public interface ICombatCommandScene
     ICombatCommandAvatar? SelectAvatar(string name);
 
     ICombatCommandAvatar SelectAvatar(int avatarIndex);
+}
+
+public interface ICombatScriptScene : ICombatCommandScene
+{
+    IReadOnlyCollection<ICombatCommandAvatar> GetAvatars();
+
+    void BeforeTask(CancellationToken cancellationToken);
 }
 
 public interface ICombatCommandAvatar

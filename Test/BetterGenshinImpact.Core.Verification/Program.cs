@@ -27,6 +27,9 @@ using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Suspend;
+using BetterGenshinImpact.GameTask.AutoPathing.Handler;
+using BetterGenshinImpact.GameTask.Common;
+using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.Common.Map.Maps;
 using BetterGenshinImpact.GameTask.Common.Map.Maps.Base;
 using BetterGenshinImpact.GameTask.Model.Area;
@@ -43,6 +46,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 var recorder = new RecordingInputBackend();
 OverlayDrawPlatform.Configure(new RecordingOverlayDrawPlatform());
 CombatCommandPlatform.Configure(new VerificationCombatCommandPlatform());
+var combatSceneProvider = new RecordingCombatSceneProvider();
+CombatSceneProvider.Configure(combatSceneProvider);
+TaskControlPlatform.Configure(new RecordingTaskControlPlatform());
 BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory CpuFactory(IOnnxModelPathResolver resolver) =>
     new(new BetterGenshinImpact.Core.Runtime.Portable.CpuOnnxRuntimePlatform(resolver));
 DesktopRegionInputPlatform.Configure(recorder);
@@ -187,6 +193,13 @@ foreach (var command in combatWaypointForTrack.CombatScript!.CombatCommands)
 Assert("upstream combat command execution preserves macro dispatch order",
     recordingCombatAvatar.Calls.SequenceEqual(["KeyDown(q)", "Wait(600)", "KeyUp(q)"]),
     string.Join(',', recordingCombatAvatar.Calls));
+recordingCombatAvatar.Calls.Clear();
+combatSceneProvider.Scene = recordingCombatScene;
+await new CombatScriptHandler().RunAsync(CancellationToken.None, combatWaypointForTrack);
+Assert("real CombatScriptHandler executes the upstream command loop",
+    recordingCombatScene.BeforeTaskCount == 1
+    && recordingCombatAvatar.Calls.SequenceEqual(["KeyDown(q)", "Wait(600)", "KeyUp(q)"]),
+    $"before={recordingCombatScene.BeforeTaskCount}, calls={string.Join(',', recordingCombatAvatar.Calls)}");
 Assert("upstream TrapEscaper is compiled into Core",
     typeof(TrapEscaper).Assembly == typeof(PathingTask).Assembly,
     typeof(TrapEscaper).Assembly.GetName().Name ?? "unknown");
@@ -2043,13 +2056,22 @@ sealed class VerificationCombatCommandPlatform : ICombatCommandPlatform
     }
 }
 
-sealed class RecordingCombatCommandScene(ICombatCommandAvatar avatar) : ICombatCommandScene
+sealed class RecordingCombatCommandScene(ICombatCommandAvatar avatar) : ICombatScriptScene
 {
+    public int BeforeTaskCount { get; private set; }
     public ICombatCommandAvatar? SelectAvatar(string name) => avatar.Name == name ? avatar : null;
 
     public ICombatCommandAvatar SelectAvatar(int avatarIndex) => avatarIndex == 1
         ? avatar
         : throw new ArgumentOutOfRangeException(nameof(avatarIndex));
+    public IReadOnlyCollection<ICombatCommandAvatar> GetAvatars() => [avatar];
+    public void BeforeTask(CancellationToken cancellationToken) => BeforeTaskCount++;
+}
+
+sealed class RecordingCombatSceneProvider : ICombatSceneProvider
+{
+    public ICombatScriptScene? Scene { get; set; }
+    public Task<ICombatScriptScene?> GetCombatScene(CancellationToken cancellationToken) => Task.FromResult(Scene);
 }
 
 sealed class RecordingPathExecutorSuspendContext : IPathExecutorSuspendContext
@@ -2058,6 +2080,23 @@ sealed class RecordingPathExecutorSuspendContext : IPathExecutorSuspendContext
     public (int, WaypointForTrack) CurWaypoint { get; init; }
     public bool GetPositionAndTimeSuspendFlag { get; set; }
     public DateTime MoveToStartTime { get; set; }
+}
+
+sealed class RecordingTaskControlPlatform : ITaskControlPlatform
+{
+    public Microsoft.Extensions.Logging.ILogger Logger => NullLogger.Instance;
+    public double DpiScale => 1;
+    public void EnsureGameActive() { }
+    public void ReleasePressedInputs() { }
+    public void SimulateAction(GIActions action, KeyType keyType) { }
+    public bool IsActionKeyDown(GIActions action) => false;
+    public void MoveMouseBy(int x, int y) { }
+    public void LeftButtonDown() { }
+    public void LeftButtonUp() { }
+    public void RightButtonUp() { }
+    public void MiddleButtonClick() { }
+    public void PressEscape() { }
+    public ImageRegion CaptureToRectArea(bool forceNew) => throw new NotSupportedException();
 }
 
 sealed class RecordingCombatCommandAvatar(string name) : ICombatCommandAvatar

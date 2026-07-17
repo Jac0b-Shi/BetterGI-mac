@@ -205,11 +205,14 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoPathing/Model/WaypointForTrack.cs" Link="GameTask/AutoPathing/Model/WaypointForTrack.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Script/CombatCommandPlatform.cs" Link="GameTask/AutoFight/Script/CombatCommandPlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Script/ICombatCommandRuntime.cs" Link="GameTask/AutoFight/Script/ICombatCommandRuntime.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Script/CombatSceneProvider.cs" Link="GameTask/AutoFight/Script/CombatSceneProvider.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Script/CombatCommand.cs" Link="GameTask/AutoFight/Script/CombatCommand.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Script/CombatCommand.Execution.cs" Link="GameTask/AutoFight/Script/CombatCommand.Execution.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Script/CombatScript.cs" Link="GameTask/AutoFight/Script/CombatScript.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Script/CombatScriptBag.cs" Link="GameTask/AutoFight/Script/CombatScriptBag.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Script/CombatScriptBag.Execution.cs" Link="GameTask/AutoFight/Script/CombatScriptBag.Execution.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoPathing/Handler/IActionHandler.cs" Link="GameTask/AutoPathing/Handler/IActionHandler.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoPathing/Handler/CombatScriptHandler.cs" Link="GameTask/AutoPathing/Handler/CombatScriptHandler.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Script/CombatScriptParser.cs" Link="GameTask/AutoFight/Script/CombatScriptParser.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Script/Method.cs" Link="GameTask/AutoFight/Script/Method.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoGeniusInvokation/Model/ElementalType.cs" Link="GameTask/AutoGeniusInvokation/Model/ElementalType.cs" />

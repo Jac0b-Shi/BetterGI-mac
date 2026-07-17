@@ -18,7 +18,7 @@ public class CombatScriptHandler : IActionHandler
         {
             Logger.LogInformation("执行 {Text}", "简易策略脚本");
             var combatScript = waypointForTrack.CombatScript;
-            var combatScenes = await RunnerContext.Instance.GetCombatScenes(ct);
+            var combatScenes = await CombatSceneProvider.Current.GetCombatScene(ct);
             if (combatScenes == null)
             {
                 Logger.LogError("队伍识别未初始化成功！");
