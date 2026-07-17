@@ -10,6 +10,7 @@ public interface ITaskControlPlatform
 {
     ILogger Logger { get; }
     double DpiScale { get; }
+    bool IsHdrCapture { get; }
     void EnsureGameActive();
     void ReleasePressedInputs();
     void SimulateAction(GIActions action, KeyType keyType);

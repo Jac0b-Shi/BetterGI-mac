@@ -18,7 +18,6 @@ using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.QuickTeleport.Assets;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Helpers.Extensions;
-using Fischless.GameCapture;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
@@ -1096,7 +1095,7 @@ public class TpTask
     private bool CheckMapChooseIcon(ImageRegion imageRegion)
     {
         var hasMapChooseIcon = false;
-        var isHdrCapture = TaskContext.Instance().Config.CaptureMode == nameof(CaptureModes.WindowsGraphicsCaptureHdr);
+        var isHdrCapture = TaskControlPlatform.Current.IsHdrCapture;
 
         // 全匹配一遍
         using var mapChooseIconRoi = imageRegion.CacheGreyMat[_assets.MapChooseIconRoi].Clone();

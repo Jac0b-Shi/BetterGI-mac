@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Vanara.PInvoke;
 using System;
 using System.Threading;
+using Fischless.GameCapture;
 
 namespace BetterGenshinImpact.Core.Runtime.Windows;
 
@@ -16,6 +17,8 @@ public sealed class WindowsTaskControlPlatform : ITaskControlPlatform
 {
     public ILogger Logger => App.GetLogger<TaskControl>();
     public double DpiScale => TaskContext.Instance().DpiScale;
+    public bool IsHdrCapture =>
+        TaskContext.Instance().Config.CaptureMode == nameof(CaptureModes.WindowsGraphicsCaptureHdr);
 
     public void EnsureGameActive()
     {

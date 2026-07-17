@@ -2,9 +2,7 @@
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
-using BetterGenshinImpact.GameTask.AutoSkip.Audio;
 using BetterGenshinImpact.GameTask.AutoSkip.Assets;
 using BetterGenshinImpact.GameTask.AutoSkip.Model;
 using BetterGenshinImpact.GameTask.Common;
@@ -12,8 +10,6 @@ using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Service;
-using BetterGenshinImpact.View.Drawable;
-using BetterGenshinImpact.View.Windows;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -25,7 +21,6 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
-using Vanara.PInvoke;
 using Region = BetterGenshinImpact.GameTask.Model.Area.Region;
 
 namespace BetterGenshinImpact.GameTask.AutoSkip;
@@ -73,7 +68,8 @@ public partial class AutoSkipTrigger : ITaskTrigger
     private readonly AutoSkipAssets _autoSkipAssets;
 
     private readonly AutoSkipConfig _config;
-    private readonly DialogueOptionAudioWaiter _dialogueOptionAudioWaiter = new();
+    private readonly IAutoSkipAudioWaiter _dialogueOptionAudioWaiter =
+        AutoSkipRuntimePlatform.Current.CreateAudioWaiter();
 
     /// <summary>
     /// 不自动点击的选项，优先级低于橙色文字点击
@@ -90,8 +86,6 @@ public partial class AutoSkipTrigger : ITaskTrigger
     /// </summary>
     private List<string> _selectList = [];
 
-    private PostMessageSimulator? _postMessageSimulator;
-    
     private readonly bool _isCustomConfiguration;
 
     public AutoSkipTrigger()
@@ -116,8 +110,6 @@ public partial class AutoSkipTrigger : ITaskTrigger
         IsEnabled = _config.Enabled;
         IsBackgroundRunning = _config.RunBackgroundEnabled;
         // IsUseInteractionKey = _config.SelectChatOptionType == SelectChatOptionTypes.UseInteractionKey;
-        _postMessageSimulator = TaskContext.Instance().PostMessageSimulator;
-
         if (!_isCustomConfiguration)
         {
             InitKeyword();
@@ -137,7 +129,8 @@ public partial class AutoSkipTrigger : ITaskTrigger
         catch (Exception e)
         {
             _logger.LogError(e, "读取自动剧情默认暂停点击关键词列表失败");
-            ThemedMessageBox.Error("读取自动剧情默认暂停点击关键词列表失败，请确认修改后的自动剧情默认暂停点击关键词内容格式是否正确！");
+            AutoSkipRuntimePlatform.Current.ReportError(
+                "读取自动剧情默认暂停点击关键词列表失败，请确认修改后的自动剧情默认暂停点击关键词内容格式是否正确！");
         }
 
         try
@@ -151,7 +144,8 @@ public partial class AutoSkipTrigger : ITaskTrigger
         catch (Exception e)
         {
             _logger.LogError(e, "读取自动剧情暂停点击关键词列表失败");
-            ThemedMessageBox.Error("读取自动剧情暂停点击关键词列表失败，请确认修改后的自动剧情暂停点击关键词内容格式是否正确！");
+            AutoSkipRuntimePlatform.Current.ReportError(
+                "读取自动剧情暂停点击关键词列表失败，请确认修改后的自动剧情暂停点击关键词内容格式是否正确！");
         }
 
         try
@@ -165,7 +159,8 @@ public partial class AutoSkipTrigger : ITaskTrigger
         catch (Exception e)
         {
             _logger.LogError(e, "读取自动剧情优先点击选项列表失败");
-            ThemedMessageBox.Error("读取自动剧情优先点击选项列表失败，请确认修改后的自动剧情优先点击选项内容格式是否正确！");
+            AutoSkipRuntimePlatform.Current.ReportError(
+                "读取自动剧情优先点击选项列表失败，请确认修改后的自动剧情优先点击选项内容格式是否正确！");
         }
     }
 
@@ -272,11 +267,11 @@ public partial class AutoSkipTrigger : ITaskTrigger
                 }
                 if (IsUseInteractionKey)
                 {
-                    _postMessageSimulator? .SimulateActionBackground(GIActions.PickUpOrInteract); // 注意这里不是交互键 NOTE By Ayu0K: 这里确实是交互键
+                    AutoSkipRuntimePlatform.Current.SimulateBackgroundAction(GIActions.PickUpOrInteract); // 注意这里不是交互键 NOTE By Ayu0K: 这里确实是交互键
                 }
                 else
                 {
-                    _postMessageSimulator?.KeyPressBackground(User32.VK.VK_SPACE);
+                    AutoSkipRuntimePlatform.Current.PressBackgroundKey(0x20);
                 }
             }
 
@@ -352,11 +347,11 @@ public partial class AutoSkipTrigger : ITaskTrigger
             {
                 if (UseBackgroundOperation)
                 {
-                    TaskContext.Instance().PostMessageSimulator?.LeftButtonClickBackground();
+                    AutoSkipRuntimePlatform.Current.BackgroundLeftButtonClick();
                 }
                 else
                 {
-                    Simulation.SendInput.Mouse.LeftButtonClick();
+                    TaskControlPlatform.Current.LeftButtonClick();
                 }
 
                 _logger.LogInformation("自动剧情：{Text} 比例 {Rate}", "点击黑屏", rate.ToString("F"));
@@ -414,8 +409,8 @@ public partial class AutoSkipTrigger : ITaskTrigger
                             HangoutOptionClick(hangoutOption);
                             _logger.LogInformation("邀约分支[{Text}]关键词[{Str}]命中", _config.AutoHangoutEndChoose, str);
                             AutoHangoutSkipLog(hangoutOption.OptionTextSrc);
-                            VisionContext.Instance().DrawContent.RemoveRect("HangoutSelected");
-                            VisionContext.Instance().DrawContent.RemoveRect("HangoutUnselected");
+                            OverlayDrawPlatform.Current.RemoveRectangles("HangoutSelected");
+                            OverlayDrawPlatform.Current.RemoveRectangles("HangoutUnselected");
                             return;
                         }
                     }
@@ -429,8 +424,8 @@ public partial class AutoSkipTrigger : ITaskTrigger
                 {
                     HangoutOptionClick(hangoutOption);
                     AutoHangoutSkipLog(hangoutOption.OptionTextSrc);
-                    VisionContext.Instance().DrawContent.RemoveRect("HangoutSelected");
-                    VisionContext.Instance().DrawContent.RemoveRect("HangoutUnselected");
+                    OverlayDrawPlatform.Current.RemoveRectangles("HangoutSelected");
+                    OverlayDrawPlatform.Current.RemoveRectangles("HangoutUnselected");
                     return;
                 }
             }
@@ -438,8 +433,8 @@ public partial class AutoSkipTrigger : ITaskTrigger
             // 没有未点击的选项 选择第一个已点击选项
             HangoutOptionClick(hangoutOptionList[0]);
             AutoHangoutSkipLog(hangoutOptionList[0].OptionTextSrc);
-            VisionContext.Instance().DrawContent.RemoveRect("HangoutSelected");
-            VisionContext.Instance().DrawContent.RemoveRect("HangoutUnselected");
+            OverlayDrawPlatform.Current.RemoveRectangles("HangoutSelected");
+            OverlayDrawPlatform.Current.RemoveRectangles("HangoutUnselected");
         }
         else
         {
@@ -499,7 +494,7 @@ public partial class AutoSkipTrigger : ITaskTrigger
         {
             Thread.Sleep(100);
             GameCaptureRegion.GameRegion1080PPosMove(960, 900);
-            TaskContext.Instance().PostMessageSimulator.LeftButtonClickBackground();
+            AutoSkipRuntimePlatform.Current.BackgroundLeftButtonClick();
             _prevGetDailyRewardsTime = DateTime.MinValue;
             primogemRa.Dispose();
         });
@@ -539,7 +534,7 @@ public partial class AutoSkipTrigger : ITaskTrigger
             var fKey = AutoPickAssets.Instance.PickVk.ToWindowsVirtualKey();
             if (_config.IsClickFirstChatOption())
             {
-                _postMessageSimulator?.KeyPressBackground(fKey);
+                AutoSkipRuntimePlatform.Current.PressBackgroundKey((int)fKey);
             }
             else if (_config.IsClickRandomChatOption())
             {
@@ -548,18 +543,18 @@ public partial class AutoSkipTrigger : ITaskTrigger
                 var r = random.Next(0, 5);
                 for (var j = 0; j < r; j++)
                 {
-                    _postMessageSimulator?.KeyPressBackground(User32.VK.VK_S);
+                    AutoSkipRuntimePlatform.Current.PressBackgroundKey(0x53);
                     Thread.Sleep(100);
                 }
 
                 Thread.Sleep(50);
-                _postMessageSimulator?.KeyPressBackground(fKey);
+                AutoSkipRuntimePlatform.Current.PressBackgroundKey((int)fKey);
             }
             else
             {
-                _postMessageSimulator?.KeyPressBackground(User32.VK.VK_W);
+                AutoSkipRuntimePlatform.Current.PressBackgroundKey(0x57);
                 Thread.Sleep(100);
-                _postMessageSimulator?.KeyPressBackground(fKey);
+                AutoSkipRuntimePlatform.Current.PressBackgroundKey((int)fKey);
             }
             
             AutoSkipLog("交互键点击(后台)");
@@ -799,7 +794,8 @@ public partial class AutoSkipTrigger : ITaskTrigger
             using var pickRa = region.Find(AutoPickAssets.Instance.ChatPickRo);
             if (pickRa.IsExist())
             {
-                _postMessageSimulator?.KeyPressBackground(AutoPickAssets.Instance.PickVk.ToWindowsVirtualKey());
+                AutoSkipRuntimePlatform.Current.PressBackgroundKey(
+                    (int)AutoPickAssets.Instance.PickVk.ToWindowsVirtualKey());
                 AutoSkipLog("无气泡图标，但存在交互键，直接按下交互键");
             }
         }
@@ -1013,7 +1009,7 @@ public partial class AutoSkipTrigger : ITaskTrigger
         {
             if (!Bv.IsInBigMapUi(content.CaptureRectArea))
             {
-                TaskContext.Instance().PostMessageSimulator.KeyPress(User32.VK.VK_ESCAPE);
+                AutoSkipRuntimePlatform.Current.PressBackgroundKey(0x1B);
 
                 AutoSkipLog("关闭弹出页");
                 pageCloseRoRa.Dispose();
@@ -1213,7 +1209,7 @@ public partial class AutoSkipTrigger : ITaskTrigger
                 btnWhiteConfirmRa.Click();
                 _logger.LogInformation("提交物品：{Text}", "3. 交付");
 
-                VisionContext.Instance().DrawContent.ClearAll();
+                OverlayDrawPlatform.Current.ClearAll();
             }
 
             // 最多4个物品 现在就支持一个

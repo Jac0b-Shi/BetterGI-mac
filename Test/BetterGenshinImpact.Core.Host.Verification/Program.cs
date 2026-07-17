@@ -14,6 +14,7 @@ using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
+using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.Service;
 using BetterGenshinImpact.GameTask.Shell;
 using Microsoft.Extensions.Logging;
@@ -314,6 +315,42 @@ try
     }, cancellation.Token);
     TaskControlPlatform.Current.PressKey(0x75);
     await rawKeyResponder;
+    var autoSkipPlatform = new MacAutoSkipRuntimePlatform(
+        server.PlatformCallbacks, sessionToken, cancellation.Token);
+    var autoSkipResponder = Task.Run(async () =>
+    {
+        var input = await callbackConnection.ReadRequestAsync(cancellation.Token)
+            ?? throw new EndOfStreamException("AutoSkip input callback channel ended unexpectedly.");
+        Require(input.Method == "input.dispatch" &&
+                input.Params?.Value<string>("action") == "keyPress" &&
+                input.Params?.Value<int>("windowsVirtualKey") == 0x20,
+            "macOS AutoSkip did not route the upstream space key through acknowledged input.");
+        await callbackConnection.WriteResponseAsync(
+            RpcResponse.Success(input.Id, new { acknowledged = true }), cancellation.Token);
+
+        var dialog = await callbackConnection.ReadRequestAsync(cancellation.Token)
+            ?? throw new EndOfStreamException("AutoSkip dialog callback channel ended unexpectedly.");
+        Require(dialog.Method == "dialog.request" &&
+                dialog.Params?.Value<string>("kind") == "error" &&
+                dialog.Params?.Value<string>("message") == "verification error",
+            "macOS AutoSkip did not forward the upstream error dialog.");
+        await callbackConnection.WriteResponseAsync(
+            RpcResponse.Success(dialog.Id, new { acknowledged = true }), cancellation.Token);
+    }, cancellation.Token);
+    autoSkipPlatform.PressBackgroundKey(0x20);
+    autoSkipPlatform.ReportError("verification error");
+    await autoSkipResponder;
+    var vadUnavailable = false;
+    try
+    {
+        autoSkipPlatform.CreateAudioWaiter().Start(
+            1000, 500, loggerFactory.CreateLogger("AutoSkipVerification"));
+    }
+    catch (CapabilityUnavailableException)
+    {
+        vadUnavailable = true;
+    }
+    Require(vadUnavailable, "macOS AutoSkip VAD silently fell back instead of reporting unavailable capability.");
     Console.WriteLine("Shared TaskControl passed: hold action, focus check, key-up ordering, raw key and platform key-state query.");
 
     var pathingPlatformResponder = Task.Run(async () =>

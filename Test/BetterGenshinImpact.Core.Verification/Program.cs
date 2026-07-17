@@ -2090,6 +2090,7 @@ sealed class RecordingTaskControlPlatform : ITaskControlPlatform
 {
     public Microsoft.Extensions.Logging.ILogger Logger => NullLogger.Instance;
     public double DpiScale => 1;
+    public bool IsHdrCapture => false;
     public void EnsureGameActive() { }
     public void ReleasePressedInputs() { }
     public void SimulateAction(GIActions action, KeyType keyType) { }

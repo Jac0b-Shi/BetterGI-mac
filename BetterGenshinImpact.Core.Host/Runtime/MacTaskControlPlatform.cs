@@ -17,6 +17,7 @@ public sealed class MacTaskControlPlatform(
     ILogger logger) : ITaskControlPlatform
 {
     public ILogger Logger { get; } = logger;
+    public bool IsHdrCapture => false;
     public double DpiScale => Invoke("window.metrics", null).Value<double?>("dpiScale")
         ?? throw new InvalidDataException("window.metrics did not return dpiScale.");
 

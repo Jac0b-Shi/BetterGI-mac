@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace BetterGenshinImpact.GameTask.AutoSkip.Audio;
 
-internal sealed class DialogueOptionAudioWaiter
+internal sealed class DialogueOptionAudioWaiter : IAutoSkipAudioWaiter
 {
     private const int SilenceDurationMilliseconds = 2000;
     private const int SpeechStartGraceMilliseconds = 5000;

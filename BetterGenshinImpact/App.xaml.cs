@@ -236,6 +236,8 @@ public partial class App : Application
             new Core.Runtime.Windows.WindowsCombatSceneProvider());
         GameTask.AutoFight.AutoFightRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsAutoFightRuntimePlatform());
+        GameTask.AutoSkip.AutoSkipRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsAutoSkipRuntimePlatform());
         GameTask.Shell.ShellTaskPlatform.Configure(new GameTask.WindowsShellTaskPlatform());
         Core.Recorder.KeyMouseMacroPlatform.Configure(new GameTask.WindowsKeyMouseMacroPlatform());
         GameTask.AutoPathing.ScriptGroupExecutionServices.Configure(

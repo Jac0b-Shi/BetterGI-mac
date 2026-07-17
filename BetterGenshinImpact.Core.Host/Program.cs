@@ -8,6 +8,7 @@ using BetterGenshinImpact.Core.Recorder;
 using BetterGenshinImpact.GameTask.Shell;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoFight;
+using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Common;
@@ -76,6 +77,8 @@ TaskControlPlatform.Configure(new MacTaskControlPlatform(
     loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.Common.TaskControl")));
 AutoFightRuntimePlatform.Configure(new MacAutoFightRuntimePlatform(
     gameTaskManagerPlatform.SystemInfo, imageRegionOcrService));
+AutoSkipRuntimePlatform.Configure(new MacAutoSkipRuntimePlatform(
+    server.PlatformCallbacks, sessionToken, shutdown.Token));
 var pathExecutorPlatform = new MacPathExecutorPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token);
 PathExecutorPlatform.Configure(pathExecutorPlatform);
