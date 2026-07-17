@@ -1,8 +1,9 @@
 using BetterGenshinImpact.GameTask.AutoFight.Script;
+using BetterGenshinImpact.Core.Script.Dependence;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
-public sealed class MacCombatCommandPlatform : ICombatCommandPlatform
+public sealed class MacCombatCommandPlatform(IGlobalMethodRuntime input) : ICombatCommandPlatform
 {
     private static readonly HashSet<string> NamedKeys = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -29,4 +30,8 @@ public sealed class MacCombatCommandPlatform : ICombatCommandPlatform
         if (!isLetter && !isDigit && !isFunctionKey && !NamedKeys.Contains(normalized))
             throw new ArgumentException($"Unsupported macOS semantic key name: '{keyName}'.", nameof(keyName));
     }
+
+    public void KeyDown(string keyName) { ValidateKeyName(keyName); input.KeyDown(keyName); }
+    public void KeyUp(string keyName) { ValidateKeyName(keyName); input.KeyUp(keyName); }
+    public void KeyPress(string keyName) { ValidateKeyName(keyName); input.KeyPress(keyName); }
 }

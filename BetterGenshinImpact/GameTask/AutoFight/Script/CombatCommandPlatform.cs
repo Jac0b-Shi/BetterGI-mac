@@ -6,6 +6,9 @@ namespace BetterGenshinImpact.GameTask.AutoFight.Script;
 public interface ICombatCommandPlatform
 {
     void ValidateKeyName(string keyName);
+    void KeyDown(string keyName);
+    void KeyUp(string keyName);
+    void KeyPress(string keyName);
 }
 
 public static class CombatCommandPlatform

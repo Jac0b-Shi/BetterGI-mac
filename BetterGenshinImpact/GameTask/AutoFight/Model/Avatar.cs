@@ -16,11 +16,9 @@ using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.AutoTrackPath;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoFight.Assets;
-using BetterGenshinImpact.ViewModel.Pages;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Model;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
@@ -135,7 +133,7 @@ public class Avatar : ICombatCommandAvatar
         {
             Logger.LogWarning("检测到复苏界面，存在角色被击败，前往七天神像复活");
             // 先打开地图
-            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE); // NOTE: 此处按下Esc是为了关闭复苏界面，无需改键
+            TaskControlPlatform.Current.PressEscape(); // NOTE: 此处按下Esc是为了关闭复苏界面，无需改键
             Sleep(600, ct);
             TpForRecover(ct, new RetryException("检测到复苏界面，存在角色被击败，前往七天神像复活"));
         }
@@ -713,32 +711,32 @@ public class Avatar : ICombatCommandAvatar
             return;
         }
 
-        User32.VK vk = User32.VK.VK_NONAME;
+        GIActions? action = null;
         if (key == "w")
         {
-            vk = GIActions.MoveForward.ToActionKey().ToVK();
+            action = GIActions.MoveForward;
         }
         else if (key == "s")
         {
-            vk = GIActions.MoveBackward.ToActionKey().ToVK();
+            action = GIActions.MoveBackward;
         }
         else if (key == "a")
         {
-            vk = GIActions.MoveLeft.ToActionKey().ToVK();
+            action = GIActions.MoveLeft;
         }
         else if (key == "d")
         {
-            vk = GIActions.MoveRight.ToActionKey().ToVK();
+            action = GIActions.MoveRight;
         }
 
-        if (vk == User32.VK.VK_NONAME)
+        if (action is null)
         {
             return;
         }
 
-        Simulation.SendInput.Keyboard.KeyDown(vk);
+        Simulation.SendInput.SimulateAction(action.Value, KeyType.KeyDown);
         Sleep(ms); // 行走不能被cts取消
-        Simulation.SendInput.Keyboard.KeyUp(vk);
+        Simulation.SendInput.SimulateAction(action.Value, KeyType.KeyUp);
     }
 
     /// <summary>
@@ -1029,80 +1027,17 @@ public class Avatar : ICombatCommandAvatar
 
     public void KeyDown(string key)
     {
-        var vk = KeyBindingsSettingsPageViewModel.MappingKey(User32Helper.ToVk(key));
-        switch (key)
-        {
-            case "VK_LBUTTON":
-                Simulation.SendInput.Mouse.LeftButtonDown();
-                break;
-            case "VK_RBUTTON":
-                Simulation.SendInput.Mouse.RightButtonDown();
-                break;
-            case "VK_MBUTTON":
-                Simulation.SendInput.Mouse.MiddleButtonDown();
-                break;
-            case "VK_XBUTTON1":
-                Simulation.SendInput.Mouse.XButtonDown(0x0001);
-                break;
-            case "VK_XBUTTON2":
-                Simulation.SendInput.Mouse.XButtonDown(0x0001);
-                break;
-            default:
-                Simulation.SendInput.Keyboard.KeyDown(vk);
-                break;
-        }
+        CombatCommandPlatform.Current.KeyDown(key);
     }
 
     public void KeyUp(string key)
     {
-        var vk = KeyBindingsSettingsPageViewModel.MappingKey(User32Helper.ToVk(key));
-        switch (key)
-        {
-            case "VK_LBUTTON":
-                Simulation.SendInput.Mouse.LeftButtonUp();
-                break;
-            case "VK_RBUTTON":
-                Simulation.SendInput.Mouse.RightButtonUp();
-                break;
-            case "VK_MBUTTON":
-                Simulation.SendInput.Mouse.MiddleButtonUp();
-                break;
-            case "VK_XBUTTON1":
-                Simulation.SendInput.Mouse.XButtonUp(0x0001);
-                break;
-            case "VK_XBUTTON2":
-                Simulation.SendInput.Mouse.XButtonUp(0x0001);
-                break;
-            default:
-                Simulation.SendInput.Keyboard.KeyUp(vk);
-                break;
-        }
+        CombatCommandPlatform.Current.KeyUp(key);
     }
 
     public void KeyPress(string key)
     {
-        var vk = KeyBindingsSettingsPageViewModel.MappingKey(User32Helper.ToVk(key));
-        switch (key)
-        {
-            case "VK_LBUTTON":
-                Simulation.SendInput.Mouse.LeftButtonClick();
-                break;
-            case "VK_RBUTTON":
-                Simulation.SendInput.Mouse.RightButtonClick();
-                break;
-            case "VK_MBUTTON":
-                Simulation.SendInput.Mouse.MiddleButtonClick();
-                break;
-            case "VK_XBUTTON1":
-                Simulation.SendInput.Mouse.XButtonClick(0x0001);
-                break;
-            case "VK_XBUTTON2":
-                Simulation.SendInput.Mouse.XButtonClick(0x0001);
-                break;
-            default:
-                Simulation.SendInput.Keyboard.KeyPress(vk);
-                break;
-        }
+        CombatCommandPlatform.Current.KeyPress(key);
     }
 
     /// <summary>

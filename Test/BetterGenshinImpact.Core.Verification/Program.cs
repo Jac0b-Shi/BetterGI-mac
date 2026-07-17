@@ -2054,6 +2054,9 @@ sealed class VerificationCombatCommandPlatform : ICombatCommandPlatform
         if (normalized is "LBUTTON" or "RBUTTON" or "MBUTTON" or "SPACE" or "ESCAPE") return;
         throw new ArgumentException($"Unsupported verification key: {keyName}", nameof(keyName));
     }
+    public void KeyDown(string keyName) => ValidateKeyName(keyName);
+    public void KeyUp(string keyName) => ValidateKeyName(keyName);
+    public void KeyPress(string keyName) => ValidateKeyName(keyName);
 }
 
 sealed class RecordingCombatCommandScene(ICombatCommandAvatar avatar) : ICombatScriptScene

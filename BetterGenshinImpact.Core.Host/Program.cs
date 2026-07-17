@@ -56,6 +56,8 @@ var scriptHostServices = new MacScriptHostServices(
 ScriptHostServices.Configure(scriptHostServices);
 server.AttachScriptHostServices(scriptHostServices);
 var captureRing = new SharedCaptureRingReader(layout);
+var globalMethodRuntime = new MacGlobalMethodRuntime(
+    server.PlatformCallbacks, sessionToken, shutdown.Token, captureRing);
 var gameTaskManagerPlatform = new MacGameTaskManagerPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token);
 server.AttachPlatformAssetInitializer(() =>
@@ -76,7 +78,7 @@ server.AttachPathExecutorPlatform(pathExecutorPlatform);
 NavigationPlatform.Configure(new MacNavigationPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token));
 BetterGenshinImpact.GameTask.AutoFight.Script.CombatCommandPlatform.Configure(
-    new MacCombatCommandPlatform());
+    new MacCombatCommandPlatform(globalMethodRuntime));
 BetterGenshinImpact.GameTask.AutoFight.Script.CombatSceneProvider.Configure(
     new MacCombatSceneProvider());
 var scriptServicePlatform = new MacScriptServicePlatform(
@@ -98,8 +100,7 @@ TaskRunnerPlatform.Configure(new MacTaskRunnerPlatform(
 GameTaskManagerPlatform.Configure(gameTaskManagerPlatform);
 OverlayDrawPlatform.Configure(new MacOverlayDrawPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token));
-GlobalMethod.Configure(new MacGlobalMethodRuntime(
-    server.PlatformCallbacks, sessionToken, shutdown.Token, captureRing));
+GlobalMethod.Configure(globalMethodRuntime);
 ScriptProjectHost.Configure(new MacScriptProjectHostInitializer());
 await server.RunAsync(shutdown.Token);
 imageRegionOcrService.Dispose();
