@@ -1,0 +1,27 @@
+# betterGI-mac
+
+betterGI-mac is the SwiftUI/AppKit frontend bundled with the extracted BetterGI C# Core in this repository.
+
+Production script catalog, scheduling, ClearScript execution and BetterGI task decisions must come from `BetterGenshinImpact.Core.Host`. Swift owns the macOS UI, ScreenCaptureKit capture, guarded input dispatch and platform callbacks. If the Core Host is unavailable, running scripts is disabled; there is no JavaScriptCore, mock, or Rust business fallback.
+
+The project is intended to be released under GPLv3, matching upstream BetterGI. Upstream BetterGI visual assets used by this prototype are listed in `NOTICE`.
+
+The runtime root is `~/Library/Application Support/betterGI-mac/`. The app starts the bundled `Contents/Helpers/BetterGICore/BetterGenshinImpact.Core.Host`, negotiates the versioned local RPC protocol, and obtains script groups and scheduler state from that process.
+
+Build:
+
+```bash
+swift build
+```
+
+Publish the self-contained C# Core Host used by the app:
+
+```bash
+./scripts/package-bettergi-core.sh
+```
+
+Run:
+
+```bash
+swift run betterGI-mac
+```

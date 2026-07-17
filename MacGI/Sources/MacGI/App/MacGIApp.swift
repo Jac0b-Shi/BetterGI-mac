@@ -1,0 +1,97 @@
+import AppKit
+import SwiftUI
+
+@main
+struct MacGIApp: App {
+    @StateObject private var appState = AppState()
+    @StateObject private var coordinator = AppCoordinator()
+
+    init() {
+        FontRegistry.registerBundledFonts()
+    }
+
+    var body: some Scene {
+        Window("betterGI-mac", id: "main") {
+            MainWindowView()
+                .environmentObject(appState)
+                .environmentObject(coordinator)
+                .frame(minWidth: 1080, minHeight: 720)
+                .onAppear {
+                    coordinator.configure(appState: appState)
+                }
+        }
+        .defaultSize(width: 1180, height: 780)
+        .windowStyle(.hiddenTitleBar)
+        .commands {
+            MacGICommands(appState: appState, coordinator: coordinator)
+        }
+
+        MenuBarExtra("betterGI-mac", systemImage: "scope") {
+            MenuBarControls()
+                .environmentObject(appState)
+                .environmentObject(coordinator)
+        }
+        .menuBarExtraStyle(.menu)
+    }
+}
+
+struct MacGICommands: Commands {
+    @ObservedObject var appState: AppState
+    let coordinator: AppCoordinator
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        CommandMenu("betterGI-mac Control") {
+            Button("Open betterGI-mac") {
+                openWindow(id: "main")
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            .keyboardShortcut("0", modifiers: [.command])
+
+            Divider()
+
+            Button(appState.appStatus == .running ? "Pause" : "Start") {
+                appState.toggleStartPause()
+                coordinator.showHUDIfNeeded()
+            }
+            .keyboardShortcut("r", modifiers: [.command, .shift])
+
+            Button(appState.isHUDVisible ? "Hide HUD" : "Show HUD") {
+                appState.toggleHUD()
+            }
+            .keyboardShortcut("h", modifiers: [.command, .shift])
+
+            Button("Add Test Log") {
+                appState.addTestLog()
+            }
+            .keyboardShortcut("l", modifiers: [.command, .shift])
+        }
+    }
+}
+
+struct MenuBarControls: View {
+    @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var coordinator: AppCoordinator
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("Open betterGI-mac") {
+            openWindow(id: "main")
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        Button(appState.appStatus == .running ? "Pause" : "Start") {
+            appState.toggleStartPause()
+            coordinator.showHUDIfNeeded()
+        }
+        Button(appState.isHUDVisible ? "Hide HUD" : "Show HUD") {
+            appState.toggleHUD()
+        }
+        Button("Add Test Log") {
+            appState.addTestLog()
+        }
+        Divider()
+        Button("Quit") {
+            coordinator.quit()
+        }
+    }
+}

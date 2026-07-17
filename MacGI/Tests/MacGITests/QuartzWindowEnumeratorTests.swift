@@ -1,0 +1,79 @@
+import CoreGraphics
+@testable import MacGI
+import Testing
+
+@Suite("Quartz window selection")
+struct QuartzWindowEnumeratorTests {
+    @Test("Generic YAAGL launcher title is not treated as the game")
+    func genericYaaglLauncherTitleIsNotGame() throws {
+        let launcher = makeWindow(
+            id: 1,
+            ownerName: "Yaagl OS",
+            title: "Yet Another Anime Game Launcher",
+            frame: CGRect(x: 320, y: 89, width: 1280, height: 730)
+        )
+
+        #expect(!launcher.isLikelyGameWindow)
+        #expect(launcher.gameWindowSelectionPriority == 0)
+    }
+
+    @Test("Wine Genshin window is preferred over a larger YAAGL launcher")
+    func wineGenshinWindowPreferredOverLauncher() throws {
+        let launcher = makeWindow(
+            id: 1,
+            ownerName: "Yaagl OS",
+            title: "Genshin Impact Launcher",
+            frame: CGRect(x: 320, y: 89, width: 1280, height: 730)
+        )
+        let game = makeWindow(
+            id: 2,
+            ownerName: "wine",
+            title: "原神",
+            frame: CGRect(x: 18, y: 82, width: 960, height: 572)
+        )
+
+        #expect(launcher.isLikelyGameWindow)
+        #expect(game.isLikelyGameWindow)
+        #expect(game.gameWindowSelectionPriority > launcher.gameWindowSelectionPriority)
+        #expect(QuartzWindowEnumerator.bestGameWindow(from: [launcher, game]) == game)
+    }
+
+    @Test("Wine utility windows remain below titled game windows")
+    func wineUtilityWindowStaysBelowGameWindow() throws {
+        let utility = makeWindow(
+            id: 3,
+            ownerName: "wine",
+            title: "",
+            frame: CGRect(x: 0, y: 580, width: 500, height: 500)
+        )
+        let game = makeWindow(
+            id: 4,
+            ownerName: "wine",
+            title: "Genshin Impact",
+            frame: CGRect(x: 18, y: 82, width: 960, height: 572)
+        )
+
+        #expect(!utility.isLikelyGameWindow)
+        #expect(game.isLikelyGameWindow)
+        #expect(QuartzWindowEnumerator.bestGameWindow(from: [utility, game]) == game)
+    }
+
+    private func makeWindow(
+        id: CGWindowID,
+        ownerName: String,
+        title: String,
+        frame: CGRect
+    ) -> WindowInfo {
+        WindowInfo(
+            id: id,
+            ownerPID: 1000 + pid_t(id),
+            ownerName: ownerName,
+            title: title,
+            frame: frame,
+            layer: 0,
+            isOnScreen: true,
+            scaleFactor: 1,
+            isMock: false
+        )
+    }
+}

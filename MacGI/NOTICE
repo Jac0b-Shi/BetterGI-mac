@@ -1,0 +1,59 @@
+betterGI-mac
+
+This project is intended to be distributed under GNU General Public License
+Version 3, matching the upstream BetterGI project.
+
+Imported upstream assets:
+
+- Sources/MacGI/Resources/Images/bettergi-banner.jpg
+- Sources/MacGI/Resources/Images/bettergi-logo.png
+- Sources/MacGI/Resources/Images/bettergi-drag.png
+- Sources/MacGI/Resources/Fgi-Regular.ttf
+- Sources/MacGI/Resources/MiSans-Regular.ttf
+- Sources/MacGI/Resources/GameTask/AutoPick/Assets/1920x1080/F.png
+- Sources/MacGI/Resources/GameTask/AutoPick/Assets/1920x1080/L.png
+- Sources/MacGI/Resources/GameTask/AutoPick/Assets/1920x1080/icon_settings.png
+- Sources/MacGI/Resources/GameTask/AutoSkip/Assets/1920x1080/disabled_ui.png
+- Sources/MacGI/Resources/GameTask/AutoSkip/Assets/1920x1080/hangout_skip.png
+- Sources/MacGI/Resources/GameTask/AutoSkip/Assets/1920x1080/icon_exclamation.png
+- Sources/MacGI/Resources/GameTask/AutoSkip/Assets/1920x1080/icon_option.png
+- Sources/MacGI/Resources/GameTask/AutoSkip/Assets/1920x1080/page_close.png
+- Sources/MacGI/Resources/GameTask/AutoSkip/Assets/1920x1080/stop_auto.png
+- Sources/MacGI/Resources/GameTask/AutoSkip/Assets/1920x1080/submit_goods.png
+- Sources/MacGI/Resources/Assets/Model/LICENSE
+- Sources/MacGI/Resources/Assets/Model/PaddleOCR/README.md
+- Sources/MacGI/Resources/Assets/Model/PaddleOCR/test_pp_ocr.png
+- Sources/MacGI/Resources/Assets/Model/PaddleOCR/test_pp_ocr_number.png
+- Sources/MacGI/Resources/Assets/Model/PaddleOCR/Det/V4/PP-OCRv4_mobile_det_infer/slim.onnx
+- Sources/MacGI/Resources/Assets/Model/PaddleOCR/Det/V4/PP-OCRv4_mobile_det_infer/inference.yml
+- Sources/MacGI/Resources/Assets/Model/PaddleOCR/Rec/V4/PP-OCRv4_mobile_rec_infer/slim.onnx
+- Sources/MacGI/Resources/Assets/Model/PaddleOCR/Rec/V4/PP-OCRv4_mobile_rec_infer/inference.yml
+- Sources/MacGI/Resources/Assets/Model/PaddleOCR/Rec/V4/en_PP-OCRv4_mobile_rec_infer/slim.onnx
+- Sources/MacGI/Resources/Assets/Model/PaddleOCR/Rec/V4/en_PP-OCRv4_mobile_rec_infer/inference.yml
+
+These assets were copied from:
+
+- /Volumes/Aquarius/CodeProjects/better-genshin-impact/BetterGenshinImpact/Resources/Images/banner.jpg
+- /Volumes/Aquarius/CodeProjects/better-genshin-impact/BetterGenshinImpact/Resources/Images/logo.png
+- /Volumes/Aquarius/CodeProjects/better-genshin-impact/BetterGenshinImpact/Resources/Images/drag.png
+- /Volumes/Aquarius/CodeProjects/better-genshin-impact/BetterGenshinImpact/Resources/Fonts/Fgi-Regular.ttf
+- /Volumes/Aquarius/CodeProjects/better-genshin-impact/BetterGenshinImpact/Resources/Fonts/MiSans-Regular.ttf
+- /Volumes/Aquarius/CodeProjects/better-genshin-impact/BetterGenshinImpact/GameTask/AutoPick/Assets/1920x1080/
+- /Volumes/Aquarius/CodeProjects/better-genshin-impact/BetterGenshinImpact/GameTask/AutoSkip/Assets/1920x1080/
+- /Volumes/Aquarius/CodeProjects/better-genshin-impact/packages/bettergi.assets.model/1.0.24/contentFiles/any/any/Assets/Model/
+
+Upstream repository reference:
+
+- /Volumes/Aquarius/CodeProjects/better-genshin-impact
+
+License:
+
+- GNU General Public License Version 3
+- Full license text is included in LICENSE.
+
+Third-party dependencies:
+
+- ONNX Runtime Swift Package Manager
+  - Source: https://github.com/microsoft/onnxruntime-swift-package-manager
+  - License: MIT
+  - Used for PaddleOCR ONNX inference.

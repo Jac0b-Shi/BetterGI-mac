@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  rust:
+    name: Rust tests
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: macgi-core
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Rust version
+        run: rustc --version && cargo --version
+
+      - name: Cargo fmt check
+        run: cargo fmt --check
+
+      - name: Cargo test
+        run: cargo test
+
+      - name: Cargo build (lib)
+        run: cargo build --lib
+
+      - name: Verify dylib exists
+        run: test -f target/debug/libmacgi_core.dylib
+
+      - name: Verify exported symbols
+        run: |
+          nm -gU target/debug/libmacgi_core.dylib | grep macgi_core_create
+          nm -gU target/debug/libmacgi_core.dylib | grep macgi_core_destroy
+          nm -gU target/debug/libmacgi_core.dylib | grep macgi_core_submit_frame
+          nm -gU target/debug/libmacgi_core.dylib | grep macgi_core_evaluate_auto_pick
+          nm -gU target/debug/libmacgi_core.dylib | grep macgi_core_evaluate_auto_skip
+          nm -gU target/debug/libmacgi_core.dylib | grep macgi_core_version
+          nm -gU target/debug/libmacgi_core.dylib | grep macgi_core_match_template
+          nm -gU target/debug/libmacgi_core.dylib | grep macgi_core_match_pixels
+
+  swift:
+    name: Swift build and tests
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Resolve Swift package
+        run: swift package resolve
+
+      - name: Build Swift package
+        run: swift build
+
+      - name: Run Swift tests
+        run: swift test
+
+      - name: Check C header syntax
+        run: clang -fsyntax-only -x c -Wno-nullability-completeness shared/macgi_core.h

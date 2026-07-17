@@ -1,0 +1,201 @@
+# =============================================================================
+# .gitignore — betterGI-mac
+# =============================================================================
+# 基于 GitHub gitignore 官方模板 (Swift + macOS)，
+# 叠加 AI coding agent、编辑器、构建缓存等规则。
+# 官方模板仓库: https://github.com/github/gitignore
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# 1. Swift / Swift Package Manager
+# ---------------------------------------------------------------------------
+.build/
+.swiftpm/
+Packages/
+
+# ---------------------------------------------------------------------------
+# 2. Xcode
+# ---------------------------------------------------------------------------
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+*.xcuserdatad/
+*.xcuserstate
+build/
+
+# ---------------------------------------------------------------------------
+# 3. macOS (Finder, Spotlight, Trash, metadata)
+# ---------------------------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# Spotlight
+.Spotlight-V100/
+
+# Trash
+.Trashes/
+.Trash/
+
+# File metadata / resource forks
+._*
+
+# Network / Time Machine / file system
+.apdisk
+.AppleDB
+.AppleDesktop
+.fseventsd
+.DocumentRevisions-V100
+.TemporaryItems
+
+# ---------------------------------------------------------------------------
+# 4. Windows
+# ---------------------------------------------------------------------------
+Thumbs.db
+Thumbs.db:encryptable
+Desktop.ini
+ehthumbs.db
+ehthumbs_vista.db
+$RECYCLE.BIN/
+
+# ---------------------------------------------------------------------------
+# 5. Linux
+# ---------------------------------------------------------------------------
+*~
+.directory
+.nfs*
+
+# ---------------------------------------------------------------------------
+# 6. Editors / IDEs
+# ---------------------------------------------------------------------------
+# VS Code
+.vscode/
+
+# JetBrains
+.idea/
+*.iml
+out/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+
+# Sublime
+*.sublime-workspace
+
+# Kate
+*.kate-swp
+
+# Emacs
+\#*\#
+
+# ---------------------------------------------------------------------------
+# 7. Vim
+# ---------------------------------------------------------------------------
+*.swp
+*.swo
+*.sw?
+
+# ---------------------------------------------------------------------------
+# 8. AI Coding Agents
+# ---------------------------------------------------------------------------
+.claude/
+.claude.json
+.claude.local.json
+claude-debug.log
+
+.codex/
+codex.log
+
+.gemini/
+
+.aider*
+.aider.chat.history.md
+
+.cursor/
+.continue/
+.cline/
+.roo/
+.workbuddy/
+.goose/
+.hermes/
+.hermes-agent/
+
+# ---------------------------------------------------------------------------
+# 9. Rust (future Rust core build artifacts)
+# ---------------------------------------------------------------------------
+target/
+# Cargo.lock intentionally NOT ignored — this is an application project.
+
+# ---------------------------------------------------------------------------
+# 10. C / C++
+# ---------------------------------------------------------------------------
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+
+# ---------------------------------------------------------------------------
+# 11. Node.js (tooling / scripts)
+# ---------------------------------------------------------------------------
+node_modules/
+.npm/
+.pnpm-store/
+
+# ---------------------------------------------------------------------------
+# 12. Logs
+# ---------------------------------------------------------------------------
+*.log
+logs/
+log/
+
+# ---------------------------------------------------------------------------
+# 13. Temp / Cache
+# ---------------------------------------------------------------------------
+tmp/
+temp/
+.cache/
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+
+# ---------------------------------------------------------------------------
+# 14. Environment / Secrets (NEVER commit)
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.*
+credentials.*
+
+# ---------------------------------------------------------------------------
+# 15. Syncthing
+# ---------------------------------------------------------------------------
+*.sync-conflict-*
+.syncthing.tmp/
+~syncthing~*
+
+# ---------------------------------------------------------------------------
+# 16. Project-specific
+# ---------------------------------------------------------------------------
+.photos/
+
+# ONNX models distributed via NuGet upstream — not in git, downloaded at first launch
+Sources/MacGI/Resources/Assets/Model/Common/
+Sources/MacGI/Resources/Assets/Model/Domain/
+Sources/MacGI/Resources/Assets/Model/Fish/
+Sources/MacGI/Resources/Assets/Model/Item/
+Sources/MacGI/Resources/Assets/Model/Mine/
+Sources/MacGI/Resources/Assets/Model/PaddleOCR/Det/V5/
+Sources/MacGI/Resources/Assets/Model/PaddleOCR/Rec/V5/
+Sources/MacGI/Resources/Assets/Model/PaddleOCR/paddle2onnx.sh
+Sources/MacGI/Resources/Assets/Model/Vad/
+Sources/MacGI/Resources/Assets/Model/World/
+Sources/MacGI/Resources/Assets/Model/Yap/
