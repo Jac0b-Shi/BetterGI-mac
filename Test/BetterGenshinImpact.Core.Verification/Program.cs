@@ -118,6 +118,33 @@ Assert("AutoFishing input preserves upstream action order",
         "action:MoveForward:KeyDown", "action:MoveForward:KeyUp"
     ]), string.Join(" | ", recordingTaskControl.Calls));
 
+recordingTaskControl.Calls.Clear();
+var fishingBlackboard = new Blackboard(sleep: milliseconds =>
+    recordingTaskControl.Calls.Add($"sleep:{milliseconds}"));
+using (var frame = new ImageRegion(new Mat(1080, 1920, MatType.CV_8UC3), 0, 0))
+{
+    var moveViewpoint = new MoveViewpointDown(
+        "real-viewpoint", fishingBlackboard, NullLogger.Instance, false, fishingInput);
+    var firstTick = moveViewpoint.Tick(frame);
+    var secondTick = moveViewpoint.Tick(frame);
+    Assert("AutoFishing real MoveViewpointDown first tick runs",
+        firstTick == BehaviourTree.BehaviourStatus.Running, firstTick.ToString());
+    Assert("AutoFishing real MoveViewpointDown second tick succeeds",
+        secondTick == BehaviourTree.BehaviourStatus.Succeeded, secondTick.ToString());
+}
+Assert("AutoFishing real MoveViewpointDown preserves movement/sleep order",
+    recordingTaskControl.Calls.SequenceEqual(["move:0,500", "sleep:100"]),
+    string.Join(" | ", recordingTaskControl.Calls));
+
+using (var fishBarFrame = new Mat(140, 1920, MatType.CV_8UC3, Scalar.Black))
+{
+    Cv2.Rectangle(fishBarFrame, new Rect(700, 80, 180, 12), new Scalar(192, 255, 255), -1);
+    Cv2.Rectangle(fishBarFrame, new Rect(900, 80, 90, 12), new Scalar(192, 255, 255), -1);
+    var bars = AutoFishingImageRecognition.GetFishBarRect(fishBarFrame);
+    Assert("AutoFishing real fish-bar recognizer detects deterministic bars",
+        bars?.Count == 2, $"count={bars?.Count ?? 0}");
+}
+
 // ==== Scheduler lifecycle: real upstream TaskRunner algorithm ====
 Console.WriteLine("Scheduler lifecycle: TaskRunner lock/cancel/error/finally semantics");
 var taskRunnerPlatform = new RecordingTaskRunnerPlatform();

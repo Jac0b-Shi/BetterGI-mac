@@ -14,6 +14,13 @@ using BetterGenshinImpact.Core.Recognition;
 
 namespace BetterGenshinImpact.GameTask.Model.Area;
 
+public enum RegionDrawColor
+{
+    Default,
+    White,
+    LightPink,
+}
+
 /// <summary>
 /// 区域基类
 /// 用于描述一个区域，可以是一个矩形，也可以是一个点
@@ -199,11 +206,24 @@ public class Region : IDisposable
     /// </summary>
     /// <param name="name"></param>
     /// <param name="pen"></param>
-#if BGI_FULL_WINDOWS
     public void DrawSelf(string name, Pen? pen = null)
     {
         // 相对自己是 0, 0 坐标
         DrawRect(0, 0, Width, Height, name, pen);
+    }
+
+    public void DrawSelf(string name, RegionDrawColor color)
+    {
+#if BGI_FULL_WINDOWS
+        DrawSelf(name, color switch
+        {
+            RegionDrawColor.White => Pens.White,
+            RegionDrawColor.LightPink => Pens.LightPink,
+            _ => null,
+        });
+#else
+        DrawSelf(name);
+#endif
     }
 
     /// <summary>
@@ -217,16 +237,43 @@ public class Region : IDisposable
     /// <param name="pen"></param>
     public void DrawRect(int x, int y, int w, int h, string name, Pen? pen = null)
     {
+#if BGI_FULL_WINDOWS
         var drawable = ToRectDrawable(x, y, w, h, name, pen);
         VisionContext.Instance().DrawContent.PutRect(name, drawable);
+#else
+        OverlayDrawPlatform.Current.SetRectangles(name,
+            this as ImageRegion ?? throw new InvalidOperationException("Overlay drawing requires an ImageRegion."),
+            [new Rect(x, y, w, h)]);
+#endif
     }
 
     public void DrawRect(Rect rect, string name, Pen? pen = null)
     {
+#if BGI_FULL_WINDOWS
         var drawable = ToRectDrawable(rect.X, rect.Y, rect.Width, rect.Height, name, pen);
         VisionContext.Instance().DrawContent.PutRect(name, drawable);
+#else
+        OverlayDrawPlatform.Current.SetRectangles(name,
+            this as ImageRegion ?? throw new InvalidOperationException("Overlay drawing requires an ImageRegion."),
+            [rect]);
+#endif
     }
 
+    public void DrawRect(Rect rect, string name, RegionDrawColor color)
+    {
+#if BGI_FULL_WINDOWS
+        DrawRect(rect, name, color switch
+        {
+            RegionDrawColor.White => Pens.White,
+            RegionDrawColor.LightPink => Pens.LightPink,
+            _ => null,
+        });
+#else
+        DrawRect(rect, name);
+#endif
+    }
+
+#if BGI_FULL_WINDOWS
     /// <summary>
     /// 转换【自己】到遮罩窗口绘制矩形
     /// </summary>

@@ -25,7 +25,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
         /// <summary>
         /// 鱼塘
         /// </summary>
-        public Fishpond fishpond;
+        public Fishpond fishpond = null!;
 
         /// <summary>
         /// 是否没有抛竿落点

@@ -352,6 +352,23 @@ try
         vadUnavailable = true;
     }
     Require(vadUnavailable, "macOS AutoSkip VAD silently fell back instead of reporting unavailable capability.");
+
+    var fishingScreenshotUnavailable = false;
+    using (var screenshotFrame = new ImageRegion(new OpenCvSharp.Mat(
+               16, 16, OpenCvSharp.MatType.CV_8UC3), 0, 0))
+    {
+        try
+        {
+            new MacAutoFishingRuntimePlatform().SaveBehaviourScreenshot(
+                screenshotFrame, "verification.png");
+        }
+        catch (CapabilityUnavailableException)
+        {
+            fishingScreenshotUnavailable = true;
+        }
+    }
+    Require(fishingScreenshotUnavailable,
+        "macOS AutoFishing screenshot path silently succeeded without Core-owned privacy configuration.");
     var reloginPlatform = new MacExitAndReloginPlatform();
     var focusResponder = Task.Run(async () =>
     {

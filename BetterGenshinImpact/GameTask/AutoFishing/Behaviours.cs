@@ -453,7 +453,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             else
             {
                 noTargetFishTimes = 0;
-                imageRegion.DrawRect(fishpondTargetRect, "Target", System.Drawing.Pens.White);
+                imageRegion.DrawRect(fishpondTargetRect, "Target", RegionDrawColor.White);
                 imageRegion.Derive(currentFish.Rect).DrawSelf("Fish");
 
                 // drawContent.PutRect("Target", fishpond.TargetRect.ToRectDrawable());
@@ -862,7 +862,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                     blackboard.fishBoxRect = new Rect(rx, ry, rw, rh).ClampTo(imageRegion.SrcMat);
                 }
                 using var boxRa = imageRegion.Derive(blackboard.fishBoxRect);
-                boxRa.DrawSelf("FishBox", System.Drawing.Pens.LightPink);
+                boxRa.DrawSelf("FishBox", RegionDrawColor.LightPink);
                 logger.LogInformation("  识别到钓鱼框");
                 return BehaviourStatus.Succeeded;
             }

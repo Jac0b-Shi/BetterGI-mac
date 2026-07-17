@@ -8,6 +8,7 @@ using BetterGenshinImpact.Core.Recorder;
 using BetterGenshinImpact.GameTask.Shell;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoFight;
+using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask;
@@ -69,6 +70,8 @@ server.AttachPlatformAssetInitializer(() =>
     ElementAssets.Initialize(gameTaskManagerPlatform.SystemInfo);
     BetterGenshinImpact.GameTask.AutoFight.Assets.AutoFightAssets.Initialize(
         gameTaskManagerPlatform.SystemInfo);
+    BetterGenshinImpact.GameTask.AutoFishing.Assets.AutoFishingAssets.Initialize(
+        gameTaskManagerPlatform.SystemInfo);
 });
 var imageRegionOcrService = new MacImageRegionOcrService(
     layout, loggerFactory.CreateLogger<BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory>());
@@ -78,6 +81,7 @@ TaskControlPlatform.Configure(new MacTaskControlPlatform(
     loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.Common.TaskControl")));
 AutoFightRuntimePlatform.Configure(new MacAutoFightRuntimePlatform(
     gameTaskManagerPlatform.SystemInfo, imageRegionOcrService));
+AutoFishingRuntimePlatform.Configure(new MacAutoFishingRuntimePlatform());
 AutoSkipRuntimePlatform.Configure(new MacAutoSkipRuntimePlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token));
 ExitAndReloginPlatform.Configure(new MacExitAndReloginPlatform());

@@ -19,6 +19,7 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.4" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Localization" Version="9.0.4" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.21.0" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.21.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
@@ -31,6 +32,8 @@
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageReference Include="Semver" Version="3.0.0" />
     <PackageReference Include="YoloSharp" Version="6.0.3" />
+    <PackageReference Include="BehaviourTree" Version="1.0.73" />
+    <PackageReference Include="TorchSharp" Version="0.105.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -221,10 +224,24 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/AutoSkipRuntimePlatform.cs" Link="GameTask/AutoSkip/AutoSkipRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ExitAndReloginPlatform.cs" Link="GameTask/Common/Job/ExitAndReloginPlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingInput.cs" Link="GameTask/AutoFishing/AutoFishingInput.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingRuntimePlatform.cs" Link="GameTask/AutoFishing/AutoFishingRuntimePlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/Assets/*.cs" Link="GameTask/AutoFishing/Assets/%(Filename)%(Extension)" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/Model/*.cs" Link="GameTask/AutoFishing/Model/%(Filename)%(Extension)" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingConfig.cs" Link="GameTask/AutoFishing/AutoFishingConfig.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingImageRecognition.cs" Link="GameTask/AutoFishing/AutoFishingImageRecognition.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/BehaviourTreeExtensions.cs" Link="GameTask/AutoFishing/BehaviourTreeExtensions.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/Behaviours.cs" Link="GameTask/AutoFishing/Behaviours.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/Blackboard.cs" Link="GameTask/AutoFishing/Blackboard.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/FishingTimePolicy.cs" Link="GameTask/AutoFishing/FishingTimePolicy.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/RodInput.cs" Link="GameTask/AutoFishing/RodInput.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/RodNet.cs" Link="GameTask/AutoFishing/RodNet.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridScreenExtensions.cs" Link="GameTask/Model/GameUI/GridScreenExtensions.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/GetGridIcons/GridIconClassifier.cs" Link="GameTask/GetGridIcons/GridIconClassifier.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recognition/OpenCv/ImageDifferenceDetector.cs" Link="Core/Recognition/OpenCv/ImageDifferenceDetector.cs" />
     <Compile Include="../BetterGenshinImpact/Helpers/StringUtils.cs" Link="Helpers/StringUtils.cs" />
     <Compile Include="../BetterGenshinImpact/Helpers/RegexHelper.cs" Link="Helpers/RegexHelper.cs" />
+    <Compile Include="../BetterGenshinImpact/Helpers/CultureHelper.cs" Link="Helpers/CultureHelper.cs" />
+    <Compile Include="../BetterGenshinImpact/Helpers/Extensions/EnumExtensions.cs" Link="Helpers/Extensions/EnumExtensions.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoGeniusInvokation/Model/ElementalType.cs" Link="GameTask/AutoGeniusInvokation/Model/ElementalType.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Exceptions/HandledException.cs" Link="GameTask/Common/Exceptions/HandledException.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Exceptions/RetryException.cs" Link="GameTask/Common/Exceptions/RetryException.cs" />
@@ -281,6 +298,7 @@
   <!-- Model -->
   <ItemGroup>
     <Compile Include="../BetterGenshinImpact/Model/Singleton.cs" Link="Model/Singleton.cs" />
+    <Compile Include="../BetterGenshinImpact/Model/EnumItem.cs" Link="Model/EnumItem.cs" />
   </ItemGroup>
 
   <!-- ==================== Core Runtime Abstractions ==================== -->
