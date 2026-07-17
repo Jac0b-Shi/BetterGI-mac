@@ -32,12 +32,13 @@ public sealed class MacAutoSkipRuntimePlatform(
 
     private sealed class UnavailableAudioWaiter : IAutoSkipAudioWaiter
     {
-        public bool IsWaiting => false;
-        public void Cancel() { }
-        public void ReleaseDetector() { }
+        public bool IsWaiting => throw Unavailable();
+        public void Cancel() => throw Unavailable();
+        public void ReleaseDetector() => throw Unavailable();
         public bool Start(int maxWaitMilliseconds, int fallbackDelayMilliseconds, ILogger logger) =>
-            throw new CapabilityUnavailableException(
-                "AutoSkip process-audio VAD is not available on the macOS Core Host.");
-        public bool Update(ILogger logger) => true;
+            throw Unavailable();
+        public bool Update(ILogger logger) => throw Unavailable();
+        private static CapabilityUnavailableException Unavailable() => new(
+            "AutoSkip process-audio VAD is not available on the macOS Core Host.");
     }
 }

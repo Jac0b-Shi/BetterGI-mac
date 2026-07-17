@@ -29,8 +29,8 @@ public sealed class MacGameTaskManagerPlatform(
         IPaddleAutoPickTextRecognizer paddleRecognizer, IYapAutoPickTextRecognizer yapRecognizer) =>
         throw Unavailable($"trigger '{name}'");
 
-    public void ReloadAssets() { }
-    public void ClearOverlay() { }
+    public void ReloadAssets() => throw Unavailable("asset reload");
+    public void ClearOverlay() => BetterGenshinImpact.Core.Recognition.OverlayDrawPlatform.Current.ClearAll();
 
     private JObject Metrics() => callbacks.InvokeAsync(
             "window.metrics", null, sessionToken, cancellationToken).GetAwaiter().GetResult() as JObject
