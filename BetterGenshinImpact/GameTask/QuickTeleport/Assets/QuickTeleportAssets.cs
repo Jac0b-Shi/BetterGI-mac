@@ -1,6 +1,7 @@
 ﻿using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask.Model;
 using OpenCvSharp;
+using System;
 using System.Collections.Generic;
 
 namespace BetterGenshinImpact.GameTask.QuickTeleport.Assets;
@@ -20,7 +21,22 @@ public class QuickTeleportAssets : BaseAssets<QuickTeleportAssets>
     public RecognitionObject MapUndergroundSwitchButtonRo;
     public RecognitionObject MapUndergroundToGroundButtonRo;
 
+#if BGI_FULL_WINDOWS
     private QuickTeleportAssets()
+#else
+    public static void Initialize(ISystemInfo systemInfo)
+    {
+        ArgumentNullException.ThrowIfNull(systemInfo);
+        if (_instance is not null)
+            throw new InvalidOperationException("QuickTeleportAssets is already initialized. Call DestroyInstance() first.");
+        _instance = new QuickTeleportAssets(systemInfo);
+    }
+
+    public new static QuickTeleportAssets Instance => _instance
+        ?? throw new InvalidOperationException("QuickTeleportAssets.Initialize(...) must be called before Instance.");
+
+    private QuickTeleportAssets(ISystemInfo systemInfo) : base(systemInfo)
+#endif
     {
         MapChooseIconRoi = new Rect((int)(1270 * AssetScale),
             (int)(100 * AssetScale),

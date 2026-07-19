@@ -250,6 +250,7 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Script/Method.cs" Link="GameTask/AutoFight/Script/Method.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Script/ESkillCdTracker.cs" Link="GameTask/AutoFight/Script/ESkillCdTracker.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/AutoSkipRuntimePlatform.cs" Link="GameTask/AutoSkip/AutoSkipRuntimePlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/Assets/AutoSkipAssets.cs" Link="GameTask/AutoSkip/Assets/AutoSkipAssets.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ExitAndReloginPlatform.cs" Link="GameTask/Common/Job/ExitAndReloginPlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingInput.cs" Link="GameTask/AutoFishing/AutoFishingInput.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingRuntimePlatform.cs" Link="GameTask/AutoFishing/AutoFishingRuntimePlatform.cs" />

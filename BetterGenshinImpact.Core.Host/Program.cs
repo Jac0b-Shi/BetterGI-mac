@@ -77,6 +77,10 @@ server.AttachPlatformAssetInitializer(() =>
         gameTaskManagerPlatform.SystemInfo);
     BetterGenshinImpact.GameTask.AutoFishing.Assets.AutoFishingAssets.Initialize(
         gameTaskManagerPlatform.SystemInfo);
+    BetterGenshinImpact.GameTask.AutoSkip.Assets.AutoSkipAssets.Initialize(
+        gameTaskManagerPlatform.SystemInfo);
+    BetterGenshinImpact.GameTask.QuickTeleport.Assets.QuickTeleportAssets.Initialize(
+        gameTaskManagerPlatform.SystemInfo);
     AutoPickAssets.Initialize(
         gameTaskManagerPlatform.SystemInfo,
         new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(

@@ -1,6 +1,7 @@
 ﻿using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask.Model;
 using OpenCvSharp;
+using System;
 
 namespace BetterGenshinImpact.GameTask.AutoSkip.Assets;
 
@@ -38,7 +39,22 @@ public class AutoSkipAssets : BaseAssets<AutoSkipAssets>
     public RecognitionObject HangoutUnselectedRo;
     public RecognitionObject HangoutSkipRo;
 
+#if BGI_FULL_WINDOWS
     private AutoSkipAssets()
+#else
+    public static void Initialize(ISystemInfo systemInfo)
+    {
+        ArgumentNullException.ThrowIfNull(systemInfo);
+        if (_instance is not null)
+            throw new InvalidOperationException("AutoSkipAssets is already initialized. Call DestroyInstance() first.");
+        _instance = new AutoSkipAssets(systemInfo);
+    }
+
+    public new static AutoSkipAssets Instance => _instance
+        ?? throw new InvalidOperationException("AutoSkipAssets.Initialize(...) must be called before Instance.");
+
+    private AutoSkipAssets(ISystemInfo systemInfo) : base(systemInfo)
+#endif
     {
         StopAutoButtonRo = new RecognitionObject
         {

@@ -3,6 +3,7 @@ using BetterGenshinImpact.GameTask.AutoFight.Assets;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.GameTask.QuickTeleport.Assets;
 using BetterGenshinImpact.Helpers;
 using OpenCvSharp;
 using System.Globalization;
@@ -58,6 +59,23 @@ public static partial class Bv
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// 是否在大地图界面
+    /// </summary>
+    /// <param name="captureRa"></param>
+    /// <returns></returns>
+    public static bool IsInBigMapUi(ImageRegion captureRa)
+    {
+        using var scaleRa = captureRa.Find(QuickTeleportAssets.Instance.MapScaleButtonRo);
+        if (scaleRa.IsExist())
+        {
+            return true;
+        }
+
+        using var settingsRa = captureRa.Find(QuickTeleportAssets.Instance.MapSettingsButtonRo);
+        return settingsRa.IsExist();
     }
 
     public static bool IsInBlessingOfTheWelkinMoon(
