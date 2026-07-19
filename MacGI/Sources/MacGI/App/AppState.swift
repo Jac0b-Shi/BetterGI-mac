@@ -306,6 +306,7 @@ final class AppState: ObservableObject {
     private var schedulerExecutionTask: Task<Void, Never>?
     private var betterGICoreSupervisor: BetterGICoreProcessSupervisor?
     private var coreStartupTask: Task<Void, Never>?
+    private var coreStartupInFlight = false
 
     // MARK: Derived capture metrics (from lastCapturedFrame)
 
@@ -419,6 +420,9 @@ final class AppState: ObservableObject {
     }
 
     private func startBetterGICore() async {
+        guard !coreStartupInFlight else { return }
+        coreStartupInFlight = true
+        defer { coreStartupInFlight = false }
         do {
             let supervisor = try BetterGICoreProcessSupervisor(store: runtimeResourceStore)
             let adapter = BetterGICorePlatformAdapter(appState: self)
@@ -838,6 +842,10 @@ final class AppState: ObservableObject {
     func setSelectedWindow(_ window: WindowInfo) {
         selectedWindow = window
         addLog(.info, "Window selected: \(window.displayName)")
+        guard window.id != 0, window.isOnScreen, !window.isMock, coreStatus != .ok else { return }
+        coreStartupTask = Task { [weak self] in
+            await self?.startBetterGICore()
+        }
     }
 
     func selectWindow(byID id: CGWindowID) {

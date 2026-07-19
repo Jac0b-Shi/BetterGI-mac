@@ -15,6 +15,10 @@ actor BetterGICoreProcessSupervisor {
     private var client: BetterGICoreRPCClient?
     private var callbackClient: BetterGICorePlatformCallbackClient?
     private var callbackTask: Task<Void, Never>?
+    private var platformHandler: BetterGICorePlatformCallbackClient.Handler?
+    private var processGeneration = 0
+    private var controlledRestartCount = 0
+    private var intentionalStop = false
 
     init(store: BGIRuntimeResourceStore = .defaultStore(), executableURL: URL? = nil) throws {
         self.store = store
@@ -23,6 +27,8 @@ actor BetterGICoreProcessSupervisor {
 
     func start(platformHandler: @escaping BetterGICorePlatformCallbackClient.Handler) async throws -> BetterGICoreHandshake {
         if case .running(let handshake) = state { return handshake }
+        self.platformHandler = platformHandler
+        intentionalStop = false
         try store.createDirectorySkeleton()
         let runURL = store.rootURL.appendingPathComponent("Run", isDirectory: true)
         try FileManager.default.createDirectory(at: runURL, withIntermediateDirectories: true)
@@ -30,6 +36,11 @@ actor BetterGICoreProcessSupervisor {
         try? FileManager.default.removeItem(at: socketURL)
         let token = Self.makeSessionToken()
         let process = Process()
+        processGeneration += 1
+        let generation = processGeneration
+        process.terminationHandler = { [weak self] _ in
+            Task { await self?.processTerminated(generation: generation) }
+        }
         process.executableURL = executableURL
         process.arguments = [
             "--runtime-root", store.rootURL.path,
@@ -87,6 +98,7 @@ actor BetterGICoreProcessSupervisor {
             state = .running(handshake)
             return handshake
         } catch {
+            intentionalStop = true
             process.terminate()
             self.process = nil
             client?.disconnect()
@@ -96,6 +108,7 @@ actor BetterGICoreProcessSupervisor {
             callbackTask?.cancel()
             callbackTask = nil
             state = .failed(error.localizedDescription)
+            intentionalStop = false
             throw error
         }
     }
@@ -162,6 +175,7 @@ actor BetterGICoreProcessSupervisor {
     }
 
     func stop() {
+        intentionalStop = true
         if let client {
             _ = try? client.request(method: "core.shutdown")
             client.disconnect()
@@ -174,6 +188,28 @@ actor BetterGICoreProcessSupervisor {
         callbackClient = nil
         callbackTask = nil
         state = .stopped
+    }
+
+    private func processTerminated(generation: Int) async {
+        guard generation == processGeneration, !intentionalStop else { return }
+        guard case .running = state else { return }
+
+        client?.disconnect()
+        callbackClient?.stop()
+        callbackTask?.cancel()
+        process = nil
+        client = nil
+        callbackClient = nil
+        callbackTask = nil
+        state = .failed("BetterGI Core exited unexpectedly.")
+
+        guard controlledRestartCount == 0, let platformHandler else { return }
+        controlledRestartCount = 1
+        do {
+            _ = try await start(platformHandler: platformHandler)
+        } catch {
+            state = .failed("BetterGI Core controlled restart failed: \(error.localizedDescription)")
+        }
     }
 
     private func callbackFailed(_ error: Error) {
