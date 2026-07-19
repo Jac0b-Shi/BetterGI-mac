@@ -1,0 +1,53 @@
+name: macOS Core Extraction
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - mac-core-extraction
+  pull_request:
+    paths:
+      - "BetterGenshinImpact.Core/**"
+      - "BetterGenshinImpact.Core.Host/**"
+      - "BetterGenshinImpact.Platform.Abstractions/**"
+      - "BetterGenshinImpact/Core/**"
+      - "BetterGenshinImpact/GameTask/**"
+      - "Test/BetterGenshinImpact.Core.Verification/**"
+      - "Test/BetterGenshinImpact.Core.Host.Verification/**"
+      - "MacGI/**"
+      - "scripts/verify-core-extraction.sh"
+      - ".github/workflows/mac-core.yml"
+
+concurrency:
+  group: mac-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Require Apple Silicon
+        run: test "$(uname -m)" = arm64
+      - name: Static anti-fake gate
+        run: scripts/verify-core-extraction.sh
+      - name: Restore Core
+        run: dotnet restore BetterGenshinImpact.Core.sln
+      - name: Build Core
+        run: dotnet build BetterGenshinImpact.Core.sln -c Debug --no-restore
+      - name: Verify locked models and real OCR
+        run: >
+          dotnet run
+          --project Test/BetterGenshinImpact.Core.Verification/BetterGenshinImpact.Core.Verification.csproj
+          -c Debug --no-build
+      - name: Verify Core Host RPC and ClearScript
+        run: >
+          dotnet run
+          --project Test/BetterGenshinImpact.Core.Host.Verification/BetterGenshinImpact.Core.Host.Verification.csproj
+          -c Debug --no-build
+      - name: Test Swift UI and platform adapters
+        working-directory: MacGI
+        run: swift test

@@ -19,7 +19,6 @@ concurrency:
 jobs:
   full-build:
     runs-on: windows-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -30,7 +29,7 @@ jobs:
           dotnet restore
           BetterGenshinImpact/BetterGenshinImpact.csproj
           -p:Platform=x64
-      - name: Build (known-failing)
+      - name: Build
         run: >
           dotnet build
           BetterGenshinImpact/BetterGenshinImpact.csproj
