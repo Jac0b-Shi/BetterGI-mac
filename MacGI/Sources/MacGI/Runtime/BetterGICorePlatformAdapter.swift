@@ -105,6 +105,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             }
             let rect = window.captureRect
             let workingArea = NSScreen.main?.visibleFrame ?? rect
+            let isActive = NSWorkspace.shared.frontmostApplication?.processIdentifier == window.ownerPID
             return [
                 "width": Int(rect.width), "height": Int(rect.height),
                 "captureX": Int(rect.minX), "captureY": Int(rect.minY),
@@ -112,6 +113,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                 "dpiScale": Double(window.scaleFactor), "processId": Int(window.ownerPID),
                 "workingAreaX": Int(workingArea.minX), "workingAreaY": Int(workingArea.minY),
                 "workingAreaWidth": Int(workingArea.width), "workingAreaHeight": Int(workingArea.height),
+                "isActive": isActive,
             ]
         case "window.activate":
             guard let application = NSRunningApplication(processIdentifier: appState.selectedWindow.ownerPID),
