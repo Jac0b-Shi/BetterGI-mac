@@ -11,7 +11,6 @@ using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Model.Area;
 using OpenCvSharp;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 using System.Text.RegularExpressions;
 using BetterGenshinImpact.Core.Config;
@@ -22,7 +21,7 @@ namespace BetterGenshinImpact.GameTask.Common.Job;
 
 public partial class ChooseTalkOptionTask
 {
-    private readonly ILogger<ChooseTalkOptionTask> _logger = App.GetLogger<ChooseTalkOptionTask>();
+    private readonly ILogger<ChooseTalkOptionTask> _logger = AutoFight.AutoFightRuntimePlatform.Current.GetLogger<ChooseTalkOptionTask>();
 
     public string Name => "持续对话并选择目标选项";
 
@@ -53,7 +52,7 @@ public partial class ChooseTalkOptionTask
             var optionRegions = RecognizeOption(region, ct);
             if (optionRegions == null)
             {
-                TaskContext.Instance().PostMessageSimulator.KeyPressBackground(User32.VK.VK_SPACE);
+                AutoSkip.AutoSkipRuntimePlatform.Current.PressBackgroundKey(0x20);
                 await Delay(500, ct);
                 continue; // retry
             }
@@ -120,7 +119,7 @@ public partial class ChooseTalkOptionTask
                 }
                 else
                 {
-                    TaskContext.Instance().PostMessageSimulator.KeyPressBackground(User32.VK.VK_SPACE);
+                    AutoSkip.AutoSkipRuntimePlatform.Current.PressBackgroundKey(0x20);
                 }
             }
             else if (Bv.IsInMainUi(region))
@@ -146,7 +145,7 @@ public partial class ChooseTalkOptionTask
     /// <returns></returns>
     public List<Region>? RecognizeOption(ImageRegion region, CancellationToken ct)
     {
-        var assetScale = TaskContext.Instance().SystemInfo.AssetScale;
+        var assetScale = AutoFight.AutoFightRuntimePlatform.Current.SystemInfo.AssetScale;
 
         // 气泡识别
         var chatOptionResultList = region.FindMulti(AutoSkipAssets.Instance.OptionIconRo);

@@ -92,6 +92,9 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/SwitchPartyTask.cs" Link="GameTask/Common/Job/SwitchPartyTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/LinneaMiningTask.cs" Link="GameTask/Common/Job/LinneaMiningTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/GoToAdventurersGuildTask.cs" Link="GameTask/Common/Job/GoToAdventurersGuildTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ChooseTalkOptionTask.cs" Link="GameTask/Common/Job/ChooseTalkOptionTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimEncounterPointsRewardsTask.cs" Link="GameTask/Common/Job/ClaimEncounterPointsRewardsTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/OneKeyExpeditionTask.cs" Link="GameTask/AutoSkip/OneKeyExpeditionTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoWood/Assets/AutoWoodAssets.cs" Link="GameTask/AutoWood/Assets/AutoWoodAssets.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/GameLoading/Assets/GameLoadingAssets.cs" Link="GameTask/GameLoading/Assets/GameLoadingAssets.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoPathing/CameraRotateTask.cs" Link="GameTask/AutoPathing/CameraRotateTask.cs" />
@@ -242,6 +245,7 @@
     <Compile Include="../BetterGenshinImpact/GameTask/TaskProgress/*.cs" Link="GameTask/TaskProgress/%(Filename)%(Extension)" />
     <Compile Include="../BetterGenshinImpact/Core/Script/Utils/JsonMerger.cs" Link="Core/Script/Utils/JsonMerger.cs" />
     <Compile Include="../BetterGenshinImpact/Model/ConditionDefinition.cs" Link="Model/ConditionDefinition.cs" />
+    <Compile Include="../BetterGenshinImpact/Model/Condition.cs" Link="Model/Condition.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Config/CombatAvatar.cs" Link="GameTask/AutoFight/Config/CombatAvatar.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Config/DefaultAutoFightConfig.cs" Link="GameTask/AutoFight/Config/DefaultAutoFightConfig.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Assets/AutoFightAssets.cs" Link="GameTask/AutoFight/Assets/AutoFightAssets.cs" />

@@ -11,7 +11,6 @@ using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 using Microsoft.Extensions.Localization;
 using BetterGenshinImpact.Helpers;
@@ -33,8 +32,8 @@ public class GoToAdventurersGuildTask
 
     public GoToAdventurersGuildTask()
     {
-        IStringLocalizer<GoToAdventurersGuildTask> stringLocalizer = App.GetService<IStringLocalizer<GoToAdventurersGuildTask>>() ?? throw new NullReferenceException();
-        CultureInfo cultureInfo = new CultureInfo(TaskContext.Instance().Config.OtherConfig.GameCultureInfoName);
+        IStringLocalizer<GoToAdventurersGuildTask> stringLocalizer = BetterGenshinImpact.GameTask.Model.TaskParameterPlatform.Current.GetStringLocalizer<GoToAdventurersGuildTask>();
+        CultureInfo cultureInfo = new CultureInfo(BetterGenshinImpact.GameTask.Model.TaskParameterPlatform.Current.GameCultureInfoName);
         this.dailyLocalizedString = stringLocalizer.WithCultureGet(cultureInfo, "每日");
         this.catherineLocalizedString = stringLocalizer.WithCultureGet(cultureInfo, "凯瑟琳");
         this.expeditionLocalizedString = stringLocalizer.WithCultureGet(cultureInfo, "探索");
@@ -104,7 +103,7 @@ public class GoToAdventurersGuildTask
             await _chooseTalkOptionTask.SelectLastOptionUntilEnd(ct, null, 3); // 点几下
             await Bv.WaitUntilFound(ElementAssets.Instance.PaimonMenuRo, ct);
             await Delay(500, ct);
-            TaskContext.Instance().PostMessageSimulator.KeyPress(User32.VK.VK_ESCAPE);
+            PressEscape();
             await new ReturnMainUiTask().Start(ct);
 
             // 结束后重新打开
@@ -180,7 +179,7 @@ public class GoToAdventurersGuildTask
             using var ra = CaptureToRectArea();
             if (!Bv.IsInTalkUi(ra))
             {
-                Simulation.SendInput.Keyboard.KeyPress(AutoPickAssets.Instance.PickVk);
+                BvSimpleOperationPlatform.Current.PressPickKey();
                 await Delay(500, ct);
 
                 if (i == retryTalkTimes - 1)

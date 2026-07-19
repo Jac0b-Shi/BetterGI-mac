@@ -106,6 +106,8 @@ public class TaskControl
     public static void SimulateAction(GIActions action, KeyType keyType = KeyType.KeyPress) =>
         TaskControlPlatform.Current.SimulateAction(action, keyType);
 
+    public static void ReleaseAllKey() => TaskControlPlatform.Current.ReleasePressedInputs();
+
     public static bool IsActionKeyDown(GIActions action) =>
         TaskControlPlatform.Current.IsActionKeyDown(action);
 
