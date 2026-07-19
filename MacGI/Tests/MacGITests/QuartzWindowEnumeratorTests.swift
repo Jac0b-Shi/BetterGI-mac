@@ -73,7 +73,7 @@ struct QuartzWindowEnumeratorTests {
             layer: 0,
             isOnScreen: true,
             scaleFactor: 1,
-            isMock: false
+            isSynthetic: false
         )
     }
 }

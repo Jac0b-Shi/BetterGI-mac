@@ -53,6 +53,10 @@ if rg -n 'BGIToggleMock|exportLogsMock|saveDebugFrameMock|Mock debug frame|Expor
   fail "production Swift source contains a deceptive mock action"
 fi
 
+if rg -n -i '\b(mock|fake)\b' MacGI/Sources/MacGI; then
+  fail "production Swift source contains mock or fake platform state"
+fi
+
 if rg -n 'TemplateMatchingRecognitionEngine|PaddleOCRRecognitionEngine|BGIYOLOOnnxRuntime|BGIMiniMapLocalizationService|BGIBigMapInteractionService|BGIAuto[A-Za-z]+Service|BGIScriptRepositoryUpdater|TaskTriggerLoopController' \
   MacGI/Sources/MacGI; then
   fail "historical Swift BetterGI business translation still exists in the App source tree"

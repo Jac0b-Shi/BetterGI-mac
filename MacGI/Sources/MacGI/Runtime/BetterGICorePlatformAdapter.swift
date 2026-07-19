@@ -101,7 +101,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
         switch method {
         case "window.metrics":
             let window = appState.selectedWindow
-            guard window.id != 0, window.isOnScreen, !window.isMock else {
+            guard window.id != 0, window.isOnScreen, !window.isSynthetic else {
                 throw BetterGICorePlatformAdapterError.invalidParameters("No real on-screen game window is selected.")
             }
             let rect = window.captureRect

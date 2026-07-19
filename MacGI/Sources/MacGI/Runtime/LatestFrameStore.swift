@@ -24,7 +24,7 @@ enum LatestFrameStoreError: LocalizedError, Equatable {
 
 /// Thread-safe store that holds the most recent captured game frame.
 ///
-/// Fed continuously by `ScreenCaptureKitFrameProvider` (or the mock provider)
+/// Fed continuously by the active platform capture provider.
 /// and read synchronously from any thread, including BetterGI Core platform callbacks.
 /// without blocking on `@MainActor` or a semaphore.
 ///

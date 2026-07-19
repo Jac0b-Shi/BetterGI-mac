@@ -48,15 +48,15 @@ struct WindowInfo: Identifiable, Equatable, Hashable, Sendable {
     /// Backing scale factor (1.0 = non-Retina, 2.0 = Retina, 3.0 = Retina 3×).
     let scaleFactor: CGFloat
 
-    /// `true` when this is a mock window (no real backing window).
-    /// Safety gate blocks real input into mock windows.
-    let isMock: Bool
+    /// `true` when this value has no real backing window.
+    /// The safety gate blocks capture and input for synthetic sentinels.
+    let isSynthetic: Bool
 
     // MARK: Init
 
     init(id: CGWindowID, ownerPID: pid_t, ownerName: String,
          title: String, frame: CGRect, layer: Int,
-         isOnScreen: Bool, scaleFactor: CGFloat, isMock: Bool = false) {
+         isOnScreen: Bool, scaleFactor: CGFloat, isSynthetic: Bool = false) {
         self.id = id
         self.ownerPID = ownerPID
         self.ownerName = ownerName
@@ -65,7 +65,7 @@ struct WindowInfo: Identifiable, Equatable, Hashable, Sendable {
         self.layer = layer
         self.isOnScreen = isOnScreen
         self.scaleFactor = scaleFactor
-        self.isMock = isMock
+        self.isSynthetic = isSynthetic
     }
 
     // MARK: Derived
@@ -127,12 +127,12 @@ extension WindowInfo {
         id: 0, ownerPID: 0, ownerName: "None",
         title: "No game window", frame: .zero,
         layer: 0, isOnScreen: false, scaleFactor: 1.0,
-        isMock: true
+        isSynthetic: true
     )
 
-    /// Mock window for UI development. `id: .max` and `isMock: true`
-    /// prevent the safety gate from dispatching real input.
-    static func mock(title: String = "YAAGL - Genshin Impact") -> WindowInfo {
+    /// Sentinel used while no real game window is available. `id: .max` and
+    /// `isSynthetic: true` prevent capture and input dispatch.
+    static func unavailable(title: String = "No game window selected") -> WindowInfo {
         WindowInfo(
             id: .max,
             ownerPID: 99999,
@@ -142,7 +142,7 @@ extension WindowInfo {
             layer: 0,
             isOnScreen: true,
             scaleFactor: 2.0,
-            isMock: true
+            isSynthetic: true
         )
     }
 }

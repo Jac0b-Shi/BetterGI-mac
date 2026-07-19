@@ -4,15 +4,15 @@ import Foundation
 @preconcurrency import ScreenCaptureKit
 
 enum ScreenCaptureKitFrameError: LocalizedError {
-    case mockWindow
+    case syntheticWindow
     case windowNotFound(CGWindowID)
     case emptyImage(CGWindowID)
     case allBackendsFailed(primary: String, fallback: String)
 
     var errorDescription: String? {
         switch self {
-        case .mockWindow:
-            "ScreenCaptureKit cannot capture a mock window"
+        case .syntheticWindow:
+            "ScreenCaptureKit cannot capture a synthetic window sentinel"
         case let .windowNotFound(id):
             "ScreenCaptureKit did not expose window id \(id)"
         case let .emptyImage(id):
@@ -34,8 +34,8 @@ final class ScreenCaptureKitFrameProvider {
     private let quartzFallback = QuartzWindowImageFrameProvider()
 
     func captureWindow(_ window: WindowInfo) async throws -> CaptureImageFrame {
-        guard !window.isMock else {
-            throw ScreenCaptureKitFrameError.mockWindow
+        guard !window.isSynthetic else {
+            throw ScreenCaptureKitFrameError.syntheticWindow
         }
 
         do {

@@ -21,7 +21,7 @@ enum InputMouseButton: Equatable, Sendable {
 
 // MARK: - InputAction
 
-/// Typed input action — replaces the `String` action name in mock InputService.
+/// Typed platform input action sent by the C# Core callback.
 enum InputAction: Equatable, Sendable {
 
     /// Key press (down + up).

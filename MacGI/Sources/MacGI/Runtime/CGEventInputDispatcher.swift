@@ -5,7 +5,7 @@ import Foundation
 
 enum CGEventInputDispatchError: LocalizedError, Equatable {
     case accessibilityPermissionMissing
-    case mockWindow
+    case syntheticWindow
     case invalidClickTarget
     case unsupportedKey(KeyCode)
     case unsupportedMouseButton(InputMouseButton)
@@ -15,8 +15,8 @@ enum CGEventInputDispatchError: LocalizedError, Equatable {
         switch self {
         case .accessibilityPermissionMissing:
             "Accessibility permission is required before posting CGEvent input"
-        case .mockWindow:
-            "CGEvent input cannot target a mock window"
+        case .syntheticWindow:
+            "CGEvent input cannot target a synthetic window sentinel"
         case .invalidClickTarget:
             "Unable to resolve a valid click target"
         case let .unsupportedKey(key):
@@ -44,8 +44,8 @@ final class CGEventInputDispatcher {
     private let clickDelayUsec: useconds_t = 50_000
 
     func perform(_ action: InputAction, targetWindow: WindowInfo) throws -> CGEventDispatchReport {
-        guard !targetWindow.isMock else {
-            throw CGEventInputDispatchError.mockWindow
+        guard !targetWindow.isSynthetic else {
+            throw CGEventInputDispatchError.syntheticWindow
         }
         guard AXIsProcessTrusted() else {
             throw CGEventInputDispatchError.accessibilityPermissionMissing

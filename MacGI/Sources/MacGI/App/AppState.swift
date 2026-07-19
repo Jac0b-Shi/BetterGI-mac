@@ -262,7 +262,7 @@ final class AppState: ObservableObject {
     // MARK: Window & capture (typed — not strings)
 
     /// Currently selected game window.
-    @Published var selectedWindow: WindowInfo = .mock()
+    @Published var selectedWindow: WindowInfo = .unavailable()
 
     /// Available game windows from the tracker.
     @Published var availableWindows: [WindowInfo] = []
@@ -664,7 +664,7 @@ final class AppState: ObservableObject {
         let windows = QuartzWindowEnumerator.enumerateApplicationWindows()
         if windows.isEmpty {
             availableWindows = []
-            selectedWindow = .mock(title: "No game window selected")
+            selectedWindow = .unavailable(title: "No game window selected")
             gameWindowStatus = .missing
             addLog(.warn, "Quartz window list contains no selectable game window")
             return
@@ -686,7 +686,7 @@ final class AppState: ObservableObject {
     func setSelectedWindow(_ window: WindowInfo) {
         selectedWindow = window
         addLog(.info, "Window selected: \(window.displayName)")
-        guard window.id != 0, window.isOnScreen, !window.isMock, coreStatus != .ok else { return }
+        guard window.id != 0, window.isOnScreen, !window.isSynthetic, coreStatus != .ok else { return }
         coreStartupTask = Task { [weak self] in
             await self?.startBetterGICore()
         }
@@ -705,7 +705,7 @@ final class AppState: ObservableObject {
     }
 
     func captureSelectedWindowOnce() {
-        if selectedWindow.isMock {
+        if selectedWindow.isSynthetic {
             captureStatus = .error
             addLog(.error, "Capture rejected: no real on-screen game window is selected")
             return
@@ -739,7 +739,7 @@ final class AppState: ObservableObject {
         addLog(.debug, "Input action: \(name) [\(prefix)]")
     }
 
-    /// Gate-checked dispatch — single entry point for real/mock input.
+    /// Gate-checked dispatch — single entry point for platform input.
     /// Callers should NOT check the gate a second time.
     @discardableResult
     func dispatchInput(_ action: InputAction, source: ActionSource = .manual) -> InputSafetyGate.GateResult {
@@ -797,7 +797,7 @@ final class AppState: ObservableObject {
 
     func captureFrameForBetterGICore() async throws -> CaptureImageFrame {
         let targetWindow = selectedWindow
-        guard targetWindow.id != 0, targetWindow.isOnScreen, !targetWindow.isMock else {
+        guard targetWindow.id != 0, targetWindow.isOnScreen, !targetWindow.isSynthetic else {
             throw BetterGICoreRPCError.protocolViolation("No real on-screen game window is selected for Core capture.")
         }
         let imageFrame = try await frameProvider.captureWindow(targetWindow)
@@ -821,7 +821,7 @@ final class AppState: ObservableObject {
         inputStatus = .missing
         coreStatus = .error
         debugConfidence = 0.86
-        selectedWindow = .mock()
+        selectedWindow = .unavailable()
         availableWindows = []
         lastCapturedFrame = nil
         lastCaptureImageFrame = nil

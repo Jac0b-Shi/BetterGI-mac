@@ -21,7 +21,7 @@ enum ActionSource: Equatable {
 ///           1. emergencyStop?  ───→  blocked
 ///           2. !isAppRunning?  ───→  blocked
 ///           3. window invalid? ───→  blocked
-///           4. window.isMock?  ───→  blocked
+///           4. window.isSynthetic?  ───→  blocked
 ///           5. dryRun?         ───→  dryRun (no CGEvent, skips runtime guards)
 ///           6. !realInput?     ───→  blocked
 ///           7. runtimeTrigger && !allowRuntimeRealInput? → blocked
@@ -136,10 +136,10 @@ final class InputSafetyGate: ObservableObject {
             return .blocked(reason: "Target window invalid or off-screen (id=\(window.id))")
         }
 
-        // 4. Mock window — never dispatch real input into a mock
-        if window.isMock {
+        // 4. Synthetic sentinel — never dispatch real input without a backing window
+        if window.isSynthetic {
             blockedActionCount += 1
-            return .blocked(reason: "Mock window cannot receive real input")
+            return .blocked(reason: "Synthetic window sentinel cannot receive real input")
         }
 
         // 5. Dry-run — log but no dispatch, skip runtime guards
@@ -179,7 +179,7 @@ final class InputSafetyGate: ObservableObject {
         return .allow
     }
 
-    /// Record a dry-run hit from external dispatch (used when `check()` is bypassed in mock).
+    /// Record a dry-run hit from external dispatch when `check()` is deliberately bypassed.
     func recordDryRun() {
         dryRunCount += 1
     }

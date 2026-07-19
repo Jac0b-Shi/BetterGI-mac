@@ -72,7 +72,7 @@ private extension WindowInfo {
             layer: layer,
             isOnScreen: isOnScreen,
             scaleFactor: backingScaleFactor(for: frame),
-            isMock: false
+            isSynthetic: false
         )
     }
 

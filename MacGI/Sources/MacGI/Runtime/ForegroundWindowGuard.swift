@@ -15,7 +15,7 @@ struct ForegroundWindowGuard {
 
     /// Check whether `window` belongs to the currently frontmost application.
     static func isTargetFrontmost(_ window: WindowInfo) -> Bool {
-        guard !window.isMock else { return false }
+        guard !window.isSynthetic else { return false }
         guard let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier else {
             return false
         }

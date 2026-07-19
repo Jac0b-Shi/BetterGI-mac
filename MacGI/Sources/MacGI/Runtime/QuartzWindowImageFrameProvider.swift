@@ -4,14 +4,14 @@ import Darwin
 import Foundation
 
 enum QuartzWindowImageFrameError: LocalizedError {
-    case mockWindow
+    case syntheticWindow
     case unavailableOnCurrentOS
     case emptyImage(CGWindowID)
 
     var errorDescription: String? {
         switch self {
-        case .mockWindow:
-            "Quartz window capture cannot capture a mock window"
+        case .syntheticWindow:
+            "Quartz window capture cannot capture a synthetic window sentinel"
         case .unavailableOnCurrentOS:
             "Quartz window capture is unavailable on this macOS version"
         case let .emptyImage(id):
@@ -30,8 +30,8 @@ final class QuartzWindowImageFrameProvider {
     private var frameIndex: UInt64 = 0
 
     func captureWindow(_ window: WindowInfo) throws -> CaptureImageFrame {
-        guard !window.isMock else {
-            throw QuartzWindowImageFrameError.mockWindow
+        guard !window.isSynthetic else {
+            throw QuartzWindowImageFrameError.syntheticWindow
         }
 
         let options: CGWindowImageOption = [.boundsIgnoreFraming, .nominalResolution]
