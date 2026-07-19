@@ -27,6 +27,15 @@ struct InputPage: View {
                             warning: nil
                         )
                         SafetyToggle(
+                            title: "Core Runtime Input",
+                            detail: "允许 BetterGI C# Core 的触发器与脚本发送输入；仍受 Dry-Run、真实输入、前台窗口及紧急停止约束。",
+                            isOn: Binding(
+                                get: { appState.allowRuntimeRealInput },
+                                set: { appState.allowRuntimeRealInput = $0 }
+                            ),
+                            warning: appState.allowRuntimeRealInput ? "⚠️ Core 自动化已获输入授权" : nil
+                        )
+                        SafetyToggle(
                             title: "Emergency Stop",
                             detail: "立即停止所有输入和自动化循环。",
                             isOn: Binding(
