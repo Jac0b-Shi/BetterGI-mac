@@ -128,20 +128,6 @@ actor BetterGICoreProcessSupervisor {
         return try client.listScriptGroups()
     }
 
-    func getScriptGroup(name: String) throws -> BetterGIScriptGroupDocument {
-        guard case .running = state, let client else {
-            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
-        }
-        return try client.getScriptGroup(name: name)
-    }
-
-    func saveScriptGroup(name: String, documentData: Data) throws -> BetterGIScriptGroupDocument {
-        guard case .running = state, let client else {
-            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
-        }
-        return try client.saveScriptGroup(name: name, documentData: documentData)
-    }
-
     func listScriptProjects() throws -> [BetterGIScriptProjectSummary] {
         guard case .running = state, let client else {
             throw BetterGICoreRPCError.socket("BetterGI Core is not running.")

@@ -24,15 +24,24 @@ struct BetterGICoreHandshake: Equatable, Sendable {
     let capabilities: [String]
 }
 
-struct BetterGIScriptGroupSummary: Equatable, Sendable {
+struct BetterGIScriptGroupProjectSummary: Equatable, Sendable, Identifiable {
+    let index: Int
     let name: String
-    let path: String
+    let type: String
+    let status: String
+    let schedule: String
+    let runNum: Int
+
+    var id: String { "\(index)|\(type)|\(name)" }
 }
 
-struct BetterGIScriptGroupDocument: Sendable {
+struct BetterGIScriptGroupSummary: Equatable, Sendable, Identifiable {
     let name: String
     let path: String
-    let documentData: Data
+    let index: Int
+    let projects: [BetterGIScriptGroupProjectSummary]
+
+    var id: String { "\(index)|\(name)" }
 }
 
 struct BetterGIScriptProjectSummary: Equatable, Sendable {
@@ -152,49 +161,32 @@ final class BetterGICoreRPCClient: @unchecked Sendable {
             throw BetterGICoreRPCError.protocolViolation("Invalid script-group catalog result.")
         }
         return try items.map { item in
-            guard let name = item["name"] as? String, let path = item["path"] as? String else {
+            guard let name = item["name"] as? String,
+                  let path = item["path"] as? String,
+                  let index = item["index"] as? Int,
+                  let projectItems = item["projects"] as? [[String: Any]]
+            else {
                 throw BetterGICoreRPCError.protocolViolation("Invalid script-group summary.")
             }
-            return BetterGIScriptGroupSummary(name: name, path: path)
+            let projects = try projectItems.map { project -> BetterGIScriptGroupProjectSummary in
+                guard let projectIndex = project["index"] as? Int,
+                      let projectName = project["name"] as? String,
+                      let type = project["type"] as? String,
+                      let status = project["status"] as? String,
+                      let schedule = project["schedule"] as? String,
+                      let runNum = project["runNum"] as? Int
+                else { throw BetterGICoreRPCError.protocolViolation("Invalid script-group project summary.") }
+                return BetterGIScriptGroupProjectSummary(
+                    index: projectIndex,
+                    name: projectName,
+                    type: type,
+                    status: status,
+                    schedule: schedule,
+                    runNum: runNum
+                )
+            }
+            return BetterGIScriptGroupSummary(name: name, path: path, index: index, projects: projects)
         }
-    }
-
-    func getScriptGroup(name: String) throws -> BetterGIScriptGroupDocument {
-        guard let item = try request(
-            method: "catalog.getScriptGroup",
-            parameters: ["name": name]
-        ) as? [String: Any],
-        let responseName = item["name"] as? String,
-        let path = item["path"] as? String,
-        let document = item["document"] as? [String: Any],
-        JSONSerialization.isValidJSONObject(document)
-        else { throw BetterGICoreRPCError.protocolViolation("Invalid script-group document.") }
-        return BetterGIScriptGroupDocument(
-            name: responseName,
-            path: path,
-            documentData: try JSONSerialization.data(withJSONObject: document, options: [.sortedKeys])
-        )
-    }
-
-    func saveScriptGroup(name: String, documentData: Data) throws -> BetterGIScriptGroupDocument {
-        let document = try JSONSerialization.jsonObject(with: documentData)
-        guard let object = document as? [String: Any], JSONSerialization.isValidJSONObject(object) else {
-            throw BetterGICoreRPCError.protocolViolation("Script-group document must be a JSON object.")
-        }
-        guard let item = try request(
-            method: "catalog.saveScriptGroup",
-            parameters: ["name": name, "document": object]
-        ) as? [String: Any],
-        let responseName = item["name"] as? String,
-        let path = item["path"] as? String,
-        let savedDocument = item["document"] as? [String: Any],
-        JSONSerialization.isValidJSONObject(savedDocument)
-        else { throw BetterGICoreRPCError.protocolViolation("Invalid catalog.saveScriptGroup result.") }
-        return BetterGIScriptGroupDocument(
-            name: responseName,
-            path: path,
-            documentData: try JSONSerialization.data(withJSONObject: savedDocument, options: [.sortedKeys])
-        )
     }
 
     func listScriptProjects() throws -> [BetterGIScriptProjectSummary] {

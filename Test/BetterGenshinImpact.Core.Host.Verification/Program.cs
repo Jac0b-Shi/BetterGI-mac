@@ -764,9 +764,13 @@ try
     var catalog = await ExchangeAsync(connection, "2", "catalog.listScriptGroups", sessionToken, null, cancellation.Token);
     var documents = JArray.FromObject(catalog.Result!);
     Require(documents.Count == 1, "catalog did not return the fixture group");
-    Require(documents[0]?["document"]?["projects"]?[0]?["runNum"]?.Value<int>() == 2,
-        "catalog did not pass the document through the upstream ScriptGroup model");
-    var savedDocument = (JObject)documents[0]!["document"]!.DeepClone();
+    Require(documents[0]?["projects"]?[0]?["runNum"]?.Value<int>() == 2 &&
+            documents[0]?["projects"]?[0]?["status"]?.Value<string>() == "Enabled",
+        "catalog did not expose the Core-owned ScriptGroup UI summary");
+    var initialDocument = await ExchangeAsync(connection, "catalog-initial", "catalog.getScriptGroup", sessionToken,
+        JObject.FromObject(new { name = "狗粮+锄地" }), cancellation.Token);
+    Require(initialDocument.Error is null, initialDocument.Error?.Message ?? "catalog.getScriptGroup failed");
+    var savedDocument = (JObject)JObject.FromObject(initialDocument.Result!)["document"]!.DeepClone();
     savedDocument["projects"]![0]!["runNum"] = 3;
     var saved = await ExchangeAsync(connection, "catalog-save", "catalog.saveScriptGroup", sessionToken,
         JObject.FromObject(new { name = "狗粮+锄地", document = savedDocument }), cancellation.Token);

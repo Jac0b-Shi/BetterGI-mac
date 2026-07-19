@@ -259,7 +259,7 @@ final class AppState: ObservableObject {
     }
     @Published var dispatcherIntervalMs = 50
     @Published var allowRuntimeRealInput = false
-    @Published var schedulerGroups: [BGIScriptGroup] = []
+    @Published var schedulerGroups: [BetterGIScriptGroupSummary] = []
     @Published var schedulerCatalogIssues: [BGIScriptRepositoryCatalogIssue] = []
     @Published var schedulerCatalogStatus = "Core unavailable"
     @Published var selectedSchedulerGroupName = ""
@@ -430,15 +430,7 @@ final class AppState: ObservableObject {
             return
         }
         do {
-            let summaries = try await supervisor.listScriptGroups()
-            var groups: [BGIScriptGroup] = []
-            groups.reserveCapacity(summaries.count)
-            let decoder = JSONDecoder()
-            for summary in summaries {
-                let document = try await supervisor.getScriptGroup(name: summary.name)
-                groups.append(try decoder.decode(BGIScriptGroup.self, from: document.documentData))
-            }
-            schedulerGroups = groups.sorted {
+            schedulerGroups = try await supervisor.listScriptGroups().sorted {
                 if $0.index != $1.index { return $0.index < $1.index }
                 return $0.name.localizedStandardCompare($1.name) == .orderedAscending
             }
@@ -647,7 +639,7 @@ final class AppState: ObservableObject {
         }
     }
 
-    func schedulerGroupsForCurrentSelection() -> [BGIScriptGroup] {
+    func schedulerGroupsForCurrentSelection() -> [BetterGIScriptGroupSummary] {
         let selectedGroups = schedulerGroups.filter { $0.name == selectedSchedulerGroupName }
         return selectedGroups.isEmpty ? schedulerGroups : selectedGroups
     }
@@ -669,77 +661,6 @@ final class AppState: ObservableObject {
             } catch {
                 self?.schedulerExecutionStatus = "Stop failed"
                 self?.addLog(.error, "Core scheduler stop failed: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    // MARK: - Scheduler UI Actions
-
-    func toggleSchedulerProject(at index: Int) {
-        guard let groupIdx = schedulerGroups.firstIndex(where: { $0.name == selectedSchedulerGroupName }) ?? 0 as Int?,
-              index < schedulerGroups[groupIdx].projects.count else { return }
-        let current = schedulerGroups[groupIdx].projects[index].status
-        schedulerGroups[groupIdx].projects[index].status = current == .enabled ? .disabled : .enabled
-    }
-
-    func addSchedulerProject(type: String) {
-        guard let idx = schedulerGroups.firstIndex(where: { $0.name == selectedSchedulerGroupName }) ?? 0 as Int? else { return }
-        let count = schedulerGroups[idx].projects.count
-        let projectType = BGIScriptGroupProjectType(rawValue: type) ?? .javascript
-        schedulerGroups[idx].projects.append(BGIScriptGroupProject(
-            index: count + 1,
-            name: "新项目",
-            folderName: "",
-            type: projectType,
-            status: .enabled
-        ))
-    }
-
-    func removeSchedulerProject(at index: Int) {
-        guard let idx = schedulerGroups.firstIndex(where: { $0.name == selectedSchedulerGroupName }) ?? 0 as Int?,
-              index < schedulerGroups[idx].projects.count else { return }
-        schedulerGroups[idx].projects.remove(at: index)
-    }
-
-    func setNextFlag(at index: Int) {
-        guard let idx = schedulerGroups.firstIndex(where: { $0.name == selectedSchedulerGroupName }) ?? 0 as Int?,
-              index < schedulerGroups[idx].projects.count else { return }
-        schedulerGroups[idx].projects[index].nextFlag = true
-        currentSchedulerProjectID = "\(schedulerGroups[idx].projects[index].index)"
-    }
-
-    func clearSchedulerProjects() {
-        guard let idx = schedulerGroups.firstIndex(where: { $0.name == selectedSchedulerGroupName }) ?? 0 as Int? else { return }
-        schedulerGroups[idx].projects.removeAll()
-        persistCurrentSchedulerGroup()
-    }
-
-    func reverseSchedulerProjects() {
-        guard let idx = schedulerGroups.firstIndex(where: { $0.name == selectedSchedulerGroupName }) ?? 0 as Int? else { return }
-        schedulerGroups[idx].projects.reverse()
-        for i in 0..<schedulerGroups[idx].projects.count {
-            schedulerGroups[idx].projects[i].index = i + 1
-        }
-        persistCurrentSchedulerGroup()
-    }
-
-    /// Persist the currently selected scheduler group back to User/ScriptGroup/{name}.json
-    private func persistCurrentSchedulerGroup() {
-        guard let group = schedulerGroups.first(where: { $0.name == selectedSchedulerGroupName }) else { return }
-        guard let supervisor = betterGICoreSupervisor else {
-            addLog(.error, "Cannot save scheduler group: BetterGI Core is unavailable.")
-            return
-        }
-        Task { [weak self] in
-            do {
-                let encoder = JSONEncoder()
-                encoder.outputFormatting = [.sortedKeys]
-                let data = try encoder.encode(group)
-                _ = try await supervisor.saveScriptGroup(name: group.name, documentData: data)
-                self?.addLog(.info, "Core saved scheduler group: \(group.name)")
-                await self?.loadSchedulerGroupsFromCore()
-            } catch {
-                self?.addLog(.error, "Core failed to save scheduler group \(group.name): \(error.localizedDescription)")
             }
         }
     }

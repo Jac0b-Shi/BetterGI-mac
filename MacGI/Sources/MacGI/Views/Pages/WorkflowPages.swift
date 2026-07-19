@@ -351,9 +351,6 @@ struct OneDragonPage: View {
 
 struct SchedulerPage: View {
     @EnvironmentObject private var appState: AppState
-    @State private var showGroupSettings = false
-    @State private var showProjectEditor = false
-    @State private var editingProjectIndex: Int?
 
     var body: some View {
         let selectedGroup = appState.schedulerGroups.first { $0.name == appState.selectedSchedulerGroupName }
@@ -364,8 +361,7 @@ struct SchedulerPage: View {
             commands: [
                 BGICommand(title: "运行", symbol: "play.fill", action: { appState.runSchedulerGroups() }),
                 BGICommand(title: "刷新", symbol: "arrow.clockwise", action: { appState.reloadSchedulerGroupsFromCore() }),
-                BGICommand(title: "停止", symbol: "stop.fill", action: { appState.cancelSchedulerGroups() }),
-                BGICommand(title: "设置", symbol: "gearshape", action: { showGroupSettings = true })
+                BGICommand(title: "停止", symbol: "stop.fill", action: { appState.cancelSchedulerGroups() })
             ]
         ) {
             BGIGroupSidebar(
@@ -378,32 +374,19 @@ struct SchedulerPage: View {
             VStack(alignment: .leading, spacing: 14) {
                 BGISectionCard("配置组 - \(selectedGroup?.name ?? "未选择")", subtitle: "数据由 BetterGI C# Core 提供；在下方列表中右键可添加配置，拖拽可调整执行顺序。", symbolName: "cpu") {
                     VStack(spacing: 0) {
-                        ForEach(Array((selectedGroup?.projects ?? []).enumerated()), id: \.element.id) { idx, project in
+                        ForEach(selectedGroup?.projects ?? []) { project in
                             HStack {
                                 Text("\(project.index)")
                                     .frame(width: 30, alignment: .leading)
                                 Text(project.name)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                Text(project.type.rawValue == "Javascript" ? "JS脚本" : project.type.rawValue)
+                                Text(project.type == "Javascript" ? "JS脚本" : project.type)
                                     .frame(width: 80, alignment: .center)
-                                Toggle("", isOn: Binding(
-                                    get: { project.status == .enabled },
-                                    set: { _ in appState.toggleSchedulerProject(at: idx) }
-                                ))
+                                Toggle("", isOn: .constant(project.status == "Enabled"))
                                 .frame(width: 60)
+                                .disabled(true)
                             }
                             .padding(.vertical, 4)
-                            .contextMenu {
-                                Button("编辑设置") { editingProjectIndex = idx; showProjectEditor = true }
-                                Button("添加JS脚本") { appState.addSchedulerProject(type: "Javascript") }
-                                Button("添加地图追踪任务") { appState.addSchedulerProject(type: "Pathing") }
-                                Button("添加键鼠脚本") { appState.addSchedulerProject(type: "KeyMouse") }
-                                Button("添加Shell") { appState.addSchedulerProject(type: "Shell") }
-                                Divider()
-                                Button("下一次任务从此处执行") { appState.setNextFlag(at: idx) }
-                                Divider()
-                                Button("删除", role: .destructive) { appState.removeSchedulerProject(at: idx) }
-                            }
                             Divider()
                         }
                     }
@@ -414,23 +397,11 @@ struct SchedulerPage: View {
                         Button("连续执行") { appState.runSchedulerGroups() }
                         Button("继续执行") { appState.runSchedulerGroups() }
                         Menu("更多功能") {
-                            Button("清空") { appState.clearSchedulerProjects() }
-                            Button("日志分析") {}
-                            Button("打开脚本仓库") {}
                             Button("从 Core 更新") { appState.reloadSchedulerGroupsFromCore() }
-                            Button("任务倒序排列") { appState.reverseSchedulerProjects() }
                         }
                         Spacer()
                     }
                 }
-            }
-        }
-        .sheet(isPresented: $showGroupSettings) {
-            ScriptGroupConfigSheet(appState: appState)
-        }
-        .sheet(isPresented: $showProjectEditor) {
-            if let idx = editingProjectIndex {
-                ScriptGroupProjectEditorSheet(appState: appState, projectIndex: idx)
             }
         }
     }
@@ -625,7 +596,7 @@ struct JSScriptPage: View {
                 BGIDataTable(
                     headers: ["目录", "名称", "版本"],
                     rows: appState.schedulerGroups.flatMap { group in
-                        group.projects.map { [group.name, $0.name, $0.type.rawValue] }
+                        group.projects.map { [group.name, $0.name, $0.type] }
                     }
                 )
             }

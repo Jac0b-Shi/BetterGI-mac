@@ -29,6 +29,20 @@ public sealed record ScriptGroupDocument(
     [property: JsonProperty("path")] string Path,
     [property: JsonProperty("document")] JObject Document);
 
+public sealed record ScriptGroupSummary(
+    [property: JsonProperty("name")] string Name,
+    [property: JsonProperty("path")] string Path,
+    [property: JsonProperty("index")] int Index,
+    [property: JsonProperty("projects")] IReadOnlyList<ScriptGroupProjectSummary> Projects);
+
+public sealed record ScriptGroupProjectSummary(
+    [property: JsonProperty("index")] int Index,
+    [property: JsonProperty("name")] string Name,
+    [property: JsonProperty("type")] string Type,
+    [property: JsonProperty("status")] string Status,
+    [property: JsonProperty("schedule")] string Schedule,
+    [property: JsonProperty("runNum")] int RunNum);
+
 public sealed record ScriptProjectDocument(
     [property: JsonProperty("folderName")] string FolderName,
     [property: JsonProperty("manifest")] object Manifest,

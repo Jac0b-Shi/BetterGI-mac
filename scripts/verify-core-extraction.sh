@@ -29,6 +29,13 @@ if rg -n 'BGIJSScriptRuntime|BGIScriptGroupScheduler' MacGI/Sources/MacGI MacGI/
   fail "Swift owns BetterGI script execution or scheduling again"
 fi
 
+if rg -n '\bBGIScriptGroup(Project|Config)?\b|getScriptGroup\(|saveScriptGroup\(' \
+  MacGI/Sources/MacGI/App MacGI/Sources/MacGI/Views \
+  MacGI/Sources/MacGI/Runtime/BetterGICoreRPCClient.swift \
+  MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift; then
+  fail "Swift interprets or persists the upstream ScriptGroup document instead of consuming Core DTOs"
+fi
+
 if rg -n '仍为 Mock|Mock UI|Mock Capture' MacGI/Sources/MacGI/Views; then
   fail "production UI exposes a fake runnable control"
 fi

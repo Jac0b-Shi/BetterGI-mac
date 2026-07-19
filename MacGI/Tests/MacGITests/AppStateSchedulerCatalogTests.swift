@@ -57,8 +57,8 @@ struct AppStateSchedulerCatalogTests {
                 .appendingPathComponent("bettergi-mac-empty-scheduler-test-\(UUID().uuidString)", isDirectory: true)
         ))
         appState.schedulerGroups = [
-            BGIScriptGroup(index: 1, name: "每日", projects: []),
-            BGIScriptGroup(index: 2, name: "狗粮+锄地", projects: [])
+            BetterGIScriptGroupSummary(name: "每日", path: "User/ScriptGroup/每日.json", index: 1, projects: []),
+            BetterGIScriptGroupSummary(name: "狗粮+锄地", path: "User/ScriptGroup/狗粮+锄地.json", index: 2, projects: [])
         ]
         appState.selectedSchedulerGroupName = "狗粮+锄地"
 

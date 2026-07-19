@@ -8,12 +8,12 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 
 public sealed class ScriptGroupCatalog(RuntimeLayout layout)
 {
-    public IReadOnlyList<ScriptGroupDocument> List()
+    public IReadOnlyList<ScriptGroupSummary> List()
     {
         layout.EnsureCreated();
         return Directory.EnumerateFiles(layout.ScriptGroupPath, "*.json", SearchOption.TopDirectoryOnly)
             .OrderBy(Path.GetFileName, StringComparer.Ordinal)
-            .Select(Read)
+            .Select(ReadSummary)
             .ToArray();
     }
 
@@ -49,6 +49,23 @@ public sealed class ScriptGroupCatalog(RuntimeLayout layout)
         if (string.IsNullOrWhiteSpace(name))
             name = Path.GetFileNameWithoutExtension(path);
         return new ScriptGroupDocument(name, Path.GetRelativePath(layout.RootPath, path), document);
+    }
+
+    private ScriptGroupSummary ReadSummary(string path)
+    {
+        var group = ScriptGroup.FromJson(File.ReadAllText(path, Encoding.UTF8));
+        var name = string.IsNullOrWhiteSpace(group.Name) ? Path.GetFileNameWithoutExtension(path) : group.Name;
+        return new ScriptGroupSummary(
+            name,
+            Path.GetRelativePath(layout.RootPath, path),
+            group.Index,
+            group.Projects.Select(project => new ScriptGroupProjectSummary(
+                project.Index,
+                project.Name,
+                project.Type,
+                project.Status,
+                project.Schedule,
+                project.RunNum)).ToArray());
     }
 
     private static string Normalize(ScriptGroup group) =>
