@@ -231,6 +231,26 @@ struct BGIUnavailableToggle: View {
     }
 }
 
+struct BGIUnavailableAction: View {
+    let title: String
+    let systemImage: String?
+
+    init(_ title: String, systemImage: String? = nil) {
+        self.title = title
+        self.systemImage = systemImage
+    }
+
+    var body: some View {
+        if let systemImage {
+            Label("\(title)（不可用）", systemImage: systemImage)
+                .foregroundStyle(.secondary)
+        } else {
+            Text("\(title)（不可用）")
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
 struct OneDragonPage: View {
     @EnvironmentObject private var appState: AppState
 
@@ -575,14 +595,8 @@ struct JSScriptPage: View {
         VStack(alignment: .leading, spacing: 14) {
             BGIPageTitle(title: "自定义 Javascript 脚本（实验功能）")
             HStack(spacing: 8) {
-                Button {
-                } label: {
-                    Label("打开脚本目录", systemImage: "folder")
-                }
-                Button {
-                } label: {
-                    Label("脚本仓库", systemImage: "archivebox")
-                }
+                BGIUnavailableAction("打开脚本目录", systemImage: "folder")
+                BGIUnavailableAction("脚本仓库", systemImage: "archivebox")
                 Button { appState.runSchedulerGroups() } label: {
                     Label("运行所选配置组", systemImage: "play.fill")
                 }
@@ -616,20 +630,10 @@ struct MapTrackingPage: View {
         VStack(alignment: .leading, spacing: 14) {
             BGIPageTitle(title: "地图追踪（实验功能）")
             HStack(spacing: 8) {
-                Button {
-                } label: {
-                    Label("打开任务目录", systemImage: "folder")
-                }
-                Button {
-                } label: {
-                    Label("脚本仓库", systemImage: "archivebox")
-                }
-                Button {
-                } label: {
-                    Label("设置", systemImage: "gearshape")
-                }
-                Button("开发者工具") {
-                }
+                BGIUnavailableAction("打开任务目录", systemImage: "folder")
+                BGIUnavailableAction("脚本仓库", systemImage: "archivebox")
+                BGIUnavailableAction("设置", systemImage: "gearshape")
+                BGIUnavailableAction("开发者工具")
                 Spacer()
             }
 
@@ -663,22 +667,10 @@ struct RecordReplayPage: View {
         VStack(alignment: .leading, spacing: 14) {
             BGIPageTitle(title: "键鼠录制回放功能（实验功能）")
             HStack(spacing: 8) {
-                Button {
-                } label: {
-                    Label("打开脚本目录", systemImage: "folder")
-                }
-                Button {
-                } label: {
-                    Label("脚本仓库", systemImage: "archivebox")
-                }
-                Button {
-                } label: {
-                    Label("开始录制", systemImage: "record.circle")
-                }
-                Button {
-                } label: {
-                    Label("停止录制", systemImage: "stop.fill")
-                }
+                BGIUnavailableAction("打开脚本目录", systemImage: "folder")
+                BGIUnavailableAction("脚本仓库", systemImage: "archivebox")
+                BGIUnavailableAction("开始录制", systemImage: "record.circle")
+                BGIUnavailableAction("停止录制", systemImage: "stop.fill")
                 Spacer()
             }
 
@@ -708,8 +700,7 @@ struct MacroPage: View {
                     BGIInlinePicker(value: "按住时重复", width: 140)
                 }
                 BGISettingLine(title: "宏配置", subtitle: "打开角色宏配置文件。") {
-                    Button("前往设置") {
-                    }
+                    BGIUnavailableAction("前往设置")
                 }
                 BGISettingLine(title: "默认战斗宏编号", subtitle: "当角色 macroPriority 为 0 时使用，范围 1~5。") {
                     BGINumberField(value: "1", width: 70)
@@ -717,8 +708,7 @@ struct MacroPage: View {
             }
 
             BGIOriginalCard(icon: .symbol("cursorarrow.motionlines"), title: "那维莱特 - 转圈圈", subtitle: "快速水平平移鼠标，需要配置快捷键触发。") {
-                Button("绑定快捷键") {
-                }
+                BGIUnavailableAction("绑定快捷键")
             } content: {
                 BGISettingLine(title: "移动鼠标距离", subtitle: "可为负数，绝对值越大移动越快。") {
                     BGINumberField(value: "120", width: 90)
@@ -729,8 +719,7 @@ struct MacroPage: View {
             }
 
             BGIOriginalCard(icon: .symbol("cursorarrow.click"), title: "快速强化圣遗物", subtitle: "快速跳过强化结果展示，需要配置快捷键触发。") {
-                Button("绑定快捷键") {
-                }
+                BGIUnavailableAction("绑定快捷键")
             } content: {
                 BGISettingLine(title: "强化的额外等待时间（毫秒）", subtitle: "高延迟下无法跳过结果显示时延长此配置。") {
                     BGINumberField(value: "300", width: 90)
@@ -798,8 +787,7 @@ struct NotificationPage: View {
                     BGIUnavailableToggle(isOn: provider.0 == "全局通知设置")
                 } content: {
                     BGISettingLine(title: "测试通知", subtitle: "发送测试通知，验证当前渠道配置。") {
-                        Button("发送测试通知") {
-                        }
+                        BGIUnavailableAction("发送测试通知")
                     }
                     BGISettingLine(title: "通知模板", subtitle: "任务开始、任务结束、异常退出时的消息模板。") {
                         BGIInlinePicker(value: "默认", width: 110)

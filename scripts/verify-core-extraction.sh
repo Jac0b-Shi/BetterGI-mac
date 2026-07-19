@@ -61,6 +61,10 @@ if rg -n -i '\b(mock|fake)\b' MacGI/Sources/MacGI; then
   fail "production Swift source contains mock or fake platform state"
 fi
 
+if rg -n -U 'Button\s*(?:\([^)]*\))?\s*\{\s*\}' MacGI/Sources/MacGI/Views; then
+  fail "production Swift UI contains a clickable action with an empty implementation"
+fi
+
 if rg -n '由 Rust/OpenCV 提供|Rust.*(脚本|调度|路径|识别)' MacGI/Sources/MacGI; then
   fail "Swift UI assigns BetterGI business authority to Rust"
 fi

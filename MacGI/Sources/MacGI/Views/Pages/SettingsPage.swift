@@ -89,8 +89,7 @@ struct SettingsPage: View {
                     .labelsHidden()
             } content: {
                 BGISettingLine(title: "截图快捷键", subtitle: "绑定保存截图的快捷键。") {
-                    Button("绑定快捷键") {
-                    }
+                    BGIUnavailableAction("绑定快捷键")
                 }
                 BGISettingLine(title: "截图遮盖UID", subtitle: "生成的截图会遮盖右下角 UID 区域。") {
                     Toggle("", isOn: .constant(true))
@@ -200,22 +199,18 @@ struct SettingsPage: View {
             }
 
             BGIOriginalCard(icon: .symbol("arrow.down.circle"), title: "版本更新", subtitle: "检查软件是否有新版本可用。") {
-                Button("检查更新") {
-                }
+                BGIUnavailableAction("检查更新")
             } content: {
                 BGISettingLine(title: "检查是否存在最新测试版", subtitle: "测试版非常不稳定，请谨慎选择更新。") {
-                    Button("检查更新") {
-                    }
+                    BGIUnavailableAction("检查更新")
                 }
                 BGISettingLine(title: "直接从 Github 获取最新测试版", subtitle: "打开项目发布页。") {
-                    Button("访问 Github") {
-                    }
+                    BGIUnavailableAction("访问 Github")
                 }
             }
 
             BGIOriginalCard(icon: .symbol("info.circle"), title: "关于 BetterGI", subtitle: "查看项目、文档、许可证与素材来源。", expanded: false) {
-                Button("查看") {
-                }
+                BGIUnavailableAction("查看")
             } content: {
                 EmptyView()
             }
