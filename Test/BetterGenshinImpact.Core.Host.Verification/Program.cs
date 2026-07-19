@@ -154,6 +154,22 @@ Require(upstreamProject.ProjectPath == runtimeProject && await upstreamProject.L
 var socketPath = Path.Combine(layout.RunPath, "verification.sock");
 var sessionToken = Convert.ToHexString(Guid.NewGuid().ToByteArray());
 using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "config.json"), """
+    {
+      "otherConfig": {
+        "farmingPlanConfig": { "enabled": true },
+        "autoRestartConfig": {
+          "enabled": true,
+          "failureCount": 7,
+          "restartGameTogether": true
+        }
+      },
+      "genshinStartConfig": {
+        "linkedStartEnabled": true,
+        "autoEnterGameEnabled": false
+      }
+    }
+    """);
 var server = new CoreRpcServer(socketPath, sessionToken, layout);
 using var loggerFactory = LoggerFactory.Create(builder => builder.AddSimpleConsole());
 var scriptHostServices = new MacScriptHostServices(
@@ -167,6 +183,12 @@ var scriptServicePlatform = new MacScriptServicePlatform(
     layout, loggerFactory.CreateLogger("BetterGenshinImpact.Service.ScriptService"), scriptHostServices,
     server.PlatformCallbacks, sessionToken, cancellation.Token, new SharedCaptureRingReader(layout),
     new MacGameTaskManagerPlatform(server.PlatformCallbacks, sessionToken, cancellation.Token, loggerFactory));
+Require(scriptServicePlatform.FarmingPlanEnabled,
+    "macOS scheduler ignored the upstream farming-plan configuration");
+Require(scriptServicePlatform.RestartPolicy is
+    { Enabled: true, FailureCount: 7, RestartGameTogether: true,
+      LinkedStartEnabled: true, AutoEnterGameEnabled: false },
+    "macOS scheduler did not load the upstream restart/start configuration");
 ScriptServicePlatform.Configure(scriptServicePlatform);
 server.AttachScriptServicePlatform(scriptServicePlatform);
 TaskRunnerPlatform.Configure(new MacTaskRunnerPlatform(

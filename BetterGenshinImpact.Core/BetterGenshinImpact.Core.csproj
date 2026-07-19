@@ -209,6 +209,7 @@
   <ItemGroup>
     <Compile Include="../BetterGenshinImpact/Core/Script/Dependence/Model/TimerConfig/AutoPickExternalConfig.cs" Link="Core/Script/Dependence/Model/TimerConfig/AutoPickExternalConfig.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Config/OtherConfig.cs" Link="Core/Config/OtherConfig.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Config/GenshinStartConfig.cs" Link="Core/Config/GenshinStartConfig.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Config/RectConfig.cs" Link="Core/Config/RectConfig.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Config/ConfigJson.cs" Link="Core/Config/ConfigJson.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Config/ScreenshotPrivacy.cs" Link="Core/Config/ScreenshotPrivacy.cs" />

@@ -8,7 +8,10 @@ using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.Core.Script.Dependence;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
+using BetterGenshinImpact.Core.Config;
 using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Runtime.Versioning;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
@@ -26,6 +29,7 @@ public sealed class MacScriptServicePlatform(
     MacGameTaskManagerPlatform gameTaskManagerPlatform) : IScriptServicePlatform
 {
     private string _mapMatchingMethod = "TemplateMatch";
+    private readonly JsonObject? _configRoot = LoadConfigRoot(layout);
 
     public ILogger Logger { get; } = logger;
     public string AutoPathingRoot => Path.Combine(layout.UserPath, "AutoPathing");
@@ -35,11 +39,21 @@ public sealed class MacScriptServicePlatform(
         .OrderBy(path => path, StringComparer.Ordinal)
         .Select(path => ScriptGroup.FromJson(File.ReadAllText(path)))
         .ToArray();
-    public bool FarmingPlanEnabled => false;
+    public bool FarmingPlanEnabled => LoadOtherConfig().FarmingPlanConfig.Enabled;
     public bool IsDailyFarmingLimitReached(FarmingSession farmingSession, out string message) =>
         throw Unavailable("farming-plan statistics");
     public void ClearTriggers() => GameTaskManager.ClearTriggers();
-    public SchedulerRestartPolicy RestartPolicy => new(false, 0, false, false, false);
+    public SchedulerRestartPolicy RestartPolicy
+    {
+        get
+        {
+            var restart = LoadOtherConfig().AutoRestartConfig;
+            var start = LoadGenshinStartConfig();
+            return new SchedulerRestartPolicy(
+                restart.Enabled, restart.FailureCount, restart.RestartGameTogether,
+                start.LinkedStartEnabled, start.AutoEnterGameEnabled);
+        }
+    }
     public void SetCurrentScriptProject(ScriptGroupProject project) => scriptHostServices.SetCurrentProject(project);
 
     public void SetMapMatchingMethod(string value)
@@ -116,6 +130,25 @@ public sealed class MacScriptServicePlatform(
 
     private static CapabilityUnavailableException Unavailable(string capability) =>
         new($"{capability} is not composed on macOS yet.");
+
+    private OtherConfig LoadOtherConfig() =>
+        _configRoot?["otherConfig"]?.Deserialize<OtherConfig>(ConfigJson.Options)
+        ?? new OtherConfig();
+
+    private GenshinStartConfig LoadGenshinStartConfig() =>
+        _configRoot?["genshinStartConfig"]?.Deserialize<GenshinStartConfig>(ConfigJson.Options)
+        ?? new GenshinStartConfig();
+
+    private static JsonObject? LoadConfigRoot(RuntimeLayout layout)
+    {
+        var path = Path.Combine(layout.UserPath, "config.json");
+        if (!File.Exists(path)) return null;
+        return JsonNode.Parse(File.ReadAllText(path), documentOptions: new JsonDocumentOptions
+        {
+            AllowTrailingCommas = true,
+            CommentHandling = JsonCommentHandling.Skip
+        }) as JsonObject ?? throw new InvalidDataException("User/config.json root must be an object.");
+    }
 
     private void RequireAcknowledgement(string method, JObject? parameters)
     {

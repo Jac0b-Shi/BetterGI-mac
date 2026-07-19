@@ -12,6 +12,7 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 public sealed class MacTriggerDispatcher(ILogger<MacTriggerDispatcher> logger, CancellationToken shutdown)
 {
     private const int IntervalMilliseconds = 50;
+    private readonly object _startLock = new();
     private Task? _loop;
     private int _frameIndex;
     private GameUiCategory _previousCategory = GameUiCategory.Unknown;
@@ -19,8 +20,12 @@ public sealed class MacTriggerDispatcher(ILogger<MacTriggerDispatcher> logger, C
 
     public void Start()
     {
-        if (Interlocked.CompareExchange(ref _loop, Task.Run(RunAsync, shutdown), null) is not null)
-            throw new InvalidOperationException("macOS trigger dispatcher has already been started.");
+        lock (_startLock)
+        {
+            if (_loop is not null)
+                throw new InvalidOperationException("macOS trigger dispatcher has already been started.");
+            _loop = Task.Run(RunAsync, shutdown);
+        }
     }
 
     private async Task RunAsync()
