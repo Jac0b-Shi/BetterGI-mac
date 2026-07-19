@@ -95,6 +95,8 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ChooseTalkOptionTask.cs" Link="GameTask/Common/Job/ChooseTalkOptionTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimEncounterPointsRewardsTask.cs" Link="GameTask/Common/Job/ClaimEncounterPointsRewardsTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/OneKeyExpeditionTask.cs" Link="GameTask/AutoSkip/OneKeyExpeditionTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/AutoSkipConfig.cs" Link="GameTask/AutoSkip/AutoSkipConfig.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/AutoSkipTrigger.cs" Link="GameTask/AutoSkip/AutoSkipTrigger.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoWood/Assets/AutoWoodAssets.cs" Link="GameTask/AutoWood/Assets/AutoWoodAssets.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/GameLoading/Assets/GameLoadingAssets.cs" Link="GameTask/GameLoading/Assets/GameLoadingAssets.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoPathing/CameraRotateTask.cs" Link="GameTask/AutoPathing/CameraRotateTask.cs" />
@@ -277,6 +279,8 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Script/JsonCombatStrategyParser.cs" Link="GameTask/AutoFight/Script/JsonCombatStrategyParser.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/AutoSkipRuntimePlatform.cs" Link="GameTask/AutoSkip/AutoSkipRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/Assets/AutoSkipAssets.cs" Link="GameTask/AutoSkip/Assets/AutoSkipAssets.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/Assets/HangoutConfig.cs" Link="GameTask/AutoSkip/Assets/HangoutConfig.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Recognition/OpenCv/ContoursHelper.cs" Link="Core/Recognition/OpenCv/ContoursHelper.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ExitAndReloginPlatform.cs" Link="GameTask/Common/Job/ExitAndReloginPlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingInput.cs" Link="GameTask/AutoFishing/AutoFishingInput.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingRuntimePlatform.cs" Link="GameTask/AutoFishing/AutoFishingRuntimePlatform.cs" />

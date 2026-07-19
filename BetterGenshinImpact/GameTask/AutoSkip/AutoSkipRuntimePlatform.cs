@@ -1,6 +1,11 @@
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using System;
 using System.Threading;
+using BetterGenshinImpact.GameTask.Model;
+using Microsoft.Extensions.Logging;
+using BetterGenshinImpact.Core.Recognition.OCR;
+using BetterGenshinImpact.Platform.Abstractions;
+using BetterGenshinImpact.GameTask.Model.Area;
 
 namespace BetterGenshinImpact.GameTask.AutoSkip;
 
@@ -15,10 +20,17 @@ public interface IAutoSkipAudioWaiter
 
 public interface IAutoSkipRuntimePlatform
 {
+    AutoSkipConfig Config { get; }
+    ISystemInfo SystemInfo { get; }
+    ILogger<T> GetLogger<T>();
+    IOcrService OcrService { get; }
+    bool IsGameActive();
+    void ActivateGameWindow();
     IAutoSkipAudioWaiter CreateAudioWaiter();
     void SimulateBackgroundAction(GIActions action);
-    void PressBackgroundKey(int windowsVirtualKey);
+    void PressBackgroundKey(BgiKey key);
     void BackgroundLeftButtonClick();
+    void BackgroundClick(Region region);
     void ReportError(string message);
 }
 

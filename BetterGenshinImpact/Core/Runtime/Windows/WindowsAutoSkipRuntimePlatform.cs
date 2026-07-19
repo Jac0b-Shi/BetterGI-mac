@@ -3,17 +3,29 @@ using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.AutoSkip.Audio;
 using BetterGenshinImpact.View.Windows;
+using BetterGenshinImpact.GameTask.Model;
+using Microsoft.Extensions.Logging;
+using BetterGenshinImpact.Core.Recognition.OCR;
+using BetterGenshinImpact.Platform.Abstractions;
+using BetterGenshinImpact.GameTask.Model.Area;
 
 namespace BetterGenshinImpact.Core.Runtime.Windows;
 
 public sealed class WindowsAutoSkipRuntimePlatform : IAutoSkipRuntimePlatform
 {
+    public AutoSkipConfig Config => TaskContext.Instance().Config.AutoSkipConfig;
+    public ISystemInfo SystemInfo => TaskContext.Instance().SystemInfo;
+    public ILogger<T> GetLogger<T>() => App.GetLogger<T>();
+    public IOcrService OcrService => OcrFactory.Paddle;
+    public bool IsGameActive() => SystemControl.IsGenshinImpactActive();
+    public void ActivateGameWindow() => SystemControl.ActivateWindow();
     public IAutoSkipAudioWaiter CreateAudioWaiter() => new DialogueOptionAudioWaiter();
     public void SimulateBackgroundAction(GIActions action) =>
         TaskContext.Instance().PostMessageSimulator.SimulateActionBackground(action);
-    public void PressBackgroundKey(int windowsVirtualKey) =>
-        TaskContext.Instance().PostMessageSimulator.KeyPressBackground((Vanara.PInvoke.User32.VK)windowsVirtualKey);
+    public void PressBackgroundKey(BgiKey key) =>
+        TaskContext.Instance().PostMessageSimulator.KeyPressBackground(key.ToWindowsVirtualKey());
     public void BackgroundLeftButtonClick() =>
         TaskContext.Instance().PostMessageSimulator.LeftButtonClickBackground();
+    public void BackgroundClick(Region region) => region.BackgroundClick();
     public void ReportError(string message) => ThemedMessageBox.Error(message);
 }

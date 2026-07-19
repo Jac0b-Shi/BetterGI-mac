@@ -52,7 +52,7 @@ public partial class ChooseTalkOptionTask
             var optionRegions = RecognizeOption(region, ct);
             if (optionRegions == null)
             {
-                AutoSkip.AutoSkipRuntimePlatform.Current.PressBackgroundKey(0x20);
+                AutoSkip.AutoSkipRuntimePlatform.Current.PressBackgroundKey(BetterGenshinImpact.Platform.Abstractions.BgiKey.Space);
                 await Delay(500, ct);
                 continue; // retry
             }
@@ -119,7 +119,7 @@ public partial class ChooseTalkOptionTask
                 }
                 else
                 {
-                    AutoSkip.AutoSkipRuntimePlatform.Current.PressBackgroundKey(0x20);
+                    AutoSkip.AutoSkipRuntimePlatform.Current.PressBackgroundKey(BetterGenshinImpact.Platform.Abstractions.BgiKey.Space);
                 }
             }
             else if (Bv.IsInMainUi(region))

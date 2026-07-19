@@ -121,6 +121,7 @@ BvSimpleOperationPlatform.Configure(bvSimpleOperationPlatform);
 TpTaskRuntimePlatform.Configure(new MacTpTaskRuntimePlatform(
     layout, gameTaskManagerPlatform.SystemInfo));
 AutoSkipRuntimePlatform.Configure(new MacAutoSkipRuntimePlatform(
+    layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory, imageRegionOcrService,
     server.PlatformCallbacks, sessionToken, shutdown.Token));
 ExitAndReloginPlatform.Configure(new MacExitAndReloginPlatform());
 var pathExecutorPlatform = new MacPathExecutorPlatform(

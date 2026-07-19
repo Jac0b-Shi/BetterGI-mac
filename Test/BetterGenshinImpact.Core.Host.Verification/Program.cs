@@ -333,6 +333,9 @@ try
     TaskControlPlatform.Current.PressKey(0x75);
     await rawKeyResponder;
     var autoSkipPlatform = new MacAutoSkipRuntimePlatform(
+        layout,
+        () => throw new InvalidOperationException("Verification did not request AutoSkip system metrics."),
+        loggerFactory, imageRegionOcrService,
         server.PlatformCallbacks, sessionToken, cancellation.Token);
     var autoSkipResponder = Task.Run(async () =>
     {
@@ -340,7 +343,7 @@ try
             ?? throw new EndOfStreamException("AutoSkip input callback channel ended unexpectedly.");
         Require(input.Method == "input.dispatch" &&
                 input.Params?.Value<string>("action") == "keyPress" &&
-                input.Params?.Value<int>("windowsVirtualKey") == 0x20,
+                input.Params?.Value<string>("key") == "Space",
             "macOS AutoSkip did not route the upstream space key through acknowledged input.");
         await callbackConnection.WriteResponseAsync(
             RpcResponse.Success(input.Id, new { acknowledged = true }), cancellation.Token);
@@ -354,7 +357,7 @@ try
         await callbackConnection.WriteResponseAsync(
             RpcResponse.Success(dialog.Id, new { acknowledged = true }), cancellation.Token);
     }, cancellation.Token);
-    autoSkipPlatform.PressBackgroundKey(0x20);
+    autoSkipPlatform.PressBackgroundKey(BetterGenshinImpact.Platform.Abstractions.BgiKey.Space);
     autoSkipPlatform.ReportError("verification error");
     await autoSkipResponder;
     var vadUnavailable = false;

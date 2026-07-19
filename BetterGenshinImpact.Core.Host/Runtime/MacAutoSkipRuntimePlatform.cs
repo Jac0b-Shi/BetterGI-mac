@@ -4,20 +4,43 @@ using BetterGenshinImpact.GameTask.Common;
 using Microsoft.Extensions.Logging;
 using BetterGenshinImpact.Core.Host.Transport;
 using Newtonsoft.Json.Linq;
+using BetterGenshinImpact.GameTask.Model;
+using BetterGenshinImpact.Core.Config;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using BetterGenshinImpact.Core.Recognition.OCR;
+using BetterGenshinImpact.Platform.Abstractions;
+using BetterGenshinImpact.GameTask.Model.Area;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
 public sealed class MacAutoSkipRuntimePlatform(
+    RuntimeLayout layout,
+    Func<ISystemInfo> getSystemInfo,
+    ILoggerFactory loggerFactory,
+    IOcrService ocrService,
     PlatformCallbackChannel callbacks,
     string sessionToken,
     CancellationToken cancellationToken) : IAutoSkipRuntimePlatform
 {
+    public AutoSkipConfig Config { get; } = LoadConfig(layout);
+    public ISystemInfo SystemInfo => getSystemInfo();
+    public ILogger<T> GetLogger<T>() => loggerFactory.CreateLogger<T>();
+    public IOcrService OcrService { get; } = ocrService;
+    public bool IsGameActive() => Invoke("window.metrics", null).Value<bool?>("isActive")
+        ?? throw new InvalidDataException("window.metrics did not return isActive.");
+    public void ActivateGameWindow() => RequireAcknowledgement("window.activate", null);
     public IAutoSkipAudioWaiter CreateAudioWaiter() => new UnavailableAudioWaiter();
     public void SimulateBackgroundAction(GIActions action) =>
         TaskControlPlatform.Current.SimulateAction(action, KeyType.KeyPress);
-    public void PressBackgroundKey(int windowsVirtualKey) =>
-        TaskControlPlatform.Current.PressKey(windowsVirtualKey);
+    public void PressBackgroundKey(BgiKey key) => RequireAcknowledgement(
+        "input.dispatch", JObject.FromObject(new { action = "keyPress", key = key.ToString() }));
     public void BackgroundLeftButtonClick() => TaskControlPlatform.Current.LeftButtonClick();
+    public void BackgroundClick(Region region)
+    {
+        region.Move();
+        BackgroundLeftButtonClick();
+    }
     public void ReportError(string message)
     {
         var response = callbacks.InvokeAsync("dialog.request", JObject.FromObject(new
@@ -28,6 +51,29 @@ public sealed class MacAutoSkipRuntimePlatform(
         }), sessionToken, cancellationToken).GetAwaiter().GetResult();
         if (response?.Value<bool?>("acknowledged") != true)
             throw new InvalidDataException("dialog.request did not return acknowledged=true.");
+    }
+
+    private JToken Invoke(string method, JObject? parameters) => callbacks.InvokeAsync(
+            method, parameters, sessionToken, cancellationToken).GetAwaiter().GetResult()
+        ?? throw new InvalidDataException($"{method} returned an empty response.");
+
+    private void RequireAcknowledgement(string method, JObject? parameters)
+    {
+        if (Invoke(method, parameters).Value<bool?>("acknowledged") != true)
+            throw new InvalidDataException($"{method} did not return acknowledged=true.");
+    }
+
+    private static AutoSkipConfig LoadConfig(RuntimeLayout layout)
+    {
+        var path = Path.Combine(layout.UserPath, "config.json");
+        if (!File.Exists(path)) return new AutoSkipConfig();
+        var root = JsonNode.Parse(File.ReadAllText(path), documentOptions: new JsonDocumentOptions
+        {
+            AllowTrailingCommas = true,
+            CommentHandling = JsonCommentHandling.Skip
+        }) as JsonObject ?? throw new InvalidDataException("User/config.json root must be an object.");
+        return root["autoSkipConfig"]?.Deserialize<AutoSkipConfig>(ConfigJson.Options)
+            ?? new AutoSkipConfig();
     }
 
     private sealed class UnavailableAudioWaiter : IAutoSkipAudioWaiter

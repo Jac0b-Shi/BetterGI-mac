@@ -1,13 +1,23 @@
 using BetterGenshinImpact.GameTask.AutoPathing;
+using BetterGenshinImpact.GameTask;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
-/// <summary>
-/// macOS Core Host 尚未组合 AutoSkipTrigger 时显式失败，禁止 PathExecutor 跳过行为后继续成功。
-/// </summary>
+using BetterGenshinImpact.GameTask.AutoSkip;
+
+/// <summary>Composes the real shared AutoSkipTrigger for PathExecutor dialogue frames.</summary>
 public sealed class MacPathExecutorAutoSkipPlatform : IPathExecutorAutoSkipPlatform
 {
-    public IPathExecutorAutoSkipSession CreateSession() =>
-        throw new CapabilityUnavailableException(
-            "PathExecutor AutoSkip requires the full shared AutoSkipTrigger closure.");
+    public IPathExecutorAutoSkipSession CreateSession()
+    {
+        var trigger = new AutoSkipTrigger();
+        trigger.Init();
+        trigger.IsEnabled = true;
+        return new Session(trigger);
+    }
+
+    private sealed class Session(AutoSkipTrigger trigger) : IPathExecutorAutoSkipSession
+    {
+        public void OnCapture(CaptureContent content) => trigger.OnCapture(content);
+    }
 }
