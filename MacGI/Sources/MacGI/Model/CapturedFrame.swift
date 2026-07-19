@@ -60,19 +60,6 @@ extension CapturedFrame {
         UInt64(60 * 1000 / max(1, intervalMs))
     }
 
-    /// Mock frame for UI / testing with no real capture session.
-    static func mock(window: WindowInfo = .mock(), frameIndex: UInt64 = 0) -> CapturedFrame {
-        CapturedFrame(
-            frameIndex: frameIndex,
-            timestamp: Date(),
-            width: 2560,
-            height: 1400,
-            scaleFactor: window.scaleFactor,
-            pixelFormat: 0x42475241,
-            bytesPerRow: 2560 * 4,
-            sourceWindow: window
-        )
-    }
 }
 
 // MARK: - CaptureImageFrame

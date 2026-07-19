@@ -221,7 +221,7 @@ struct BGINumberField: View {
     }
 }
 
-struct BGIToggleMock: View {
+struct BGIUnavailableToggle: View {
     let isOn: Bool
 
     var body: some View {
@@ -248,7 +248,7 @@ struct OneDragonPage: View {
             VStack(spacing: 10) {
                 BGIGroupSidebar(title: "任务列表", groups: ["每日委托", "自动秘境", "自动首领讨伐", "自动地脉花", "领取奖励", "尘歌壶", "完成后操作"], selected: "自动秘境")
                 BGIOriginalCard(icon: .fgi("\u{e411}"), title: "每日流程", subtitle: "右键添加或删除任务", expanded: false) {
-                    BGIToggleMock(isOn: true)
+                    BGIUnavailableToggle(isOn: true)
                 } content: {
                     EmptyView()
                 }
@@ -264,7 +264,7 @@ struct OneDragonPage: View {
                 }
 
                 BGIOriginalCard(icon: .symbol("moon.stars"), title: "合成树脂", subtitle: "指定地区合成树脂，控制合成后保留的原粹树脂数量。") {
-                    BGIToggleMock(isOn: true)
+                    BGIUnavailableToggle(isOn: true)
                 } content: {
                     BGISettingLine(title: "合成树脂合成台", subtitle: "指定地区合成树脂。") {
                         BGIInlinePicker(value: "枫丹", width: 120)
@@ -275,7 +275,7 @@ struct OneDragonPage: View {
                 }
 
                 BGIOriginalCard(icon: .fgi("\u{f073}"), title: "每日秘境刷取配置", subtitle: "前往指定秘境消耗树脂，并自动领取奖励。") {
-                    BGIToggleMock(isOn: true)
+                    BGIUnavailableToggle(isOn: true)
                 } content: {
                     BGISettingLine(title: "进入秘境切换的队伍名称", subtitle: "注意是游戏内你设置的名称。") {
                         BGINumberField(value: "秘境队", width: 150)
@@ -286,7 +286,7 @@ struct OneDragonPage: View {
                 }
 
                 BGIOriginalCard(icon: .fgi("\u{f784}"), title: "每周秘境刷取配置", subtitle: "启用后，每日刷取配置将会失效。") {
-                    BGIToggleMock(isOn: false)
+                    BGIUnavailableToggle(isOn: false)
                 } content: {
                     BGIDataTable(
                         headers: ["日期", "队伍", "秘境", "奖励"],
@@ -311,13 +311,13 @@ struct OneDragonPage: View {
                         BGIInlinePicker(value: "无相系列", width: 150)
                     }
                     BGISettingLine(title: "指定讨伐次数", subtitle: "关闭时刷取至原粹树脂耗尽。") {
-                        BGIToggleMock(isOn: true)
+                        BGIUnavailableToggle(isOn: true)
                         BGINumberField(value: "4", width: 70)
                     }
                 }
 
                 BGIOriginalCard(icon: .fgi("\u{f2f1}"), title: "自动地脉花", subtitle: "跳过准备流程、树脂耗尽模式、运行日期配置。") {
-                    BGIToggleMock(isOn: true)
+                    BGIUnavailableToggle(isOn: true)
                 } content: {
                     BGISettingLine(title: "运行日期配置", subtitle: "按星期设置类型与国家，留空时使用独立任务默认设置。") {
                         BGIInlinePicker(value: "每日", width: 110)
@@ -334,7 +334,7 @@ struct OneDragonPage: View {
                 }
 
                 BGIOriginalCard(icon: .fgi("\u{f07a}"), title: "尘歌壶配置", subtitle: "进壶方式、购买日期与商品。", expanded: false) {
-                    BGIToggleMock(isOn: true)
+                    BGIUnavailableToggle(isOn: true)
                 } content: {
                     EmptyView()
                 }
@@ -647,13 +647,13 @@ struct MapTrackingPage: View {
             }
 
             BGIOriginalCard(icon: .fgi("\u{f279}"), title: "地图遮罩点位", subtitle: "未来显示在游戏窗口上方的点位、路径和小地图方位。") {
-                BGIToggleMock(isOn: true)
+                BGIUnavailableToggle(isOn: true)
             } content: {
                 BGISettingLine(title: "显示小地图方位", subtitle: "在小地图周围显示东南西北文字。") {
-                    BGIToggleMock(isOn: true)
+                    BGIUnavailableToggle(isOn: true)
                 }
                 BGISettingLine(title: "显示图像识别结果", subtitle: "实时显示各种图像识别的结果。") {
-                    BGIToggleMock(isOn: false)
+                    BGIUnavailableToggle(isOn: false)
                 }
             }
         }
@@ -704,7 +704,7 @@ struct MacroPage: View {
             BGIPageTitle(title: "辅助操控设置")
 
             BGIOriginalCard(icon: .symbol("applescript"), title: "一键宏（按角色）", subtitle: "触发后识别当前出战角色，并根据配置执行对应宏。") {
-                BGIToggleMock(isOn: false)
+                BGIUnavailableToggle(isOn: false)
             } content: {
                 BGISettingLine(title: "快捷键触发方式", subtitle: "按住时重复；触发：按下启动再按关闭。") {
                     BGIInlinePicker(value: "按住时重复", width: 140)
@@ -740,12 +740,12 @@ struct MacroPage: View {
             }
 
             BGIOriginalCard(icon: .symbol("keyboard"), title: "长按空格等于连续按下空格", subtitle: "用于解除冻结；水下场景不推荐启用。", expanded: false) {
-                BGIToggleMock(isOn: false)
+                BGIUnavailableToggle(isOn: false)
             } content: {
                 EmptyView()
             }
             BGIOriginalCard(icon: .symbol("keyboard"), title: "长按 F 等于连续按下 F", subtitle: "快速拾取大量掉落物。", expanded: false) {
-                BGIToggleMock(isOn: false)
+                BGIUnavailableToggle(isOn: false)
             } content: {
                 EmptyView()
             }
@@ -797,7 +797,7 @@ struct NotificationPage: View {
             BGIPageTitle(title: "通知设置")
             ForEach(providers, id: \.0) { provider in
                 BGIOriginalCard(icon: .symbol(provider.2), title: provider.0, subtitle: provider.1, expanded: provider.0 == "全局通知设置") {
-                    BGIToggleMock(isOn: provider.0 == "全局通知设置")
+                    BGIUnavailableToggle(isOn: provider.0 == "全局通知设置")
                 } content: {
                     BGISettingLine(title: "测试通知", subtitle: "发送测试通知，验证当前渠道配置。") {
                         Button("发送测试通知") {

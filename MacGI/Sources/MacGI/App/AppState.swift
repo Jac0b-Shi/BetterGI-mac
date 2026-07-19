@@ -36,7 +36,6 @@ enum AppStatus: String, CaseIterable, Identifiable {
 enum RuntimeStatus: String, CaseIterable, Identifiable {
     case lost
     case detected
-    case mock
     case ready
     case missing
     case ok
@@ -48,7 +47,6 @@ enum RuntimeStatus: String, CaseIterable, Identifiable {
         switch self {
         case .lost: "Lost"
         case .detected: "Detected"
-        case .mock: "Mock"
         case .ready: "Ready"
         case .missing: "Missing"
         case .ok: "OK"
@@ -60,7 +58,6 @@ enum RuntimeStatus: String, CaseIterable, Identifiable {
         switch self {
         case .lost, .missing, .error: BGIColors.danger
         case .detected, .ready, .ok: BGIColors.success
-        case .mock: BGIColors.accent
         }
     }
 }
@@ -541,8 +538,17 @@ final class AppState: ObservableObject {
         addLog(.info, "Logs cleared")
     }
 
-    func exportLogsMock() {
-        addLog(.info, "Export logs requested (mock)")
+    func exportLogs() {
+        do {
+            try runtimeResourceStore.createDirectorySkeleton()
+            let destination = try UILogFileExporter.export(
+                entries: recentLogs.reversed(),
+                to: runtimeResourceStore.logURL
+            )
+            addLog(.info, "Logs exported: \(destination.path)")
+        } catch {
+            addLog(.error, "Log export failed: \(error.localizedDescription)")
+        }
     }
 
     func runSchedulerGroups() {
@@ -721,12 +727,6 @@ final class AppState: ObservableObject {
                 addLog(.error, "ScreenCaptureKit capture failed: \(error.localizedDescription)")
             }
         }
-    }
-
-    func saveDebugFrameMock() {
-        lastCaptureImageFrame = nil
-        lastCapturedFrame = .mock(window: selectedWindow)
-        addLog(.info, "Mock debug frame captured: \(frameSize) \(pixelFormat)")
     }
 
     func testInputAction(_ name: String, prefix: String = "○") {

@@ -31,7 +31,7 @@ struct LogsPage: View {
                     }
 
                     Button {
-                        appState.exportLogsMock()
+                        appState.exportLogs()
                     } label: {
                         Label("Export", systemImage: "square.and.arrow.up")
                     }
