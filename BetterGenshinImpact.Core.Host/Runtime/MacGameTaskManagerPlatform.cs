@@ -8,6 +8,7 @@ using BetterGenshinImpact.Platform.Abstractions;
 using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 using BetterGenshinImpact.GameTask.AutoPick;
+using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
 using Microsoft.Extensions.Logging;
 
@@ -44,6 +45,11 @@ public sealed class MacGameTaskManagerPlatform(
                     loggerFactory.CreateLogger<AutoPickTrigger>(),
                     paddleRecognizer,
                     yapRecognizer)),
+            "AutoSkip" => new KeyValuePair<string, ITaskTrigger>(
+                name,
+                externalConfig is AutoSkipConfig config
+                    ? new AutoSkipTrigger(config)
+                    : new AutoSkipTrigger()),
             _ => throw Unavailable($"trigger '{name}'")
         };
 
