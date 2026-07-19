@@ -5,7 +5,6 @@ using BetterGenshinImpact.GameTask.AutoFight.Config;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
-using BetterGenshinImpact.View.Drawable;
 using BetterGenshinImpact.GameTask.Model.Area;
 using OpenCvSharp;
 using System;
@@ -14,8 +13,6 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Vanara.PInvoke;
-using Point = System.Windows.Point;
 using Rect = OpenCvSharp.Rect;
 
 namespace BetterGenshinImpact.GameTask.SkillCd;
@@ -25,11 +22,12 @@ namespace BetterGenshinImpact.GameTask.SkillCd;
 /// </summary>
 public class SkillCdTrigger : ITaskTrigger
 {
+    private readonly ISkillCdRuntimePlatform _platform = SkillCdRuntimePlatform.Current;
     public string Name => "SkillCd";
     public bool IsEnabled
     {
-        get => TaskContext.Instance().Config.SkillCdConfig.Enabled;
-        set => TaskContext.Instance().Config.SkillCdConfig.Enabled = value;
+        get => _platform.Config.Enabled;
+        set => _platform.Config.Enabled = value;
     }
 
     public int Priority => 10;
@@ -76,7 +74,7 @@ public class SkillCdTrigger : ITaskTrigger
     private ImageRegion? _lastImage = null; // 上一帧
     private ImageRegion? _penultimateImage = null; // 上上帧（倒数第二帧）
     private readonly object _stateLock = new();
-    private readonly ILogger _logger = TaskControl.Logger;
+    private ILogger Logger => _platform.Logger;
     private readonly AvatarActiveCheckContext _activeCheckContext = new();
 
     /// <summary>
@@ -113,7 +111,7 @@ public class SkillCdTrigger : ITaskTrigger
 
         if (!IsEnabled)
         {
-            VisionContext.Instance().DrawContent.PutOrRemoveTextList("SkillCdText", null);
+            _platform.Publish(null);
         }
     }
 
@@ -124,7 +122,7 @@ public class SkillCdTrigger : ITaskTrigger
     {
         if (!IsEnabled)
         {
-            VisionContext.Instance().DrawContent.PutOrRemoveTextList("SkillCdText", null);
+            _platform.Publish(null);
             return;
         }
 
@@ -157,7 +155,7 @@ public class SkillCdTrigger : ITaskTrigger
             {
                 // 检测到联机状态，自动关闭SkillCd
                 IsEnabled = false;
-                _logger.LogWarning("检测到联机状态，自动关闭冷却提示");
+                Logger.LogWarning("检测到联机状态，自动关闭冷却提示");
                 return;
             }
             _contextLeaveTime = DateTime.MinValue;
@@ -180,7 +178,7 @@ public class SkillCdTrigger : ITaskTrigger
         {
             if (_wasInContext)
             {
-                VisionContext.Instance().DrawContent.PutOrRemoveTextList("SkillCdText", null);
+                _platform.Publish(null);
                 _wasInContext = false;
                 _contextEnterTime = DateTime.MinValue;
                 _lastActiveIndex = -1;
@@ -215,7 +213,7 @@ public class SkillCdTrigger : ITaskTrigger
                 CombatScenes? scenes = null;
                 try 
                 {
-                    scenes = RunnerContext.Instance.TrySyncCombatScenesSilent();
+                    scenes = _platform.TrySyncCombatScenesSilent();
                     if (scenes != null && scenes.CheckTeamInitialized())
                     {
                         var avatars = scenes.GetAvatars();
@@ -245,7 +243,7 @@ public class SkillCdTrigger : ITaskTrigger
                                     bool isFullTeam = wasFullTeam && isNowFullTeam;
                                     if (isFullTeam)
                                     {
-                                        _logger.LogInformation("[SkillCD] 队伍配置变化: {OldTeam} -> {NewTeam}",
+                                        Logger.LogInformation("[SkillCD] 队伍配置变化: {OldTeam} -> {NewTeam}",
                                             string.Join(",", _lastTeamAvatarNames),
                                             string.Join(",", newTeamNames));
                                     }
@@ -309,11 +307,7 @@ public class SkillCdTrigger : ITaskTrigger
         }
 
         // 监听元素战技 (E) 键物理输入
-        var elementalSkillKey = (int)TaskContext.Instance()
-            .Config.KeyBindingsConfig.ElementalSkill.ToVK();
-
-        short eKeyState = User32.GetAsyncKeyState(elementalSkillKey);
-        bool isEDown = (eKeyState & 0x8000) != 0;
+        bool isEDown = _platform.IsElementalSkillDown();
         if (isEDown && !_prevEKey) _lastEKeyPress = now;
         _prevEKey = isEDown;
 
@@ -321,8 +315,7 @@ public class SkillCdTrigger : ITaskTrigger
         int pressedIndex = -1;
         for (int i = 0; i < 4; i++)
         {
-            short keyState = User32.GetAsyncKeyState((int)(User32.VK.VK_1 + (byte)i));
-            bool isDown = (keyState & 0x8000) != 0;
+            bool isDown = _platform.IsPartySlotDown(i);
             if (isDown && !_prevKeys[i]) pressedIndex = i;
             _prevKeys[i] = isDown;
             _lastPressIndexTime = DateTime.Now;
@@ -339,7 +332,7 @@ public class SkillCdTrigger : ITaskTrigger
                 }
             }
 
-            if (_prevEKey && TaskContext.Instance().Config.SkillCdConfig.TriggerOnSkillUse)
+            if (_prevEKey && _platform.Config.TriggerOnSkillUse)
             {
                 ImageRegion frameToUse = _penultimateImage ?? _lastImage;
                 if (frameToUse != null)
@@ -533,7 +526,7 @@ public class SkillCdTrigger : ITaskTrigger
     private Dictionary<string, double?> ParseCustomCdConfig()
     {
         var result = new Dictionary<string, double?>();
-        var list = TaskContext.Instance().Config.SkillCdConfig.CustomCdList;
+        var list = _platform.Config.CustomCdList;
         
         if (list == null) return result;
 
@@ -567,13 +560,13 @@ public class SkillCdTrigger : ITaskTrigger
             var roi = crop.SrcMat;
             using var whiteMask = new Mat();
             Cv2.InRange(roi, new Scalar(230, 230, 230), new Scalar(255, 255, 255), whiteMask);
-            var text = OcrFactory.Paddle.OcrWithoutDetector(whiteMask);
+            var text = ImageRegionOcrPlatform.Current.OcrWithoutDetector(whiteMask);
             if (string.IsNullOrWhiteSpace(text)) return 0;
             var match = Regex.Match(text, @"\d+(\.\d+)?");
             if (match.Success && double.TryParse(match.Value, out var val))
             {
                 // 减去两帧的时间作为补偿
-                int intervalMs = TaskContext.Instance().Config.TriggerInterval;
+                int intervalMs = _platform.TriggerInterval;
                 double compensation = (intervalMs * 2) / 1000.0;
                 val -= compensation;
 
@@ -582,7 +575,7 @@ public class SkillCdTrigger : ITaskTrigger
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "[SkillCD] OCR识别CD失败");
+            Logger.LogDebug(ex, "[SkillCD] OCR识别CD失败");
         }
         return 0;
     }
@@ -592,17 +585,16 @@ public class SkillCdTrigger : ITaskTrigger
     /// </summary>
     private void UpdateOverlay()
     {
-        var drawContent = VisionContext.Instance().DrawContent;
         var sideRects = AutoFightAssets.Instance.AvatarSideIconRectList;
-        var config = TaskContext.Instance().Config.SkillCdConfig;
+        var config = _platform.Config;
         
         if (sideRects == null || sideRects.Count < 4)
         {
-            drawContent.PutOrRemoveTextList("SkillCdText", null);
+            _platform.Publish(null);
             return;
         }
 
-        var systemInfo = TaskContext.Instance().SystemInfo;
+        var systemInfo = _platform.SystemInfo;
         double factor = (double)systemInfo.GameScreenSize.Width / systemInfo.ScaleMax1080PCaptureRect.Width;
         
         // 使用配置中的坐标（保留一位小数）
@@ -614,11 +606,11 @@ public class SkillCdTrigger : ITaskTrigger
         double basePy = userPY * factor;
         double intervalY = userGap * factor;
 
-        var textList = new List<TextDrawable>();
+        var textList = new List<SkillCdTextCommand>();
         
         if (_isSyncingTeam)
         {
-            drawContent.PutOrRemoveTextList("SkillCdText", null);
+            _platform.Publish(null);
             return;
         }
 
@@ -629,10 +621,7 @@ public class SkillCdTrigger : ITaskTrigger
         if (validAvatarCount != 4)
         {
             // 不是4人，确保清空
-            if (drawContent.TextList.ContainsKey("SkillCdText"))
-            {
-               drawContent.PutOrRemoveTextList("SkillCdText", null);
-            }
+            _platform.Publish(null);
             return;
         }
         
@@ -649,11 +638,10 @@ public class SkillCdTrigger : ITaskTrigger
                 var px = basePx;
                 var py = basePy + intervalY * i;
 
-                textList.Add(new TextDrawable(_cds[i].ToString("F1"), new Point(px, py)));
+                textList.Add(new SkillCdTextCommand(_cds[i].ToString("F1"), px, py));
             }
         }
 
-        if (textList.Count == 0) drawContent.PutOrRemoveTextList("SkillCdText", null);
-        else drawContent.PutOrRemoveTextList("SkillCdText", textList);
+        _platform.Publish(textList.Count == 0 ? null : textList);
     }
 }

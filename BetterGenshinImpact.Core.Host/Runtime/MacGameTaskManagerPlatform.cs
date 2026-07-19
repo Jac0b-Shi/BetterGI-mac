@@ -24,6 +24,7 @@ using BetterGenshinImpact.GameTask.AutoEat.Assets;
 using BetterGenshinImpact.GameTask.GameLoading;
 using BetterGenshinImpact.GameTask.Placeholder;
 using BetterGenshinImpact.GameTask.MapMask;
+using BetterGenshinImpact.GameTask.SkillCd;
 using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
 using Microsoft.Extensions.Logging;
 
@@ -71,6 +72,7 @@ public sealed class MacGameTaskManagerPlatform(
             "GameLoading" => new KeyValuePair<string, ITaskTrigger>(name, new GameLoadingTrigger()),
             "RecognitionTest" => new KeyValuePair<string, ITaskTrigger>(name, new TestTrigger()),
             "MapMask" => new KeyValuePair<string, ITaskTrigger>(name, new MapMaskTrigger()),
+            "SkillCd" => new KeyValuePair<string, ITaskTrigger>(name, new SkillCdTrigger()),
             _ => throw Unavailable($"trigger '{name}'")
         };
 

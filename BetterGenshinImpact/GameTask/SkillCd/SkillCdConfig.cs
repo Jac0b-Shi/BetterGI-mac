@@ -144,10 +144,10 @@ public partial class SkillCdConfig : ObservableObject
 public partial class SkillCdRule : ObservableObject
 {
     [ObservableProperty]
-    private string _roleName;
+    private string _roleName = string.Empty;
 
     [ObservableProperty]
-    private string _cdValueText;
+    private string _cdValueText = string.Empty;
 
     [System.Text.Json.Serialization.JsonIgnore]
     [Newtonsoft.Json.JsonIgnore]
@@ -171,4 +171,3 @@ public partial class SkillCdRule : ObservableObject
         }
     }
 }
-

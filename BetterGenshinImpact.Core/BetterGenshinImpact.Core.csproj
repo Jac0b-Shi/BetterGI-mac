@@ -111,6 +111,9 @@
     <Compile Include="../BetterGenshinImpact/GameTask/MapMask/MapPointApiProvider.cs" Link="GameTask/MapMask/MapPointApiProvider.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/MapMask/MapMaskRuntimePlatform.cs" Link="GameTask/MapMask/MapMaskRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/MapMask/MapMaskTrigger.cs" Link="GameTask/MapMask/MapMaskTrigger.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/SkillCd/SkillCdConfig.cs" Link="GameTask/SkillCd/SkillCdConfig.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/SkillCd/SkillCdRuntimePlatform.cs" Link="GameTask/SkillCd/SkillCdRuntimePlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/SkillCd/SkillCdTrigger.cs" Link="GameTask/SkillCd/SkillCdTrigger.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recognition/OpenCv/TemplateMatchStabilityDetector.cs" Link="Core/Recognition/OpenCv/TemplateMatchStabilityDetector.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoPathing/CameraRotateTask.cs" Link="GameTask/AutoPathing/CameraRotateTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoPathing/PathExecutorPlatform.cs" Link="GameTask/AutoPathing/PathExecutorPlatform.cs" />

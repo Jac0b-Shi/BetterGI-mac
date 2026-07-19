@@ -244,6 +244,8 @@ public partial class App : Application
             new Core.Runtime.Windows.WindowsGameLoadingRuntimePlatform());
         GameTask.MapMask.MapMaskRuntimePlatform.Configure(
             new GameTask.MapMask.WindowsMapMaskRuntimePlatform());
+        GameTask.SkillCd.SkillCdRuntimePlatform.Configure(
+            new GameTask.SkillCd.WindowsSkillCdRuntimePlatform());
         GameTask.AutoFight.Script.CombatCommandPlatform.Configure(
             new Core.Runtime.Windows.WindowsCombatCommandPlatform());
         GameTask.AutoFight.Script.CombatSceneProvider.Configure(
