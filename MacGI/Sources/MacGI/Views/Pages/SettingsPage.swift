@@ -8,14 +8,15 @@ struct SettingsPage: View {
             BGIPageTitle(title: "软件设置")
 
             BGISettingGroup(icon: "globe", title: "软件UI语言", subtitle: "UI Language") {
-                Button("更新") {
-                    appState.addLog(.info, "UI语言更新仍为 Mock")
-                }
+                Text("暂不可更改")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Picker("", selection: .constant("简体中文")) {
                     Text("简体中文").tag("简体中文")
                     Text("English").tag("English")
                 }
                 .frame(width: 160)
+                .disabled(true)
             } content: {
                 BGISettingLine(title: "原神游戏语言", subtitle: "Game Language") {
                     Picker("", selection: .constant("简体中文")) {
@@ -189,7 +190,7 @@ struct SettingsPage: View {
                     Toggle("", isOn: $appState.keepWindowOnTop)
                         .labelsHidden()
                 }
-                BGISettingLine(title: "重置 Mock 状态", subtitle: "重置捕获、核心、输入、窗口状态。") {
+                BGISettingLine(title: "重置界面状态", subtitle: "重置捕获、核心、输入、窗口状态。") {
                     Button {
                         appState.resetUIState()
                     } label: {

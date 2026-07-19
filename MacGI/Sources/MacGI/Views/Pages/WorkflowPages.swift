@@ -227,6 +227,7 @@ struct BGIToggleMock: View {
     var body: some View {
         Toggle("", isOn: .constant(isOn))
             .labelsHidden()
+            .disabled(true)
     }
 }
 
@@ -299,9 +300,9 @@ struct OneDragonPage: View {
                 }
 
                 BGIOriginalCard(icon: .fgi("\u{e629}"), title: "自动首领讨伐配置", subtitle: "自动传送、战斗并领取奖励。") {
-                    Button("启动") {
-                        appState.addLog(.info, "自动首领讨伐配置仍为 Mock")
-                    }
+                    Text("Core 暂未开放")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 } content: {
                     BGISettingLine(title: "选择战斗策略", subtitle: "仅用于首领讨伐，不覆盖其他策略设置。") {
                         BGIInlinePicker(value: "默认策略", width: 150)

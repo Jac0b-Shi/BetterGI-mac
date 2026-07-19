@@ -15,13 +15,9 @@ struct OverviewPage: View {
                 }
                 .buttonStyle(.borderedProminent)
             } content: {
-                BGISettingLine(title: "截图后端", subtitle: "macOS 使用 ScreenCaptureKit；MockCapture 仅用于开发调试。") {
-                    Picker("", selection: .constant("MockCapture")) {
-                        Text("MockCapture").tag("MockCapture")
-                        Text("SCK - Window").tag("SCKWindow")
-                        Text("SCK - Display").tag("SCKDisplay")
-                    }
-                    .frame(width: 150)
+                BGISettingLine(title: "截图后端", subtitle: "macOS 平台回调使用 ScreenCaptureKit 捕获目标窗口。") {
+                    Text("ScreenCaptureKit")
+                        .foregroundStyle(.secondary)
                 }
                 BGISettingLine(title: "触发器间隔（毫秒）", subtitle: "默认50ms，普通用户不建议调整这个值，具体调整方式见文档。") {
                     TextField("", text: .constant("50"))
@@ -34,14 +30,14 @@ struct OverviewPage: View {
                         Text("Gpu").tag("Gpu")
                     }
                     .frame(width: 98)
-                    Button("更多...") {
-                        appState.addLog(.info, "AI推理设备设置仍为 Mock")
-                    }
+                    Text("由 Core 管理")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 BGISettingLine(title: "测试图像捕获", subtitle: "测试功能，测试几种截图模式的效果。") {
-                    Button("测试图像捕获") {
-                        appState.saveDebugFrameMock()
-                    }
+                    Text("使用真实运行帧")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 BGISettingLine(title: "手动选择窗口（无法找到原神窗口时使用）", subtitle: "原神已经启动的情况下，点击“启动”仍旧提示无法找到窗口时使用。") {
                     Button("选择捕获窗口") {
@@ -55,9 +51,9 @@ struct OverviewPage: View {
                     .labelsHidden()
             } content: {
                 BGISettingLine(title: "原神安装位置（不支持云原神的联动启动）", subtitle: "/Applications/Genshin Impact.app") {
-                    Button("浏览") {
-                        appState.addLog(.info, "浏览原神安装位置仍为 Mock")
-                    }
+                    Text("暂不可更改")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 BGISettingLine(title: "启动参数", subtitle: "如果你不知道什么是启动参数请不要填写。") {
                     TextField("", text: .constant(""))

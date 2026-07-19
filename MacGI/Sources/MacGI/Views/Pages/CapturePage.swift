@@ -94,7 +94,7 @@ struct CapturePage: View {
                                 Image(systemName: "photo")
                                     .font(.system(size: 42, weight: .light))
                                     .foregroundStyle(BGIColors.mutedText)
-                                Text("Mock Capture Frame")
+                                Text("No captured frame")
                                     .font(BGIFonts.bodyStrong)
                                     .foregroundStyle(BGIColors.secondaryText)
                                 Text("\(appState.frameSize) · \(appState.pixelFormat)")
@@ -104,11 +104,6 @@ struct CapturePage: View {
                         }
                     }
                     .frame(height: 260)
-                    Button {
-                        appState.saveDebugFrameMock()
-                    } label: {
-                        Label("Save Debug Frame", systemImage: "square.and.arrow.down")
-                    }
                 }
             }
         }
