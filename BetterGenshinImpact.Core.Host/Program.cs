@@ -108,6 +108,10 @@ var autoFishingRuntimePlatform = new MacAutoFishingRuntimePlatform(
 AutoFishingRuntimePlatform.Configure(autoFishingRuntimePlatform);
 GenshinRuntimePlatform.Configure(new MacGenshinRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, autoFishingRuntimePlatform, "TemplateMatch"));
+DispatcherRuntimePlatform.Configure(new MacDispatcherRuntimePlatform(
+    shutdown.Token, autoPickRuntimeState, semanticInputBackend,
+    () => gameTaskManagerPlatform.SystemInfo, autoPickConfigProvider,
+    paddleAutoPickRecognizer, yapAutoPickRecognizer));
 TaskParameterPlatform.Configure(new MacTaskParameterPlatform(
     autoFishingRuntimePlatform.GameCultureInfoName));
 BvSimpleOperationPlatform.Configure(bvSimpleOperationPlatform);
