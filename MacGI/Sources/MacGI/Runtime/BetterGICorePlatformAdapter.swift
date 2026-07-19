@@ -42,6 +42,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
     }
 
     private weak var appState: AppState?
+    private var audioCapture: BGIAudioSampleProvider?
 
     init(appState: AppState) { self.appState = appState }
 
@@ -121,6 +122,49 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             else {
                 throw BetterGICorePlatformAdapterError.invalidParameters("Unable to activate the selected game process.")
             }
+            return ["acknowledged": true]
+        case "audio.start":
+            guard let parameters,
+                  let processID = (parameters["processId"] as? NSNumber)?.int32Value,
+                  processID == appState.selectedWindow.ownerPID,
+                  (parameters["sampleRate"] as? NSNumber)?.intValue == 16_000,
+                  (parameters["channels"] as? NSNumber)?.intValue == 1,
+                  parameters["sampleFormat"] as? String == "float32le"
+            else {
+                throw BetterGICorePlatformAdapterError.invalidParameters(
+                    "audio.start requires the selected PID and 16kHz mono float32le."
+                )
+            }
+            guard audioCapture == nil else {
+                throw BetterGICorePlatformAdapterError.invalidParameters("Core audio capture is already active.")
+            }
+            let capture = BGIScreenCaptureKitAudioCapture(targetProcessID: processID)
+            try capture.startCapture()
+            audioCapture = capture
+            return ["acknowledged": true]
+        case "audio.read":
+            guard let audioCapture, audioCapture.isCapturing else {
+                throw BetterGICorePlatformAdapterError.invalidParameters("Core audio capture is not active.")
+            }
+            let samples = audioCapture.readSamples()
+            let data = samples.withUnsafeBytes { Data($0) }
+            return [
+                "sampleFormat": "float32le",
+                "sampleCount": samples.count,
+                "samplesBase64": data.base64EncodedString(),
+            ]
+        case "audio.discard":
+            guard let audioCapture, audioCapture.isCapturing else {
+                throw BetterGICorePlatformAdapterError.invalidParameters("Core audio capture is not active.")
+            }
+            _ = audioCapture.readSamples()
+            return ["acknowledged": true]
+        case "audio.stop":
+            guard let audioCapture else {
+                throw BetterGICorePlatformAdapterError.invalidParameters("Core audio capture is not active.")
+            }
+            audioCapture.stopCapture()
+            self.audioCapture = nil
             return ["acknowledged": true]
         case "input.dispatch":
             let action = try makeInputAction(parameters, appState: appState)

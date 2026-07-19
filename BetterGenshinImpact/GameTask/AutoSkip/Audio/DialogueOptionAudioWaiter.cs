@@ -5,7 +5,9 @@ using System.Threading;
 
 namespace BetterGenshinImpact.GameTask.AutoSkip.Audio;
 
-internal sealed class DialogueOptionAudioWaiter : IAutoSkipAudioWaiter
+public sealed class DialogueOptionAudioWaiter(
+    Func<int?> getGameProcessId,
+    Func<int, IAutoSkipAudioSampleCapture> createCapture) : IAutoSkipAudioWaiter
 {
     private const int SilenceDurationMilliseconds = 2000;
     private const int SpeechStartGraceMilliseconds = 5000;
@@ -159,7 +161,7 @@ internal sealed class DialogueOptionAudioWaiter : IAutoSkipAudioWaiter
     {
         lock (_detectorLock)
         {
-            var targetProcessId = GetGameProcessId();
+            var targetProcessId = getGameProcessId();
             if (targetProcessId is not > 0)
             {
                 logger.LogWarning("自动剧情：未能获取游戏进程 PID，将使用固定延迟");
@@ -183,7 +185,7 @@ internal sealed class DialogueOptionAudioWaiter : IAutoSkipAudioWaiter
 
             try
             {
-                _detector = DialogueOptionVoiceDetector.Create(processId);
+                _detector = DialogueOptionVoiceDetector.Create(processId, createCapture);
                 _unavailableProcessId = null;
                 _detectorRetryAfter = DateTime.MinValue;
                 logger.LogDebug("自动剧情：Silero VAD 采样来源 游戏进程音频 PID={ProcessId}", processId);
@@ -197,12 +199,6 @@ internal sealed class DialogueOptionAudioWaiter : IAutoSkipAudioWaiter
                 return null;
             }
         }
-    }
-
-    private static int? GetGameProcessId()
-    {
-        using var process = SystemControl.GetProcessByHandle(TaskContext.Instance().GameHandle);
-        return process?.Id;
     }
 
     private bool StartFallbackWait(int milliseconds)

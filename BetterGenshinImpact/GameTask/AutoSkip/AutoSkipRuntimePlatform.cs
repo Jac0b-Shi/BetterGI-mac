@@ -1,6 +1,7 @@
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using System;
 using System.Threading;
+using System.Collections.Generic;
 using BetterGenshinImpact.GameTask.Model;
 using Microsoft.Extensions.Logging;
 using BetterGenshinImpact.Core.Recognition.OCR;
@@ -16,6 +17,12 @@ public interface IAutoSkipAudioWaiter
     void ReleaseDetector();
     bool Start(int maxWaitMilliseconds, int fallbackDelayMilliseconds, Microsoft.Extensions.Logging.ILogger logger);
     bool Update(Microsoft.Extensions.Logging.ILogger logger);
+}
+
+public interface IAutoSkipAudioSampleCapture : IDisposable
+{
+    void ReadAvailableSamples(List<float> destination);
+    void DiscardAvailableSamples();
 }
 
 public interface IAutoSkipRuntimePlatform

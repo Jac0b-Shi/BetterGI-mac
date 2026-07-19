@@ -19,7 +19,9 @@ public sealed class WindowsAutoSkipRuntimePlatform : IAutoSkipRuntimePlatform
     public IOcrService OcrService => OcrFactory.Paddle;
     public bool IsGameActive() => SystemControl.IsGenshinImpactActive();
     public void ActivateGameWindow() => SystemControl.ActivateWindow();
-    public IAutoSkipAudioWaiter CreateAudioWaiter() => new DialogueOptionAudioWaiter();
+    public IAutoSkipAudioWaiter CreateAudioWaiter() => new DialogueOptionAudioWaiter(
+        GetGameProcessId,
+        processId => new ProcessLoopbackAudioCapture(processId));
     public void SimulateBackgroundAction(GIActions action) =>
         TaskContext.Instance().PostMessageSimulator.SimulateActionBackground(action);
     public void PressBackgroundKey(BgiKey key) =>
@@ -28,4 +30,10 @@ public sealed class WindowsAutoSkipRuntimePlatform : IAutoSkipRuntimePlatform
         TaskContext.Instance().PostMessageSimulator.LeftButtonClickBackground();
     public void BackgroundClick(Region region) => region.BackgroundClick();
     public void ReportError(string message) => ThemedMessageBox.Error(message);
+
+    private static int? GetGameProcessId()
+    {
+        using var process = SystemControl.GetProcessByHandle(TaskContext.Instance().GameHandle);
+        return process?.Id;
+    }
 }

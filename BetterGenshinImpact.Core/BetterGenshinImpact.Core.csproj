@@ -97,6 +97,9 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/OneKeyExpeditionTask.cs" Link="GameTask/AutoSkip/OneKeyExpeditionTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/AutoSkipConfig.cs" Link="GameTask/AutoSkip/AutoSkipConfig.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/AutoSkipTrigger.cs" Link="GameTask/AutoSkip/AutoSkipTrigger.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/Audio/DialogueOptionAudioWaiter.cs" Link="GameTask/AutoSkip/Audio/DialogueOptionAudioWaiter.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/Audio/DialogueOptionVoiceDetector.cs" Link="GameTask/AutoSkip/Audio/DialogueOptionVoiceDetector.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/Audio/SileroVadDetector.cs" Link="GameTask/AutoSkip/Audio/SileroVadDetector.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoWood/Assets/AutoWoodAssets.cs" Link="GameTask/AutoWood/Assets/AutoWoodAssets.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/GameLoading/Assets/GameLoadingAssets.cs" Link="GameTask/GameLoading/Assets/GameLoadingAssets.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoPathing/CameraRotateTask.cs" Link="GameTask/AutoPathing/CameraRotateTask.cs" />

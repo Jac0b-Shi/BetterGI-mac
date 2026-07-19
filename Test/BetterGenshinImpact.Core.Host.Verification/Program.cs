@@ -26,6 +26,7 @@ using Microsoft.ClearScript.V8;
 using Newtonsoft.Json.Linq;
 using System.Dynamic;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 
 if (!OperatingSystem.IsMacOS())
     throw new PlatformNotSupportedException("Core Host verification currently requires macOS.");
@@ -422,17 +423,37 @@ try
     autoSkipPlatform.PressBackgroundKey(BetterGenshinImpact.Platform.Abstractions.BgiKey.Space);
     autoSkipPlatform.ReportError("verification error");
     await autoSkipResponder;
-    var vadUnavailable = false;
-    try
+    var audioSamples = new List<float>();
+    var audioCallbacks = server.PlatformCallbacks;
+    var audioCaptureTask = Task.Run(() =>
     {
-        autoSkipPlatform.CreateAudioWaiter().Start(
-            1000, 500, loggerFactory.CreateLogger("AutoSkipVerification"));
-    }
-    catch (CapabilityUnavailableException)
+        using var capture = new MacProcessAudioSampleCapture(
+            4242, audioCallbacks, sessionToken, cancellation.Token);
+        capture.ReadAvailableSamples(audioSamples);
+        capture.DiscardAvailableSamples();
+    }, cancellation.Token);
+    foreach (var expectedMethod in new[] { "audio.start", "audio.read", "audio.discard", "audio.stop" })
     {
-        vadUnavailable = true;
+        var audio = await callbackConnection.ReadRequestAsync(cancellation.Token)
+            ?? throw new EndOfStreamException("AutoSkip audio callback channel ended unexpectedly.");
+        Require(audio.Method == expectedMethod,
+            $"macOS AutoSkip audio expected {expectedMethod}, got {audio.Method}.");
+        object result = expectedMethod == "audio.read"
+            ? new
+            {
+                sampleFormat = "float32le",
+                sampleCount = 2,
+                samplesBase64 = Convert.ToBase64String(
+                    MemoryMarshal.AsBytes<float>(new float[] { 0.25f, -0.5f }).ToArray())
+            }
+            : new { acknowledged = true };
+        await callbackConnection.WriteResponseAsync(
+            RpcResponse.Success(audio.Id, result), cancellation.Token);
     }
-    Require(vadUnavailable, "macOS AutoSkip VAD silently fell back instead of reporting unavailable capability.");
+    await audioCaptureTask;
+    Require(audioSamples.SequenceEqual([0.25f, -0.5f]),
+        "macOS AutoSkip audio transport did not preserve float32 PCM samples.");
+    Console.WriteLine("AutoSkip audio passed: upstream C# waiter/VAD with macOS process PCM callbacks and no Swift business fallback.");
 
     var reloginPlatform = new MacExitAndReloginPlatform();
     var focusResponder = Task.Run(async () =>

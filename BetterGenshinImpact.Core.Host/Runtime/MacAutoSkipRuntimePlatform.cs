@@ -11,6 +11,7 @@ using System.Text.Json.Nodes;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Platform.Abstractions;
 using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.GameTask.AutoSkip.Audio;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
@@ -30,7 +31,10 @@ public sealed class MacAutoSkipRuntimePlatform(
     public bool IsGameActive() => Invoke("window.metrics", null).Value<bool?>("isActive")
         ?? throw new InvalidDataException("window.metrics did not return isActive.");
     public void ActivateGameWindow() => RequireAcknowledgement("window.activate", null);
-    public IAutoSkipAudioWaiter CreateAudioWaiter() => new UnavailableAudioWaiter();
+    public IAutoSkipAudioWaiter CreateAudioWaiter() => new DialogueOptionAudioWaiter(
+        () => SystemInfo.GameProcessId,
+        processId => new MacProcessAudioSampleCapture(
+            processId, callbacks, sessionToken, cancellationToken));
     public void SimulateBackgroundAction(GIActions action) =>
         TaskControlPlatform.Current.SimulateAction(action, KeyType.KeyPress);
     public void PressBackgroundKey(BgiKey key) => RequireAcknowledgement(
@@ -76,15 +80,4 @@ public sealed class MacAutoSkipRuntimePlatform(
             ?? new AutoSkipConfig();
     }
 
-    private sealed class UnavailableAudioWaiter : IAutoSkipAudioWaiter
-    {
-        public bool IsWaiting => throw Unavailable();
-        public void Cancel() => throw Unavailable();
-        public void ReleaseDetector() => throw Unavailable();
-        public bool Start(int maxWaitMilliseconds, int fallbackDelayMilliseconds, ILogger logger) =>
-            throw Unavailable();
-        public bool Update(ILogger logger) => throw Unavailable();
-        private static CapabilityUnavailableException Unavailable() => new(
-            "AutoSkip process-audio VAD is not available on the macOS Core Host.");
-    }
 }
