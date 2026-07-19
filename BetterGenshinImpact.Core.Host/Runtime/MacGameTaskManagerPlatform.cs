@@ -9,6 +9,15 @@ using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 using BetterGenshinImpact.GameTask.AutoPick;
 using BetterGenshinImpact.GameTask.AutoSkip;
+using BetterGenshinImpact.GameTask.AutoFishing;
+using BetterGenshinImpact.GameTask.AutoPick.Assets;
+using BetterGenshinImpact.GameTask.AutoSkip.Assets;
+using BetterGenshinImpact.GameTask.AutoFishing.Assets;
+using BetterGenshinImpact.GameTask.QuickTeleport.Assets;
+using BetterGenshinImpact.GameTask.AutoWood.Assets;
+using BetterGenshinImpact.GameTask.AutoFight.Assets;
+using BetterGenshinImpact.GameTask.Common.Element.Assets;
+using BetterGenshinImpact.GameTask.GameLoading.Assets;
 using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
 using Microsoft.Extensions.Logging;
 
@@ -50,10 +59,22 @@ public sealed class MacGameTaskManagerPlatform(
                 externalConfig is AutoSkipConfig config
                     ? new AutoSkipTrigger(config)
                     : new AutoSkipTrigger()),
+            "AutoFish" => new KeyValuePair<string, ITaskTrigger>(name, new AutoFishingTrigger()),
             _ => throw Unavailable($"trigger '{name}'")
         };
 
-    public void ReloadAssets() => throw Unavailable("asset reload");
+    public void ReloadAssets()
+    {
+        AutoPickAssets.DestroyInstance();
+        AutoSkipAssets.DestroyInstance();
+        AutoFishingAssets.DestroyInstance();
+        QuickTeleportAssets.DestroyInstance();
+        AutoWoodAssets.DestroyInstance();
+        AutoFightAssets.DestroyInstance();
+        ElementAssets.DestroyInstance();
+        GameLoadingAssets.DestroyInstance();
+        MapLazyAssets.DestroyInstance();
+    }
     public void ClearOverlay() => BetterGenshinImpact.Core.Recognition.OverlayDrawPlatform.Current.ClearAll();
 
     private JObject Metrics() => callbacks.InvokeAsync(
