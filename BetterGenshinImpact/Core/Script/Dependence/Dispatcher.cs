@@ -68,7 +68,7 @@ public class Dispatcher
     /// </summary>
     public void ClearAllTriggers()
     {
-        TaskTriggerDispatcher.Instance().ClearTriggers();
+        DispatcherRuntimePlatform.Current.ClearTriggers();
     }
 
     /// <summary>
@@ -90,7 +90,7 @@ public class Dispatcher
             throw new ArgumentNullException(nameof(realtimeTimer.Name), "实时任务名称不能为空");
         }
 
-        if (!TaskTriggerDispatcher.Instance().AddTrigger(realtimeTimer.Name, realtimeTimer.Config))
+        if (!DispatcherRuntimePlatform.Current.AddTrigger(realtimeTimer.Name, realtimeTimer.Config))
         {
             throw new ArgumentException($"添加实时任务失败: {realtimeTimer.Name}", nameof(realtimeTimer.Name));
         }
@@ -101,7 +101,7 @@ public class Dispatcher
         // 创建链接的取消令牌源，任何一个取消都会触发
         CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             customCts.Token,
-            CancellationContext.Instance.Cts.Token);
+            DispatcherRuntimePlatform.Current.GlobalCancellationToken);
         await RunTask(soloTask, linkedCts.Token);
     }
 
@@ -142,7 +142,7 @@ public class Dispatcher
         else
         {
             // 如果没有自定义令牌，就使用全局令牌
-            cancellationToken = CancellationContext.Instance.Cts.Token;
+            cancellationToken = DispatcherRuntimePlatform.Current.GlobalCancellationToken;
         }
 
         // 根据名称执行任务
@@ -312,7 +312,7 @@ public class Dispatcher
     public CancellationTokenSource GetLinkedCancellationTokenSource()
     {
         // 创建一个新的链接令牌源，链接到全局令牌
-        return CancellationTokenSource.CreateLinkedTokenSource(CancellationContext.Instance.Cts.Token);
+        return CancellationTokenSource.CreateLinkedTokenSource(DispatcherRuntimePlatform.Current.GlobalCancellationToken);
     }
 
 
@@ -334,7 +334,7 @@ public class Dispatcher
             throw new ArgumentNullException(nameof(param), "秘境任务参数不能为空");  
         }  
   
-        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;  
+        CancellationToken cancellationToken = customCt ?? DispatcherRuntimePlatform.Current.GlobalCancellationToken;
         return await new AutoDomainTask(param).Start(cancellationToken);
     }  
 
@@ -351,7 +351,7 @@ public class Dispatcher
             throw new ArgumentNullException(nameof(param), "自动首领讨伐任务参数不能为空");
         }
 
-        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;
+        CancellationToken cancellationToken = customCt ?? DispatcherRuntimePlatform.Current.GlobalCancellationToken;
         return await new AutoBossTask(param).Start(cancellationToken);
     }
 
@@ -368,7 +368,7 @@ public class Dispatcher
             throw new ArgumentNullException(nameof(param), "战斗任务参数不能为空");  
         }  
   
-        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;  
+        CancellationToken cancellationToken = customCt ?? DispatcherRuntimePlatform.Current.GlobalCancellationToken;
         var factory = GameTask.AutoFight.Factory.CombatTaskFactoryProvider.GetFactory(param.CombatStrategyPath);
         var fightTask = factory.CreateTask(param);
         await fightTask.Start(cancellationToken);  
@@ -387,7 +387,7 @@ public class Dispatcher
             throw new ArgumentNullException(nameof(param), "自动地脉花任务参数不能为空");  
         }  
   
-        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;  
+        CancellationToken cancellationToken = customCt ?? DispatcherRuntimePlatform.Current.GlobalCancellationToken;
         await new AutoLeyLineOutcropTask(param).Start(cancellationToken);  
     }
 
@@ -405,7 +405,7 @@ public class Dispatcher
             throw new ArgumentNullException(nameof(param), "自动幽境危战任务参数不能为空");
         }
 
-        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;
+        CancellationToken cancellationToken = customCt ?? DispatcherRuntimePlatform.Current.GlobalCancellationToken;
         await new AutoStygianOnslaughtTask(param).Start(cancellationToken);
     }
     
@@ -422,7 +422,7 @@ public class Dispatcher
             throw new ArgumentNullException(nameof(param), "背包物品计数参数不能为空");
         }
 
-        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;
+        CancellationToken cancellationToken = customCt ?? DispatcherRuntimePlatform.Current.GlobalCancellationToken;
         object result = await new CountInventoryItem(param).Start(cancellationToken);
 
         if (param.ItemName != null)
