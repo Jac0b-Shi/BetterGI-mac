@@ -186,7 +186,7 @@ server.AttachPathExecutorPlatform(pathExecutorPlatform);
 var navigationPlatform = new MacNavigationPlatform(
     server.PlatformCallbacks, sessionToken, cancellation.Token);
 NavigationPlatform.Configure(navigationPlatform);
-ScriptGroupExecutionServices.Configure(new MacScriptGroupExecutionServices());
+ScriptGroupExecutionServices.Configure(new MacScriptGroupExecutionServices(layout));
 var shellPlatform = new MacShellTaskPlatform(server.PlatformCallbacks, sessionToken, cancellation.Token);
 ShellTaskPlatform.Configure(shellPlatform);
 var shellResult = await shellPlatform.ExecuteAsync(
@@ -392,6 +392,20 @@ try
         await callbackConnection.WriteResponseAsync(
             RpcResponse.Success(current.Id, new { acknowledged = true }), cancellation.Token);
 
+        var dpiMetrics = await callbackConnection.ReadRequestAsync(cancellation.Token)
+            ?? throw new EndOfStreamException("Real PathExecutor did not request DPI metrics.");
+        Require(dpiMetrics.Method == "window.metrics",
+            "Real PathExecutor constructor requested unexpected DPI data.");
+        await callbackConnection.WriteResponseAsync(
+            RpcResponse.Success(dpiMetrics.Id, new { dpiScale = 1.0 }), cancellation.Token);
+
+        var executorDpiMetrics = await callbackConnection.ReadRequestAsync(cancellation.Token)
+            ?? throw new EndOfStreamException("PathExecutor camera did not request DPI metrics.");
+        Require(executorDpiMetrics.Method == "window.metrics",
+            "PathExecutor camera requested unexpected DPI data.");
+        await callbackConnection.WriteResponseAsync(
+            RpcResponse.Success(executorDpiMetrics.Id, new { dpiScale = 1.0 }), cancellation.Token);
+
         var position = await callbackConnection.ReadRequestAsync(cancellation.Token)
             ?? throw new EndOfStreamException("Navigation did not publish its matched position.");
         Require(position.Method == "pathing.position" &&
@@ -408,9 +422,14 @@ try
         Info = new PathingTaskInfo { Name = "Verification Route", Author = "BetterGI" },
         Positions = [new Waypoint { X = 1, Y = 2 }]
     });
+    var composedPathExecutor = ScriptGroupExecutionServices.Current.CreatePathExecutor(cancellation.Token);
+    Require(composedPathExecutor is PathExecutor,
+        "ScriptGroup Pathing branch did not create the real upstream PathExecutor.");
+    Require(ScriptGroupExecutionServices.Current.DefaultPartyConfig is not null,
+        "ScriptGroup Pathing branch did not expose the Core-owned default party config.");
     navigationPlatform.PublishCurrentPosition(new OpenCvSharp.Point2f(123.5f, -42.25f));
     await pathingPlatformResponder;
-    Console.WriteLine("PathExecutor platform passed: real window metrics, Core-owned config, current-route metadata and Navigation position callbacks.");
+    Console.WriteLine("PathExecutor platform passed: real ScriptGroup executor, window metrics, Core-owned config, current-route metadata and Navigation callbacks.");
 
     GlobalMethod.Configure(globalRuntime);
     ScriptProjectHost.Configure(new MacScriptProjectHostInitializer());

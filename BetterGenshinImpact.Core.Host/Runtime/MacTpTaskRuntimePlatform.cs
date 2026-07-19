@@ -18,7 +18,7 @@ public sealed class MacTpTaskRuntimePlatform : ITpTaskRuntimePlatform
         QuickTeleportConfig = root?["quickTeleportConfig"]?.Deserialize<QuickTeleportConfig>(ConfigJson.Options)
             ?? new QuickTeleportConfig();
         MapMatchingMethod = root?["pathingConditionConfig"]?["mapMatchingMethod"]?.GetValue<string>()
-            ?? "SIFT";
+            ?? "TemplateMatch";
     }
 
     public ISystemInfo SystemInfo { get; }

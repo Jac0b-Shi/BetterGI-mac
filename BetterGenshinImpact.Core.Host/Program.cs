@@ -136,7 +136,7 @@ ShellTaskPlatform.Configure(new MacShellTaskPlatform(server.PlatformCallbacks, s
 KeyMouseMacroPlatform.Configure(new MacKeyMouseMacroPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token,
     loggerFactory.CreateLogger("BetterGenshinImpact.Core.Recorder.KeyMouseMacroPlayer")));
-ScriptGroupExecutionServices.Configure(new MacScriptGroupExecutionServices());
+ScriptGroupExecutionServices.Configure(new MacScriptGroupExecutionServices(layout));
 DesktopRegionInputPlatform.Configure(new MacSemanticInputBackend(
     server.PlatformCallbacks, sessionToken, shutdown.Token));
 TaskRunnerPlatform.Configure(new MacTaskRunnerPlatform(
