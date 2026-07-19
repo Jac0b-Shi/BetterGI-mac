@@ -3,6 +3,8 @@ using BetterGenshinImpact.Core.Recorder;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System.Drawing;
+using BetterGenshinImpact.GameTask.Common;
+using BetterGenshinImpact.GameTask.Common.Map;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
@@ -38,8 +40,11 @@ public sealed class MacKeyMouseMacroPlatform(
     }
 
     public void ActivateGameWindow() => Acknowledged("window.activate", null);
-    public double GetCameraOrientation() => throw new CapabilityUnavailableException(
-        "Camera-orientation correction requires capture.request shared-memory transport.");
+    public double GetCameraOrientation()
+    {
+        using var region = TaskControl.CaptureToRectArea();
+        return CameraOrientation.Compute(region.SrcMat);
+    }
     public void KeyDown(int windowsVirtualKey) => Input(new { action = "keyDown", windowsVirtualKey });
     public void KeyUp(int windowsVirtualKey) => Input(new { action = "keyUp", windowsVirtualKey });
     public void MoveMouseTo(double normalizedX, double normalizedY) =>

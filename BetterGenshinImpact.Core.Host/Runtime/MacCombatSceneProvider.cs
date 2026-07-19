@@ -1,10 +1,10 @@
 using BetterGenshinImpact.GameTask.AutoFight.Script;
+using BetterGenshinImpact.GameTask;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
 public sealed class MacCombatSceneProvider : ICombatSceneProvider
 {
-    public Task<ICombatScriptScene?> GetCombatScene(CancellationToken cancellationToken) =>
-        throw new CapabilityUnavailableException(
-            "Combat scene recognition is unavailable until the full upstream CombatScenes dependency closure is composed.");
+    public async Task<ICombatScriptScene?> GetCombatScene(CancellationToken cancellationToken) =>
+        await RunnerContext.Instance.GetCombatScenes(cancellationToken);
 }

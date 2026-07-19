@@ -3,6 +3,7 @@ using BetterGenshinImpact.Core.Script.Dependence;
 using BetterGenshinImpact.GameTask.Model.Area;
 using Newtonsoft.Json.Linq;
 using System.Runtime.Versioning;
+using BetterGenshinImpact.GameTask.AutoFight.Script;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
@@ -43,8 +44,13 @@ public sealed class MacGlobalMethodRuntime(
 
     public ImageRegion CaptureGameRegion() => captureRing.Read(Invoke("capture.request", null));
 
-    public string[] GetAvatars() => throw new CapabilityUnavailableException(
-        "Avatar recognition requires the capture.request shared-memory frame transport.");
+    public string[] GetAvatars()
+    {
+        var scene = CombatSceneProvider.Current.GetCombatScene(cancellationToken)
+            .GetAwaiter().GetResult()
+            ?? throw new InvalidOperationException("队伍角色识别失败");
+        return scene.GetAvatars().Select(avatar => avatar.Name).ToArray();
+    }
 
     private void Dispatch(object operation)
     {
