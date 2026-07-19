@@ -10,9 +10,24 @@ public class AutoEatAssets : BaseAssets<AutoEatAssets>
     public RecognitionObject RecoveryIconRa;
     public RecognitionObject ResurrectionIconRa;
 
-    private AutoEatAssets()
+    #if BGI_FULL_WINDOWS
+    private AutoEatAssets() : base()
+    #else
+    public static void Initialize(ISystemInfo systemInfo)
     {
-        var s = TaskContext.Instance().SystemInfo.AssetScale;
+        ArgumentNullException.ThrowIfNull(systemInfo);
+        if (_instance is not null)
+            throw new InvalidOperationException("AutoEatAssets is already initialized. Call DestroyInstance() first.");
+        _instance = new AutoEatAssets(systemInfo);
+    }
+
+    public new static AutoEatAssets Instance => _instance
+        ?? throw new InvalidOperationException("AutoEatAssets.Initialize(...) must be called before Instance.");
+
+    public AutoEatAssets(ISystemInfo systemInfo) : base(systemInfo)
+    #endif
+    {
+        var s = systemInfo.AssetScale;
         
         RecoveryIconRa = new RecognitionObject
         {

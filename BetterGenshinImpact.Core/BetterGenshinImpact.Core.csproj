@@ -303,6 +303,9 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingTask.cs" Link="GameTask/AutoFishing/AutoFishingTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingTaskParam.cs" Link="GameTask/AutoFishing/AutoFishingTaskParam.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingTrigger.cs" Link="GameTask/AutoFishing/AutoFishingTrigger.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoEat/AutoEatRuntimePlatform.cs" Link="GameTask/AutoEat/AutoEatRuntimePlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoEat/AutoEatTrigger.cs" Link="GameTask/AutoEat/AutoEatTrigger.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoEat/Assets/AutoEatAssets.cs" Link="GameTask/AutoEat/Assets/AutoEatAssets.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Model/BaseTaskParam.cs" Link="GameTask/Model/BaseTaskParam.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Model/TaskParameterPlatform.cs" Link="GameTask/Model/TaskParameterPlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridScreenExtensions.cs" Link="GameTask/Model/GameUI/GridScreenExtensions.cs" />

@@ -238,6 +238,8 @@ public partial class App : Application
         GameTask.AutoPathing.NavigationPlatform.Configure(new Core.Runtime.Windows.WindowsNavigationPlatform());
         GameTask.QuickTeleport.QuickTeleportRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsQuickTeleportRuntimePlatform());
+        GameTask.AutoEat.AutoEatRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsAutoEatRuntimePlatform());
         GameTask.AutoFight.Script.CombatCommandPlatform.Configure(
             new Core.Runtime.Windows.WindowsCombatCommandPlatform());
         GameTask.AutoFight.Script.CombatSceneProvider.Configure(

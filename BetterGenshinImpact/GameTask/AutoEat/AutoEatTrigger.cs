@@ -1,14 +1,10 @@
-using BetterGenshinImpact.Core.Simulator;
-using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.AutoEat.Assets;
-using BetterGenshinImpact.Service.Notification;
-using BetterGenshinImpact.Service.Notification.Model.Enum;
 using Microsoft.Extensions.Logging;
 using System;
-using static BetterGenshinImpact.GameTask.Common.TaskControl;
+using BetterGenshinImpact.Core.Simulator.Extensions;
 
 namespace BetterGenshinImpact.GameTask.AutoEat;
 
@@ -18,7 +14,8 @@ namespace BetterGenshinImpact.GameTask.AutoEat;
 /// </summary>
 public class AutoEatTrigger : ITaskTrigger
 {
-    private readonly ILogger<AutoEatTrigger> _logger = App.GetLogger<AutoEatTrigger>();
+    private readonly IAutoEatRuntimePlatform _runtime;
+    private readonly ILogger<AutoEatTrigger> _logger;
 
     public string Name => "自动吃药";
     public bool IsEnabled { get; set; }
@@ -35,7 +32,9 @@ public class AutoEatTrigger : ITaskTrigger
 
     public AutoEatTrigger()
     {
-        _config = TaskContext.Instance().Config.AutoEatConfig;
+        _runtime = AutoEatRuntimePlatform.Current;
+        _logger = _runtime.GetLogger<AutoEatTrigger>();
+        _config = _runtime.Config;
     }
 
     public void Init()
@@ -79,7 +78,7 @@ public class AutoEatTrigger : ITaskTrigger
                     if ((now - _lastEatTime).TotalMilliseconds >= _config.EatInterval)
                     {
                         // 使用便携营养袋
-                        Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget);
+                        _runtime.SimulateAction(GIActions.QuickUseGadget);
                         _lastEatTime = now;
                         
                         _logger.LogInformation("检测到红血且不在CD，自动吃药");
@@ -94,7 +93,7 @@ public class AutoEatTrigger : ITaskTrigger
                 if ((now - _lastResurrectionTime).TotalSeconds >= 2)
                 {
                     // 走原神动作映射，跟随“快捷使用小道具”键位配置
-                    Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget);
+                    _runtime.SimulateAction(GIActions.QuickUseGadget);
                     _lastResurrectionTime = now;
                     _logger.LogInformation("检测到复活图标，自动复活");
                 }

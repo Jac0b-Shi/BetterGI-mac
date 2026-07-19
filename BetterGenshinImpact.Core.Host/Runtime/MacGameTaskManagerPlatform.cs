@@ -19,6 +19,8 @@ using BetterGenshinImpact.GameTask.AutoFight.Assets;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.GameLoading.Assets;
 using BetterGenshinImpact.GameTask.QuickTeleport;
+using BetterGenshinImpact.GameTask.AutoEat;
+using BetterGenshinImpact.GameTask.AutoEat.Assets;
 using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
 using Microsoft.Extensions.Logging;
 
@@ -62,6 +64,7 @@ public sealed class MacGameTaskManagerPlatform(
                     : new AutoSkipTrigger()),
             "AutoFish" => new KeyValuePair<string, ITaskTrigger>(name, new AutoFishingTrigger()),
             "QuickTeleport" => new KeyValuePair<string, ITaskTrigger>(name, new QuickTeleportTrigger()),
+            "AutoEat" => new KeyValuePair<string, ITaskTrigger>(name, new AutoEatTrigger()),
             _ => throw Unavailable($"trigger '{name}'")
         };
 
@@ -76,6 +79,7 @@ public sealed class MacGameTaskManagerPlatform(
         ElementAssets.DestroyInstance();
         GameLoadingAssets.DestroyInstance();
         MapLazyAssets.DestroyInstance();
+        AutoEatAssets.DestroyInstance();
     }
     public void ClearOverlay() => BetterGenshinImpact.Core.Recognition.OverlayDrawPlatform.Current.ClearAll();
 

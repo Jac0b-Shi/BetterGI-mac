@@ -3,6 +3,7 @@ using BetterGenshinImpact.Core.Host.Protocol;
 using BetterGenshinImpact.Core.Host.Runtime;
 using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.Core.Script.Project;
 using BetterGenshinImpact.Core.Script.Group;
@@ -18,6 +19,7 @@ using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.FarmingPlan;
 using BetterGenshinImpact.GameTask.QuickTeleport;
+using BetterGenshinImpact.GameTask.AutoEat;
 using BetterGenshinImpact.Service;
 using BetterGenshinImpact.GameTask.Shell;
 using Microsoft.Extensions.Logging;
@@ -176,7 +178,8 @@ await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "config.json"), """
         "autoEnterGameEnabled": false
       },
       "quickTeleportConfig": { "enabled": true, "hotkeyTpEnabled": true },
-      "hotKeyConfig": { "quickTeleportTickHotkey": "F6" }
+      "hotKeyConfig": { "quickTeleportTickHotkey": "F6" },
+      "autoEatConfig": { "enabled": true, "eatInterval": 1234 }
     }
     """);
 var server = new CoreRpcServer(socketPath, sessionToken, layout);
@@ -416,6 +419,23 @@ try
     }, cancellation.Token);
     TaskControlPlatform.Current.PressKey(0x75);
     await rawKeyResponder;
+    var autoEatPlatform = new MacAutoEatRuntimePlatform(layout, loggerFactory);
+    Require(autoEatPlatform.Config.Enabled && autoEatPlatform.Config.EatInterval == 1234,
+        "macOS AutoEat did not load the upstream trigger configuration.");
+    var autoEatResponder = Task.Run(async () =>
+    {
+        var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
+            ?? throw new EndOfStreamException("AutoEat input callback channel ended unexpectedly.");
+        Require(callback.Method == "input.dispatch" &&
+                callback.Params?.Value<string>("action") == "gameAction" &&
+                callback.Params?.Value<string>("gameAction") == "quickUseGadget" &&
+                callback.Params?.Value<string>("keyType") == "keyPress",
+            "macOS AutoEat did not preserve the upstream QuickUseGadget action.");
+        await callbackConnection.WriteResponseAsync(
+            RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+    }, cancellation.Token);
+    autoEatPlatform.SimulateAction(GIActions.QuickUseGadget);
+    await autoEatResponder;
     var autoSkipPlatform = new MacAutoSkipRuntimePlatform(
         layout,
         () => throw new InvalidOperationException("Verification did not request AutoSkip system metrics."),
