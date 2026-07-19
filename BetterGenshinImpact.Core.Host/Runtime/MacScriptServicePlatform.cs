@@ -125,11 +125,13 @@ public sealed class MacScriptServicePlatform(
     public void NotifyGroupStart(string groupName) => Notify("info", $"配置组{groupName}启动");
     public void NotifyGroupEndSuccess(string groupName) => Notify("info", $"配置组{groupName}结束");
     public void NotifyGroupEndError(string message) => Notify("error", message);
-    public void CloseGame() => throw Unavailable("game process control");
-    public void RestartApplication(string taskProgressName) => throw Unavailable("application restart");
-
-    private static CapabilityUnavailableException Unavailable(string capability) =>
-        new($"{capability} is not composed on macOS yet.");
+    public void CloseGame() => RequireAcknowledgement("game.close", null);
+    public void RestartApplication(string taskProgressName)
+    {
+        if (string.IsNullOrWhiteSpace(taskProgressName))
+            throw new ArgumentException("Task progress name cannot be empty.", nameof(taskProgressName));
+        RequireAcknowledgement("application.restart", JObject.FromObject(new { taskProgressName }));
+    }
 
     private OtherConfig LoadOtherConfig() =>
         _configRoot?["otherConfig"]?.Deserialize<OtherConfig>(ConfigJson.Options)

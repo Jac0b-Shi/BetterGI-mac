@@ -455,6 +455,27 @@ try
         "macOS AutoSkip audio transport did not preserve float32 PCM samples.");
     Console.WriteLine("AutoSkip audio passed: upstream C# waiter/VAD with macOS process PCM callbacks and no Swift business fallback.");
 
+    var processControlResponder = Task.Run(async () =>
+    {
+        foreach (var expectedMethod in new[] { "game.close", "application.restart" })
+        {
+            var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
+                ?? throw new EndOfStreamException("Process-control callback channel ended unexpectedly.");
+            Require(callback.Method == expectedMethod,
+                $"scheduler expected {expectedMethod}, got {callback.Method}.");
+            if (expectedMethod == "application.restart")
+            {
+                Require(callback.Params?.Value<string>("taskProgressName") == "next-project",
+                    "application.restart lost the upstream task progress name.");
+            }
+            await callbackConnection.WriteResponseAsync(
+                RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+        }
+    }, cancellation.Token);
+    scriptServicePlatform.CloseGame();
+    scriptServicePlatform.RestartApplication("next-project");
+    await processControlResponder;
+
     var reloginPlatform = new MacExitAndReloginPlatform();
     var focusResponder = Task.Run(async () =>
     {

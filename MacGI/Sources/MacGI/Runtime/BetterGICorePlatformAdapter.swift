@@ -166,6 +166,40 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             audioCapture.stopCapture()
             self.audioCapture = nil
             return ["acknowledged": true]
+        case "game.close":
+            guard let application = NSRunningApplication(
+                processIdentifier: appState.selectedWindow.ownerPID
+            ), application.terminate() else {
+                throw BetterGICorePlatformAdapterError.invalidParameters(
+                    "Unable to terminate the selected game process."
+                )
+            }
+            return ["acknowledged": true]
+        case "application.restart":
+            guard let parameters,
+                  let taskProgressName = parameters["taskProgressName"] as? String,
+                  !taskProgressName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else {
+                throw BetterGICorePlatformAdapterError.invalidParameters(
+                    "application.restart requires a non-empty taskProgressName."
+                )
+            }
+            let bundleURL = Bundle.main.bundleURL
+            guard bundleURL.pathExtension == "app" else {
+                throw BetterGICorePlatformAdapterError.invalidParameters(
+                    "application.restart requires an installed macOS app bundle."
+                )
+            }
+            let relaunch = Process()
+            relaunch.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            relaunch.arguments = [
+                "-n", bundleURL.path, "--args", "--TaskProgress", taskProgressName,
+            ]
+            try relaunch.run()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                NSApp.terminate(nil)
+            }
+            return ["acknowledged": true]
         case "input.dispatch":
             let action = try makeInputAction(parameters, appState: appState)
             let gate = appState.dispatchInput(action, source: .runtimeTrigger)
