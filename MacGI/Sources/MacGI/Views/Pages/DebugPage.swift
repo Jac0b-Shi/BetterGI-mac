@@ -36,22 +36,10 @@ struct DebugPage: View {
                         SettingRow(title: "RPC Contract", detail: "目录、调度、捕获和输入均通过本机双向 RPC。") {
                             BGIStatusBadge(text: "Active", tint: BGIColors.success)
                         }
-                        SettingRow(title: "BGI Assets", detail: appState.bgiAssetStatusText) {
+                        SettingRow(title: "Core vision runtime", detail: "模型、OCR 与识别状态由 C# Core 握手及验证门禁负责。") {
                             BGIStatusBadge(
-                                text: appState.bgiAssetCoverage.missing.isEmpty ? "Ready" : "Missing",
-                                tint: appState.bgiAssetCoverage.missing.isEmpty ? BGIColors.success : BGIColors.warning
-                            )
-                        }
-                        SettingRow(title: "OCR Models", detail: appState.bgiModelAssetStatusText) {
-                            BGIStatusBadge(
-                                text: appState.bgiModelAssetCoverage.missing.isEmpty ? "Ready" : "Missing",
-                                tint: appState.bgiModelAssetCoverage.missing.isEmpty ? BGIColors.success : BGIColors.warning
-                            )
-                        }
-                        SettingRow(title: "OCR Runtime", detail: appState.paddleOCRRuntimeStatusText) {
-                            BGIStatusBadge(
-                                text: appState.isPaddleOCRRuntimeReady ? "Ready" : "Missing",
-                                tint: appState.isPaddleOCRRuntimeReady ? BGIColors.success : BGIColors.warning
+                                text: appState.coreStatus == .ok ? "Core" : "Unavailable",
+                                tint: appState.coreStatus == .ok ? BGIColors.success : BGIColors.warning
                             )
                         }
                         SettingRow(title: "Compute Preference", detail: "\(appState.computePreference.rawValue)") {

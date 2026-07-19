@@ -258,9 +258,6 @@ final class AppState: ObservableObject {
 #endif
     }
     @Published var dispatcherIntervalMs = 50
-    @Published var runtimeLoopTickCount: UInt64 = 0
-    @Published var runtimeLoopSkippedTicks: UInt32 = 0
-    @Published var runtimeLoopLastTickCostMs: Double = 0
     @Published var allowRuntimeRealInput = false
     @Published var schedulerGroups: [BGIScriptGroup] = []
     @Published var schedulerCatalogIssues: [BGIScriptRepositoryCatalogIssue] = []
@@ -283,17 +280,9 @@ final class AppState: ObservableObject {
     /// Most recent captured image frame for OCR/template matching.
     @Published var lastCaptureImageFrame: CaptureImageFrame?
 
-    /// Recognition objects mirrored from BetterGI `RecognitionObject` definitions.
-    @Published var recognitionObjects: [RecognitionObject] = RecognitionObject.bgiP0Defaults
-
     /// Key bindings mirrored from BetterGI `KeyBindingsConfig`.
     @Published var keyBindings: KeyBindingsConfig = .bgiDefault
 
-    /// Trigger descriptors mirrored from BetterGI `GameTaskManager.LoadInitialTriggers()`.
-    @Published var triggerDescriptors: [TaskTriggerDescriptor] = TaskTriggerDescriptor.bgiInitialTriggers
-
-    /// Last dispatcher tick result.
-    @Published var runtimeSnapshot: AutomationRuntimeSnapshot = .empty
 
     /// Input safety gate (dry-run, emergency stop, rate limiting).
     let safetyGate = InputSafetyGate()
@@ -323,9 +312,6 @@ final class AppState: ObservableObject {
         lastCapturedFrame?.pixelFormatName ?? "Unavailable"
     }
 
-    var lastFrameTime: String {
-        String(format: "%.1f ms", runtimeSnapshot.metrics.processingCostMs)
-    }
     @Published var logLevelFilter: LogLevel = .trace
     @Published var logSearchText = ""
     @Published var inputActionLog: [String] = []
@@ -540,13 +526,6 @@ final class AppState: ObservableObject {
             "uidCover": \(overlayUidCoverEnabled)
           },
           "enabledFeatures": [\(enabledFeatures.map { "\"\($0.id)\"" }.joined(separator: ", "))],
-          "dispatcher": {
-            "frameIndex": \(runtimeSnapshot.frameIndex),
-            "uiCategory": "\(runtimeSnapshot.currentGameUiCategory.rawValue)",
-            "recognitionObjects": \(runtimeSnapshot.recognitionObjects.count),
-            "observations": \(runtimeSnapshot.observations.count),
-            "decisions": \(runtimeSnapshot.decisions.count)
-          },
           "keyBindings": {
             "globalKeyMappingEnabled": \(keyBindings.globalKeyMappingEnabled),
             "bindings": \(keyBindings.bindings.count),
@@ -562,33 +541,6 @@ final class AppState: ObservableObject {
           "windowValid": \(isWindowValid)
         }
         """
-    }
-
-    // MARK: - Computed properties for DebugPage / runtime status
-
-    var bgiAssetCoverage: BGIAssetCoverage {
-        BGIAssetResolver.coverage(for: recognitionObjects)
-    }
-
-    var bgiAssetStatusText: String {
-        bgiAssetCoverage.summary
-    }
-
-    var bgiModelAssetCoverage: BGIModelAssetCoverage {
-        BGIModelAssetResolver.coverage(for: BGIOnnxModel.upstreamRegisteredModels)
-    }
-
-    var bgiModelAssetStatusText: String {
-        bgiModelAssetCoverage.summary
-    }
-
-    var isPaddleOCRRuntimeReady: Bool {
-        // TODO: wire to actual PaddleOCROnnxRuntime initialization status
-        false
-    }
-
-    var paddleOCRRuntimeStatusText: String {
-        "OCR runtime: unchecked"
     }
 
     func startOrResume() {
@@ -1023,10 +975,6 @@ final class AppState: ObservableObject {
         availableWindows = []
         lastCapturedFrame = nil
         lastCaptureImageFrame = nil
-        runtimeSnapshot = .empty
-        runtimeLoopTickCount = 0
-        runtimeLoopSkippedTicks = 0
-        runtimeLoopLastTickCostMs = 0
         schedulerExecutionStatus = "Idle"
         currentSchedulerProjectID = nil
         safetyGate.resetCounters()
