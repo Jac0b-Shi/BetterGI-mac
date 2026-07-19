@@ -24,6 +24,10 @@ rg -q 'AddHostObject\("dispatcher", new Dispatcher' \
 rg -q 'Microsoft.ClearScript.V8.Native.osx-arm64' BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj \
   BetterGenshinImpact.Core.Host/BetterGenshinImpact.Core.Host.csproj \
   || fail "native macOS arm64 ClearScript dependency is missing"
+rg -q 'AttachRuntimeArtifactInitializer' BetterGenshinImpact.Core.Host/Program.cs \
+  || fail "published Core Host does not provision locked runtime artifacts"
+rg -q 'EnsureInstalledAsync' BetterGenshinImpact.Core.Host/Runtime/RuntimeArtifactProvisioner.cs \
+  || fail "Core runtime artifact provisioner is not source-lock backed"
 
 if rg -n 'BGIJSScriptRuntime|BGIScriptGroupScheduler' MacGI/Sources/MacGI MacGI/Package.swift; then
   fail "Swift owns BetterGI script execution or scheduling again"

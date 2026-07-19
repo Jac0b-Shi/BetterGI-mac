@@ -938,9 +938,12 @@ Console.WriteLine("B11.6.2: Hardening — fake local archive end-to-end");
     // Run downloader
     using var dl = new BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader();
     Directory.CreateDirectory(fakeOutput);
-    var dlResult = await dl.DownloadAsync(fakeLockPath, fakeOutput, CancellationToken.None);
+    var fakeCache = Path.Combine(fakeWork, "cache");
+    var dlResult = await dl.DownloadAsync(fakeLockPath, fakeOutput, CancellationToken.None, fakeCache);
     Assert("B11.6.2 Fake archive download success", dlResult.Success, $"errors={string.Join("; ", dlResult.Errors)}");
     Assert("B11.6.2 Fake archive extracted all files", dlResult.ArtifactsExtracted == fakeFiles.Count, $"extracted={dlResult.ArtifactsExtracted}");
+    Assert("B11.6.2 Verified source archive is retained in Cache/Downloads",
+        Directory.EnumerateFiles(fakeCache, "*.7z").Count() == 1, fakeCache);
 
     // Verify output files exist and match expected content
     foreach (var kvp in fakeFiles)
@@ -950,6 +953,17 @@ Console.WriteLine("B11.6.2: Hardening — fake local archive end-to-end");
         var content = File.ReadAllBytes(outPath);
         Assert($"B11.6.2 Fake output content matches {kvp.Key}", content.SequenceEqual(kvp.Value), "");
     }
+
+    var alreadyInstalled = await dl.EnsureInstalledAsync(fakeLockPath, fakeOutput, CancellationToken.None, fakeCache);
+    Assert("B11.6.2 Ensure skips a fully verified install",
+        alreadyInstalled.Success && alreadyInstalled.ArtifactsExtracted == 0 &&
+        alreadyInstalled.ArtifactsSkipped == fakeFiles.Count,
+        $"extracted={alreadyInstalled.ArtifactsExtracted}, skipped={alreadyInstalled.ArtifactsSkipped}");
+    File.WriteAllBytes(Path.Combine(fakeOutput, fakeFiles.Keys.First()), [0]);
+    var repaired = await dl.EnsureInstalledAsync(fakeLockPath, fakeOutput, CancellationToken.None, fakeCache);
+    Assert("B11.6.2 Ensure repairs a corrupt installed artifact",
+        repaired.Success && repaired.ArtifactsExtracted == fakeFiles.Count,
+        $"errors={string.Join("; ", repaired.Errors)}");
 
     // Cleanup
     Directory.Delete(fakeWork, recursive: true);

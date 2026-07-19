@@ -23,6 +23,8 @@ public sealed class CoreRpcServer(string socketPath, string sessionToken, Runtim
     private MacScriptHostServices? _scriptHostServices;
     private MacScriptServicePlatform? _scriptServicePlatform;
     private MacPathExecutorPlatform? _pathExecutorPlatform;
+    private Func<RuntimeArtifactStatus>? _runtimeArtifactInitializer;
+    private RuntimeArtifactStatus? _runtimeArtifactStatus;
     private Action? _platformAssetInitializer;
     private int _platformAssetsInitialized;
     public PlatformCallbackChannel PlatformCallbacks => _platformCallbacks;
@@ -49,6 +51,13 @@ public sealed class CoreRpcServer(string socketPath, string sessionToken, Runtim
         ArgumentNullException.ThrowIfNull(initializer);
         if (Interlocked.CompareExchange(ref _platformAssetInitializer, initializer, null) is not null)
             throw new InvalidOperationException("Platform asset initializer has already been attached.");
+    }
+
+    public void AttachRuntimeArtifactInitializer(Func<RuntimeArtifactStatus> initializer)
+    {
+        ArgumentNullException.ThrowIfNull(initializer);
+        if (Interlocked.CompareExchange(ref _runtimeArtifactInitializer, initializer, null) is not null)
+            throw new InvalidOperationException("Runtime artifact initializer has already been attached.");
     }
 
     public void AttachPathExecutorPlatform(MacPathExecutorPlatform platform)
@@ -185,6 +194,7 @@ public sealed class CoreRpcServer(string socketPath, string sessionToken, Runtim
                 "catalog.script-groups",
                 "catalog.script-projects",
                 "runtime-layout",
+                "runtime-artifacts.source-lock",
                 "opencv",
                 "clearscript-v8",
                 "trigger-control",
@@ -199,6 +209,8 @@ public sealed class CoreRpcServer(string socketPath, string sessionToken, Runtim
         if (!string.IsNullOrWhiteSpace(requestedRoot) && Path.GetFullPath(requestedRoot) != layout.RootPath)
             throw new InvalidOperationException("Runtime root cannot change after process startup.");
         layout.EnsureCreated();
+        if (_runtimeArtifactInitializer is not null && _runtimeArtifactStatus is null)
+            _runtimeArtifactStatus = _runtimeArtifactInitializer();
         if (_platformCallbacks.IsAttached && _platformAssetInitializer is not null &&
             Interlocked.CompareExchange(ref _platformAssetsInitialized, 1, 0) == 0)
         {
@@ -225,6 +237,9 @@ public sealed class CoreRpcServer(string socketPath, string sessionToken, Runtim
             scriptHostServicesAttached = _scriptHostServices is not null,
             scriptServicePlatformAttached = _scriptServicePlatform is not null,
             platformAssetsInitialized = Volatile.Read(ref _platformAssetsInitialized) == 1,
+            runtimeArtifactsReady = _runtimeArtifactInitializer is null || _runtimeArtifactStatus is not null,
+            runtimeArtifactsExtracted = _runtimeArtifactStatus?.Extracted ?? 0,
+            runtimeArtifactsVerified = _runtimeArtifactStatus?.VerifiedExisting ?? 0,
             mapMatchingMethod = _scriptServicePlatform?.MapMatchingMethod,
             autoFetchDispatchAdventurersGuildCountry =
                 _pathExecutorPlatform?.AutoFetchDispatchAdventurersGuildCountry

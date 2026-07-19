@@ -20,13 +20,14 @@ public sealed class RuntimeLayout
     public string UserPath => Path.Combine(RootPath, "User");
     public string ScriptGroupPath => Path.Combine(UserPath, "ScriptGroup");
     public string RunPath => Path.Combine(RootPath, "Run");
+    public string DownloadCachePath => Path.Combine(RootPath, "Cache", "Downloads");
 
     public void EnsureCreated()
     {
         Directory.CreateDirectory(RootPath);
         Directory.CreateDirectory(Path.Combine(RootPath, "Repos"));
         Directory.CreateDirectory(Path.Combine(RootPath, "Assets"));
-        Directory.CreateDirectory(Path.Combine(RootPath, "Cache", "Downloads"));
+        Directory.CreateDirectory(DownloadCachePath);
         Directory.CreateDirectory(Path.Combine(RootPath, "Cache", "Model"));
         Directory.CreateDirectory(Path.Combine(RootPath, "log"));
         Directory.CreateDirectory(RunPath);

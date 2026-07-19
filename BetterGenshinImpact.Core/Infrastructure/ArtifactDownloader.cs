@@ -108,6 +108,79 @@ public sealed class ArtifactDownloader : IDisposable
         public List<string> Errors { get; set; } = [];
     }
 
+    public async Task<DownloadResult> EnsureInstalledAsync(
+        string sourceLockPath,
+        string modelRoot,
+        CancellationToken ct = default,
+        string? archiveCacheDirectory = null)
+    {
+        var lockDoc = LoadSourceLock(sourceLockPath);
+        var verificationErrors = await VerifyInstalledAsync(lockDoc, modelRoot, ct);
+        if (verificationErrors.Count == 0)
+        {
+            return new DownloadResult
+            {
+                Success = true,
+                ArtifactsSkipped = lockDoc.Artifacts.Count
+            };
+        }
+
+        var downloaded = await DownloadAsync(sourceLockPath, modelRoot, ct, archiveCacheDirectory);
+        if (!downloaded.Success) return downloaded;
+
+        var postInstallErrors = await VerifyInstalledAsync(lockDoc, modelRoot, ct);
+        if (postInstallErrors.Count == 0) return downloaded;
+        downloaded.Success = false;
+        downloaded.Errors.AddRange(postInstallErrors);
+        return downloaded;
+    }
+
+    public async Task<IReadOnlyList<string>> VerifyInstalledAsync(
+        SourceLock lockDoc,
+        string modelRoot,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(lockDoc);
+        if (string.IsNullOrWhiteSpace(modelRoot))
+            return ["modelRoot is null or empty"];
+
+        var errors = new List<string>();
+        var root = Path.GetFullPath(modelRoot);
+        foreach (var artifact in lockDoc.Artifacts)
+        {
+            ct.ThrowIfCancellationRequested();
+            var relativePath = NormalizeArchiveMember(artifact.DestinationRelativePath);
+            if (!IsSafeArchiveMember(relativePath))
+            {
+                errors.Add($"Unsafe artifact destination path: {artifact.DestinationRelativePath}");
+                continue;
+            }
+
+            var path = Path.GetFullPath(Path.Combine(root,
+                relativePath.Replace('/', Path.DirectorySeparatorChar)));
+            if (!path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            {
+                errors.Add($"Artifact destination escapes model root: {artifact.DestinationRelativePath}");
+                continue;
+            }
+            if (!File.Exists(path))
+            {
+                errors.Add($"Artifact is missing: {artifact.DestinationRelativePath}");
+                continue;
+            }
+            var info = new FileInfo(path);
+            if (info.Length != artifact.SizeBytes)
+            {
+                errors.Add($"Artifact size mismatch: {artifact.DestinationRelativePath}");
+                continue;
+            }
+            var hash = await ComputeSha256Async(path);
+            if (!hash.Equals(artifact.Sha256, StringComparison.OrdinalIgnoreCase))
+                errors.Add($"Artifact SHA-256 mismatch: {artifact.DestinationRelativePath}");
+        }
+        return errors;
+    }
+
     // ──────────────────────────────────────────────
     //  Main download pipeline
     // ──────────────────────────────────────────────
@@ -127,7 +200,8 @@ public sealed class ArtifactDownloader : IDisposable
     public async Task<DownloadResult> DownloadAsync(
         string sourceLockPath,
         string modelRoot,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? archiveCacheDirectory = null)
     {
         var result = new DownloadResult();
 
@@ -163,12 +237,41 @@ public sealed class ArtifactDownloader : IDisposable
         {
             // 2. Download archive
             var archiveFileName = $"bettergi-{lockDoc.ArtifactSetVersion}.7z";
-            var archivePath = Path.Combine(tempDir, archiveFileName);
-
             var expectedHash = source.Sha256.ToLowerInvariant();
-            Console.WriteLine($"Downloading {source.Url}");
-            await DownloadFileAsync(source.Url, archivePath, ct);
-            Console.WriteLine($"Downloaded {new FileInfo(archivePath).Length:N0} bytes");
+            var archivePath = Path.Combine(tempDir, archiveFileName);
+            if (!string.IsNullOrWhiteSpace(archiveCacheDirectory))
+            {
+                Directory.CreateDirectory(archiveCacheDirectory);
+                var cachedPath = Path.Combine(Path.GetFullPath(archiveCacheDirectory), archiveFileName);
+                if (File.Exists(cachedPath) &&
+                    await ComputeSha256Async(cachedPath) == expectedHash)
+                {
+                    archivePath = cachedPath;
+                    Console.WriteLine($"Using verified cached archive {cachedPath}");
+                }
+                else
+                {
+                    if (File.Exists(cachedPath)) File.Delete(cachedPath);
+                    Console.WriteLine($"Downloading {source.Url}");
+                    await DownloadFileAsync(source.Url, archivePath, ct);
+                    Console.WriteLine($"Downloaded {new FileInfo(archivePath).Length:N0} bytes");
+                    var downloadedHash = await ComputeSha256Async(archivePath);
+                    if (downloadedHash != expectedHash)
+                    {
+                        result.Errors.Add(
+                            $"Archive SHA-256 mismatch: expected {expectedHash}, got {downloadedHash}");
+                        return result;
+                    }
+                    File.Move(archivePath, cachedPath, true);
+                    archivePath = cachedPath;
+                }
+            }
+            else
+            {
+                Console.WriteLine($"Downloading {source.Url}");
+                await DownloadFileAsync(source.Url, archivePath, ct);
+                Console.WriteLine($"Downloaded {new FileInfo(archivePath).Length:N0} bytes");
+            }
 
             // 3. Verify archive SHA-256
             var archiveHash = await ComputeSha256Async(archivePath);

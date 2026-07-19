@@ -186,6 +186,12 @@ await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "config.json"), """
     """);
 var server = new CoreRpcServer(socketPath, sessionToken, layout);
 using var loggerFactory = LoggerFactory.Create(builder => builder.AddSimpleConsole());
+var artifactInitializationCount = 0;
+server.AttachRuntimeArtifactInitializer(() =>
+{
+    artifactInitializationCount++;
+    return new RuntimeArtifactStatus(0, 30, "verification-source-lock.json");
+});
 var scriptHostServices = new MacScriptHostServices(
     loggerFactory, server.PlatformCallbacks, sessionToken, cancellation.Token);
 scriptHostServices.SetJsNotificationEnabled(true);
@@ -312,7 +318,10 @@ try
     var initializedJson = JObject.FromObject(initialized.Result!);
     Require(initializedJson.Value<bool>("scriptServicePlatformAttached") &&
             initializedJson.Value<string>("mapMatchingMethod") == "SIFT" &&
-            initializedJson.Value<string>("autoFetchDispatchAdventurersGuildCountry") == "璃月",
+            initializedJson.Value<string>("autoFetchDispatchAdventurersGuildCountry") == "璃月" &&
+            initializedJson.Value<bool>("runtimeArtifactsReady") &&
+            initializedJson.Value<int>("runtimeArtifactsVerified") == 30 &&
+            artifactInitializationCount == 1,
         "core.initialize did not apply the ScriptService platform configuration");
 
     await using var callbackConnection = await ConnectAsync(socketPath, cancellation.Token);

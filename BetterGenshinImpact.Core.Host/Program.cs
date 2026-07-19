@@ -71,6 +71,10 @@ var scriptHostServices = new MacScriptHostServices(
 ScriptHostServices.Configure(scriptHostServices);
 ServerTimeHelper.Initialize(new ServerTimeProvider(TimeProvider.System, () => scriptHostServices.ServerTimeZoneOffset));
 server.AttachScriptHostServices(scriptHostServices);
+var runtimeArtifactProvisioner = new RuntimeArtifactProvisioner(
+    layout, loggerFactory.CreateLogger<RuntimeArtifactProvisioner>());
+server.AttachRuntimeArtifactInitializer(() =>
+    runtimeArtifactProvisioner.EnsureInstalled(shutdown.Token));
 var captureRing = new SharedCaptureRingReader(layout);
 var globalMethodRuntime = new MacGlobalMethodRuntime(
     server.PlatformCallbacks, sessionToken, shutdown.Token, captureRing);
