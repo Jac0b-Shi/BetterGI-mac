@@ -106,6 +106,7 @@
     <Compile Include="../BetterGenshinImpact/GameTask/GameLoading/Assets/GameLoadingAssets.cs" Link="GameTask/GameLoading/Assets/GameLoadingAssets.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/GameLoading/GameLoadingRuntimePlatform.cs" Link="GameTask/GameLoading/GameLoadingRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/GameLoading/GameLoading.cs" Link="GameTask/GameLoading/GameLoading.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Placeholder/PlaceholderTrigger.cs" Link="GameTask/Placeholder/PlaceholderTrigger.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoPathing/CameraRotateTask.cs" Link="GameTask/AutoPathing/CameraRotateTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoPathing/PathExecutorPlatform.cs" Link="GameTask/AutoPathing/PathExecutorPlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoPathing/PathExecutorAutoSkipPlatform.cs" Link="GameTask/AutoPathing/PathExecutorAutoSkipPlatform.cs" />
