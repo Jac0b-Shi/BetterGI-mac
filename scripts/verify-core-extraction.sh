@@ -29,6 +29,10 @@ if rg -n 'BGIJSScriptRuntime|BGIScriptGroupScheduler' MacGI/Sources/MacGI MacGI/
   fail "Swift owns BetterGI script execution or scheduling again"
 fi
 
+if rg -n '启动请求仍为 Mock|Mock UI' MacGI/Sources/MacGI/Views; then
+  fail "production UI exposes a fake runnable control"
+fi
+
 while IFS= read -r source; do
   relative=${source#MacGI/Sources/MacGI/}
   rg -Fq "\"$relative\"" MacGI/Package.swift \

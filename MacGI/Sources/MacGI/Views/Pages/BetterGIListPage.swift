@@ -37,12 +37,13 @@ struct BetterGIListPage: View {
         case .none:
             EmptyView()
         case .start:
-            Button("启动") {
-                appState.addLog(.info, "\(item.title) 启动请求仍为 Mock")
-            }
+            Text("Core 暂未开放")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         case .toggle:
             Toggle("", isOn: .constant(false))
                 .labelsHidden()
+                .disabled(true)
         }
     }
 }
@@ -84,7 +85,7 @@ extension BetterGIListPage {
     static let macroItems = [
         BetterGIListItem(icon: .symbol("gamecontroller"), title: "辅助操控", subtitle: "游戏内常用宏和手动辅助动作"),
         BetterGIListItem(icon: .symbol("bolt"), title: "一键战斗宏", subtitle: "按预设顺序发送技能与攻击动作"),
-        BetterGIListItem(icon: .symbol("cursorarrow.click"), title: "点击辅助", subtitle: "窗口检测、点击位置和动作队列的 Mock UI")
+        BetterGIListItem(icon: .symbol("cursorarrow.click"), title: "点击辅助", subtitle: "等待 Core 暴露窗口检测、点击位置和动作队列能力")
     ]
 
     static let hotkeyItems = [

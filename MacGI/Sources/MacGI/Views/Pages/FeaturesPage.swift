@@ -45,9 +45,9 @@ struct SoloTasksPage: View {
             BGIPageTitle(title: "独立任务设置")
             ForEach(tasks, id: \.1) { task in
                 BGITaskCard(icon: task.0, title: task.1, subtitle: task.2) {
-                    Button("启动") {
-                        appState.addLog(.info, "\(task.1) 启动请求仍为 Mock")
-                    }
+                    Text("Core 暂未开放")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
