@@ -2468,6 +2468,15 @@ try
                 Y = localizedTargetGame.Y,
                 Type = WaypointType.Path.Code,
                 MoveMode = MoveModeEnum.Walk.Code
+            },
+            new Waypoint
+            {
+                X = localizedTargetGame.X,
+                Y = localizedTargetGame.Y,
+                Type = WaypointType.Path.Code,
+                MoveMode = MoveModeEnum.Walk.Code,
+                Action = ActionEnum.UseGadget.Code,
+                ActionParams = "not_wait"
             }
         ]
     };
@@ -2490,10 +2499,13 @@ try
     Assert("PathExecutor Pathing completes the shared waypoint orchestration",
         fullPathExecutor.SuccessEnd && fullPathExecutor.SuccessFight == 0,
         $"successEnd={fullPathExecutor.SuccessEnd} successFight={fullPathExecutor.SuccessFight}");
+    Assert("PathExecutor Pathing executes the upstream use-gadget action handler",
+        recordingTaskControl.Calls.Count(call => call == "action:QuickUseGadget:KeyPress") == 2,
+        string.Join(" | ", recordingTaskControl.Calls));
     Assert("PathExecutor Pathing drives and releases movement through TaskControl",
         pathingCaptureIndex >= pathingFrames.Count &&
-        recordingTaskControl.Calls.Count(call => call == "action:MoveForward:KeyDown") == 1 &&
-        recordingTaskControl.Calls.Count(call => call == "action:MoveForward:KeyUp") >= 2 &&
+        recordingTaskControl.Calls.Count(call => call == "action:MoveForward:KeyDown") == 2 &&
+        recordingTaskControl.Calls.Count(call => call == "action:MoveForward:KeyUp") == 3 &&
         !recordingTaskControl.IsPressed(GIActions.MoveForward),
         $"captures={pathingCaptureIndex} calls={string.Join(" | ", recordingTaskControl.Calls)}");
 
