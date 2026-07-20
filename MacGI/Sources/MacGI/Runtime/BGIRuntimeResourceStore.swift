@@ -43,6 +43,49 @@ struct BGIRuntimeResourceStore: Equatable, Sendable {
         }
     }
 
+    func synchronizeBundledGameTaskResources(
+        sourceURL: URL? = Bundle.module.resourceURL?
+            .appendingPathComponent("GameTask", isDirectory: true),
+        fileManager: FileManager = .default
+    ) throws {
+        guard let sourceURL else {
+            throw CocoaError(.fileNoSuchFile, userInfo: [
+                NSFilePathErrorKey: "Bundle.module/GameTask"
+            ])
+        }
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: sourceURL.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw CocoaError(.fileNoSuchFile, userInfo: [NSFilePathErrorKey: sourceURL.path])
+        }
+
+        try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        let identifier = UUID().uuidString
+        let stagingURL = rootURL.appendingPathComponent(".GameTask.staging-\(identifier)", isDirectory: true)
+        let backupURL = rootURL.appendingPathComponent(".GameTask.backup-\(identifier)", isDirectory: true)
+        let destinationURL = rootURL.appendingPathComponent("GameTask", isDirectory: true)
+        defer {
+            try? fileManager.removeItem(at: stagingURL)
+            try? fileManager.removeItem(at: backupURL)
+        }
+
+        try fileManager.copyItem(at: sourceURL, to: stagingURL)
+        let destinationExists = fileManager.fileExists(atPath: destinationURL.path)
+        if destinationExists {
+            try fileManager.moveItem(at: destinationURL, to: backupURL)
+        }
+        do {
+            try fileManager.moveItem(at: stagingURL, to: destinationURL)
+            if destinationExists {
+                try? fileManager.removeItem(at: backupURL)
+            }
+        } catch {
+            if destinationExists, !fileManager.fileExists(atPath: destinationURL.path) {
+                try? fileManager.moveItem(at: backupURL, to: destinationURL)
+            }
+            throw error
+        }
+    }
+
     var requiredDirectories: [URL] {
         [
             rootURL,

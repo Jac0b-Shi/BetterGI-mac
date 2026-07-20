@@ -849,7 +849,7 @@ try
         "GameLoading/Assets/1920x1080/welkin_moon_logo.png"
     })
     {
-        var destination = Path.Combine(layout.RootPath, "Assets", "GameTask", relativeAsset);
+        var destination = Path.Combine(layout.RootPath, "GameTask", relativeAsset);
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         File.Copy(Path.Combine(sourceRoot, relativeAsset), destination, true);
     }

@@ -16,6 +16,17 @@ if rg -n 'Unsupported.*AutoPickTextRecognizer|SKIPPED\s*[—-]|RecognitionTest|n
   fail "placeholder, skipped verification, or fake AutoPick recognizer found"
 fi
 
+if rg -n 'Assets[\\/]+GameTask' BetterGenshinImpact.Core.Host MacGI/Sources/MacGI --glob '*.{cs,swift}'; then
+  echo "Production code must load BetterGI assets from the canonical runtime GameTask root." >&2
+  exit 1
+fi
+
+rg -q 'synchronizeBundledGameTaskResources\(\)' \
+  MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift || {
+  echo "Core supervisor must synchronize bundled GameTask resources before launch." >&2
+  exit 1
+}
+
 rg -q 'Core/Script/Dependence/Dispatcher.cs' BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj \
   || fail "shared upstream Dispatcher is not linked into Core"
 rg -q 'AddHostObject\("dispatcher", new Dispatcher' \

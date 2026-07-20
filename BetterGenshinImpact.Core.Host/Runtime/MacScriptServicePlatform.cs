@@ -69,7 +69,7 @@ public sealed class MacScriptServicePlatform(
         if (!waitForMainUi)
             return;
 
-        using var assets = new MacMainUiRecognitionAssets(layout, gameTaskManagerPlatform.SystemInfo);
+        using var assets = new MacMainUiRecognitionAssets(gameTaskManagerPlatform.SystemInfo);
         var first = true;
         while (true)
         {
@@ -100,7 +100,7 @@ public sealed class MacScriptServicePlatform(
         if (now.Hour != 4 || now.Minute >= 10)
             return;
 
-        using var assets = new MacMainUiRecognitionAssets(layout, gameTaskManagerPlatform.SystemInfo);
+        using var assets = new MacMainUiRecognitionAssets(gameTaskManagerPlatform.SystemInfo);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, hostCancellationToken);
         using var firstFrame = await Capture(linked.Token);
         if (!IsBlessing(firstFrame, assets))

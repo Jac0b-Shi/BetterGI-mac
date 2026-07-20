@@ -38,6 +38,7 @@ actor BetterGICoreProcessSupervisor {
         self.platformHandler = platformHandler
         intentionalStop = false
         try store.createDirectorySkeleton()
+        try store.synchronizeBundledGameTaskResources()
         let runURL = store.rootURL.appendingPathComponent("Run", isDirectory: true)
         try FileManager.default.createDirectory(at: runURL, withIntermediateDirectories: true)
         let socketURL = runURL.appendingPathComponent("core.sock")
