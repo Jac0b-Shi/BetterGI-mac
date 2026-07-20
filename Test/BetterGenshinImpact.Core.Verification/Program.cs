@@ -10,6 +10,7 @@ using BetterGenshinImpact.Core.Recognition.OCR.Engine.data;
 using BetterGenshinImpact.Core.Recognition.OCR.Paddle;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+using Newtonsoft.Json.Linq;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Infrastructure;
 using BetterGenshinImpact.Core.Recognition;
@@ -355,6 +356,9 @@ Assert("upstream map coordinate transform round-trips",
 Console.WriteLine();
 
 Console.WriteLine("Scheduler records: real ExecutionRecordStorage skip semantics");
+var executionRecordPreviousRoot = Global.StartUpPath;
+var executionRecordRuntimeRoot = Path.Combine(Path.GetTempPath(), $"bgi-execution-records-{Guid.NewGuid():N}");
+Global.StartUpPath = executionRecordRuntimeRoot;
 var recordGroup = new ScriptGroup
 {
     Name = "record-group",
@@ -392,6 +396,112 @@ recentRecord.IsSuccessful = false;
 Assert("failed execution record never triggers skip",
     !ExecutionRecordStorage.IsSkipTask(recordProject, out _,
         [new DailyExecutionRecord { ExecutionRecords = [recentRecord] }]), "failed record matched");
+
+var persistedRecordId = Guid.NewGuid();
+var persistedRecord = new ExecutionRecord
+{
+    Id = persistedRecordId,
+    GroupName = recordGroup.Name,
+    ProjectName = recordProject.Name,
+    FolderName = recordProject.FolderName,
+    Type = recordProject.Type,
+    StartTime = DateTime.Now.AddMinutes(-3),
+    EndTime = DateTime.Now.AddMinutes(-2),
+    ServerStartTime = ScriptHostServices.ServerTimeNow.AddMinutes(-3),
+    ServerEndTime = ScriptHostServices.ServerTimeNow.AddMinutes(-2),
+    IsSuccessful = false
+};
+ExecutionRecordStorage.SaveExecutionRecord(persistedRecord);
+var executionRecordPath = Path.Combine(
+    Global.Absolute("log"), "ExecutionRecords", $"{persistedRecord.StartTime:yyyyMMdd}.json");
+Assert("ExecutionRecordStorage writes the runtime-root daily JSON file",
+    File.Exists(executionRecordPath), executionRecordPath);
+var persistedJson = JObject.Parse(File.ReadAllText(executionRecordPath));
+var persistedItems = persistedJson["execution_records"] as JArray;
+Assert("ExecutionRecordStorage preserves upstream Newtonsoft field names",
+    persistedJson.Value<string>("name") == persistedRecord.StartTime.ToString("yyyyMMdd") &&
+    persistedItems is { Count: 1 } &&
+    persistedItems[0]?.Value<string>("guid") == persistedRecordId.ToString() &&
+    persistedItems[0]?.Value<bool>("is_successful") == false,
+    persistedJson.ToString(Newtonsoft.Json.Formatting.None));
+
+persistedRecord.IsSuccessful = true;
+persistedRecord.EndTime = DateTime.Now.AddSeconds(-1);
+persistedRecord.ServerEndTime = ScriptHostServices.ServerTimeNow.AddSeconds(-1);
+ExecutionRecordStorage.SaveExecutionRecord(persistedRecord);
+var updatedJson = JObject.Parse(File.ReadAllText(executionRecordPath));
+var updatedItems = updatedJson["execution_records"] as JArray;
+Assert("ExecutionRecordStorage updates an existing GUID instead of appending",
+    updatedItems is { Count: 1 } && updatedItems[0]?.Value<bool>("is_successful") == true,
+    updatedJson.ToString(Newtonsoft.Json.Formatting.None));
+
+var olderRecord = new ExecutionRecord
+{
+    GroupName = recordGroup.Name,
+    ProjectName = recordProject.Name,
+    FolderName = recordProject.FolderName,
+    Type = recordProject.Type,
+    StartTime = DateTime.Today.AddDays(-1).AddHours(1),
+    EndTime = DateTime.Today.AddDays(-1).AddHours(2),
+    IsSuccessful = true
+};
+ExecutionRecordStorage.SaveExecutionRecord(olderRecord);
+var reloadedRecords = ExecutionRecordStorage.GetRecentExecutionRecords(2);
+Assert("ExecutionRecordStorage reloads daily files in reverse date order",
+    reloadedRecords.Count == 2 &&
+    reloadedRecords[0].Name == DateTime.Today.ToString("yyyyMMdd") &&
+    reloadedRecords[0].ExecutionRecords.Single().Id == persistedRecordId &&
+    reloadedRecords[1].Name == DateTime.Today.AddDays(-1).ToString("yyyyMMdd"),
+    string.Join(",", reloadedRecords.Select(record => record.Name)));
+
+var skipConfig = recordGroup.Config.PathingConfig.TaskCompletionSkipRuleConfig;
+skipConfig.SkipPolicy = "PhysicalPathSkipPolicy";
+Assert("PhysicalPathSkipPolicy matches the exact physical folder",
+    ExecutionRecordStorage.IsSkipTask(recordProject, out var physicalPathMessage, reloadedRecords) &&
+    physicalPathMessage.Contains("物理路径相同", StringComparison.Ordinal), physicalPathMessage);
+recordProject.FolderName = "other-folder";
+Assert("PhysicalPathSkipPolicy rejects a different physical folder",
+    !ExecutionRecordStorage.IsSkipTask(recordProject, out _, reloadedRecords), "different folder matched");
+
+recordProject.FolderName = persistedRecord.FolderName;
+skipConfig.SkipPolicy = "GroupPhysicalPathSkipPolicy";
+Assert("GroupPhysicalPathSkipPolicy matches group and physical folder",
+    ExecutionRecordStorage.IsSkipTask(recordProject, out var groupPathMessage, reloadedRecords) &&
+    groupPathMessage.Contains("组和物理路径匹配一致", StringComparison.Ordinal), groupPathMessage);
+recordGroup.Name = "other-group";
+Assert("GroupPhysicalPathSkipPolicy rejects a different group",
+    !ExecutionRecordStorage.IsSkipTask(recordProject, out _, reloadedRecords), "different group matched");
+
+recordGroup.Name = persistedRecord.GroupName;
+skipConfig.SkipPolicy = "SameNameSkipPolicy";
+skipConfig.BoundaryTime = 4;
+skipConfig.LastRunGapSeconds = -1;
+skipConfig.IsBoundaryTimeBasedOnServerTime = true;
+persistedRecord.ServerStartTime = ScriptHostServices.ServerTimeNow.AddMinutes(-1);
+Assert("server-time boundary accepts a record in the current 04:00 day",
+    ExecutionRecordStorage.IsSkipTask(recordProject, out _,
+        [new DailyExecutionRecord { ExecutionRecords = [persistedRecord] }]),
+    persistedRecord.ServerStartTime?.ToString("O") ?? "null");
+persistedRecord.ServerStartTime = ScriptHostServices.ServerTimeNow.AddDays(-1).AddMinutes(-1);
+Assert("server-time boundary rejects the previous 04:00 day",
+    !ExecutionRecordStorage.IsSkipTask(recordProject, out _,
+        [new DailyExecutionRecord { ExecutionRecords = [persistedRecord] }]),
+    persistedRecord.ServerStartTime?.ToString("O") ?? "null");
+
+skipConfig.BoundaryTime = -1;
+skipConfig.LastRunGapSeconds = 60;
+persistedRecord.StartTime = DateTime.Now.AddMinutes(-2);
+persistedRecord.EndTime = DateTime.Now.AddSeconds(-1);
+skipConfig.ReferencePoint = "EndTime";
+Assert("execution gap can use EndTime as its reference point",
+    ExecutionRecordStorage.IsSkipTask(recordProject, out _,
+        [new DailyExecutionRecord { ExecutionRecords = [persistedRecord] }]), "recent end time did not match");
+skipConfig.ReferencePoint = "StartTime";
+Assert("execution gap can use StartTime as its reference point",
+    !ExecutionRecordStorage.IsSkipTask(recordProject, out _,
+        [new DailyExecutionRecord { ExecutionRecords = [persistedRecord] }]), "stale start time matched");
+Global.StartUpPath = executionRecordPreviousRoot;
+Directory.Delete(executionRecordRuntimeRoot, recursive: true);
 Console.WriteLine();
 
 // ==== Native Smoke Test ====
