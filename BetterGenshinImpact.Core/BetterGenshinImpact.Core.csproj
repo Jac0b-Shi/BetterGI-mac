@@ -169,6 +169,10 @@
 
   <!-- Core/Recognition -->
   <ItemGroup>
+    <Compile Include="../BetterGenshinImpact/Core/BgiVision/BvImage.cs" Link="Core/BgiVision/BvImage.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/BgiVision/BvLocator.cs" Link="Core/BgiVision/BvLocator.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/BgiVision/BvPage.cs" Link="Core/BgiVision/BvPage.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/BgiVision/BvRuntimePlatform.cs" Link="Core/BgiVision/BvRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recognition/RecognitionObject.cs" Link="Core/Recognition/RecognitionObject.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recognition/RecognitionTypes.cs" Link="Core/Recognition/RecognitionTypes.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recognition/OverlayDrawPlatform.cs" Link="Core/Recognition/OverlayDrawPlatform.cs" />

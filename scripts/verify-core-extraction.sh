@@ -37,6 +37,16 @@ rg -q 'Core/Script/Dependence/Dispatcher.cs' BetterGenshinImpact.Core/BetterGens
 rg -q 'AddHostObject\("dispatcher", new Dispatcher' \
   BetterGenshinImpact.Core.Host/Runtime/MacScriptProjectHostInitializer.cs \
   || fail "ClearScript dispatcher host is not registered"
+for bv_type in BvPage BvLocator BvImage; do
+  rg -q "AddHostType\(\"${bv_type}\", typeof\(${bv_type}\)\)" \
+    BetterGenshinImpact.Core.Host/Runtime/MacScriptProjectHostInitializer.cs \
+    || fail "ClearScript ${bv_type} host type is not registered"
+  rg -q "Core/BgiVision/${bv_type}\.cs" BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj \
+    || fail "upstream ${bv_type} source is not linked into Core"
+done
+if rg -n '\bTaskContext\b' BetterGenshinImpact/Core/BgiVision/BvLocator.cs; then
+  fail "BvLocator must obtain capture metrics through BvRuntimePlatform"
+fi
 rg -q 'Microsoft.ClearScript.V8.Native.osx-arm64' BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj \
   BetterGenshinImpact.Core.Host/BetterGenshinImpact.Core.Host.csproj \
   || fail "native macOS arm64 ClearScript dependency is missing"

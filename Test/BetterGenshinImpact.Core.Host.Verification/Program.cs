@@ -11,6 +11,7 @@ using BetterGenshinImpact.Core.Script.Dependence;
 using BetterGenshinImpact.Core.Script.Dependence.Model;
 using BetterGenshinImpact.Core.Recorder;
 using BetterGenshinImpact.Core.Recognition;
+using BetterGenshinImpact.Core.BgiVision;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask;
@@ -211,6 +212,7 @@ server.AttachScriptHostServices(scriptHostServices);
 var gameTaskManagerPlatform = new MacGameTaskManagerPlatform(
     server.PlatformCallbacks, sessionToken, cancellation.Token, loggerFactory);
 GameTaskManagerPlatform.Configure(gameTaskManagerPlatform);
+BvRuntimePlatform.Configure(new MacBvRuntimePlatform(() => gameTaskManagerPlatform.SystemInfo));
 var scriptServicePlatform = new MacScriptServicePlatform(
     layout, loggerFactory.CreateLogger("BetterGenshinImpact.Service.ScriptService"), scriptHostServices,
     server.PlatformCallbacks, sessionToken, cancellation.Token, new SharedCaptureRingReader(layout),
@@ -747,7 +749,7 @@ try
         new MacScriptProjectHostInitializer().Initialize(
             hostSurfaceEngine, Path.Combine(layout.UserPath, "JsScript"), [], null);
         var missingHostNames = Convert.ToString(hostSurfaceEngine.Evaluate("""
-            ["keyMouseScript", "pathingScript", "genshin", "dispatcher", "RecognitionObject", "DesktopRegion", "GameCaptureRegion", "ImageRegion", "Region",
+            ["keyMouseScript", "pathingScript", "genshin", "dispatcher", "RecognitionObject", "BvPage", "BvLocator", "BvImage", "DesktopRegion", "GameCaptureRegion", "ImageRegion", "Region",
              "CombatScenes", "Avatar", "OpenCvSharp", "AutoFightParam", "AutoSkipConfig",
              "RealtimeTimer", "SoloTask", "CancellationTokenSource", "CancellationToken"].filter(name => typeof globalThis[name] === "undefined").join(",")
             """));
@@ -1006,6 +1008,64 @@ try
     await new ScriptProject("GenshinReturnMainUi").ExecuteAsync();
     await genshinCaptureResponder;
     Console.WriteLine("Real BetterGI genshin.returnMainUi passed: ClearScript, upstream task, capture ring and Paimon recognition.");
+
+    var bvExpectedInputs = new Queue<string>([
+        "keyDown", "keyUp", "keyPress", "inputText", "moveMouseBy",
+        "mouseClick:left", "mouseClick:right", "mouseClick:middle", "verticalScroll"
+    ]);
+    var bvResponder = Task.Run(async () =>
+    {
+        var metrics = await callbackConnection.ReadRequestAsync(cancellation.Token)
+            ?? throw new EndOfStreamException("BvImage did not request system metrics.");
+        Require(metrics.Method == "window.metrics", "BvImage requested unexpected system data.");
+        await callbackConnection.WriteResponseAsync(RpcResponse.Success(metrics.Id, new
+        {
+            captureWidth = schedulerWidth, captureHeight = schedulerHeight,
+            workingAreaWidth = schedulerWidth, workingAreaHeight = schedulerHeight,
+            captureX = 0, captureY = 0, processId = 1
+        }), cancellation.Token);
+
+        var capture = await callbackConnection.ReadRequestAsync(cancellation.Token)
+            ?? throw new EndOfStreamException("BvLocator did not request a real capture.");
+        Require(capture.Method == "capture.request", "BvLocator emitted an unexpected capture callback.");
+        await callbackConnection.WriteResponseAsync(RpcResponse.Success(capture.Id, new
+        {
+            ringPath = captureRingPath, frameId = 8UL, sequence = 2UL, slot = 0,
+            width = schedulerWidth, height = schedulerHeight, stride = schedulerStride, pixelFormat = "BGRA8"
+        }), cancellation.Token);
+
+        while (bvExpectedInputs.Count > 0)
+        {
+            var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
+                ?? throw new EndOfStreamException("Bv input callback channel ended unexpectedly.");
+            Require(callback.Method == "input.dispatch", $"Bv input emitted unexpected callback {callback.Method}.");
+            var action = callback.Params?.Value<string>("action") ?? "";
+            var actual = callback.Params?.Value<string>("button") is { } button
+                ? $"{action}:{button}"
+                : action;
+            Require(actual == bvExpectedInputs.Dequeue(), $"Bv input order changed at {actual}.");
+            await callbackConnection.WriteResponseAsync(
+                RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+        }
+    }, cancellation.Token);
+    using (var bvEngine = new V8ScriptEngine(
+               V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding |
+               V8ScriptEngineFlags.EnableTaskPromiseConversion))
+    {
+        new MacScriptProjectHostInitializer().Initialize(
+            bvEngine, Path.Combine(layout.UserPath, "JsScript"), [], null);
+        var bvFound = bvEngine.Evaluate("""
+            const page = new BvPage();
+            const found = page.getByImage(new BvImage("Common/Element:paimon_menu.png")).isExist();
+            page.keyboard.keyDown(87).keyUp(87).keyPress(70).textEntry("A");
+            page.mouse.moveMouseBy(3, -2).leftButtonClick().rightButtonClick().middleButtonClick().verticalScroll(1);
+            found;
+            """);
+        Require(bvFound is true, "BvLocator did not find the real Paimon template through ClearScript.");
+    }
+    await bvResponder;
+    Require(bvExpectedInputs.Count == 0, "Bv input proxy did not dispatch every acknowledged action.");
+    Console.WriteLine("Bv host surface passed: upstream image/locator plus acknowledged keyboard and mouse proxies.");
 
     var schedulerStates = new List<string>();
     var schedulerResponder = Task.Run(async () =>

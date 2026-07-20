@@ -3,6 +3,7 @@ using BetterGenshinImpact.Core.Script.Project;
 using BetterGenshinImpact.Core.Script.Utils;
 using BetterGenshinImpact.Core.Script.Dependence.Model;
 using BetterGenshinImpact.Core.Recognition;
+using BetterGenshinImpact.Core.BgiVision;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoSkip;
@@ -35,6 +36,9 @@ public sealed class MacScriptProjectHostInitializer : IScriptProjectHostInitiali
         engine.AddHostType("Mat", typeof(Mat));
         engine.AddHostType("Point2f", typeof(Point2f));
         engine.AddHostType("RecognitionObject", typeof(RecognitionObject));
+        engine.AddHostType("BvPage", typeof(BvPage));
+        engine.AddHostType("BvLocator", typeof(BvLocator));
+        engine.AddHostType("BvImage", typeof(BvImage));
         engine.AddHostType("DesktopRegion", typeof(DesktopRegion));
         engine.AddHostType("GameCaptureRegion", typeof(GameCaptureRegion));
         engine.AddHostType("ImageRegion", typeof(ImageRegion));

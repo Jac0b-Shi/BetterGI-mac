@@ -48,8 +48,13 @@ public sealed class MacTaskControlPlatform(
     public void MiddleButtonClick() => Dispatch(new { action = "mouseClick", button = "middle" });
     public void VerticalScroll(int scrollAmountInClicks) =>
         Dispatch(new { action = "verticalScroll", clicks = scrollAmountInClicks });
+    public void KeyDown(int windowsVirtualKey) =>
+        Dispatch(new { action = "keyDown", windowsVirtualKey });
+    public void KeyUp(int windowsVirtualKey) =>
+        Dispatch(new { action = "keyUp", windowsVirtualKey });
     public void PressKey(int windowsVirtualKey) =>
         Dispatch(new { action = "keyPress", windowsVirtualKey });
+    public void InputText(string text) => Dispatch(new { action = "inputText", text });
     public void PressEscape() => PressKey(0x1B);
 
     public ImageRegion CaptureToRectArea(bool forceNew)

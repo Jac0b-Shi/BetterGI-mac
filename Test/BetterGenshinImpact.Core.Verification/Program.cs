@@ -2762,7 +2762,10 @@ sealed class RecordingTaskControlPlatform : ITaskControlPlatform
     public void MiddleButtonUp() { }
     public void MiddleButtonClick() { }
     public void VerticalScroll(int scrollAmountInClicks) { }
+    public void KeyDown(int windowsVirtualKey) { }
+    public void KeyUp(int windowsVirtualKey) { }
     public void PressKey(int windowsVirtualKey) { }
+    public void InputText(string text) { }
     public void PressEscape() { }
     public ImageRegion CaptureToRectArea(bool forceNew) => CaptureFrameProvider is null
         ? throw new NotSupportedException()

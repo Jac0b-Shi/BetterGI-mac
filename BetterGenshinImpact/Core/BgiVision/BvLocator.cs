@@ -7,7 +7,6 @@ using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
-using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
@@ -19,7 +18,6 @@ namespace BetterGenshinImpact.Core.BgiVision;
 /// </summary>
 public class BvLocator
 {
-    private static readonly ILogger Logger = App.GetLogger<BvLocator>();
     private readonly CancellationToken _cancellationToken;
     private int? _timeout;
     private int? _retryInterval;
@@ -204,7 +202,7 @@ public class BvLocator
 
     public BvLocator WithRoi(Func<Rect, Rect> deltaFunc)
     {
-        var captureAreaRect = TaskContext.Instance().SystemInfo.ScaleMax1080PCaptureRect;
+        var captureAreaRect = BvRuntimePlatform.Current.SystemInfo.ScaleMax1080PCaptureRect;
         var rect = deltaFunc(captureAreaRect);
         RecognitionObject.RegionOfInterest = rect;
         return this;

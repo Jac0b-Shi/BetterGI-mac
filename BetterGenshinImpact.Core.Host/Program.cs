@@ -80,6 +80,8 @@ var globalMethodRuntime = new MacGlobalMethodRuntime(
     server.PlatformCallbacks, sessionToken, shutdown.Token, captureRing);
 var gameTaskManagerPlatform = new MacGameTaskManagerPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token, loggerFactory);
+BetterGenshinImpact.Core.BgiVision.BvRuntimePlatform.Configure(
+    new MacBvRuntimePlatform(() => gameTaskManagerPlatform.SystemInfo));
 var bvSimpleOperationPlatform = new MacBvSimpleOperationPlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo);
 var imageRegionOcrService = new MacImageRegionOcrService(
