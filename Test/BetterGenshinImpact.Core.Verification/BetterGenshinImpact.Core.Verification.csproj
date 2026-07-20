@@ -27,6 +27,9 @@
     <None Include="..\..\BetterGenshinImpact\GameTask\AutoBoss\Assets\Pathing\雷音权现前往.json"
           Link="Fixtures\雷音权现前往.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\BetterGenshinImpact.UnitTest\Assets\AutoFight\联机满编\*.png"
+          Link="Fixtures\AutoFight\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

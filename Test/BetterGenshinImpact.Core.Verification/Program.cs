@@ -48,6 +48,7 @@ using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFight.Assets;
+using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.FarmingPlan;
 using BetterGenshinImpact.GameTask.AutoSkip.Assets;
 using BetterGenshinImpact.GameTask.GameLoading.Assets;
@@ -1569,6 +1570,45 @@ ElementAssets.DestroyInstance();
 ElementAssets.Initialize(b5SystemInfo);
 AutoFightAssets.DestroyInstance();
 AutoFightAssets.Initialize(b5SystemInfo);
+
+Console.WriteLine("AvatarSide: pinned real screenshots through upstream CombatScenes");
+var avatarFixtureDirectory = Path.Combine(AppContext.BaseDirectory, "Fixtures", "AutoFight");
+var avatarScenarios = new[]
+{
+    new AvatarRecognitionScenario("别人进我世界_2人.png", "9f11e9762332f7dddcd3e926dbc7c4d7330e43d083d060ca929b2382e7c04b2f", 2, true, ["阿蕾奇诺", "钟离"]),
+    new AvatarRecognitionScenario("别人进我世界_3人.png", "b1f422e70fd4c59f664824982d3381c39e849630bcd8f5c2440bbfd643a3ea6f", 3, true, ["阿蕾奇诺", "钟离"]),
+    new AvatarRecognitionScenario("别人进我世界_4人.png", "d906980dc59cce2fe3a79644fc44dacd29ab86961eb3dca39c7e84bd9c66c280", 3, true, ["阿蕾奇诺"]),
+    new AvatarRecognitionScenario("别人进我世界_4人_2.png", "3557d084f5b5250dc1590c9dd5ed1b3fd7246b76542a6cf90ad9100138b01718", 3, true, ["阿蕾奇诺"]),
+    new AvatarRecognitionScenario("我进别人世界_2人.png", "04ab814db9f26005f1d84fa2b8536223fef7c14b0800a13d1fb73cb6ab7a96eb", 2, false, ["阿蕾奇诺", "钟离"]),
+    new AvatarRecognitionScenario("我进别人世界_3人.png", "40cbb476bbe21cace4317310d419de1d4273ba588b5b2bc1fdf079b0146a4b48", 3, false, ["阿蕾奇诺"]),
+    new AvatarRecognitionScenario("我进别人世界_4人.png", "93d602f695b958374bb7c15fb07cea7fa227a0349fcb5e15b74abc952d3f14a5", 3, false, ["阿蕾奇诺"])
+};
+var visualAutoFightConfig = new AutoFightConfig();
+foreach (var scenario in avatarScenarios)
+{
+    var fixturePath = Path.Combine(avatarFixtureDirectory, scenario.FileName);
+    Assert($"AvatarSide fixture exists: {scenario.FileName}", File.Exists(fixturePath), fixturePath);
+    if (!File.Exists(fixturePath)) continue;
+
+    var fixtureHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(fixturePath))).ToLowerInvariant();
+    Assert($"AvatarSide fixture hash: {scenario.FileName}", fixtureHash == scenario.Sha256, fixtureHash);
+    using var screenshot = Cv2.ImRead(fixturePath, ImreadModes.Color);
+    Assert($"AvatarSide fixture decodes: {scenario.FileName}",
+        screenshot.Width == 1920 && screenshot.Height == 1080,
+        $"{screenshot.Width}x{screenshot.Height}");
+    if (screenshot.Empty()) continue;
+
+    using var imageRegion = new ImageRegion(screenshot, 0, 0);
+    using var combatScenes = new CombatScenes().InitializeTeam(imageRegion, visualAutoFightConfig);
+    var status = combatScenes.CurrentMultiGameStatus;
+    Assert($"AvatarSide detects multiplayer status: {scenario.FileName}",
+        status is { IsInMultiGame: true } && status.PlayerCount == scenario.PlayerCount && status.IsHost == scenario.IsHost,
+        status == null ? "null" : $"players={status.PlayerCount} host={status.IsHost}");
+    var names = combatScenes.GetAvatars().Select(avatar => avatar.Name).ToArray();
+    Assert($"AvatarSide recognizes upstream team: {scenario.FileName}",
+        names.SequenceEqual(scenario.ExpectedNames), string.Join(",", names));
+}
+Console.WriteLine();
 AutoSkipAssets.DestroyInstance();
 AutoSkipAssets.Initialize(b5SystemInfo);
 GameLoadingAssets.DestroyInstance();
@@ -2923,6 +2963,13 @@ sealed class VerificationTaskParameterPlatform(string gameCultureInfoName) : Bet
     public Microsoft.Extensions.Localization.IStringLocalizer<T> GetStringLocalizer<T>() =>
         new BetterGenshinImpact.Core.Infrastructure.EmbeddedResourceStringLocalizer<T>();
 }
+
+sealed record AvatarRecognitionScenario(
+    string FileName,
+    string Sha256,
+    int PlayerCount,
+    bool IsHost,
+    string[] ExpectedNames);
 
 sealed class RecordingCombatCommandAvatar(string name) : ICombatCommandAvatar
 {
