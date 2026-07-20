@@ -1606,6 +1606,197 @@ try
     }
     tpTaskPlatform.TpConfig.ShouldMove = false;
 
+    var nearestGoddess = MapLazyAssets.Instance.GoddessPositions["293"];
+    const double nearestCenterX = -4028.888;
+    const double nearestCenterY = -4435.686;
+    Require(Math.Abs(nearestGoddess.X - nearestCenterX) < 0.001 &&
+            Math.Abs(nearestGoddess.Y - nearestCenterY) < 0.001,
+        "source-locked tp.json ID=293 no longer resolves to the expected Seirai Island statue.");
+    var nearestDeltaX = nearestGoddess.X - nearestGoddess.TranX;
+    var nearestDeltaY = nearestGoddess.Y - nearestGoddess.TranY;
+    var nearestDistance = Math.Sqrt(nearestDeltaX * nearestDeltaX + nearestDeltaY * nearestDeltaY);
+    var nearestTargetGame = new OpenCvSharp.Point2f(
+        (float)(nearestGoddess.X - nearestDeltaX * 5d / nearestDistance),
+        (float)(nearestGoddess.Y - nearestDeltaY * 5d / nearestDistance));
+    var nearestMap = BetterGenshinImpact.GameTask.Common.Map.Maps.MapManager.GetMap(
+        "Teyvat", "TemplateMatch");
+    var nearestTargetImage = nearestMap.ConvertGenshinMapCoordinatesToImageCoordinates(nearestTargetGame);
+    using (var nearestCenterFrame = BuildGroundTruthBigMapFrame(
+               layout.RootPath, sourceRoot, nearestCenterX, nearestCenterY))
+    using (var nearestTeleportFrame = nearestCenterFrame.Clone())
+    using (var nearestMainUiFrame = new OpenCvSharp.Mat(
+               schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black))
+    using (var nearestMovementStartFrame = BuildGroundTruthNavigationFrame(
+               layout.RootPath, MapAssets.Instance.MimiMapRect,
+               new OpenCvSharp.Point2f((float)nearestGoddess.TranX, (float)nearestGoddess.TranY)))
+    using (var nearestMovementTargetFrame = BuildGroundTruthNavigationFrame(
+               layout.RootPath, MapAssets.Instance.MimiMapRect, nearestTargetGame))
+    using (var nearestTeleportButton = OpenCvSharp.Cv2.ImRead(
+               Path.Combine(sourceRoot, "QuickTeleport/Assets/1920x1080/GoTeleport.png"),
+               OpenCvSharp.ImreadModes.Color))
+    using (var nearestPaimon = OpenCvSharp.Cv2.ImRead(
+               Path.Combine(sourceRoot, "Common/Element/Assets/1920x1080/paimon_menu.png"),
+               OpenCvSharp.ImreadModes.Color))
+    {
+        using (var target = new OpenCvSharp.Mat(nearestTeleportFrame,
+                   new OpenCvSharp.Rect(1500, 1008, nearestTeleportButton.Width, nearestTeleportButton.Height)))
+            nearestTeleportButton.CopyTo(target);
+        using (var target = new OpenCvSharp.Mat(nearestMainUiFrame,
+                   new OpenCvSharp.Rect(24, 20, nearestPaimon.Width, nearestPaimon.Height)))
+            nearestPaimon.CopyTo(target);
+
+        tpTaskPlatform.TpConfig.IsReviveInNearestStatueOfTheSeven = true;
+        tpTaskPlatform.TpConfig.HpRestoreDuration = 1;
+        var nearestFixturePath = Path.Combine(layout.UserPath, "JsScript", "GenshinNearestStatue");
+        Directory.CreateDirectory(nearestFixturePath);
+        await File.WriteAllTextAsync(Path.Combine(nearestFixturePath, "manifest.json"), """
+            {"name":"Genshin Nearest Statue","version":"1.0.0","description":"verification","authors":[{"name":"BetterGI"}],"main":"main.js","settings":[],"library":[]}
+            """);
+        await File.WriteAllTextAsync(Path.Combine(nearestFixturePath, "main.js"),
+            "export {}; await genshin.tpToStatueOfTheSeven();");
+
+        BetterGenshinImpact.GameTask.AutoPathing.Navigation.Reset();
+        var nearestCaptureCount = 0;
+        var nearestMetricsCount = 0;
+        var nearestActivationCount = 0;
+        var nearestPositionCount = 0;
+        var nearestStateQueryCount = 0;
+        var nearestInputs = new List<string>();
+        var nearestClicks = new List<OpenCvSharp.Point>();
+        OpenCvSharp.Mat? nearestOrientationFrame = null;
+        var nearestResponder = Task.Run(async () =>
+        {
+            var dropObserved = false;
+            var moveForwardPressed = false;
+            while (!dropObserved || nearestActivationCount < 6)
+            {
+                var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
+                    ?? throw new EndOfStreamException("nearest-statue callback channel ended unexpectedly.");
+                switch (callback.Method)
+                {
+                    case "window.metrics":
+                        nearestMetricsCount++;
+                        await callbackConnection.WriteResponseAsync(RpcResponse.Success(callback.Id, new
+                        {
+                            captureX = 0, captureY = 0, captureWidth = schedulerWidth,
+                            captureHeight = schedulerHeight, workingAreaWidth = schedulerWidth,
+                            workingAreaHeight = schedulerHeight, dpiScale = 1.0, processId = 1
+                        }), cancellation.Token);
+                        break;
+                    case "window.activate":
+                        nearestActivationCount++;
+                        await callbackConnection.WriteResponseAsync(
+                            RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+                        break;
+                    case "capture.request":
+                    {
+                        nearestCaptureCount++;
+                        var frame = nearestCaptureCount switch
+                        {
+                            <= 8 => nearestCenterFrame,
+                            9 => nearestTeleportFrame,
+                            10 => nearestMainUiFrame,
+                            11 => nearestMovementStartFrame,
+                            _ when !moveForwardPressed => nearestOrientationFrame
+                                ?? throw new InvalidOperationException(
+                                    "nearest-statue movement requested rotation before position publication."),
+                            _ => nearestMovementTargetFrame
+                        };
+                        await WriteCaptureRingFrameAsync(
+                            captureRingPath, frame, (ulong)(80 + nearestCaptureCount));
+                        await callbackConnection.WriteResponseAsync(RpcResponse.Success(callback.Id, new
+                        {
+                            ringPath = captureRingPath, frameId = (ulong)(80 + nearestCaptureCount),
+                            sequence = 2UL, slot = 0, width = schedulerWidth, height = schedulerHeight,
+                            stride = schedulerStride, pixelFormat = "BGRA8"
+                        }), cancellation.Token);
+                        break;
+                    }
+                    case "pathing.position":
+                    {
+                        nearestPositionCount++;
+                        int? targetOrientationForFrame = null;
+                        if (nearestCaptureCount >= 11 && !moveForwardPressed && nearestOrientationFrame is null)
+                        {
+                            var actualPosition = new OpenCvSharp.Point2f(
+                                callback.Params?.Value<float>("x") ?? 0f,
+                                callback.Params?.Value<float>("y") ?? 0f);
+                            targetOrientationForFrame = BetterGenshinImpact.GameTask.AutoPathing.Navigation
+                                .GetTargetOrientation(
+                                    new Waypoint { X = nearestTargetImage.X, Y = nearestTargetImage.Y },
+                                    actualPosition);
+                        }
+                        await callbackConnection.WriteResponseAsync(
+                            RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+                        if (targetOrientationForFrame is { } targetOrientation)
+                            nearestOrientationFrame = BuildOrientationAlignedFrame(
+                                nearestMovementStartFrame, MapAssets.Instance.MimiMapRect, targetOrientation);
+                        break;
+                    }
+                    case "input.query":
+                        Require(callback.Params?.Value<string>("action") == "isGameActionDown" &&
+                                callback.Params?.Value<string>("gameAction") == "moveForward",
+                            "nearest-statue movement queried an unexpected input state.");
+                        nearestStateQueryCount++;
+                        await callbackConnection.WriteResponseAsync(
+                            RpcResponse.Success(callback.Id, new { isDown = true }), cancellation.Token);
+                        break;
+                    case "input.dispatch":
+                    {
+                        var action = callback.Params?.Value<string>("action") ?? "";
+                        var gameAction = callback.Params?.Value<string>("gameAction");
+                        var keyType = callback.Params?.Value<string>("keyType");
+                        nearestInputs.Add(gameAction is null ? action : $"{action}:{gameAction}:{keyType}");
+                        if (action == "moveMouseToScreen")
+                            nearestClicks.Add(new OpenCvSharp.Point(
+                                callback.Params?.Value<int>("x") ?? -1,
+                                callback.Params?.Value<int>("y") ?? -1));
+                        moveForwardPressed = moveForwardPressed ||
+                                             gameAction == "moveForward" && keyType == "keyDown";
+                        dropObserved = gameAction == "drop" && keyType == "keyPress";
+                        await callbackConnection.WriteResponseAsync(
+                            RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+                        break;
+                    }
+                    default:
+                        throw new InvalidOperationException(
+                            $"nearest-statue branch emitted unexpected callback {callback.Method}.");
+                }
+            }
+        }, cancellation.Token);
+
+        var nearestStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        var nearestScriptTask = Task.Run(
+            () => new ScriptProject("GenshinNearestStatue").ExecuteAsync(), cancellation.Token);
+        Require(await Task.WhenAny(nearestScriptTask, Task.Delay(TimeSpan.FromSeconds(30), cancellation.Token)) ==
+                nearestScriptTask,
+            "nearest-statue script did not complete within 30 seconds.");
+        await nearestScriptTask;
+        var nearestElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(nearestStartedAt);
+        await nearestResponder;
+        nearestOrientationFrame?.Dispose();
+        Require(nearestCaptureCount >= 13 && nearestMetricsCount == 5 && nearestActivationCount == 6,
+            $"nearest-statue platform sequence changed: captures={nearestCaptureCount}, " +
+            $"metrics={nearestMetricsCount}, activations={nearestActivationCount}.");
+        Require(nearestPositionCount >= 2 && nearestStateQueryCount >= 1,
+            $"nearest-statue movement did not publish/query state: positions={nearestPositionCount}, " +
+            $"queries={nearestStateQueryCount}.");
+        Require(nearestClicks.Count == 2 &&
+                Math.Abs(nearestClicks[0].X - 960) <= 10 && Math.Abs(nearestClicks[0].Y - 540) <= 10 &&
+                Math.Abs(nearestClicks[1].X - 1519) <= 10 && Math.Abs(nearestClicks[1].Y - 1029) <= 10,
+            "nearest-statue selected unexpected target/button coordinates: " +
+            string.Join(",", nearestClicks.Select(point => $"({point.X},{point.Y})")));
+        Require(nearestInputs.Contains("gameAction:moveForward:keyDown") &&
+                nearestInputs.Contains("gameAction:moveForward:keyUp") &&
+                nearestInputs.Last() == "gameAction:drop:keyPress",
+            "nearest-statue branch did not finish MoveTo and Drop: " + string.Join(",", nearestInputs));
+        Require(nearestElapsed >= TimeSpan.FromMilliseconds(900),
+            $"nearest-statue branch skipped restore wait: {nearestElapsed}.");
+        Console.WriteLine(
+            "Real BetterGI nearest-statue branch passed: big-map center SIFT, tp.json selection, MoveTo and Drop.");
+    }
+    tpTaskPlatform.TpConfig.IsReviveInNearestStatueOfTheSeven = false;
+
     using (var partyFrame = new OpenCvSharp.Mat(
                schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black))
     using (var partyButton = OpenCvSharp.Cv2.ImRead(
