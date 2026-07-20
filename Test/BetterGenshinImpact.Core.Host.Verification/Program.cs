@@ -23,6 +23,7 @@ using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoTrackPath;
+using BetterGenshinImpact.GameTask.AutoTrackPath.Model;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.FarmingPlan;
 using BetterGenshinImpact.GameTask.QuickTeleport;
@@ -1387,6 +1388,224 @@ try
     }
     Console.WriteLine("Real BetterGI genshin.tpToStatueOfTheSeven passed: configured statue, teleport and restore wait.");
 
+    using (var movementStartFrame = BuildGroundTruthNavigationFrame(
+               layout.RootPath, MapAssets.Instance.MimiMapRect, mapFixturePosition))
+    {
+        BetterGenshinImpact.GameTask.AutoPathing.Navigation.Reset();
+        var movementPositionProbe = Task.Run(async () =>
+        {
+            var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
+                ?? throw new EndOfStreamException("ShouldMove position probe callback channel ended unexpectedly.");
+            Require(callback.Method == "pathing.position",
+                $"ShouldMove position probe emitted unexpected callback {callback.Method}.");
+            await callbackConnection.WriteResponseAsync(
+                RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+        }, cancellation.Token);
+        OpenCvSharp.Point2f movementRecognizedImagePosition;
+        using (var movementPositionRegion = new ImageRegion(movementStartFrame.Clone(), 0, 0))
+            movementRecognizedImagePosition = BetterGenshinImpact.GameTask.AutoPathing.Navigation.GetPosition(
+                movementPositionRegion, "Teyvat", "TemplateMatch");
+        await movementPositionProbe;
+        var movementMap = BetterGenshinImpact.GameTask.Common.Map.Maps.MapManager.GetMap(
+            "Teyvat", "TemplateMatch");
+        var movementRecognizedGamePosition = movementMap.ConvertImageCoordinatesToGenshinMapCoordinates(
+            movementRecognizedImagePosition)
+            ?? throw new InvalidOperationException("ShouldMove position probe escaped the staged map layer.");
+        using var movementOrientationFrame = movementStartFrame.Clone();
+        var movementCameraOrientation = BetterGenshinImpact.GameTask.Common.Map.CameraOrientation.Compute(
+            movementOrientationFrame);
+        var movementRadians = (movementCameraOrientation + 180d) * Math.PI / 180d;
+        var movementDirectionX = Math.Cos(movementRadians);
+        var movementDirectionY = Math.Sin(movementRadians);
+        var movementStatueX = movementRecognizedGamePosition.X + movementDirectionX * 100d;
+        var movementStatueY = movementRecognizedGamePosition.Y + movementDirectionY * 100d;
+        var movementTargetGroundTruth = new OpenCvSharp.Point2f(
+            mapFixturePosition.X + (float)(movementDirectionX * 95d),
+            mapFixturePosition.Y + (float)(movementDirectionY * 95d));
+        var movementTargetGame = new OpenCvSharp.Point2f(
+            movementRecognizedGamePosition.X + (float)(movementDirectionX * 95d),
+            movementRecognizedGamePosition.Y + (float)(movementDirectionY * 95d));
+        var movementTargetImage = movementMap.ConvertGenshinMapCoordinatesToImageCoordinates(movementTargetGame);
+
+        tpTaskPlatform.TpConfig.ShouldMove = true;
+        tpTaskPlatform.TpConfig.HpRestoreDuration = 1;
+        tpTaskPlatform.TpConfig.ReviveStatueOfTheSevenPointX = movementStatueX;
+        tpTaskPlatform.TpConfig.ReviveStatueOfTheSevenPointY = movementStatueY;
+        tpTaskPlatform.TpConfig.ReviveStatueOfTheSeven = new GiTpPosition
+        {
+            Id = "host-should-move",
+            Name = "Host ShouldMove Statue",
+            Type = "Goddess",
+            Country = "verification",
+            Areas = ["movement"],
+            Position = [(decimal)movementStatueY, 0m, (decimal)movementStatueX],
+            TranPosition = [
+                (decimal)movementRecognizedGamePosition.Y, 0m, (decimal)movementRecognizedGamePosition.X
+            ]
+        };
+
+        using var movementMapFrame = BuildGroundTruthBigMapFrame(
+            layout.RootPath, sourceRoot, movementStatueX, movementStatueY);
+        using var movementTeleportFrame = movementMapFrame.Clone();
+        using var movementMainUiFrame = new OpenCvSharp.Mat(
+            schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black);
+        using var movementTargetFrame = BuildGroundTruthNavigationFrame(
+            layout.RootPath, MapAssets.Instance.MimiMapRect, movementTargetGroundTruth);
+        using var movementTeleportButton = OpenCvSharp.Cv2.ImRead(
+            Path.Combine(sourceRoot, "QuickTeleport/Assets/1920x1080/GoTeleport.png"),
+            OpenCvSharp.ImreadModes.Color);
+        using var movementPaimon = OpenCvSharp.Cv2.ImRead(
+            Path.Combine(sourceRoot, "Common/Element/Assets/1920x1080/paimon_menu.png"),
+            OpenCvSharp.ImreadModes.Color);
+        using (var target = new OpenCvSharp.Mat(movementTeleportFrame,
+                   new OpenCvSharp.Rect(1500, 1008, movementTeleportButton.Width, movementTeleportButton.Height)))
+            movementTeleportButton.CopyTo(target);
+        using (var target = new OpenCvSharp.Mat(movementMainUiFrame,
+                   new OpenCvSharp.Rect(24, 20, movementPaimon.Width, movementPaimon.Height)))
+            movementPaimon.CopyTo(target);
+
+        var movementFixturePath = Path.Combine(layout.UserPath, "JsScript", "GenshinStatueShouldMove");
+        Directory.CreateDirectory(movementFixturePath);
+        await File.WriteAllTextAsync(Path.Combine(movementFixturePath, "manifest.json"), """
+            {"name":"Genshin Statue ShouldMove","version":"1.0.0","description":"verification","authors":[{"name":"BetterGI"}],"main":"main.js","settings":[],"library":[]}
+            """);
+        await File.WriteAllTextAsync(Path.Combine(movementFixturePath, "main.js"),
+            "export {}; await genshin.tpToStatueOfTheSeven();");
+
+        var movementCaptureCount = 0;
+        var movementMetricsCount = 0;
+        var movementActivationCount = 0;
+        var movementPositionCount = 0;
+        var movementStateQueryCount = 0;
+        var movementInputs = new List<string>();
+        OpenCvSharp.Mat? movementOrientationAlignedFrame = null;
+        var movementResponder = Task.Run(async () =>
+        {
+            var dropObserved = false;
+            var moveForwardPressed = false;
+            while (!dropObserved || movementActivationCount < 6)
+            {
+                var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
+                    ?? throw new EndOfStreamException("genshin statue ShouldMove callback channel ended unexpectedly.");
+                switch (callback.Method)
+                {
+                    case "window.metrics":
+                        movementMetricsCount++;
+                        await callbackConnection.WriteResponseAsync(RpcResponse.Success(callback.Id, new
+                        {
+                            captureX = 0, captureY = 0, captureWidth = schedulerWidth,
+                            captureHeight = schedulerHeight, workingAreaWidth = schedulerWidth,
+                            workingAreaHeight = schedulerHeight, dpiScale = 1.0, processId = 1
+                        }), cancellation.Token);
+                        break;
+                    case "window.activate":
+                        movementActivationCount++;
+                        await callbackConnection.WriteResponseAsync(
+                            RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+                        break;
+                    case "capture.request":
+                    {
+                        movementCaptureCount++;
+                        var frame = movementCaptureCount switch
+                        {
+                            <= 7 => movementMapFrame,
+                            8 => movementTeleportFrame,
+                            9 => movementMainUiFrame,
+                            10 => movementStartFrame,
+                            _ when !moveForwardPressed => movementOrientationAlignedFrame
+                                ?? throw new InvalidOperationException(
+                                    "ShouldMove requested rotation before publishing its localized position."),
+                            _ => movementTargetFrame
+                        };
+                        await WriteCaptureRingFrameAsync(
+                            captureRingPath, frame, (ulong)(50 + movementCaptureCount));
+                        await callbackConnection.WriteResponseAsync(RpcResponse.Success(callback.Id, new
+                        {
+                            ringPath = captureRingPath, frameId = (ulong)(50 + movementCaptureCount),
+                            sequence = 2UL, slot = 0, width = schedulerWidth, height = schedulerHeight,
+                            stride = schedulerStride, pixelFormat = "BGRA8"
+                        }), cancellation.Token);
+                        break;
+                    }
+                    case "pathing.position":
+                        movementPositionCount++;
+                        int? targetOrientationForFrame = null;
+                        if (movementCaptureCount >= 10 && !moveForwardPressed &&
+                            movementOrientationAlignedFrame is null)
+                        {
+                            var actualPosition = new OpenCvSharp.Point2f(
+                                callback.Params?.Value<float>("x") ?? 0f,
+                                callback.Params?.Value<float>("y") ?? 0f);
+                            targetOrientationForFrame = BetterGenshinImpact.GameTask.AutoPathing.Navigation
+                                .GetTargetOrientation(
+                                    new Waypoint { X = movementTargetImage.X, Y = movementTargetImage.Y },
+                                    actualPosition);
+                        }
+                        await callbackConnection.WriteResponseAsync(
+                            RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+                        if (targetOrientationForFrame is { } targetOrientation)
+                        {
+                            movementOrientationAlignedFrame = BuildOrientationAlignedFrame(
+                                movementStartFrame, MapAssets.Instance.MimiMapRect, targetOrientation);
+                        }
+                        break;
+                    case "input.query":
+                        Require(callback.Params?.Value<string>("action") == "isGameActionDown" &&
+                                callback.Params?.Value<string>("gameAction") == "moveForward",
+                            "ShouldMove queried an unexpected input state.");
+                        movementStateQueryCount++;
+                        await callbackConnection.WriteResponseAsync(
+                            RpcResponse.Success(callback.Id, new { isDown = true }), cancellation.Token);
+                        break;
+                    case "input.dispatch":
+                    {
+                        var action = callback.Params?.Value<string>("action") ?? "";
+                        var gameAction = callback.Params?.Value<string>("gameAction");
+                        var keyType = callback.Params?.Value<string>("keyType");
+                        movementInputs.Add(gameAction is null ? action : $"{action}:{gameAction}:{keyType}");
+                        moveForwardPressed = moveForwardPressed ||
+                                             gameAction == "moveForward" && keyType == "keyDown";
+                        dropObserved = gameAction == "drop" && keyType == "keyPress";
+                        await callbackConnection.WriteResponseAsync(
+                            RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+                        break;
+                    }
+                    default:
+                        throw new InvalidOperationException(
+                            $"genshin statue ShouldMove emitted unexpected callback {callback.Method}.");
+                }
+            }
+        }, cancellation.Token);
+
+        var movementStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        var movementScriptTask = Task.Run(
+            () => new ScriptProject("GenshinStatueShouldMove").ExecuteAsync(), cancellation.Token);
+        Require(await Task.WhenAny(movementScriptTask, Task.Delay(TimeSpan.FromSeconds(30), cancellation.Token)) ==
+                movementScriptTask,
+            "genshin statue ShouldMove did not complete within 30 seconds.");
+        await movementScriptTask;
+        var movementElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(movementStartedAt);
+        await movementResponder;
+        movementOrientationAlignedFrame?.Dispose();
+        Require(movementMetricsCount == 5 && movementActivationCount == 6,
+            $"ShouldMove platform sequence changed: metrics={movementMetricsCount}, " +
+            $"activations={movementActivationCount}.");
+        Require(movementCaptureCount >= 12 && movementPositionCount >= 2,
+            $"ShouldMove did not consume teleport plus movement frames: captures={movementCaptureCount}, " +
+            $"positions={movementPositionCount}.");
+        Require(movementStateQueryCount >= 1,
+            "ShouldMove did not query the real MoveForward platform state.");
+        Require(movementInputs.Contains("gameAction:moveForward:keyDown") &&
+                movementInputs.Contains("gameAction:moveForward:keyUp") &&
+                movementInputs.Last() == "gameAction:drop:keyPress",
+            "ShouldMove did not execute forward down/up followed by Drop: " + string.Join(",", movementInputs));
+        Require(movementElapsed >= TimeSpan.FromMilliseconds(900),
+            $"ShouldMove skipped the configured restore wait: {movementElapsed}.");
+        Console.WriteLine(
+            "Real BetterGI statue ShouldMove passed: coherent minimap localization, MoveTo and final Drop RPC.");
+    }
+    tpTaskPlatform.TpConfig.ShouldMove = false;
+
     using (var partyFrame = new OpenCvSharp.Mat(
                schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black))
     using (var partyButton = OpenCvSharp.Cv2.ImRead(
@@ -1755,6 +1974,35 @@ static OpenCvSharp.Mat BuildGroundTruthNavigationFrame(
     using (var target = new OpenCvSharp.Mat(frame, minimapRect))
         minimap.CopyTo(target);
     return frame;
+}
+
+static OpenCvSharp.Mat BuildOrientationAlignedFrame(
+    OpenCvSharp.Mat source, OpenCvSharp.Rect minimapRect, int targetOrientation)
+{
+    OpenCvSharp.Mat? bestFrame = null;
+    var bestDifference = double.MaxValue;
+    for (var rotation = -180; rotation < 180; rotation += 5)
+    {
+        using var candidate = source.Clone();
+        using var sourceMinimap = new OpenCvSharp.Mat(source, minimapRect);
+        using var targetMinimap = new OpenCvSharp.Mat(candidate, minimapRect);
+        using var rotationMatrix = OpenCvSharp.Cv2.GetRotationMatrix2D(
+            new OpenCvSharp.Point2f(sourceMinimap.Width / 2f, sourceMinimap.Height / 2f), rotation, 1d);
+        OpenCvSharp.Cv2.WarpAffine(sourceMinimap, targetMinimap, rotationMatrix, sourceMinimap.Size(),
+            OpenCvSharp.InterpolationFlags.Linear, OpenCvSharp.BorderTypes.Reflect101);
+        using var orientationInput = new OpenCvSharp.Mat();
+        OpenCvSharp.Cv2.CvtColor(candidate, orientationInput, OpenCvSharp.ColorConversionCodes.BGR2BGRA);
+        var actual = BetterGenshinImpact.GameTask.Common.Map.CameraOrientation.Compute(orientationInput);
+        var difference = Math.Abs((actual - targetOrientation + 540d) % 360d - 180d);
+        if (difference >= bestDifference) continue;
+        bestDifference = difference;
+        bestFrame?.Dispose();
+        bestFrame = candidate.Clone();
+    }
+
+    Require(bestFrame is not null && bestDifference < 5d,
+        $"Unable to synthesize a coherent minimap orientation: target={targetOrientation}, diff={bestDifference:F2}.");
+    return bestFrame!;
 }
 
 static OpenCvSharp.Mat BuildGroundTruthBigMapFrame(
