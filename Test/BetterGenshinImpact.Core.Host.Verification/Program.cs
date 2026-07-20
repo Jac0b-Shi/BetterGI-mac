@@ -984,6 +984,29 @@ try
     }
     File.SetUnixFileMode(captureRingPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
 
+    var genshinFixturePath = Path.Combine(layout.UserPath, "JsScript", "GenshinReturnMainUi");
+    Directory.CreateDirectory(genshinFixturePath);
+    await File.WriteAllTextAsync(Path.Combine(genshinFixturePath, "manifest.json"), """
+        {"name":"Genshin ReturnMainUi","version":"1.0.0","description":"verification","authors":[{"name":"BetterGI"}],"main":"main.js","settings":[],"library":[]}
+        """);
+    await File.WriteAllTextAsync(
+        Path.Combine(genshinFixturePath, "main.js"), "export {}; await genshin.returnMainUi();");
+    var genshinCaptureResponder = Task.Run(async () =>
+    {
+        var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
+            ?? throw new EndOfStreamException("genshin.returnMainUi did not request a real capture.");
+        Require(callback.Method == "capture.request",
+            $"genshin.returnMainUi emitted unexpected callback {callback.Method} before recognizing main UI.");
+        await callbackConnection.WriteResponseAsync(RpcResponse.Success(callback.Id, new
+        {
+            ringPath = captureRingPath, frameId = 8UL, sequence = 2UL, slot = 0,
+            width = schedulerWidth, height = schedulerHeight, stride = schedulerStride, pixelFormat = "BGRA8"
+        }), cancellation.Token);
+    }, cancellation.Token);
+    await new ScriptProject("GenshinReturnMainUi").ExecuteAsync();
+    await genshinCaptureResponder;
+    Console.WriteLine("Real BetterGI genshin.returnMainUi passed: ClearScript, upstream task, capture ring and Paimon recognition.");
+
     var schedulerStates = new List<string>();
     var schedulerResponder = Task.Run(async () =>
     {
