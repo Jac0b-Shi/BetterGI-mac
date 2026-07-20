@@ -23,6 +23,7 @@ using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoTrackPath;
+using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.FarmingPlan;
 using BetterGenshinImpact.GameTask.QuickTeleport;
 using BetterGenshinImpact.GameTask.AutoEat;
@@ -170,7 +171,7 @@ Require(upstreamProject.ProjectPath == runtimeProject && await upstreamProject.L
     "upstream ScriptProject did not resolve User/JsScript under the runtime root");
 var socketPath = Path.Combine(layout.RunPath, "verification.sock");
 var sessionToken = Convert.ToHexString(Guid.NewGuid().ToByteArray());
-using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(90));
 await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "config.json"), """
     {
       "otherConfig": {
@@ -272,6 +273,8 @@ var imageRegionOcrService = new MacImageRegionOcrService(
 var autoFishingRuntimePlatform = new MacAutoFishingRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
 AutoFishingRuntimePlatform.Configure(autoFishingRuntimePlatform);
+GenshinRuntimePlatform.Configure(new MacGenshinRuntimePlatform(
+    () => gameTaskManagerPlatform.SystemInfo, autoFishingRuntimePlatform, "TemplateMatch"));
 AutoFightRuntimePlatform.Configure(new MacAutoFightRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory));
 TpTaskRuntimePlatform.Configure(new MacTpTaskRuntimePlatform(
@@ -1067,6 +1070,57 @@ try
     Require(bvExpectedInputs.Count == 0, "Bv input proxy did not dispatch every acknowledged action.");
     Console.WriteLine("Bv host surface passed: upstream image/locator plus acknowledged keyboard and mouse proxies.");
 
+    var mapFixturePosition = new OpenCvSharp.Point2f(-4251.583984375f, -4785.17578125f);
+    await StageMapBack3Async(layout.RootPath, cancellation.Token);
+    using (var mapFrame = BuildGroundTruthNavigationFrame(
+               layout.RootPath, MapAssets.Instance.MimiMapRect, mapFixturePosition))
+    using (var paimon = OpenCvSharp.Cv2.ImRead(
+               Path.Combine(sourceRoot, "Common/Element/Assets/1920x1080/paimon_menu.png"),
+               OpenCvSharp.ImreadModes.Color))
+    {
+        using (var paimonTarget = new OpenCvSharp.Mat(
+                   mapFrame, new OpenCvSharp.Rect(24, 20, paimon.Width, paimon.Height)))
+            paimon.CopyTo(paimonTarget);
+        await WriteCaptureRingFrameAsync(captureRingPath, mapFrame, 9UL);
+    }
+    var genshinMapResponder = Task.Run(async () =>
+    {
+        var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
+            ?? throw new EndOfStreamException("genshin.getPositionFromMap did not request a real capture.");
+        Require(callback.Method == "capture.request",
+            $"genshin.getPositionFromMap emitted unexpected callback {callback.Method}.");
+        await callbackConnection.WriteResponseAsync(RpcResponse.Success(callback.Id, new
+        {
+            ringPath = captureRingPath, frameId = 9UL, sequence = 2UL, slot = 0,
+            width = schedulerWidth, height = schedulerHeight, stride = schedulerStride, pixelFormat = "BGRA8"
+        }), cancellation.Token);
+        var position = await callbackConnection.ReadRequestAsync(cancellation.Token)
+            ?? throw new EndOfStreamException("genshin.getPositionFromMap did not publish its matched position.");
+        Require(position.Method == "pathing.position",
+            $"genshin.getPositionFromMap emitted unexpected callback {position.Method} after capture.");
+        await callbackConnection.WriteResponseAsync(
+            RpcResponse.Success(position.Id, new { acknowledged = true }), cancellation.Token);
+    }, cancellation.Token);
+    using (var mapEngine = new V8ScriptEngine(
+               V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding |
+               V8ScriptEngineFlags.EnableTaskPromiseConversion))
+    {
+        new MacScriptProjectHostInitializer().Initialize(
+            mapEngine, Path.Combine(layout.UserPath, "JsScript"), [], null);
+        var positionJson = Convert.ToString(mapEngine.Evaluate("""
+            const position = genshin.getPositionFromMapWithMatchingMethod("Teyvat", "TemplateMatch", 0);
+            JSON.stringify({ x: position.x, y: position.y });
+            """)) ?? throw new InvalidOperationException("genshin.getPositionFromMap returned no value.");
+        var position = JObject.Parse(positionJson);
+        var deltaX = Math.Abs(position.Value<float>("x") - mapFixturePosition.X);
+        var deltaY = Math.Abs(position.Value<float>("y") - mapFixturePosition.Y);
+        Require(deltaX <= 75 && deltaY <= 75,
+            $"genshin.getPositionFromMap returned ({position["x"]},{position["y"]}) for fixture " +
+            $"({mapFixturePosition.X},{mapFixturePosition.Y}).");
+    }
+    await genshinMapResponder;
+    Console.WriteLine("Real BetterGI genshin.getPositionFromMap passed: ClearScript, capture ring and upstream TemplateMatch navigation.");
+
     var schedulerStates = new List<string>();
     var schedulerResponder = Task.Run(async () =>
     {
@@ -1084,7 +1138,7 @@ try
                 },
                 "capture.request" => new
                 {
-                    ringPath = captureRingPath, frameId = 8UL, sequence = 2UL, slot = 0,
+                    ringPath = captureRingPath, frameId = 9UL, sequence = 2UL, slot = 0,
                     width = schedulerWidth, height = schedulerHeight, stride = schedulerStride, pixelFormat = "BGRA8"
                 },
                 "scheduler.event" => RecordSchedulerState(callback.Params, schedulerStates),
@@ -1179,6 +1233,122 @@ static void CopyDirectory(string source, string destination)
         File.Copy(file, Path.Combine(destination, Path.GetFileName(file)), overwrite: true);
     foreach (var directory in Directory.EnumerateDirectories(source))
         CopyDirectory(directory, Path.Combine(destination, Path.GetFileName(directory)));
+}
+
+static async Task StageMapBack3Async(string runtimeRoot, CancellationToken cancellationToken)
+{
+    var sourceLockPath = Path.Combine(
+        Directory.GetCurrentDirectory(), "BetterGenshinImpact.Core", "Manifest", "model-artifacts.source-lock.json");
+    var source = BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader
+        .LoadSourceLock(sourceLockPath).Sources.Single();
+    var localArchive = Path.Combine(
+        Directory.GetCurrentDirectory(), "artifacts", "provenance-audit", "release-0.62.0",
+        "downloads", "BetterGI_v0.62.0.7z");
+    if (File.Exists(localArchive))
+        source.Url = new Uri(localArchive).AbsoluteUri;
+    var license = new BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.LicenseEvidenceEntry
+    {
+        SpdxId = "GPL-3.0",
+        Source = "BetterGI release 0.62.0 map layer data",
+        RedistributionStatus = "allowed"
+    };
+    BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.ArtifactEntry Artifact(
+        string destination, string member, long size, string sha256) => new()
+    {
+        DestinationRelativePath = destination,
+        SourceId = source.Id,
+        MemberPath = member,
+        SizeBytes = size,
+        Sha256 = sha256,
+        Transformation = "relocate",
+        LicenseEvidence = license
+    };
+    var mapLock = new BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.SourceLock
+    {
+        SchemaVersion = 1,
+        ArtifactSetVersion = "0.62.0",
+        Sources = [source],
+        Artifacts =
+        [
+            Artifact("Assets/Map/Teyvat/mapback_info.json", "BetterGI/Assets/Map/Teyvat/mapback_info.json", 705,
+                "7adf428edd494f8c6445a3e6f66a889f579b6ba0578a148d4cbf0bc1ddb135ea"),
+            Artifact("Assets/Map/Teyvat/MapBack_3_color.webp", "BetterGI/Assets/Map/Teyvat/MapBack_3_color.webp", 149064,
+                "e64715356c3e6e84646d4022533c4c7a709c57cfc93b92213a4cfc8d52b90fc4"),
+            Artifact("Assets/Map/Teyvat/MapBack_3_gray.webp", "BetterGI/Assets/Map/Teyvat/MapBack_3_gray.webp", 1302572,
+                "1bfafc57afbda3d0dd4a89a301d2ae645f47df3ad456eb63c856adc0193d1379")
+        ]
+    };
+    var temporaryLockPath = Path.Combine(Path.GetTempPath(), $"bgi-host-map-{Guid.NewGuid():N}.json");
+    try
+    {
+        await File.WriteAllTextAsync(temporaryLockPath, System.Text.Json.JsonSerializer.Serialize(
+            mapLock, new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+            }), cancellationToken);
+        using var downloader = new BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader();
+        var result = await downloader.EnsureInstalledAsync(
+            temporaryLockPath, runtimeRoot, cancellationToken,
+            Path.Combine(Path.GetTempPath(), "bgi-release-archive-cache"));
+        Require(result.Success, "MapBack_3 source-lock install failed: " + string.Join("; ", result.Errors));
+    }
+    finally
+    {
+        File.Delete(temporaryLockPath);
+    }
+
+    var descriptorPath = Path.Combine(runtimeRoot, "Assets", "Map", "Teyvat", "mapback_info.json");
+    using var descriptor = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(
+        descriptorPath, cancellationToken));
+    var mapBack3 = descriptor.RootElement.EnumerateArray()
+        .Single(entry => entry.GetProperty("LayerId").GetString() == "MapBack_3");
+    await File.WriteAllTextAsync(descriptorPath, "[" + mapBack3.GetRawText() + "]", cancellationToken);
+}
+
+static OpenCvSharp.Mat BuildGroundTruthNavigationFrame(
+    string runtimeRoot, OpenCvSharp.Rect minimapRect, OpenCvSharp.Point2f genshinPosition)
+{
+    using var coarseMap = OpenCvSharp.Cv2.ImRead(
+        Path.Combine(runtimeRoot, "Assets", "Map", "Teyvat", "MapBack_3_color.webp"),
+        OpenCvSharp.ImreadModes.Color);
+    Require(!coarseMap.Empty(), "MapBack_3 fixture image did not decode.");
+    const double layerLeft = 8.0;
+    const double layerTop = -1016.0;
+    var centerX = (int)Math.Round((layerLeft - genshinPosition.X) / 5.0);
+    var centerY = (int)Math.Round((layerTop - genshinPosition.Y) / 5.0);
+    var cropRect = new OpenCvSharp.Rect(centerX - 26, centerY - 26, 52, 52);
+    using var coarsePatch = new OpenCvSharp.Mat(coarseMap, cropRect);
+    using var patch = new OpenCvSharp.Mat();
+    OpenCvSharp.Cv2.Resize(coarsePatch, patch, new OpenCvSharp.Size(156, 156),
+        interpolation: OpenCvSharp.InterpolationFlags.Cubic);
+    using var minimap = new OpenCvSharp.Mat(
+        minimapRect.Height, minimapRect.Width, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black);
+    using (var center = new OpenCvSharp.Mat(minimap, new OpenCvSharp.Rect(28, 28, 156, 156)))
+        patch.CopyTo(center);
+    var frame = new OpenCvSharp.Mat(1080, 1920, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black);
+    using (var target = new OpenCvSharp.Mat(frame, minimapRect))
+        minimap.CopyTo(target);
+    return frame;
+}
+
+static async Task WriteCaptureRingFrameAsync(string captureRingPath, OpenCvSharp.Mat bgrFrame, ulong frameId)
+{
+    using var bgraFrame = new OpenCvSharp.Mat();
+    OpenCvSharp.Cv2.CvtColor(bgrFrame, bgraFrame, OpenCvSharp.ColorConversionCodes.BGR2BGRA);
+    var stride = checked(bgraFrame.Width * 4);
+    var capacity = checked((long)stride * bgraFrame.Height);
+    var pixels = new byte[checked((int)capacity)];
+    Marshal.Copy(bgraFrame.Data, pixels, 0, pixels.Length);
+    await using var ring = new FileStream(captureRingPath, FileMode.Create, FileAccess.ReadWrite, FileShare.ReadWrite);
+    ring.SetLength(128 + 2 * capacity);
+    using var writer = new BinaryWriter(ring, System.Text.Encoding.UTF8, leaveOpen: true);
+    writer.Write(System.Text.Encoding.ASCII.GetBytes("BGIRING1"));
+    writer.Write(1u); writer.Write(2u); writer.Write((ulong)capacity);
+    writer.Write(0u); writer.Write((uint)bgraFrame.Width); writer.Write((uint)bgraFrame.Height); writer.Write((uint)stride);
+    writer.Write(0x42475241u); writer.Write(0u); writer.Write((ulong)pixels.Length); writer.Write(frameId);
+    writer.Write(0); writer.Write(0); writer.Write(2u); writer.Write(1u); writer.Write(2UL);
+    ring.Position = 128;
+    writer.Write(pixels);
 }
 
 sealed class VerificationOverlayDrawPlatform : IOverlayDrawPlatform

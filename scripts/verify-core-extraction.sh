@@ -47,6 +47,12 @@ done
 if rg -n '\bTaskContext\b' BetterGenshinImpact/Core/BgiVision/BvLocator.cs; then
   fail "BvLocator must obtain capture metrics through BvRuntimePlatform"
 fi
+rg -q 'genshin\.getPositionFromMapWithMatchingMethod' \
+  Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
+  || fail "production ClearScript genshin map positioning is not behavior-verified"
+rg -q 'ColorConversionCodes\.BGRA2BGR' \
+  BetterGenshinImpact/GameTask/Common/Map/MiniMap/MaskCalculator.cs \
+  || fail "real BGRA capture frames are not normalized for upstream mini-map processing"
 rg -q 'Microsoft.ClearScript.V8.Native.osx-arm64' BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj \
   BetterGenshinImpact.Core.Host/BetterGenshinImpact.Core.Host.csproj \
   || fail "native macOS arm64 ClearScript dependency is missing"
