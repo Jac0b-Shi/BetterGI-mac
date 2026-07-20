@@ -59,6 +59,12 @@ rg -q 'genshin\.switchParty\("Team"\)' \
 rg -q 'await genshin\.tp' \
   Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
   || fail "production ClearScript genshin teleport is not behavior-verified"
+rg -q 'genshin\.tpToStatueOfTheSeven' \
+  Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
+  || fail "production ClearScript statue teleport is not behavior-verified"
+rg -q 'JsonConvert\.DeserializeObject<GiTpPosition>' \
+  BetterGenshinImpact.Core.Host/Runtime/MacTpTaskRuntimePlatform.cs \
+  || fail "macOS TpTask composition does not restore the upstream runtime-only statue object"
 for big_map_asset in Teyvat_0_256_SIFT.kp.bin Teyvat_0_256_SIFT.mat.png; do
   rg -q "Assets/Map/Teyvat/${big_map_asset}" \
     BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json \

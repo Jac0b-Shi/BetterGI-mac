@@ -192,7 +192,23 @@ await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "config.json"), """
         "autoEnterGameEnabled": false
       },
       "quickTeleportConfig": { "enabled": true, "hotkeyTpEnabled": true },
-      "tpConfig": { "mapZoomEnabled": false },
+      "tpConfig": {
+        "mapZoomEnabled": false,
+        "reviveStatueOfTheSevenPointX": -575.6,
+        "reviveStatueOfTheSevenPointY": 1859.34,
+        "reviveStatueOfTheSevenArea": "苍风高地",
+        "reviveStatueOfTheSevenCountry": "蒙德",
+        "reviveStatueOfTheSeven": {
+          "id": "3",
+          "name": "七天神像-风",
+          "type": "Goddess",
+          "country": "蒙德",
+          "areas": ["苍风高地"],
+          "position": [1859.34, 258.0366, -575.6],
+          "tranPosition": [1854.0525, 258.0366, -578.4359]
+        },
+        "hpRestoreDuration": 1
+      },
       "hotKeyConfig": { "quickTeleportTickHotkey": "F6" },
       "autoEatConfig": { "enabled": true, "eatInterval": 1234 }
     }
@@ -280,8 +296,15 @@ GenshinRuntimePlatform.Configure(new MacGenshinRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, autoFishingRuntimePlatform, "TemplateMatch"));
 AutoFightRuntimePlatform.Configure(new MacAutoFightRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory));
-TpTaskRuntimePlatform.Configure(new MacTpTaskRuntimePlatform(
-    layout, () => gameTaskManagerPlatform.SystemInfo));
+var tpTaskPlatform = new MacTpTaskRuntimePlatform(
+    layout, () => gameTaskManagerPlatform.SystemInfo);
+TpTaskRuntimePlatform.Configure(tpTaskPlatform);
+Require(tpTaskPlatform.TpConfig.ReviveStatueOfTheSeven is
+        { Id: "3", Country: "蒙德", Level1Area: "苍风高地" } reviveStatue &&
+        Math.Abs(reviveStatue.TranX - -578.4359) < 0.0001 &&
+        Math.Abs(reviveStatue.TranY - 1854.0525) < 0.0001 &&
+        Math.Abs(tpTaskPlatform.TpConfig.HpRestoreDuration - 1) < 0.0001,
+    "macOS TpTask composition did not restore the upstream runtime-only statue object.");
 TaskParameterPlatform.Configure(new MacTaskParameterPlatform(
     autoFishingRuntimePlatform.GameCultureInfoName));
 var quickTeleportPlatform = new MacQuickTeleportRuntimePlatform(
@@ -1260,6 +1283,109 @@ try
             $"genshin.tp input sequence changed: {string.Join(",", teleportInputActions)}.");
     }
     Console.WriteLine("Real BetterGI genshin.tp passed: big-map SIFT, target click, teleport button and main-UI completion.");
+
+    const double statueX = -575.6;
+    const double statueY = 1859.34;
+    using (var statueMapFrame = BuildGroundTruthBigMapFrame(
+               layout.RootPath, sourceRoot, statueX, statueY))
+    using (var statueTeleportFrame = statueMapFrame.Clone())
+    using (var statueMainUiFrame = new OpenCvSharp.Mat(
+               schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black))
+    using (var teleportButton = OpenCvSharp.Cv2.ImRead(
+               Path.Combine(sourceRoot, "QuickTeleport/Assets/1920x1080/GoTeleport.png"),
+               OpenCvSharp.ImreadModes.Color))
+    using (var paimon = OpenCvSharp.Cv2.ImRead(
+               Path.Combine(sourceRoot, "Common/Element/Assets/1920x1080/paimon_menu.png"),
+               OpenCvSharp.ImreadModes.Color))
+    {
+        using (var target = new OpenCvSharp.Mat(statueTeleportFrame,
+                   new OpenCvSharp.Rect(1500, 1008, teleportButton.Width, teleportButton.Height)))
+            teleportButton.CopyTo(target);
+        using (var target = new OpenCvSharp.Mat(statueMainUiFrame,
+                   new OpenCvSharp.Rect(24, 20, paimon.Width, paimon.Height)))
+            paimon.CopyTo(target);
+
+        var statueFixturePath = Path.Combine(layout.UserPath, "JsScript", "GenshinStatueTeleport");
+        Directory.CreateDirectory(statueFixturePath);
+        await File.WriteAllTextAsync(Path.Combine(statueFixturePath, "manifest.json"), """
+            {"name":"Genshin Statue Teleport","version":"1.0.0","description":"verification","authors":[{"name":"BetterGI"}],"main":"main.js","settings":[],"library":[]}
+            """);
+        await File.WriteAllTextAsync(Path.Combine(statueFixturePath, "main.js"),
+            "export {}; await genshin.tpToStatueOfTheSeven();");
+
+        var statueCaptureCount = 0;
+        var statueMetricsCount = 0;
+        var statueActivationCount = 0;
+        var statueInputActions = new List<string>();
+        var statueResponder = Task.Run(async () =>
+        {
+            while (statueCaptureCount < 9 || statueActivationCount < 6)
+            {
+                var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
+                    ?? throw new EndOfStreamException("genshin.tpToStatueOfTheSeven callback channel ended unexpectedly.");
+                if (callback.Method == "window.metrics")
+                {
+                    statueMetricsCount++;
+                    await callbackConnection.WriteResponseAsync(RpcResponse.Success(callback.Id, new
+                    {
+                        captureX = 0, captureY = 0, captureWidth = schedulerWidth, captureHeight = schedulerHeight,
+                        workingAreaWidth = schedulerWidth, workingAreaHeight = schedulerHeight,
+                        dpiScale = 1.0, processId = 1
+                    }), cancellation.Token);
+                    continue;
+                }
+                if (callback.Method == "window.activate")
+                {
+                    statueActivationCount++;
+                    await callbackConnection.WriteResponseAsync(
+                        RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+                    continue;
+                }
+                if (callback.Method == "capture.request")
+                {
+                    statueCaptureCount++;
+                    var frame = statueCaptureCount switch
+                    {
+                        <= 7 => statueMapFrame,
+                        8 => statueTeleportFrame,
+                        9 => statueMainUiFrame,
+                        _ => throw new InvalidOperationException()
+                    };
+                    await WriteCaptureRingFrameAsync(captureRingPath, frame, (ulong)(30 + statueCaptureCount));
+                    await callbackConnection.WriteResponseAsync(RpcResponse.Success(callback.Id, new
+                    {
+                        ringPath = captureRingPath, frameId = (ulong)(30 + statueCaptureCount),
+                        sequence = 2UL, slot = 0, width = schedulerWidth, height = schedulerHeight,
+                        stride = schedulerStride, pixelFormat = "BGRA8"
+                    }), cancellation.Token);
+                    continue;
+                }
+
+                Require(callback.Method == "input.dispatch",
+                    $"genshin.tpToStatueOfTheSeven emitted unexpected callback {callback.Method}.");
+                statueInputActions.Add(callback.Params?.Value<string>("action") ?? "");
+                await callbackConnection.WriteResponseAsync(
+                    RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+            }
+        }, cancellation.Token);
+        var statueStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        await new ScriptProject("GenshinStatueTeleport").ExecuteAsync();
+        var statueElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(statueStartedAt);
+        await statueResponder;
+        Require(statueCaptureCount == 9 && statueMetricsCount == 3 && statueActivationCount == 6,
+            $"genshin.tpToStatueOfTheSeven platform sequence changed: captures={statueCaptureCount}, " +
+            $"metrics={statueMetricsCount}, activations={statueActivationCount}.");
+        Require(statueInputActions.SequenceEqual([
+                "releaseAll",
+                "moveMouseToScreen", "mouseDown", "mouseUp",
+                "moveMouseToScreen", "mouseDown", "mouseUp"
+            ]),
+            "genshin.tpToStatueOfTheSeven input sequence changed: " +
+            string.Join(",", statueInputActions));
+        Require(statueElapsed >= TimeSpan.FromMilliseconds(900),
+            $"genshin.tpToStatueOfTheSeven skipped the configured restore wait: {statueElapsed}.");
+    }
+    Console.WriteLine("Real BetterGI genshin.tpToStatueOfTheSeven passed: configured statue, teleport and restore wait.");
 
     using (var partyFrame = new OpenCvSharp.Mat(
                schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black))

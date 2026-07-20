@@ -1,8 +1,10 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoTrackPath;
+using BetterGenshinImpact.GameTask.AutoTrackPath.Model;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.QuickTeleport;
+using Newtonsoft.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -16,7 +18,14 @@ public sealed class MacTpTaskRuntimePlatform : ITpTaskRuntimePlatform
     {
         _systemInfoProvider = systemInfoProvider ?? throw new ArgumentNullException(nameof(systemInfoProvider));
         var root = LoadRoot(layout);
-        TpConfig = root?["tpConfig"]?.Deserialize<TpConfig>(ConfigJson.Options) ?? new TpConfig();
+        var tpNode = root?["tpConfig"];
+        TpConfig = tpNode?.Deserialize<TpConfig>(ConfigJson.Options) ?? new TpConfig();
+        TpConfig.ReviveStatueOfTheSeven = tpNode?["reviveStatueOfTheSeven"] is { } statueNode
+            ? JsonConvert.DeserializeObject<GiTpPosition>(statueNode.ToJsonString())
+            : null;
+        TpConfig.ShouldMove = tpNode?["shouldMove"]?.GetValue<bool>() ?? false;
+        TpConfig.IsReviveInNearestStatueOfTheSeven =
+            tpNode?["isReviveInNearestStatueOfTheSeven"]?.GetValue<bool>() ?? false;
         QuickTeleportConfig = root?["quickTeleportConfig"]?.Deserialize<QuickTeleportConfig>(ConfigJson.Options)
             ?? new QuickTeleportConfig();
         MapMatchingMethod = root?["pathingConditionConfig"]?["mapMatchingMethod"]?.GetValue<string>()
