@@ -1609,6 +1609,45 @@ foreach (var scenario in avatarScenarios)
         names.SequenceEqual(scenario.ExpectedNames), string.Join(",", names));
 }
 Console.WriteLine();
+
+Console.WriteLine("Pathing mining: upstream handler through RunnerContext and real Avatar");
+var miningFixturePath = Path.Combine(avatarFixtureDirectory, "别人进我世界_2人.png");
+recordingTaskControl.Calls.Clear();
+var miningCaptureCount = 0;
+recordingTaskControl.CaptureFrameProvider = () =>
+{
+    miningCaptureCount++;
+    return Cv2.ImRead(miningFixturePath, ImreadModes.Color);
+};
+string[] miningTeamNames = [];
+RunnerContext.Instance.Reset();
+try
+{
+    await new MiningHandler().RunAsync(CancellationToken.None);
+    var miningScenes = await RunnerContext.Instance.GetCombatScenes(CancellationToken.None);
+    miningTeamNames = miningScenes?.GetAvatars().Select(avatar => avatar.Name).ToArray() ?? [];
+}
+finally
+{
+    RunnerContext.Instance.Reset();
+    recordingTaskControl.CaptureFrameProvider = null;
+}
+Assert("MiningHandler executes the upstream Zhongli hold-skill action",
+    recordingTaskControl.Calls.Contains("action:ElementalSkill:Hold"),
+    string.Join(" | ", recordingTaskControl.Calls));
+Assert("MiningHandler caches the configured upstream CombatScenes team",
+    miningTeamNames.SequenceEqual(["钟离", "夜兰", "纳西妲", "久岐忍"]),
+    string.Join(",", miningTeamNames));
+Assert("MiningHandler consumes real capture frames for UI, team and skill checks",
+    miningCaptureCount >= 3, $"captures={miningCaptureCount}");
+Assert("MiningHandler leaves movement actions released",
+    !recordingTaskControl.IsPressed(GIActions.MoveForward) &&
+    !recordingTaskControl.IsPressed(GIActions.MoveBackward) &&
+    !recordingTaskControl.IsPressed(GIActions.MoveLeft) &&
+    !recordingTaskControl.IsPressed(GIActions.MoveRight),
+    string.Join(" | ", recordingTaskControl.Calls));
+Console.WriteLine();
+
 AutoSkipAssets.DestroyInstance();
 AutoSkipAssets.Initialize(b5SystemInfo);
 GameLoadingAssets.DestroyInstance();
