@@ -1070,6 +1070,37 @@ try
     Require(bvExpectedInputs.Count == 0, "Bv input proxy did not dispatch every acknowledged action.");
     Console.WriteLine("Bv host surface passed: upstream image/locator plus acknowledged keyboard and mouse proxies.");
 
+    var genshinMetricsResponder = Task.Run(async () =>
+    {
+        for (var requestIndex = 0; requestIndex < 3; requestIndex++)
+        {
+            var metrics = await callbackConnection.ReadRequestAsync(cancellation.Token)
+                ?? throw new EndOfStreamException("genshin screen properties did not request window metrics.");
+            Require(metrics.Method == "window.metrics",
+                $"genshin screen properties emitted unexpected callback {metrics.Method}.");
+            await callbackConnection.WriteResponseAsync(RpcResponse.Success(metrics.Id, new
+            {
+                captureWidth = 1920, captureHeight = 1080,
+                workingAreaWidth = 2560, workingAreaHeight = 1440,
+                captureX = 100, captureY = 50, processId = 1, dpiScale = 1.25
+            }), cancellation.Token);
+        }
+    }, cancellation.Token);
+    using (var metricsEngine = new V8ScriptEngine(V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding))
+    {
+        new MacScriptProjectHostInitializer().Initialize(
+            metricsEngine, Path.Combine(layout.UserPath, "JsScript"), [], null);
+        var metricsJson = Convert.ToString(metricsEngine.Evaluate("""
+            JSON.stringify({ width: genshin.width, height: genshin.height, dpi: genshin.screenDpiScale });
+            """)) ?? throw new InvalidOperationException("genshin screen properties returned no value.");
+        var metrics = JObject.Parse(metricsJson);
+        Require(metrics.Value<int>("width") == 1920 && metrics.Value<int>("height") == 1080 &&
+                Math.Abs(metrics.Value<double>("dpi") - 1.25) < 0.001,
+            $"genshin screen properties returned unexpected values: {metricsJson}");
+    }
+    await genshinMetricsResponder;
+    Console.WriteLine("Real BetterGI genshin screen properties passed: ClearScript values came from macOS window.metrics callbacks.");
+
     var mapFixturePosition = new OpenCvSharp.Point2f(-4251.583984375f, -4785.17578125f);
     await StageMapBack3Async(layout.RootPath, cancellation.Token);
     using (var mapFrame = BuildGroundTruthNavigationFrame(

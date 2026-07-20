@@ -50,6 +50,9 @@ fi
 rg -q 'genshin\.getPositionFromMapWithMatchingMethod' \
   Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
   || fail "production ClearScript genshin map positioning is not behavior-verified"
+rg -q 'genshin\.screenDpiScale' \
+  Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
+  || fail "production ClearScript genshin screen metrics are not behavior-verified"
 rg -q 'ColorConversionCodes\.BGRA2BGR' \
   BetterGenshinImpact/GameTask/Common/Map/MiniMap/MaskCalculator.cs \
   || fail "real BGRA capture frames are not normalized for upstream mini-map processing"
