@@ -169,9 +169,10 @@ Global.StartUpPath = layout.RootPath;
 var upstreamProject = new ScriptProject("CoreFixture");
 Require(upstreamProject.ProjectPath == runtimeProject && await upstreamProject.LoadCode() == "globalThis.test = true;",
     "upstream ScriptProject did not resolve User/JsScript under the runtime root");
+await StageLockedRuntimeArtifactsAsync(layout.RootPath, CancellationToken.None);
 var socketPath = Path.Combine(layout.RunPath, "verification.sock");
 var sessionToken = Convert.ToHexString(Guid.NewGuid().ToByteArray());
-using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(300));
 await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "config.json"), """
     {
       "otherConfig": {
@@ -270,6 +271,7 @@ TaskControlPlatform.Configure(new MacTaskControlPlatform(
     loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.Common.TaskControl")));
 var imageRegionOcrService = new MacImageRegionOcrService(
     layout, loggerFactory.CreateLogger<BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory>());
+BetterGenshinImpact.Core.Recognition.OCR.ImageRegionOcrPlatform.Configure(imageRegionOcrService);
 var autoFishingRuntimePlatform = new MacAutoFishingRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
 AutoFishingRuntimePlatform.Configure(autoFishingRuntimePlatform);
@@ -953,6 +955,8 @@ try
     foreach (var relativeAsset in new[]
     {
         "Common/Element/Assets/1920x1080/paimon_menu.png",
+        "Common/Element/Assets/1920x1080/party_btn_choose_view.png",
+        "Common/Element/Assets/1920x1080/party_btn_delete.png",
         "Common/Element/Assets/1920x1080/primogem.png",
         "AutoFight/Assets/1920x1080/confirm.png",
         "GameLoading/Assets/1920x1080/girl_moon.png",
@@ -1152,6 +1156,90 @@ try
     await genshinMapResponder;
     Console.WriteLine("Real BetterGI genshin.getPositionFromMap passed: ClearScript, capture ring and upstream TemplateMatch navigation.");
 
+    using (var partyFrame = new OpenCvSharp.Mat(
+               schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black))
+    using (var partyButton = OpenCvSharp.Cv2.ImRead(
+               Path.Combine(sourceRoot, "Common/Element/Assets/1920x1080/party_btn_choose_view.png"),
+               OpenCvSharp.ImreadModes.Color))
+    using (var paimon = OpenCvSharp.Cv2.ImRead(
+               Path.Combine(sourceRoot, "Common/Element/Assets/1920x1080/paimon_menu.png"),
+               OpenCvSharp.ImreadModes.Color))
+    {
+        using (var partyButtonTarget = new OpenCvSharp.Mat(
+                   partyFrame, new OpenCvSharp.Rect(50, 1000, partyButton.Width, partyButton.Height)))
+            partyButton.CopyTo(partyButtonTarget);
+        using (var paimonTarget = new OpenCvSharp.Mat(
+                   partyFrame, new OpenCvSharp.Rect(24, 20, paimon.Width, paimon.Height)))
+            paimon.CopyTo(paimonTarget);
+        OpenCvSharp.Cv2.PutText(partyFrame, "Team", new OpenCvSharp.Point(100, 1026),
+            OpenCvSharp.HersheyFonts.HersheySimplex, 0.75, OpenCvSharp.Scalar.White, 2,
+            OpenCvSharp.LineTypes.AntiAlias);
+        using var partyBgra = new OpenCvSharp.Mat();
+        OpenCvSharp.Cv2.CvtColor(partyFrame, partyBgra, OpenCvSharp.ColorConversionCodes.BGR2BGRA);
+        using var partyRegion = new ImageRegion(partyBgra.Clone(), 0, 0);
+        Require(BetterGenshinImpact.GameTask.Common.BgiVision.Bv.IsInPartyViewUi(partyRegion),
+            "Synthetic party frame did not match the upstream party-view template.");
+        using var partyViewButton = partyRegion.Find(ElementAssets.Instance.PartyBtnChooseView);
+        var partyName = partyRegion.Find(new RecognitionObject
+        {
+            RecognitionType = RecognitionTypes.Ocr,
+            RegionOfInterest = new OpenCvSharp.Rect(
+                partyViewButton.Right, partyViewButton.Top, 350, partyViewButton.Height)
+        }).Text;
+        Require(partyName.Contains("Team", StringComparison.OrdinalIgnoreCase),
+            $"Locked Paddle OCR did not read the party fixture name: '{partyName}'.");
+        await WriteCaptureRingFrameAsync(captureRingPath, partyFrame, 10UL);
+    }
+    using (var partyRingRegion = new SharedCaptureRingReader(layout).Read(JObject.FromObject(new
+           {
+               ringPath = captureRingPath, frameId = 10UL, sequence = 2UL, slot = 0,
+               width = schedulerWidth, height = schedulerHeight, stride = schedulerStride, pixelFormat = "BGRA8"
+           })))
+    {
+        Require(BetterGenshinImpact.GameTask.Common.BgiVision.Bv.IsInPartyViewUi(partyRingRegion),
+            "Party frame lost the upstream party-view template after the BGRA capture ring round-trip.");
+    }
+    var switchPartyFixturePath = Path.Combine(layout.UserPath, "JsScript", "GenshinSwitchParty");
+    Directory.CreateDirectory(switchPartyFixturePath);
+    await File.WriteAllTextAsync(Path.Combine(switchPartyFixturePath, "manifest.json"), """
+        {"name":"Genshin SwitchParty","version":"1.0.0","description":"verification","authors":[{"name":"BetterGI"}],"main":"main.js","settings":[],"library":[]}
+        """);
+    await File.WriteAllTextAsync(Path.Combine(switchPartyFixturePath, "main.js"), """
+        export {};
+        if (!(await genshin.switchParty("Team"))) throw new Error("switchParty returned false");
+        """);
+    var switchPartyMetricsCount = 0;
+    var switchPartyCaptureCount = 0;
+    var switchPartyActivationCount = 0;
+    var switchPartyResponder = Task.Run(async () =>
+    {
+        while (switchPartyCaptureCount < 2)
+        {
+            var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
+                ?? throw new EndOfStreamException("genshin.switchParty callback channel ended unexpectedly.");
+            object response = callback.Method switch
+            {
+                "window.metrics" => RecordSwitchPartyMetrics(
+                    ref switchPartyMetricsCount, schedulerWidth, schedulerHeight),
+                "capture.request" => RecordSwitchPartyCapture(
+                    ref switchPartyCaptureCount, captureRingPath,
+                    schedulerWidth, schedulerHeight, schedulerStride),
+                "window.activate" => RecordAcknowledgement(ref switchPartyActivationCount),
+                _ => throw new InvalidDataException(
+                    $"genshin.switchParty emitted unexpected callback {callback.Method}.")
+            };
+            await callbackConnection.WriteResponseAsync(
+                RpcResponse.Success(callback.Id, response), cancellation.Token);
+        }
+    }, cancellation.Token);
+    await new ScriptProject("GenshinSwitchParty").ExecuteAsync();
+    await switchPartyResponder;
+    Require(switchPartyMetricsCount == 1 && switchPartyCaptureCount == 2 &&
+            switchPartyActivationCount == 1,
+        $"genshin.switchParty callbacks changed: metrics={switchPartyMetricsCount}, " +
+        $"captures={switchPartyCaptureCount}, activations={switchPartyActivationCount}.");
+    Console.WriteLine("Real BetterGI genshin.switchParty passed: ClearScript, party-view template and locked Paddle OCR.");
+
     var schedulerStates = new List<string>();
     var schedulerResponder = Task.Run(async () =>
     {
@@ -1169,7 +1257,7 @@ try
                 },
                 "capture.request" => new
                 {
-                    ringPath = captureRingPath, frameId = 9UL, sequence = 2UL, slot = 0,
+                    ringPath = captureRingPath, frameId = 10UL, sequence = 2UL, slot = 0,
                     width = schedulerWidth, height = schedulerHeight, stride = schedulerStride, pixelFormat = "BGRA8"
                 },
                 "scheduler.event" => RecordSchedulerState(callback.Params, schedulerStates),
@@ -1228,6 +1316,34 @@ static object RecordSchedulerState(JObject? parameters, List<string> states)
     states.Add(state);
     if (parameters?["error"] is JObject error)
         Console.WriteLine($"Scheduler {state}: {error.Value<string>("code")}: {error.Value<string>("message")}");
+    return new { acknowledged = true };
+}
+
+static object RecordSwitchPartyMetrics(ref int count, int width, int height)
+{
+    count++;
+    return new
+    {
+        captureWidth = width, captureHeight = height,
+        workingAreaWidth = width, workingAreaHeight = height,
+        captureX = 0, captureY = 0, processId = 1
+    };
+}
+
+static object RecordSwitchPartyCapture(
+    ref int count, string captureRingPath, int width, int height, int stride)
+{
+    count++;
+    return new
+    {
+        ringPath = captureRingPath, frameId = 10UL, sequence = 2UL, slot = 0,
+        width, height, stride, pixelFormat = "BGRA8"
+    };
+}
+
+static object RecordAcknowledgement(ref int count)
+{
+    count++;
     return new { acknowledged = true };
 }
 
@@ -1334,6 +1450,48 @@ static async Task StageMapBack3Async(string runtimeRoot, CancellationToken cance
     var mapBack3 = descriptor.RootElement.EnumerateArray()
         .Single(entry => entry.GetProperty("LayerId").GetString() == "MapBack_3");
     await File.WriteAllTextAsync(descriptorPath, "[" + mapBack3.GetRawText() + "]", cancellationToken);
+}
+
+static async Task StageLockedRuntimeArtifactsAsync(string runtimeRoot, CancellationToken cancellationToken)
+{
+    var sourceLockPath = Path.Combine(
+        Directory.GetCurrentDirectory(), "BetterGenshinImpact.Core", "Manifest", "model-artifacts.source-lock.json");
+    var completeLock = BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.LoadSourceLock(sourceLockPath);
+    var ocrPaths = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "Assets/Model/PaddleOCR/Det/V5/ppocr_det_v5.onnx",
+        "Assets/Model/PaddleOCR/Rec/V5/ppocr_rec_v5.onnx",
+        "Assets/Model/PaddleOCR/Rec/V5/inference.yml",
+        "Assets/Model/PaddleOCR/test_pp_ocr.png"
+    };
+    var ocrLock = new BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.SourceLock
+    {
+        SchemaVersion = completeLock.SchemaVersion,
+        ArtifactSetVersion = completeLock.ArtifactSetVersion,
+        Sources = completeLock.Sources,
+        Artifacts = completeLock.Artifacts
+            .Where(artifact => ocrPaths.Contains(artifact.DestinationRelativePath)).ToList()
+    };
+    Require(ocrLock.Artifacts.Count == ocrPaths.Count,
+        $"OCR source-lock selection returned {ocrLock.Artifacts.Count} of {ocrPaths.Count} artifacts.");
+    var temporaryLockPath = Path.Combine(Path.GetTempPath(), $"bgi-host-ocr-{Guid.NewGuid():N}.json");
+    try
+    {
+        await File.WriteAllTextAsync(temporaryLockPath, System.Text.Json.JsonSerializer.Serialize(
+            ocrLock, new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+            }), cancellationToken);
+        using var downloader = new BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader();
+        var result = await downloader.EnsureInstalledAsync(
+            temporaryLockPath, runtimeRoot, cancellationToken,
+            Path.Combine(Path.GetTempPath(), "bgi-release-archive-cache"));
+        Require(result.Success, "Locked OCR artifact install failed: " + string.Join("; ", result.Errors));
+    }
+    finally
+    {
+        File.Delete(temporaryLockPath);
+    }
 }
 
 static OpenCvSharp.Mat BuildGroundTruthNavigationFrame(

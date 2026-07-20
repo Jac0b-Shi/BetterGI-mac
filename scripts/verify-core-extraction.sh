@@ -53,6 +53,9 @@ rg -q 'genshin\.getPositionFromMapWithMatchingMethod' \
 rg -q 'genshin\.screenDpiScale' \
   Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
   || fail "production ClearScript genshin screen metrics are not behavior-verified"
+rg -q 'genshin\.switchParty\("Team"\)' \
+  Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
+  || fail "production ClearScript genshin party switching is not behavior-verified"
 rg -q 'ColorConversionCodes\.BGRA2BGR' \
   BetterGenshinImpact/GameTask/Common/Map/MiniMap/MaskCalculator.cs \
   || fail "real BGRA capture frames are not normalized for upstream mini-map processing"
