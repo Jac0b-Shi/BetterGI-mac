@@ -10,9 +10,11 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 
 public sealed class MacTpTaskRuntimePlatform : ITpTaskRuntimePlatform
 {
-    public MacTpTaskRuntimePlatform(RuntimeLayout layout, ISystemInfo systemInfo)
+    private readonly Func<ISystemInfo> _systemInfoProvider;
+
+    public MacTpTaskRuntimePlatform(RuntimeLayout layout, Func<ISystemInfo> systemInfoProvider)
     {
-        SystemInfo = systemInfo;
+        _systemInfoProvider = systemInfoProvider ?? throw new ArgumentNullException(nameof(systemInfoProvider));
         var root = LoadRoot(layout);
         TpConfig = root?["tpConfig"]?.Deserialize<TpConfig>(ConfigJson.Options) ?? new TpConfig();
         QuickTeleportConfig = root?["quickTeleportConfig"]?.Deserialize<QuickTeleportConfig>(ConfigJson.Options)
@@ -21,7 +23,7 @@ public sealed class MacTpTaskRuntimePlatform : ITpTaskRuntimePlatform
             ?? "TemplateMatch";
     }
 
-    public ISystemInfo SystemInfo { get; }
+    public ISystemInfo SystemInfo => _systemInfoProvider();
     public TpConfig TpConfig { get; }
     public QuickTeleportConfig QuickTeleportConfig { get; }
     public string MapMatchingMethod { get; }

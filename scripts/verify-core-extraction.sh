@@ -27,6 +27,11 @@ rg -q 'synchronizeBundledGameTaskResources\(\)' \
   exit 1
 }
 
+if rg -n 'layout, gameTaskManagerPlatform\.SystemInfo' BetterGenshinImpact.Core.Host/Program.cs; then
+  echo "Core Host must not query Swift window metrics before the callback channel attaches." >&2
+  exit 1
+fi
+
 rg -q 'Core/Script/Dependence/Dispatcher.cs' BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj \
   || fail "shared upstream Dispatcher is not linked into Core"
 rg -q 'AddHostObject\("dispatcher", new Dispatcher' \

@@ -81,7 +81,7 @@ var globalMethodRuntime = new MacGlobalMethodRuntime(
 var gameTaskManagerPlatform = new MacGameTaskManagerPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token, loggerFactory);
 var bvSimpleOperationPlatform = new MacBvSimpleOperationPlatform(
-    layout, gameTaskManagerPlatform.SystemInfo);
+    layout, () => gameTaskManagerPlatform.SystemInfo);
 var imageRegionOcrService = new MacImageRegionOcrService(
     layout, loggerFactory.CreateLogger<BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory>());
 var autoPickConfigProvider = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
@@ -106,9 +106,9 @@ TaskControlPlatform.Configure(new MacTaskControlPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token, captureRing,
     loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.Common.TaskControl")));
 AutoFightRuntimePlatform.Configure(new MacAutoFightRuntimePlatform(
-    layout, gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory));
+    layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory));
 var autoFishingRuntimePlatform = new MacAutoFishingRuntimePlatform(
-    layout, gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
+    layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
 AutoFishingRuntimePlatform.Configure(autoFishingRuntimePlatform);
 GenshinRuntimePlatform.Configure(new MacGenshinRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, autoFishingRuntimePlatform, "TemplateMatch"));
@@ -120,7 +120,7 @@ TaskParameterPlatform.Configure(new MacTaskParameterPlatform(
     autoFishingRuntimePlatform.GameCultureInfoName));
 BvSimpleOperationPlatform.Configure(bvSimpleOperationPlatform);
 TpTaskRuntimePlatform.Configure(new MacTpTaskRuntimePlatform(
-    layout, gameTaskManagerPlatform.SystemInfo));
+    layout, () => gameTaskManagerPlatform.SystemInfo));
 AutoSkipRuntimePlatform.Configure(new MacAutoSkipRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory, imageRegionOcrService,
     server.PlatformCallbacks, sessionToken, shutdown.Token));

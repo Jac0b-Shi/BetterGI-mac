@@ -9,11 +9,18 @@ using System.Text.Json.Nodes;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
-public sealed class MacBvSimpleOperationPlatform(RuntimeLayout layout, ISystemInfo systemInfo)
-    : IBvSimpleOperationPlatform
+public sealed class MacBvSimpleOperationPlatform : IBvSimpleOperationPlatform
 {
-    public ISystemInfo SystemInfo { get; } = systemInfo;
-    public AutoPickConfig AutoPickConfig { get; } = LoadConfig(layout);
+    private readonly Func<ISystemInfo> _systemInfoProvider;
+
+    public MacBvSimpleOperationPlatform(RuntimeLayout layout, Func<ISystemInfo> systemInfoProvider)
+    {
+        _systemInfoProvider = systemInfoProvider ?? throw new ArgumentNullException(nameof(systemInfoProvider));
+        AutoPickConfig = LoadConfig(layout);
+    }
+
+    public ISystemInfo SystemInfo => _systemInfoProvider();
+    public AutoPickConfig AutoPickConfig { get; }
     public void PressPickKey() => TaskControlPlatform.Current.SimulateAction(
         GIActions.PickUpOrInteract, KeyType.KeyPress);
 

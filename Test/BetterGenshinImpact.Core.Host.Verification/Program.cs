@@ -12,16 +12,22 @@ using BetterGenshinImpact.Core.Script.Dependence.Model;
 using BetterGenshinImpact.Core.Recorder;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.AutoSkip;
+using BetterGenshinImpact.GameTask.AutoFishing;
+using BetterGenshinImpact.GameTask.AutoFight;
+using BetterGenshinImpact.GameTask.AutoTrackPath;
 using BetterGenshinImpact.GameTask.FarmingPlan;
 using BetterGenshinImpact.GameTask.QuickTeleport;
 using BetterGenshinImpact.GameTask.AutoEat;
 using BetterGenshinImpact.GameTask.GameLoading;
+using BetterGenshinImpact.GameTask.MapMask;
+using BetterGenshinImpact.GameTask.SkillCd;
 using BetterGenshinImpact.Service;
 using BetterGenshinImpact.GameTask.Shell;
 using Microsoft.Extensions.Logging;
@@ -40,6 +46,9 @@ var root = Path.Combine("/tmp", "bgi-" + Guid.NewGuid().ToString("N"));
 var layout = new RuntimeLayout(root);
 OverlayDrawPlatform.Configure(new VerificationOverlayDrawPlatform());
 layout.EnsureCreated();
+CopyDirectory(
+    Path.Combine(Directory.GetCurrentDirectory(), "MacGI", "Sources", "MacGI", "Resources", "GameTask"),
+    Path.Combine(layout.RootPath, "GameTask"));
 var captureRingPath = Path.Combine(layout.RunPath, "capture-ring.bin");
 const int captureHeaderSize = 128;
 const int captureSlotCapacity = 16;
@@ -160,7 +169,7 @@ Require(upstreamProject.ProjectPath == runtimeProject && await upstreamProject.L
     "upstream ScriptProject did not resolve User/JsScript under the runtime root");
 var socketPath = Path.Combine(layout.RunPath, "verification.sock");
 var sessionToken = Convert.ToHexString(Guid.NewGuid().ToByteArray());
-using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "config.json"), """
     {
       "otherConfig": {
@@ -199,10 +208,13 @@ scriptHostServices.SetServerTimeZoneOffset(TimeSpan.FromHours(8));
 scriptHostServices.SetCurrentProject(new ScriptGroupProject(upstreamProject) { AllowJsNotification = true });
 ScriptHostServices.Configure(scriptHostServices);
 server.AttachScriptHostServices(scriptHostServices);
+var gameTaskManagerPlatform = new MacGameTaskManagerPlatform(
+    server.PlatformCallbacks, sessionToken, cancellation.Token, loggerFactory);
+GameTaskManagerPlatform.Configure(gameTaskManagerPlatform);
 var scriptServicePlatform = new MacScriptServicePlatform(
     layout, loggerFactory.CreateLogger("BetterGenshinImpact.Service.ScriptService"), scriptHostServices,
     server.PlatformCallbacks, sessionToken, cancellation.Token, new SharedCaptureRingReader(layout),
-    new MacGameTaskManagerPlatform(server.PlatformCallbacks, sessionToken, cancellation.Token, loggerFactory));
+    gameTaskManagerPlatform);
 Require(scriptServicePlatform.FarmingPlanEnabled,
     "macOS scheduler ignored the upstream farming-plan configuration");
 Require(scriptServicePlatform.RestartPolicy is
@@ -253,8 +265,33 @@ TaskRunnerPlatform.Configure(new MacTaskRunnerPlatform(
 TaskControlPlatform.Configure(new MacTaskControlPlatform(
     server.PlatformCallbacks, sessionToken, cancellation.Token, new SharedCaptureRingReader(layout),
     loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.Common.TaskControl")));
-using var imageRegionOcrService = new MacImageRegionOcrService(
+var imageRegionOcrService = new MacImageRegionOcrService(
     layout, loggerFactory.CreateLogger<BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory>());
+var autoFishingRuntimePlatform = new MacAutoFishingRuntimePlatform(
+    layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
+AutoFishingRuntimePlatform.Configure(autoFishingRuntimePlatform);
+AutoFightRuntimePlatform.Configure(new MacAutoFightRuntimePlatform(
+    layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory));
+TpTaskRuntimePlatform.Configure(new MacTpTaskRuntimePlatform(
+    layout, () => gameTaskManagerPlatform.SystemInfo));
+TaskParameterPlatform.Configure(new MacTaskParameterPlatform(
+    autoFishingRuntimePlatform.GameCultureInfoName));
+var quickTeleportPlatform = new MacQuickTeleportRuntimePlatform(
+    layout, server.PlatformCallbacks, sessionToken, cancellation.Token);
+QuickTeleportRuntimePlatform.Configure(quickTeleportPlatform);
+AutoSkipRuntimePlatform.Configure(new MacAutoSkipRuntimePlatform(
+    layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory, imageRegionOcrService,
+    server.PlatformCallbacks, sessionToken, cancellation.Token));
+AutoEatRuntimePlatform.Configure(new MacAutoEatRuntimePlatform(layout, loggerFactory));
+var triggerGameLoadingPlatform = new MacGameLoadingRuntimePlatform(
+    layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory,
+    server.PlatformCallbacks, sessionToken, cancellation.Token);
+GameLoadingRuntimePlatform.Configure(triggerGameLoadingPlatform);
+MapMaskRuntimePlatform.Configure(new MacMapMaskRuntimePlatform(
+    layout, loggerFactory, server.PlatformCallbacks, sessionToken, cancellation.Token));
+SkillCdRuntimePlatform.Configure(new MacSkillCdRuntimePlatform(
+    layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory,
+    server.PlatformCallbacks, sessionToken, cancellation.Token));
 var pathExecutorPlatform = new MacPathExecutorPlatform(
     layout, imageRegionOcrService, server.PlatformCallbacks, sessionToken, cancellation.Token);
 PathExecutorPlatform.Configure(pathExecutorPlatform);
@@ -277,6 +314,16 @@ ScriptGroupExecutionServices.Configure(new MacScriptGroupExecutionServices(
     verificationAutoPickConfigProvider,
     imageRegionOcrService.CreatePaddleAutoPickTextRecognizer(),
     imageRegionOcrService.CreateYapAutoPickTextRecognizer(layout)));
+server.AttachPlatformAssetInitializer(() =>
+{
+    GameTaskManager.LoadInitialTriggers(
+        verificationInputBackend, gameTaskManagerPlatform.SystemInfo,
+        new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(
+            () => RunnerContext.Instance.AutoPickTriggerStopCount),
+        verificationAutoPickConfigProvider,
+        imageRegionOcrService.CreatePaddleAutoPickTextRecognizer(),
+        imageRegionOcrService.CreateYapAutoPickTextRecognizer(layout));
+});
 var shellPlatform = new MacShellTaskPlatform(server.PlatformCallbacks, sessionToken, cancellation.Token);
 ShellTaskPlatform.Configure(shellPlatform);
 var shellResult = await shellPlatform.ExecuteAsync(
@@ -329,6 +376,67 @@ try
         new RpcRequest("attach", "platform.attach", null, sessionToken), cancellation.Token);
     var attachResponse = await callbackConnection.ReadResponseAsync(cancellation.Token);
     Require(attachResponse?.Error is null, attachResponse?.Error?.Message ?? "platform.attach failed");
+    using var initializationMetricsCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
+    var initializationMetricsCount = 0;
+    var initializationOverlayCount = 0;
+    var initializationMetricsResponder = Task.Run(async () =>
+    {
+        try
+        {
+            while (true)
+            {
+                var callback = await callbackConnection.ReadRequestAsync(initializationMetricsCancellation.Token)
+                    ?? throw new EndOfStreamException("Trigger initialization callback channel ended unexpectedly.");
+                object result = callback.Method switch
+                {
+                    "window.metrics" => MetricsResult(),
+                    "overlay.command" => OverlayResult(),
+                    _ => throw new InvalidOperationException(
+                        $"Trigger initialization sent unexpected callback {callback.Method}.")
+                };
+                await callbackConnection.WriteResponseAsync(
+                    RpcResponse.Success(callback.Id, result), initializationMetricsCancellation.Token);
+            }
+
+            object MetricsResult()
+            {
+                initializationMetricsCount++;
+                return new
+                {
+                    captureWidth = 1920,
+                    captureHeight = 1080,
+                    workingAreaWidth = 1920,
+                    workingAreaHeight = 1080,
+                    captureX = 0,
+                    captureY = 0,
+                    processId = Environment.ProcessId
+                };
+            }
+
+            object OverlayResult()
+            {
+                initializationOverlayCount++;
+                return new { acknowledged = true };
+            }
+        }
+        catch (OperationCanceledException) when (initializationMetricsCancellation.IsCancellationRequested) { }
+    }, initializationMetricsCancellation.Token);
+    var initializedWithPlatform = await ExchangeAsync(
+        connection, "initialize-with-platform", "core.initialize", sessionToken,
+        JObject.FromObject(new { runtimeRoot = layout.RootPath }), cancellation.Token);
+    initializationMetricsCancellation.Cancel();
+    await initializationMetricsResponder;
+    Require(initializedWithPlatform.Error is null &&
+            JObject.FromObject(initializedWithPlatform.Result!).Value<bool>("platformAssetsInitialized") &&
+            initializationMetricsCount > 0 && initializationOverlayCount > 0,
+        initializedWithPlatform.Error?.Message ?? "core.initialize did not initialize production trigger assets");
+    var productionTriggerList = await ExchangeAsync(
+        connection, "production-trigger-list", "trigger.list", sessionToken, null, cancellation.Token);
+    var productionTriggerNames = JArray.FromObject(productionTriggerList.Result!)
+        .Select(item => item?["name"]?.Value<string>()).Where(name => name is not null).ToHashSet();
+    Require(productionTriggerList.Error is null && productionTriggerNames.SetEquals(new[]
+        { "GameLoading", "AutoPick", "QuickTeleport", "AutoSkip", "AutoFish", "AutoEat", "MapMask", "SkillCd" }),
+        productionTriggerList.Error?.Message ?? "core.initialize did not register the exact production trigger set");
     var gameLoadingPlatform = new MacGameLoadingRuntimePlatform(
         layout,
         () => throw new InvalidOperationException("GameLoading verification did not request screen metrics."),
@@ -357,9 +465,6 @@ try
             gameLoadingPlatform.GetBiliLoginWindowType() == BiliLoginWindowType.Agreement,
         "GameLoading macOS platform lost upstream config, DPI, URL or Bili-window semantics.");
     await gameLoadingResponder;
-    var quickTeleportPlatform = new MacQuickTeleportRuntimePlatform(
-        layout, server.PlatformCallbacks, sessionToken, cancellation.Token);
-    QuickTeleportRuntimePlatform.Configure(quickTeleportPlatform);
     var quickTeleportQuery = Task.Run(async () =>
     {
         var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
@@ -939,8 +1044,12 @@ try
 }
 finally
 {
+    GameTaskManager.ClearTriggers();
+    GameTaskManager.ReloadAssets();
     cancellation.Cancel();
     try { await serverTask; } catch (OperationCanceledException) { }
+    imageRegionOcrService.Dispose();
+    Microsoft.ML.OnnxRuntime.OrtEnv.Instance().Dispose();
     Directory.Delete(root, true);
 }
 

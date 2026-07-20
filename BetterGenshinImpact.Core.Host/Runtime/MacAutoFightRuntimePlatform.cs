@@ -13,19 +13,20 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 
 public sealed class MacAutoFightRuntimePlatform : IAutoFightRuntimePlatform
 {
+    private readonly Func<ISystemInfo> _systemInfoProvider;
     private readonly MacImageRegionOcrService _recognition;
     private readonly ILoggerFactory _loggerFactory;
 
-    public MacAutoFightRuntimePlatform(RuntimeLayout layout, ISystemInfo systemInfo,
+    public MacAutoFightRuntimePlatform(RuntimeLayout layout, Func<ISystemInfo> systemInfoProvider,
         MacImageRegionOcrService recognition, ILoggerFactory loggerFactory)
     {
-        SystemInfo = systemInfo;
+        _systemInfoProvider = systemInfoProvider ?? throw new ArgumentNullException(nameof(systemInfoProvider));
         _recognition = recognition;
         _loggerFactory = loggerFactory;
         (AutoFightConfig, CombatMacroPriority) = LoadConfig(layout);
     }
 
-    public ISystemInfo SystemInfo { get; }
+    public ISystemInfo SystemInfo => _systemInfoProvider();
     public IOcrService OcrService => _recognition;
     public double DpiScale => TaskControlPlatform.Current.DpiScale;
     public AutoFightConfig AutoFightConfig { get; }

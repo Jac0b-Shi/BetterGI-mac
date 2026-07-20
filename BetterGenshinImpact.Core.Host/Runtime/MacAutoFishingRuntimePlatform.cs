@@ -18,24 +18,25 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 public sealed class MacAutoFishingRuntimePlatform : IAutoFishingRuntimePlatform
 {
     private readonly RuntimeLayout _layout;
+    private readonly Func<ISystemInfo> _systemInfoProvider;
     private readonly MacImageRegionOcrService _recognition;
     private readonly ILoggerFactory _loggerFactory;
     private readonly bool _screenshotUidCoverEnabled;
 
     public MacAutoFishingRuntimePlatform(
         RuntimeLayout layout,
-        ISystemInfo systemInfo,
+        Func<ISystemInfo> systemInfoProvider,
         MacImageRegionOcrService recognition,
         ILoggerFactory loggerFactory)
     {
         _layout = layout;
-        SystemInfo = systemInfo;
+        _systemInfoProvider = systemInfoProvider ?? throw new ArgumentNullException(nameof(systemInfoProvider));
         _recognition = recognition;
         _loggerFactory = loggerFactory;
         (Config, GameCultureInfoName, _screenshotUidCoverEnabled) = LoadConfig();
     }
 
-    public ISystemInfo SystemInfo { get; }
+    public ISystemInfo SystemInfo => _systemInfoProvider();
     public AutoFishingConfig Config { get; }
     public string GameCultureInfoName { get; }
     public IOcrService OcrService => _recognition;
