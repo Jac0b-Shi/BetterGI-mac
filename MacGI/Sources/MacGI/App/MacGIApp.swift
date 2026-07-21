@@ -6,20 +6,24 @@ import SwiftUI
 final class MacGIApplicationDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
-        requestPermissionsIfNeeded()
+    }
+}
+
+enum MacGIPermissionRequester {
+    static var screenCaptureGranted: Bool { CGPreflightScreenCaptureAccess() }
+    static var accessibilityGranted: Bool { AXIsProcessTrusted() }
+
+    static func requestScreenCapture() {
+        guard !screenCaptureGranted else { return }
+        _ = CGRequestScreenCaptureAccess()
     }
 
-    private func requestPermissionsIfNeeded() {
-        if !CGPreflightScreenCaptureAccess() {
-            _ = CGRequestScreenCaptureAccess()
-        }
-
-        if !AXIsProcessTrusted() {
-            let options = [
-                "AXTrustedCheckOptionPrompt": true
-            ] as CFDictionary
-            _ = AXIsProcessTrustedWithOptions(options)
-        }
+    static func requestAccessibility() {
+        guard !accessibilityGranted else { return }
+        let options = [
+            "AXTrustedCheckOptionPrompt": true
+        ] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
     }
 }
 
@@ -41,6 +45,7 @@ struct MacGIApp: App {
                 .frame(minWidth: 1080, minHeight: 720)
                 .onAppear {
                     coordinator.configure(appState: appState)
+                    appState.beginCoreStartup()
                 }
         }
         .defaultSize(width: 1180, height: 780)

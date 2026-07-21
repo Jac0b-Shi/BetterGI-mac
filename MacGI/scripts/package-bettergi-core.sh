@@ -42,10 +42,16 @@ if [[ -n ${TARGET_BUILD_DIR:-} && -n ${WRAPPER_NAME:-} ]]; then
     fi
     while IFS= read -r binary; do
       if file ${binary} | grep -q 'Mach-O'; then
-        codesign ${sign_options[@]} ${binary}
+        if [[ ${binary} == ${destination}/BetterGenshinImpact.Core.Host &&
+              ${EXPANDED_CODE_SIGN_IDENTITY} != "-" ]]; then
+          codesign ${sign_options[@]} --entitlements ${script_dir}/BetterGICore.entitlements ${binary}
+        else
+          codesign ${sign_options[@]} ${binary}
+        fi
         codesign --verify --strict --verbose=2 ${binary}
       fi
     done < <(find ${destination} -type f | sort)
+    ${destination}/BetterGenshinImpact.Core.Host --dependency-smoke
   fi
 fi
 

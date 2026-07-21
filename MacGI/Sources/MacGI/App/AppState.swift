@@ -248,6 +248,8 @@ final class AppState: ObservableObject {
     @Published var captureStatus: RuntimeStatus = .missing
     @Published var inputStatus: RuntimeStatus = .missing
     @Published var coreStatus: RuntimeStatus = .starting
+    @Published private(set) var screenCapturePermissionGranted = false
+    @Published private(set) var accessibilityPermissionGranted = false
     @Published var runtimeLifecycle: RuntimeLifecycle = .stopped
     @Published var isHUDVisible = false {
         didSet { onHUDVisibilityChanged?(isHUDVisible) }
@@ -354,9 +356,15 @@ final class AppState: ObservableObject {
         autoStartRuntimePending = launchArguments.contains("--start-runtime")
         addLog(.info, "betterGI-mac Swift UI initialized")
         addLog(.info, "Waiting for BetterGI C# Core Host")
+        refreshPermissionStatus()
         refreshWindows()
-        coreStartupTask = Task { [weak self] in
-            await self?.startBetterGICore()
+    }
+
+    func beginCoreStartup() {
+        guard coreStartupTask == nil, !coreStartupInFlight, betterGICoreSupervisor == nil else { return }
+        NSLog("BetterGI Core startup scheduled")
+        coreStartupTask = Task {
+            await startBetterGICore()
         }
     }
 
@@ -390,10 +398,12 @@ final class AppState: ObservableObject {
 
     private func startBetterGICore() async {
         guard !coreStartupInFlight else { return }
+        NSLog("BetterGI Core startup entered")
         coreStartupInFlight = true
         coreStatus = .starting
         defer { coreStartupInFlight = false }
         do {
+            NSLog("BetterGI Core supervisor resolving packaged executable")
             let supervisor = try BetterGICoreProcessSupervisor(store: runtimeResourceStore)
             let adapter = BetterGICorePlatformAdapter(appState: self)
             let handshake = try await supervisor.start(
@@ -408,6 +418,7 @@ final class AppState: ObservableObject {
                 }
             )
             betterGICoreSupervisor = supervisor
+            NSLog("BetterGI Core supervisor connected")
             coreStatus = .ok
             addLog(.info, "BetterGI Core \(handshake.runtimeVersion) connected (\(handshake.architecture))")
             await loadTriggerStatesFromCore()
@@ -416,6 +427,7 @@ final class AppState: ObservableObject {
             await loadScriptProjectsFromCore()
             attemptAutoStartRuntime()
         } catch {
+            NSLog("BetterGI Core startup failed: %@", error.localizedDescription)
             betterGICoreSupervisor = nil
             coreStatus = .error
             setCoreCatalogUnavailable(error)
@@ -439,6 +451,12 @@ final class AppState: ObservableObject {
 
     func startRuntime() {
         guard !runtimeLifecycle.isTransitioning, runtimeLifecycle != .running else { return }
+        refreshPermissionStatus()
+        guard screenCapturePermissionGranted, accessibilityPermissionGranted else {
+            runtimeLifecycle = .failed
+            addLog(.error, "Cannot start runtime: grant Screen Recording and Accessibility in the macOS permissions section.")
+            return
+        }
         guard isWindowValid, !selectedWindow.isSynthetic else {
             runtimeLifecycle = .failed
             addLog(.error, "Cannot start runtime: no real on-screen game window is selected.")
@@ -475,6 +493,21 @@ final class AppState: ObservableObject {
                 self.addLog(.error, "Cannot start runtime: \(error.localizedDescription)")
             }
         }
+    }
+
+    func refreshPermissionStatus() {
+        screenCapturePermissionGranted = MacGIPermissionRequester.screenCaptureGranted
+        accessibilityPermissionGranted = MacGIPermissionRequester.accessibilityGranted
+    }
+
+    func requestScreenCapturePermission() {
+        MacGIPermissionRequester.requestScreenCapture()
+        refreshPermissionStatus()
+    }
+
+    func requestAccessibilityPermission() {
+        MacGIPermissionRequester.requestAccessibility()
+        refreshPermissionStatus()
     }
 
     private func attemptAutoStartRuntime() {

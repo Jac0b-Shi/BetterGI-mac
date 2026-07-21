@@ -124,19 +124,29 @@ struct BGISettingGroup<HeaderAction: View, Content: View>: View {
     let subtitle: String
     @ViewBuilder var headerAction: HeaderAction
     @ViewBuilder var content: Content
+    private let expandedBinding: Binding<Bool>?
+    @State private var localExpanded: Bool
 
     init(
         icon: String,
         title: String,
         subtitle: String,
+        isExpanded: Binding<Bool>? = nil,
+        initiallyExpanded: Bool = true,
         @ViewBuilder headerAction: () -> HeaderAction,
         @ViewBuilder content: () -> Content
     ) {
         self.icon = icon
         self.title = title
         self.subtitle = subtitle
+        expandedBinding = isExpanded
+        _localExpanded = State(initialValue: initiallyExpanded)
         self.headerAction = headerAction()
         self.content = content()
+    }
+
+    private var isExpanded: Bool {
+        expandedBinding?.wrappedValue ?? localExpanded
     }
 
     var body: some View {
@@ -157,15 +167,25 @@ struct BGISettingGroup<HeaderAction: View, Content: View>: View {
                 }
                 Spacer(minLength: 20)
                 headerAction
-                Image(systemName: "chevron.up")
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(BGIColors.secondaryText)
                     .frame(width: 18)
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 16)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    if let expandedBinding {
+                        expandedBinding.wrappedValue.toggle()
+                    } else {
+                        localExpanded.toggle()
+                    }
+                }
+            }
 
-            if !(Content.self == EmptyView.self) {
+            if isExpanded && !(Content.self == EmptyView.self) {
                 Divider().overlay(BGIColors.border)
                 content
             }

@@ -78,6 +78,7 @@ struct AppStateSchedulerCatalogTests {
         )
 
         let appState = AppState(resourceStore: store)
+        appState.beginCoreStartup()
         for _ in 0..<100 where appState.schedulerCatalogIssues.isEmpty {
             try await Task.sleep(for: .milliseconds(10))
         }

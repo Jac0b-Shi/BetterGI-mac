@@ -2,10 +2,45 @@ import SwiftUI
 
 struct OverviewPage: View {
     @EnvironmentObject private var appState: AppState
+    @State private var permissionsExpanded = true
+
+    private var allPermissionsGranted: Bool {
+        appState.screenCapturePermissionGranted && appState.accessibilityPermissionGranted
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             launchBanner
+
+            BGISettingGroup(
+                icon: "lock.shield",
+                title: "macOS 权限",
+                subtitle: allPermissionsGranted ? "已授权" : "运行截图器和真实输入前必须由用户明确授权。",
+                isExpanded: $permissionsExpanded
+            ) {
+                Button {
+                    appState.refreshPermissionStatus()
+                } label: {
+                    Label("刷新", systemImage: "arrow.clockwise")
+                }
+            } content: {
+                permissionLine(
+                    title: "屏幕录制",
+                    granted: appState.screenCapturePermissionGranted,
+                    request: appState.requestScreenCapturePermission
+                )
+                permissionLine(
+                    title: "辅助功能",
+                    granted: appState.accessibilityPermissionGranted,
+                    request: appState.requestAccessibilityPermission
+                )
+            }
+            .onAppear {
+                permissionsExpanded = !allPermissionsGranted
+            }
+            .onChange(of: allPermissionsGranted) { _, granted in
+                permissionsExpanded = !granted
+            }
 
             BGISettingGroup(icon: "play", title: "BetterGI 截图器，启动！", subtitle: "截图器启动后才能使用各项功能，点击展开启动相关配置。") {
                 Button {
@@ -72,10 +107,26 @@ struct OverviewPage: View {
         }
     }
 
+    private func permissionLine(title: String, granted: Bool, request: @escaping () -> Void) -> some View {
+        BGISettingLine(
+            title: title,
+            subtitle: granted ? "已授权" : "未授权；授权后 macOS 可能要求重新打开应用。"
+        ) {
+            if granted {
+                Label("已授权", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            } else {
+                Button("请求授权", action: request)
+                    .buttonStyle(.bordered)
+            }
+        }
+    }
+
     private var launchBanner: some View {
         ZStack(alignment: .bottomLeading) {
             BGIBundledImage(resource: "bettergi-banner", fileExtension: "jpg", contentMode: .fill)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity)
+                .frame(height: 214)
                 .clipped()
             LinearGradient(
                 colors: [

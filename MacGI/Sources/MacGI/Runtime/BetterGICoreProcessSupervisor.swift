@@ -58,7 +58,9 @@ actor BetterGICoreProcessSupervisor {
 
     init(store: BGIRuntimeResourceStore = .defaultStore(), executableURL: URL? = nil) throws {
         self.store = store
+        NSLog("BetterGI Core resolving executable URL")
         self.executableURL = try executableURL ?? Self.resolveExecutableURL()
+        NSLog("BetterGI Core executable resolved: %@", self.executableURL.path)
     }
 
     func start(
@@ -425,7 +427,7 @@ actor BetterGICoreProcessSupervisor {
         }
     }
 
-    private static func resolveExecutableURL() throws -> URL {
+    private nonisolated static func resolveExecutableURL() throws -> URL {
         if let configured = ProcessInfo.processInfo.environment["BETTERGI_CORE_HOST"], !configured.isEmpty {
             return URL(fileURLWithPath: configured)
         }
