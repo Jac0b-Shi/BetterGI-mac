@@ -603,14 +603,26 @@ final class AppState: ObservableObject {
     }
 
     func runSchedulerGroups() {
-        schedulerExecutionTask?.cancel()
-        currentSchedulerProjectID = nil
-        guard let supervisor = betterGICoreSupervisor,
-              !selectedSchedulerGroupName.isEmpty else {
-            schedulerExecutionStatus = "Core unavailable"
-            addLog(.error, "Cannot run scheduler: BetterGI Core or selected group is unavailable.")
+        guard currentSchedulerProjectID == nil else {
+            addLog(.error, "Cannot run scheduler: another scheduler task is already active.")
             return
         }
+        guard let supervisor = betterGICoreSupervisor, coreStatus == .ok else {
+            schedulerExecutionStatus = "Core unavailable"
+            addLog(.error, "Cannot run scheduler: BetterGI Core is not ready.")
+            return
+        }
+        guard selectedSchedulerGroup != nil else {
+            schedulerExecutionStatus = "Group unavailable"
+            addLog(.error, "Cannot run scheduler: no script group is selected.")
+            return
+        }
+        guard isWindowValid, !selectedWindow.isSynthetic else {
+            schedulerExecutionStatus = "Window unavailable"
+            addLog(.error, "Cannot run scheduler: no real on-screen game window is selected.")
+            return
+        }
+        schedulerExecutionTask?.cancel()
         let groupName = selectedSchedulerGroupName
         schedulerExecutionStatus = "Starting"
         schedulerExecutionError = nil
@@ -702,9 +714,27 @@ final class AppState: ObservableObject {
 
     private static let terminalSchedulerStates = ["completed", "cancelled", "failed"]
 
-    func schedulerGroupsForCurrentSelection() -> [BetterGIScriptGroupSummary] {
-        let selectedGroups = schedulerGroups.filter { $0.name == selectedSchedulerGroupName }
-        return selectedGroups.isEmpty ? schedulerGroups : selectedGroups
+    var selectedSchedulerGroup: BetterGIScriptGroupSummary? {
+        schedulerGroups.first { $0.name == selectedSchedulerGroupName }
+    }
+
+    var canRunScheduler: Bool {
+        coreStatus == .ok
+            && selectedSchedulerGroup != nil
+            && isWindowValid
+            && !selectedWindow.isSynthetic
+            && currentSchedulerProjectID == nil
+    }
+
+    var schedulerRunReadiness: String {
+        guard coreStatus == .ok else { return "Core 尚未就绪" }
+        guard selectedSchedulerGroup != nil else { return "尚未选择配置组" }
+        guard isWindowValid, !selectedWindow.isSynthetic else { return "尚未选择真实游戏窗口" }
+        guard !safetyGate.emergencyStop else { return "紧急停止已启用" }
+        if safetyGate.dryRun { return "已就绪：Dry-Run，不发送真实输入" }
+        guard safetyGate.realInputEnabled else { return "真实输入尚未启用" }
+        guard allowRuntimeRealInput else { return "Core Runtime Input 尚未授权" }
+        return "已就绪：Core 可发送真实输入"
     }
 
     func cancelSchedulerGroups() {

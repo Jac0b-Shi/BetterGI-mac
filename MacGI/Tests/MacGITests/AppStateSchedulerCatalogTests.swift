@@ -74,10 +74,33 @@ struct AppStateSchedulerCatalogTests {
         ]
         appState.selectedSchedulerGroupName = "狗粮+锄地"
 
-        #expect(appState.schedulerGroupsForCurrentSelection().map(\.name) == ["狗粮+锄地"])
+        #expect(appState.selectedSchedulerGroup?.name == "狗粮+锄地")
 
         appState.selectedSchedulerGroupName = "不存在"
-        #expect(appState.schedulerGroupsForCurrentSelection().map(\.name) == ["每日", "狗粮+锄地"])
+        #expect(appState.selectedSchedulerGroup == nil)
+    }
+
+    @MainActor
+    @Test("Scheduler readiness never invents a visual selection")
+    func schedulerReadinessRequiresCoreWindowAndSelection() {
+        let appState = AppState(resourceStore: BGIRuntimeResourceStore(
+            rootURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("bettergi-mac-scheduler-readiness-test-\(UUID().uuidString)", isDirectory: true)
+        ))
+        appState.schedulerGroups = [
+            BetterGIScriptGroupSummary(name: "狗粮+锄地", path: "User/ScriptGroup/狗粮+锄地.json", index: 1, projects: [])
+        ]
+
+        #expect(appState.selectedSchedulerGroup == nil)
+        #expect(!appState.canRunScheduler)
+        #expect(appState.schedulerRunReadiness == "Core 尚未就绪")
+
+        appState.coreStatus = .ok
+        #expect(appState.schedulerRunReadiness == "尚未选择配置组")
+
+        appState.selectedSchedulerGroupName = "狗粮+锄地"
+        appState.selectedWindow = .unavailable()
+        #expect(appState.schedulerRunReadiness == "尚未选择真实游戏窗口")
     }
 }
 

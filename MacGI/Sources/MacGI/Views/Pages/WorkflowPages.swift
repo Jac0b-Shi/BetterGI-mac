@@ -4,6 +4,7 @@ private struct BGICommand: Identifiable {
     let id = UUID()
     let title: String
     let symbol: String
+    var isEnabled = true
     var action: () -> Void = {}
 }
 
@@ -42,6 +43,7 @@ private struct BGIWorkflowShell<Sidebar: View, Content: View>: View {
                         .labelStyle(.titleAndIcon)
                 }
                 .buttonStyle(.bordered)
+                .disabled(!command.isEnabled)
             }
             Spacer(minLength: 0)
         }
@@ -373,13 +375,16 @@ struct SchedulerPage: View {
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
-        let selectedGroup = appState.schedulerGroups.first { $0.name == appState.selectedSchedulerGroupName }
-            ?? appState.schedulerGroups.first
+        let selectedGroup = appState.selectedSchedulerGroup
         BGIWorkflowShell(
             title: "调度器",
             subtitle: "原 BetterGI 的配置组、连续执行、任务表格和通用配置入口。\(appState.schedulerExecutionStatus) · \(appState.schedulerCatalogStatus)",
             commands: [
-                BGICommand(title: "运行", symbol: "play.fill", action: { appState.runSchedulerGroups() }),
+                BGICommand(
+                    title: "运行",
+                    symbol: "play.fill",
+                    isEnabled: appState.canRunScheduler,
+                    action: { appState.runSchedulerGroups() }),
                 BGICommand(title: "刷新", symbol: "arrow.clockwise", action: { appState.reloadSchedulerGroupsFromCore() }),
                 BGICommand(title: "停止", symbol: "stop.fill", action: { appState.cancelSchedulerGroups() })
             ]
@@ -413,13 +418,20 @@ struct SchedulerPage: View {
                 }
 
                 BGISectionCard("操作面板", subtitle: "连续执行、日志分析、更多功能。", symbolName: "square.grid.3x3") {
-                    HStack(spacing: 12) {
-                        Button("连续执行") { appState.runSchedulerGroups() }
-                        Button("继续执行") { appState.runSchedulerGroups() }
-                        Menu("更多功能") {
-                            Button("从 Core 更新") { appState.reloadSchedulerGroupsFromCore() }
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(appState.schedulerRunReadiness)
+                            .font(BGIFonts.console)
+                            .foregroundStyle(appState.canRunScheduler ? BGIColors.secondaryText : BGIColors.warning)
+                        HStack(spacing: 12) {
+                            Button("连续执行") { appState.runSchedulerGroups() }
+                                .disabled(!appState.canRunScheduler)
+                            Button("继续执行") { appState.runSchedulerGroups() }
+                                .disabled(!appState.canRunScheduler)
+                            Menu("更多功能") {
+                                Button("从 Core 更新") { appState.reloadSchedulerGroupsFromCore() }
+                            }
+                            Spacer()
                         }
-                        Spacer()
                     }
                 }
             }
