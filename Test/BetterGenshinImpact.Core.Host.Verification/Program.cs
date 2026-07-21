@@ -248,13 +248,13 @@ var gameTaskManagerPlatform = new MacGameTaskManagerPlatform(
     server.PlatformCallbacks, sessionToken, cancellation.Token, loggerFactory);
 GameTaskManagerPlatform.Configure(gameTaskManagerPlatform);
 BvRuntimePlatform.Configure(new MacBvRuntimePlatform(() => gameTaskManagerPlatform.SystemInfo));
-var scriptServicePlatform = new MacScriptServicePlatform(
+var farmingScriptServicePlatform = new MacScriptServicePlatform(
     layout, loggerFactory.CreateLogger("BetterGenshinImpact.Service.ScriptService"), scriptHostServices,
     server.PlatformCallbacks, sessionToken, cancellation.Token, new SharedCaptureRingReader(layout),
     gameTaskManagerPlatform);
-Require(scriptServicePlatform.FarmingPlanEnabled,
+Require(farmingScriptServicePlatform.FarmingPlanEnabled,
     "macOS scheduler ignored the upstream farming-plan configuration");
-Require(scriptServicePlatform.RestartPolicy is
+Require(farmingScriptServicePlatform.RestartPolicy is
     { Enabled: true, FailureCount: 7, RestartGameTogether: true,
       LinkedStartEnabled: true, AutoEnterGameEnabled: false },
     "macOS scheduler did not load the upstream restart/start configuration");
@@ -278,7 +278,7 @@ Require(recordedFarmingData.TotalEliteMobCount == 2 &&
         recordedFarmingData.TotalNormalMobCount == 3 &&
         recordedFarmingData.Records is [{ GroupName: "验证组", ProjectName: "验证路径" }],
     "shared FarmingStatsRecorder did not persist the upstream counters and route record");
-Require(!scriptServicePlatform.IsDailyFarmingLimitReached(farmingSession, out _),
+Require(!farmingScriptServicePlatform.IsDailyFarmingLimitReached(farmingSession, out _),
     "shared FarmingStatsRecorder reported a configured cap before it was reached");
 FarmingStatsRecorder.RecordFarmingSession(new FarmingSession
 {
@@ -286,13 +286,23 @@ FarmingStatsRecorder.RecordFarmingSession(new FarmingSession
     EliteMobCount = 8,
     PrimaryTarget = "elite"
 }, new FarmingRouteInfo { GroupName = "验证组", ProjectName = "补足上限", FolderName = "fixture" });
-Require(scriptServicePlatform.IsDailyFarmingLimitReached(new FarmingSession
+Require(farmingScriptServicePlatform.IsDailyFarmingLimitReached(new FarmingSession
     {
         AllowFarmingCount = true,
         EliteMobCount = 1,
         PrimaryTarget = "elite"
     }, out var farmingLimitMessage) && farmingLimitMessage.Contains("精英超上限", StringComparison.Ordinal),
     "shared FarmingStatsRecorder did not enforce the upstream daily elite cap");
+var executionConfig = System.Text.Json.Nodes.JsonNode
+    .Parse(await File.ReadAllTextAsync(Path.Combine(layout.UserPath, "config.json")))!.AsObject();
+executionConfig["otherConfig"]!["farmingPlanConfig"]!["enabled"] = false;
+await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "config.json"), executionConfig.ToJsonString(ConfigJson.Options));
+var scriptServicePlatform = new MacScriptServicePlatform(
+    layout, loggerFactory.CreateLogger("BetterGenshinImpact.Service.ScriptService"), scriptHostServices,
+    server.PlatformCallbacks, sessionToken, cancellation.Token, new SharedCaptureRingReader(layout),
+    gameTaskManagerPlatform);
+Require(!scriptServicePlatform.FarmingPlanEnabled,
+    "Host Shell fixture must not enter the upstream farming-path cap check");
 ScriptServicePlatform.Configure(scriptServicePlatform);
 server.AttachScriptServicePlatform(scriptServicePlatform);
 TaskRunnerPlatform.Configure(new MacTaskRunnerPlatform(
