@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask.Model.Area;
