@@ -284,6 +284,10 @@ rg -q 'catalog\.setScriptGroupProjectEnabled' BetterGenshinImpact.Core.Host/Core
 if rg -n 'Toggle\("", isOn: \.constant\(project\.status' MacGI/Sources/MacGI/Views/Pages/WorkflowPages.swift; then
   fail "Scheduler project controls regressed to a read-only fake toggle"
 fi
+rg -q 'Toggle\("Dry-Run"' MacGI/Sources/MacGI/Views/Pages/WorkflowPages.swift \
+  && rg -q 'Toggle\("真实输入"' MacGI/Sources/MacGI/Views/Pages/WorkflowPages.swift \
+  && rg -q 'Toggle\("Core Runtime Input"' MacGI/Sources/MacGI/Views/Pages/WorkflowPages.swift \
+  || fail "Scheduler real-input authorization controls are not reachable in production UI"
 rg -q '@Published var isHUDVisible = false' MacGI/Sources/MacGI/App/AppState.swift \
   && rg -q 'if self\.showHUDOnStart' MacGI/Sources/MacGI/App/AppState.swift \
   || fail "HUD visibility is not bound to successful runtime start/stop"

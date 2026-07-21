@@ -424,6 +424,19 @@ struct SchedulerPage: View {
 
                 BGISectionCard("操作面板", subtitle: "连续执行、日志分析、更多功能。", symbolName: "square.grid.3x3") {
                     VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 20) {
+                            Toggle("Dry-Run", isOn: Binding(
+                                get: { appState.safetyGate.dryRun },
+                                set: { appState.safetyGate.dryRun = $0 }
+                            ))
+                            Toggle("真实输入", isOn: Binding(
+                                get: { appState.safetyGate.realInputEnabled },
+                                set: { appState.safetyGate.realInputEnabled = $0 }
+                            ))
+                            Toggle("Core Runtime Input", isOn: $appState.allowRuntimeRealInput)
+                            Spacer()
+                        }
+                        .toggleStyle(.switch)
                         Text(appState.schedulerRunReadiness)
                             .font(BGIFonts.console)
                             .foregroundStyle(appState.canRunScheduler ? BGIColors.secondaryText : BGIColors.warning)
