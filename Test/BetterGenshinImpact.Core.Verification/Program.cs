@@ -1674,6 +1674,44 @@ Assert("StopFlyingHandler exits after one real normal-motion frame",
     stopFlyingCaptureCount == 1, $"captures={stopFlyingCaptureCount}");
 Console.WriteLine();
 
+Console.WriteLine("Pathing pick-around: upstream circular movement and camera resets");
+recordingTaskControl.Calls.Clear();
+recordingTaskControl.RecordMiddleClicks = true;
+try
+{
+    var pickAroundHandler = ActionFactory.GetAfterHandler(ActionEnum.PickAround.Code);
+    Assert("ActionFactory selects the upstream PickAroundHandler",
+        pickAroundHandler is PickAroundHandler, pickAroundHandler.GetType().FullName ?? "null");
+    await pickAroundHandler.RunAsync(CancellationToken.None);
+}
+finally
+{
+    recordingTaskControl.RecordMiddleClicks = false;
+}
+var pickAroundActions = recordingTaskControl.Calls
+    .Where(call => call.StartsWith("action:", StringComparison.Ordinal))
+    .ToList();
+Assert("PickAroundHandler preserves the upstream movement action order",
+    pickAroundActions.SequenceEqual([
+        "action:MoveBackward:KeyPress",
+        "action:MoveForward:KeyDown",
+        "action:MoveForward:KeyUp",
+        "action:MoveLeft:KeyPress",
+        "action:MoveForward:KeyDown",
+        "action:MoveForward:KeyUp",
+        "action:MoveLeft:KeyDown",
+        "action:MoveLeft:KeyUp"
+    ]), string.Join(" | ", pickAroundActions));
+Assert("PickAroundHandler performs all nine upstream camera resets",
+    recordingTaskControl.Calls.Count(call => call == "middleClick") == 9,
+    string.Join(" | ", recordingTaskControl.Calls));
+Assert("PickAroundHandler leaves movement released",
+    !recordingTaskControl.IsPressed(GIActions.MoveBackward) &&
+    !recordingTaskControl.IsPressed(GIActions.MoveForward) &&
+    !recordingTaskControl.IsPressed(GIActions.MoveLeft),
+    string.Join(" | ", recordingTaskControl.Calls));
+Console.WriteLine();
+
 AutoSkipAssets.DestroyInstance();
 AutoSkipAssets.Initialize(b5SystemInfo);
 GameLoadingAssets.DestroyInstance();
@@ -2948,6 +2986,7 @@ sealed class RecordingTaskControlPlatform : ITaskControlPlatform
     public List<string> Calls { get; } = [];
     public List<GIActions> ActionStateQueries { get; } = [];
     public Func<Mat>? CaptureFrameProvider { get; set; }
+    public bool RecordMiddleClicks { get; set; }
     public Microsoft.Extensions.Logging.ILogger Logger => NullLogger.Instance;
     public double DpiScale => 1;
     public bool IsHdrCapture => false;
@@ -2974,7 +3013,10 @@ sealed class RecordingTaskControlPlatform : ITaskControlPlatform
     public void RightButtonClick() { }
     public void MiddleButtonDown() { }
     public void MiddleButtonUp() { }
-    public void MiddleButtonClick() { }
+    public void MiddleButtonClick()
+    {
+        if (RecordMiddleClicks) Calls.Add("middleClick");
+    }
     public void VerticalScroll(int scrollAmountInClicks) { }
     public void KeyDown(int windowsVirtualKey) { }
     public void KeyUp(int windowsVirtualKey) { }
