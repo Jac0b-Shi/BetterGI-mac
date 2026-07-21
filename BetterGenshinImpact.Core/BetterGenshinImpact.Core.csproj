@@ -40,6 +40,10 @@
     <ProjectReference Include="..\BetterGenshinImpact.Platform.Abstractions\BetterGenshinImpact.Platform.Abstractions.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="BetterGenshinImpact.Core.Verification" />
+  </ItemGroup>
+
   <!-- ==================== LINKED: upstream business logic ==================== -->
 
   <!-- GameTask core -->
@@ -66,6 +70,7 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoPathing/PathExecutor.cs" Link="GameTask/AutoPathing/PathExecutor.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/CombatScenes.cs" Link="GameTask/AutoFight/Model/CombatScenes.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/AutoFightParam.cs" Link="GameTask/AutoFight/AutoFightParam.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/AutoFightEndDetector.cs" Link="GameTask/AutoFight/AutoFightEndDetector.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/AutoFightTask.cs" Link="GameTask/AutoFight/AutoFightTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/AutoFightSeek.cs" Link="GameTask/AutoFight/AutoFightSeek.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/ExperienceDetector.cs" Link="GameTask/AutoFight/ExperienceDetector.cs" />

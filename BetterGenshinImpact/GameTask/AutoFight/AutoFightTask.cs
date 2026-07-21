@@ -863,10 +863,7 @@ public class AutoFightTask : ISoloTask
         var b3 = ra.SrcMat.At<Vec3b>(50, 790); //进度条颜色
         var whiteTile = ra.SrcMat.At<Vec3b>(50, 768); //白块
         TaskControlPlatform.Current.SimulateAction(GIActions.Drop, KeyType.KeyPress);
-        if (IsWhite(whiteTile.Item2, whiteTile.Item1, whiteTile.Item0) &&
-            IsYellow(b3.Item2, b3.Item1,
-                b3.Item0) /* AreDifferencesWithinBounds(_finishDetectConfig.BattleEndProgressBarColor, (b3.Item0, b3.Item1, b3.Item2), _finishDetectConfig.BattleEndProgressBarColorTolerance)*/
-           )
+        if (AutoFightEndDetector.IsFightFinished(ra.SrcMat))
         {
             Logger.LogInformation("识别到战斗结束");
             //取消正在进行的换队
@@ -889,24 +886,6 @@ public class AutoFightTask : ISoloTask
         
         _lastFightFlagTime = DateTime.Now;
         return false;
-    }
-
-    bool IsYellow(int r, int g, int b)
-    {
-        //Logger.LogInformation($"IsYellow({r},{g},{b})");
-        // 黄色范围：R高，G高，B低
-        return (r >= 200 && r <= 255) &&
-               (g >= 200 && g <= 255) &&
-               (b >= 0 && b <= 100);
-    }
-
-    bool IsWhite(int r, int g, int b)
-    {
-        //Logger.LogInformation($"IsWhite({r},{g},{b})");
-        // 白色范围：R高，G高，B低
-        return (r >= 240 && r <= 255) &&
-               (g >= 240 && g <= 255) &&
-               (b >= 240 && b <= 255);
     }
 
     static double FindMax(double[] numbers)

@@ -88,6 +88,21 @@ rg -q 'ForcedAvatarOcrFallbackCombatScenes' \
 rg -q 'Real Avatar OCR fallback passed' \
   Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
   || fail "Core Host verification does not assert real Avatar OCR fallback completion"
+for combat_end_source in AutoFightTask.cs AutoFightJsonTask.cs AutoFightSeek.cs; do
+  rg -q 'AutoFightEndDetector\.IsFightFinished' \
+    "BetterGenshinImpact/GameTask/AutoFight/${combat_end_source}" \
+    || fail "${combat_end_source} does not use the shared C# combat-end detector"
+done
+rg -q '\("TXT", \(\) => txtFightTask\.CheckFightFinish\(0, 0\)\)' \
+  Test/BetterGenshinImpact.Core.Verification/Program.cs \
+  || fail "Core verification does not execute the upstream TXT combat-end flow"
+rg -q '\("JSON", \(\) => jsonFightTask\.CheckFightFinish\(0, 0\)\)' \
+  Test/BetterGenshinImpact.Core.Verification/Program.cs \
+  || fail "Core verification does not execute the upstream JSON combat-end flow"
+if rg -n 'AutoFightEndDetector|CheckFightFinish|BattleEndProgressBarColor' \
+  MacGI/Sources; then
+  fail "Swift owns a duplicate combat-end decision"
+fi
 rg -q 'JsonConvert\.DeserializeObject<GiTpPosition>' \
   BetterGenshinImpact.Core.Host/Runtime/MacTpTaskRuntimePlatform.cs \
   || fail "macOS TpTask composition does not restore the upstream runtime-only statue object"

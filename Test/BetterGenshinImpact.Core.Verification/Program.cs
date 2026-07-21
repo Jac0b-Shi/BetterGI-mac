@@ -1601,6 +1601,56 @@ ElementAssets.Initialize(b5SystemInfo);
 AutoFightAssets.DestroyInstance();
 AutoFightAssets.Initialize(b5SystemInfo);
 
+Console.WriteLine("AutoFight end detection: upstream TXT and JSON task flows");
+var autoFightStrategyDirectory = Path.Combine("/tmp", "bgi-auto-fight-end-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(autoFightStrategyDirectory);
+var txtStrategyPath = Path.Combine(autoFightStrategyDirectory, "strategy.txt");
+var jsonStrategyPath = Path.Combine(autoFightStrategyDirectory, "strategy.json");
+File.WriteAllText(txtStrategyPath, "钟离 attack");
+File.WriteAllText(jsonStrategyPath,
+    """{"Info":{"Name":"verification"},"Actions":[{"Name":"attack","Character":"钟离","Action":"attack","Condition":{"Expression":"true"},"Index":1}]}""");
+var finishDetectConfig = new AutoFightConfig();
+var txtFightTask = new AutoFightTask(new AutoFightParam(txtStrategyPath, finishDetectConfig));
+var jsonFightTask = new AutoFightJsonTask(new AutoFightParam(jsonStrategyPath, finishDetectConfig));
+Mat CreateFinishedFightFrame()
+{
+    var frame = new Mat(1080, 1920, MatType.CV_8UC3, Scalar.Black);
+    frame.Set(50, 790, new Vec3b(0, 235, 255));
+    frame.Set(50, 768, new Vec3b(255, 255, 255));
+    return frame;
+}
+
+foreach (var (label, checkFightFinish) in new (string Label, Func<Task<bool>> Check)[]
+         {
+             ("TXT", () => txtFightTask.CheckFightFinish(0, 0)),
+             ("JSON", () => jsonFightTask.CheckFightFinish(0, 0))
+         })
+{
+    recordingTaskControl.RecordCaptures = true;
+    recordingTaskControl.Calls.Clear();
+    recordingTaskControl.CaptureFrameProvider = CreateFinishedFightFrame;
+    var finished = await checkFightFinish();
+    Assert($"AutoFight {label} recognizes shared finished frame", finished, "returned false");
+    Assert($"AutoFight {label} preserves finished input/capture order",
+        recordingTaskControl.Calls.SequenceEqual([
+            "action:OpenPartySetupScreen:KeyPress", "capture", "action:Drop:KeyPress",
+            "action:OpenPartySetupScreen:KeyPress"
+        ]), string.Join(",", recordingTaskControl.Calls));
+
+    recordingTaskControl.Calls.Clear();
+    recordingTaskControl.CaptureFrameProvider = () => new Mat(1080, 1920, MatType.CV_8UC3, Scalar.Black);
+    finished = await checkFightFinish();
+    Assert($"AutoFight {label} rejects non-finished frame", !finished, "returned true");
+    Assert($"AutoFight {label} preserves non-finished input/capture order",
+        recordingTaskControl.Calls.SequenceEqual([
+            "action:OpenPartySetupScreen:KeyPress", "capture", "action:Drop:KeyPress"
+        ]), string.Join(",", recordingTaskControl.Calls));
+}
+recordingTaskControl.RecordCaptures = false;
+recordingTaskControl.CaptureFrameProvider = null;
+Directory.Delete(autoFightStrategyDirectory, recursive: true);
+Console.WriteLine();
+
 Console.WriteLine("AvatarSide: pinned real screenshots through upstream CombatScenes");
 var avatarFixtureDirectory = Path.Combine(AppContext.BaseDirectory, "Fixtures", "AutoFight");
 var avatarScenarios = new[]
@@ -3101,6 +3151,7 @@ sealed class RecordingTaskControlPlatform : ITaskControlPlatform
     public List<string> Calls { get; } = [];
     public List<GIActions> ActionStateQueries { get; } = [];
     public Func<Mat>? CaptureFrameProvider { get; set; }
+    public bool RecordCaptures { get; set; }
     public bool RecordMiddleClicks { get; set; }
     public Microsoft.Extensions.Logging.ILogger Logger => NullLogger.Instance;
     public double DpiScale => 1;
@@ -3138,9 +3189,12 @@ sealed class RecordingTaskControlPlatform : ITaskControlPlatform
     public void PressKey(int windowsVirtualKey) { }
     public void InputText(string text) { }
     public void PressEscape() { }
-    public ImageRegion CaptureToRectArea(bool forceNew) => CaptureFrameProvider is null
-        ? throw new NotSupportedException()
-        : new ImageRegion(CaptureFrameProvider(), 0, 0);
+    public ImageRegion CaptureToRectArea(bool forceNew)
+    {
+        if (CaptureFrameProvider is null) throw new NotSupportedException();
+        if (RecordCaptures) Calls.Add("capture");
+        return new ImageRegion(CaptureFrameProvider(), 0, 0);
+    }
 }
 
 sealed class RecordingPathExecutorPlatform(

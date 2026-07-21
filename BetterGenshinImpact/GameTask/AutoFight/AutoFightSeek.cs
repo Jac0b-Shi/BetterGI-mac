@@ -324,13 +324,11 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                     SimulateAction(GIActions.OpenPartySetupScreen);
                     await Delay(detectDelayTime, ct);
                     var ra3 = CaptureToRectArea();
-                    var b33 = ra3.SrcMat.At<Vec3b>(50, 790); // 进度条颜色
-                    var whiteTile3 = ra3.SrcMat.At<Vec3b>(50, 768); // 白块
                     SimulateAction(GIActions.Drop);
+                    var fightFinished = AutoFightEndDetector.IsFightFinished(ra3.SrcMat);
                     ra3.Dispose();
-                
-                    if (IsWhite(whiteTile3.Item2, whiteTile3.Item1, whiteTile3.Item0) &&
-                        IsYellow(b33.Item2, b33.Item1, b33.Item0))
+
+                    if (fightFinished)
                     {
                         logger.LogInformation("识别到战斗结束-s");
                         SimulateAction(GIActions.OpenPartySetupScreen);
@@ -429,23 +427,6 @@ namespace BetterGenshinImpact.GameTask.AutoFight
             return null;
         }
         
-        private static bool IsYellow(int r, int g, int b)
-        {
-            //Logger.LogInformation($"IsYellow({r},{g},{b})");
-            // 黄色范围：R高，G高，B低
-            return (r >= 200 && r <= 255) &&
-                   (g >= 200 && g <= 255) &&
-                   (b >= 0 && b <= 100);
-        }
-
-        private static bool IsWhite(int r, int g, int b)
-        {
-            //Logger.LogInformation($"IsWhite({r},{g},{b})");
-            // 白色范围：R高，G高，B低
-            return (r >= 240 && r <= 255) &&
-                   (g >= 240 && g <= 255) &&
-                   (b >= 240 && b <= 255);
-        }
     }
 
     public class AutoFightSkill
