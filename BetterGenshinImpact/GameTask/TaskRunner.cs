@@ -48,6 +48,10 @@ public class TaskRunner
             {
                 CancellationContext.Instance.Clear();
             }
+            if (TaskRunnerPlatform.Current.ThrowOnLockFailure)
+            {
+                throw new InvalidOperationException("TaskRunner could not acquire the task semaphore.");
+            }
             return;
         }
         try

@@ -228,9 +228,15 @@ rg -q 'scheduler did not publish failed after a platform input rejection' \
 rg -q 'RethrowUnexpectedExceptions => true' \
   BetterGenshinImpact.Core.Host/Runtime/MacTaskRunnerPlatform.cs \
   || fail "macOS TaskRunner can swallow an exception and report scheduler completion"
+rg -q 'ThrowOnLockFailure => true' \
+  BetterGenshinImpact.Core.Host/Runtime/MacTaskRunnerPlatform.cs \
+  || fail "macOS TaskRunner can report completion after task-lock rejection"
 rg -q 'PropagateProjectExceptions => true' \
   BetterGenshinImpact.Core.Host/Runtime/MacScriptServicePlatform.cs \
   || fail "macOS ScriptService can swallow a project exception and report scheduler completion"
+rg -q 'scheduler reported success or executed the project after task-lock rejection' \
+  Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
+  || fail "Core Host verification does not reject scheduler task-lock contention"
 
 if rg -n '由 Rust/OpenCV 提供|Rust.*(脚本|调度|路径|识别)' MacGI/Sources/MacGI; then
   fail "Swift UI assigns BetterGI business authority to Rust"

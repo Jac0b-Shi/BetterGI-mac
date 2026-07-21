@@ -1052,6 +1052,13 @@ try
     rejectedSchedulerGroup.AddProject(ScriptGroupProject.BuildShellProject("printf scheduler-rejected"));
     await File.WriteAllTextAsync(
         Path.Combine(layout.ScriptGroupPath, rejectedSchedulerGroup.Name + ".json"), rejectedSchedulerGroup.ToJson());
+    var lockedSchedulerMarker = Path.Combine(root, "scheduler-locked.marker");
+    var lockedSchedulerGroup = new ScriptGroup { Name = "SchedulerShellLocked" };
+    lockedSchedulerGroup.Config.EnableShellConfig = true;
+    lockedSchedulerGroup.AddProject(
+        ScriptGroupProject.BuildShellProject($"printf scheduler-locked > '{lockedSchedulerMarker}'"));
+    await File.WriteAllTextAsync(
+        Path.Combine(layout.ScriptGroupPath, lockedSchedulerGroup.Name + ".json"), lockedSchedulerGroup.ToJson());
 
     var sourceRoot = Path.Combine(Directory.GetCurrentDirectory(), "BetterGenshinImpact", "GameTask");
     foreach (var relativeAsset in new[]
@@ -2467,6 +2474,53 @@ try
             rejectedSchedulerStates.FirstOrDefault() == "running" &&
             rejectedSchedulerStates.LastOrDefault() == "failed",
         "scheduler did not publish failed after a platform input rejection");
+
+    var lockedSchedulerStates = new List<string>();
+    await TaskRunnerPlatform.Current.TaskSemaphore.WaitAsync(cancellation.Token);
+    try
+    {
+        var lockedSchedulerResponder = Task.Run(async () =>
+        {
+            while (!lockedSchedulerStates.Contains("failed"))
+            {
+                var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
+                    ?? throw new EndOfStreamException("Locked scheduler callback channel ended unexpectedly.");
+                object result = callback.Method switch
+                {
+                    "window.metrics" => new
+                    {
+                        captureX = 0, captureY = 0, captureWidth = schedulerWidth,
+                        captureHeight = schedulerHeight, workingAreaWidth = schedulerWidth,
+                        workingAreaHeight = schedulerHeight, dpiScale = 1.0, processId = 1
+                    },
+                    "window.activate" => new { acknowledged = true },
+                    "capture.request" => new
+                    {
+                        ringPath = captureRingPath, frameId = 10UL, sequence = 2UL, slot = 0,
+                        width = schedulerWidth, height = schedulerHeight, stride = schedulerStride,
+                        pixelFormat = "BGRA8"
+                    },
+                    "scheduler.event" => RecordSchedulerState(callback.Params, lockedSchedulerStates),
+                    _ => throw new InvalidDataException($"Unexpected locked scheduler callback: {callback.Method}")
+                };
+                await callbackConnection.WriteResponseAsync(
+                    RpcResponse.Success(callback.Id, result), cancellation.Token);
+            }
+        }, cancellation.Token);
+        var lockedSchedulerRun = await ExchangeAsync(
+            connection, "scheduler-locked", "scheduler.run", sessionToken,
+            JObject.FromObject(new { groupName = lockedSchedulerGroup.Name }), cancellation.Token);
+        Require(lockedSchedulerRun.Error is null, lockedSchedulerRun.Error?.Message ?? "locked scheduler.run failed");
+        await lockedSchedulerResponder;
+    }
+    finally
+    {
+        TaskRunnerPlatform.Current.TaskSemaphore.Release();
+    }
+    Require(!File.Exists(lockedSchedulerMarker) &&
+            lockedSchedulerStates.FirstOrDefault() == "running" &&
+            lockedSchedulerStates.LastOrDefault() == "failed",
+        "scheduler reported success or executed the project after task-lock rejection");
 
     var missingGroup = await ExchangeAsync(connection, "3", "scheduler.run", sessionToken,
         JObject.FromObject(new { groupName = "missing-group" }), cancellation.Token);
