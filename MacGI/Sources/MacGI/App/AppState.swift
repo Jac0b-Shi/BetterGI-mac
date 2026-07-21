@@ -357,6 +357,28 @@ final class AppState: ObservableObject {
         }
     }
 
+    func setSchedulerProjectEnabled(projectIndex: Int, enabled: Bool) {
+        guard currentSchedulerProjectID == nil else {
+            addLog(.error, "Cannot edit scheduler group while it is running.")
+            return
+        }
+        guard let supervisor = betterGICoreSupervisor, let group = selectedSchedulerGroup else {
+            addLog(.error, "Cannot edit scheduler group: Core or selected group is unavailable.")
+            return
+        }
+        Task { [weak self] in
+            do {
+                try await supervisor.setScriptGroupProjectEnabled(
+                    groupName: group.name, projectIndex: projectIndex, enabled: enabled
+                )
+                await self?.loadSchedulerGroupsFromCore()
+                self?.addLog(.info, "Core updated project \(projectIndex) to \(enabled ? "Enabled" : "Disabled").")
+            } catch {
+                self?.addLog(.error, "Core project update failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
     private func startBetterGICore() async {
         guard !coreStartupInFlight else { return }
         coreStartupInFlight = true

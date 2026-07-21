@@ -407,9 +407,14 @@ struct SchedulerPage: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 Text(project.type == "Javascript" ? "JS脚本" : project.type)
                                     .frame(width: 80, alignment: .center)
-                                Toggle("", isOn: .constant(project.status == "Enabled"))
+                                Toggle("", isOn: Binding(
+                                    get: { project.status == "Enabled" },
+                                    set: { appState.setSchedulerProjectEnabled(
+                                        projectIndex: project.index, enabled: $0
+                                    ) }
+                                ))
                                 .frame(width: 60)
-                                .disabled(true)
+                                .disabled(appState.currentSchedulerProjectID != nil)
                             }
                             .padding(.vertical, 4)
                             Divider()

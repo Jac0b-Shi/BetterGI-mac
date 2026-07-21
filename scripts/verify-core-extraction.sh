@@ -278,6 +278,12 @@ rg -q 'appState\.toggleRuntime\(\)' MacGI/Sources/MacGI/Views/Pages/OverviewPage
 rg -q 'guard runtimeLifecycle == \.running' MacGI/Sources/MacGI/App/AppState.swift \
   && rg -q 'runtimeLifecycle == \.running' MacGI/Sources/MacGI/App/AppState.swift \
   || fail "The scheduler can start while the Core trigger runtime is stopped"
+rg -q 'catalog\.setScriptGroupProjectEnabled' BetterGenshinImpact.Core.Host/CoreRpcServer.cs \
+  && rg -q 'setSchedulerProjectEnabled' MacGI/Sources/MacGI/Views/Pages/WorkflowPages.swift \
+  || fail "Script-group project status is not edited through the Core catalog"
+if rg -n 'Toggle\("", isOn: \.constant\(project\.status' MacGI/Sources/MacGI/Views/Pages/WorkflowPages.swift; then
+  fail "Scheduler project controls regressed to a read-only fake toggle"
+fi
 rg -q '@Published var isHUDVisible = false' MacGI/Sources/MacGI/App/AppState.swift \
   && rg -q 'if self\.showHUDOnStart' MacGI/Sources/MacGI/App/AppState.swift \
   || fail "HUD visibility is not bound to successful runtime start/stop"

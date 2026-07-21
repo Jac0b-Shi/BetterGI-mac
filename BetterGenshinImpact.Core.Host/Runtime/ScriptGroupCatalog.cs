@@ -8,6 +8,8 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 
 public sealed class ScriptGroupCatalog(RuntimeLayout layout)
 {
+    private readonly object _writeLock = new();
+
     public IReadOnlyList<ScriptGroupSummary> List()
     {
         layout.EnsureCreated();
@@ -28,12 +30,36 @@ public sealed class ScriptGroupCatalog(RuntimeLayout layout)
     public ScriptGroupDocument Save(string name, JObject document)
     {
         ArgumentNullException.ThrowIfNull(document);
-        layout.EnsureCreated();
-        var path = Resolve(name);
-        var tempPath = path + ".tmp-" + Guid.NewGuid().ToString("N");
         var group = ScriptGroup.FromJson(document.ToString(Formatting.None));
         if (!string.Equals(group.Name, name, StringComparison.Ordinal))
             throw new InvalidDataException($"Script group document name '{group.Name}' does not match target name '{name}'.");
+        lock (_writeLock)
+            return SaveGroup(name, group);
+    }
+
+    public ScriptGroupSummary SetProjectEnabled(string name, int projectIndex, bool enabled)
+    {
+        lock (_writeLock)
+        {
+            var path = Resolve(name);
+            if (!File.Exists(path))
+                throw new FileNotFoundException($"Script group does not exist: {name}", path);
+            var group = ScriptGroup.FromJson(File.ReadAllText(path, Encoding.UTF8));
+            var matches = group.Projects.Where(project => project.Index == projectIndex).ToArray();
+            if (matches.Length != 1)
+                throw new InvalidDataException(
+                    $"Script group '{name}' must contain exactly one project with index {projectIndex}.");
+            matches[0].Status = enabled ? "Enabled" : "Disabled";
+            SaveGroup(name, group);
+            return ReadSummary(path);
+        }
+    }
+
+    private ScriptGroupDocument SaveGroup(string name, ScriptGroup group)
+    {
+        layout.EnsureCreated();
+        var path = Resolve(name);
+        var tempPath = path + ".tmp-" + Guid.NewGuid().ToString("N");
         var json = Normalize(group);
         File.WriteAllText(tempPath, json, new UTF8Encoding(false));
         File.Move(tempPath, path, true);

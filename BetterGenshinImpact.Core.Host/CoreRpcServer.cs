@@ -162,6 +162,12 @@ public sealed class CoreRpcServer(
                 "catalog.saveScriptGroup" => _catalog.Save(
                     RequiredString(request.Params, "name"),
                     request.Params?["document"] as JObject ?? throw new ArgumentException("document is required.")),
+                "catalog.setScriptGroupProjectEnabled" => _catalog.SetProjectEnabled(
+                    RequiredString(request.Params, "name"),
+                    request.Params?.Value<int?>("projectIndex")
+                        ?? throw new ArgumentException("projectIndex is required."),
+                    request.Params?.Value<bool?>("enabled")
+                        ?? throw new ArgumentException("enabled is required.")),
                 "catalog.listScriptProjects" => _scriptProjectCatalog.List(),
                 "catalog.getScriptProject" => _scriptProjectCatalog.Get(RequiredString(request.Params, "folderName")),
                 "trigger.list" => ListTriggers(),

@@ -163,6 +163,20 @@ actor BetterGICoreProcessSupervisor {
         return try client.listScriptGroups()
     }
 
+    func setScriptGroupProjectEnabled(groupName: String, projectIndex: Int, enabled: Bool) throws {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        guard let result = try client.request(
+            method: "catalog.setScriptGroupProjectEnabled",
+            parameters: ["name": groupName, "projectIndex": projectIndex, "enabled": enabled]
+        ) as? [String: Any], result["name"] as? String == groupName else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid catalog.setScriptGroupProjectEnabled result."
+            )
+        }
+    }
+
     func startRuntime() throws {
         guard case .running = state, let client else {
             throw BetterGICoreRPCError.socket("BetterGI Core is not running.")

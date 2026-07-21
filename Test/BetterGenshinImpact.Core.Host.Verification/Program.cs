@@ -1089,6 +1089,27 @@ try
         JObject.FromObject(new { name = "狗粮+锄地" }), cancellation.Token);
     Require(reloaded.Error is null && JObject.FromObject(reloaded.Result!)["document"]?["projects"]?[0]?["runNum"]?.Value<int>() == 3,
         reloaded.Error?.Message ?? "catalog.saveScriptGroup did not persist through the authoritative Core catalog");
+    var disabledProject = await ExchangeAsync(
+        connection, "catalog-disable-project", "catalog.setScriptGroupProjectEnabled", sessionToken,
+        JObject.FromObject(new { name = "狗粮+锄地", projectIndex = 1, enabled = false }), cancellation.Token);
+    Require(disabledProject.Error is null &&
+            JObject.FromObject(disabledProject.Result!)["projects"]?[0]?["status"]?.Value<string>() == "Disabled",
+        disabledProject.Error?.Message ?? "Core did not disable the selected script-group project");
+    var disabledDocument = await ExchangeAsync(
+        connection, "catalog-disabled-document", "catalog.getScriptGroup", sessionToken,
+        JObject.FromObject(new { name = "狗粮+锄地" }), cancellation.Token);
+    var disabledProjectDocument = JObject.FromObject(disabledDocument.Result!)["document"]?["projects"]?[0];
+    Require(disabledDocument.Error is null &&
+            disabledProjectDocument?["status"]?.Value<string>() == "Disabled" &&
+            disabledProjectDocument?["runNum"]?.Value<int>() == 3 &&
+            disabledProjectDocument?["jsScriptSettingsObject"]?["targetMonsters"]?.Value<string>() == "愚人众特辖队，巡陆艇",
+        disabledDocument.Error?.Message ?? "project status update lost upstream ScriptGroup fields");
+    var reenabledProject = await ExchangeAsync(
+        connection, "catalog-reenable-project", "catalog.setScriptGroupProjectEnabled", sessionToken,
+        JObject.FromObject(new { name = "狗粮+锄地", projectIndex = 1, enabled = true }), cancellation.Token);
+    Require(reenabledProject.Error is null &&
+            JObject.FromObject(reenabledProject.Result!)["projects"]?[0]?["status"]?.Value<string>() == "Enabled",
+        reenabledProject.Error?.Message ?? "Core did not re-enable the selected script-group project");
 
     var projects = await ExchangeAsync(connection, "projects", "catalog.listScriptProjects", sessionToken, null, cancellation.Token);
     var projectDocuments = JArray.FromObject(projects.Result!);
