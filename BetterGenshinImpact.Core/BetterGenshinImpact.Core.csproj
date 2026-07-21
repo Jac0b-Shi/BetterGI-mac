@@ -56,6 +56,8 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimBattlePassRewardsTask.cs" Link="GameTask/Common/Job/ClaimBattlePassRewardsTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/GoToCraftingBenchRuntimePlatform.cs" Link="GameTask/Common/Job/GoToCraftingBenchRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/GoToCraftingBenchTask.cs" Link="GameTask/Common/Job/GoToCraftingBenchTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/CraftMaterialRuntimePlatform.cs" Link="GameTask/Common/Job/CraftMaterialRuntimePlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/CraftMaterialTask.cs" Link="GameTask/Common/Job/CraftMaterialTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/SetTimeTask.cs" Link="GameTask/Common/Job/SetTimeTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoTrackPath/TpTask.cs" Link="GameTask/AutoTrackPath/TpTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoTrackPath/TpConfig.cs" Link="GameTask/AutoTrackPath/TpConfig.cs" />
@@ -326,6 +328,15 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Model/BaseTaskParam.cs" Link="GameTask/Model/BaseTaskParam.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Model/TaskParameterPlatform.cs" Link="GameTask/Model/TaskParameterPlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridScreenExtensions.cs" Link="GameTask/Model/GameUI/GridScreenExtensions.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridScreen.cs" Link="GameTask/Model/GameUI/GridScreen.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridScreenRuntimePlatform.cs" Link="GameTask/Model/GameUI/GridScreenRuntimePlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridScroller.cs" Link="GameTask/Model/GameUI/GridScroller.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridParams.cs" Link="GameTask/Model/GameUI/GridParams.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridCell.cs" Link="GameTask/Model/GameUI/GridCell.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ItemIconRecognizer.cs" Link="GameTask/Common/Job/ItemIconRecognizer.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ItemIconRecognitionMode.cs" Link="GameTask/Common/Job/ItemIconRecognitionMode.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Common/Reward/RewardResultRecognizer.cs" Link="GameTask/Common/Reward/RewardResultRecognizer.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Common/Reward/RewardResultRuntimePlatform.cs" Link="GameTask/Common/Reward/RewardResultRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvSimpleOperation.cs" Link="GameTask/Common/BgiVision/BvSimpleOperation.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvSimpleOperationPlatform.cs" Link="GameTask/Common/BgiVision/BvSimpleOperationPlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/GetGridIcons/GridIconClassifier.cs" Link="GameTask/GetGridIcons/GridIconClassifier.cs" />

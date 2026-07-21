@@ -72,6 +72,16 @@ if rg -n '\b(TaskContext|Simulation\.SendInput|User32\.)\b' \
   BetterGenshinImpact/GameTask/Common/Job/GoToCraftingBenchTask.cs; then
   fail "shared GoToCraftingBenchTask still owns Windows runtime dependencies"
 fi
+rg -Fq "genshin.craftMaterial('测试材料', 0" \
+  Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
+  || fail "Core Host verification does not execute genshin.craftMaterial through ClearScript"
+rg -q 'new CraftMaterialTask\(materialName, quantity, materialType\)\.Start' \
+  BetterGenshinImpact.Core.Host/Runtime/MacGenshinRuntimePlatform.cs \
+  || fail "macOS genshin.CraftMaterial is not composed from the upstream task"
+if rg -n 'TaskContext|Simulation\.SendInput|VisionContext' \
+  BetterGenshinImpact/GameTask/Common/Job/CraftMaterialTask.cs; then
+  fail "shared CraftMaterialTask still owns Windows runtime dependencies"
+fi
 rg -q 'JsonConvert\.DeserializeObject<GiTpPosition>' \
   BetterGenshinImpact.Core.Host/Runtime/MacTpTaskRuntimePlatform.cs \
   || fail "macOS TpTask composition does not restore the upstream runtime-only statue object"

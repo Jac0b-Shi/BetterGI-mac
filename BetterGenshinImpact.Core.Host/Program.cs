@@ -123,6 +123,14 @@ TaskParameterPlatform.Configure(new MacTaskParameterPlatform(
     autoFishingRuntimePlatform.GameCultureInfoName));
 GoToCraftingBenchRuntimePlatform.Configure(
     new MacGoToCraftingBenchRuntimePlatform(layout, imageRegionOcrService));
+CraftMaterialRuntimePlatform.Configure(new MacCraftMaterialRuntimePlatform(
+    loggerFactory.CreateLogger<CraftMaterialTask>()));
+BetterGenshinImpact.GameTask.Model.GameUI.GridScreenRuntimePlatform.Configure(
+    new MacGridScreenRuntimePlatform(() => gameTaskManagerPlatform.SystemInfo));
+BetterGenshinImpact.GameTask.Common.Reward.RewardResultRuntimePlatform.Configure(
+    new MacRewardResultRuntimePlatform(
+        imageRegionOcrService,
+        loggerFactory.CreateLogger<BetterGenshinImpact.GameTask.Common.Reward.RewardResultRecognizer>()));
 BvSimpleOperationPlatform.Configure(bvSimpleOperationPlatform);
 TpTaskRuntimePlatform.Configure(new MacTpTaskRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo));

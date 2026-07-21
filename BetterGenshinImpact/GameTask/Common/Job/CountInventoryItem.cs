@@ -94,7 +94,7 @@ namespace BetterGenshinImpact.GameTask.Common.Job
             {
                 GlobalMethod.LeftButtonUp();
             }
-            var gridScroller = new GridScroller(CreateGridParams(), logger, input, ct);
+            var gridScroller = new GridScroller(CreateGridParams(), logger, ct);
             while (await gridScroller.TryVerticalScollDown((src, columns) => GridScreen.GridEnumerator.GetGridItems(src, columns)))
             {
                 await TaskControl.Delay(300, ct);

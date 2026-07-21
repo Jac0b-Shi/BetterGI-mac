@@ -263,6 +263,12 @@ public partial class App : Application
             new Core.Runtime.Windows.WindowsTaskParameterPlatform());
         GameTask.Common.Job.GoToCraftingBenchRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsGoToCraftingBenchRuntimePlatform());
+        GameTask.Common.Job.CraftMaterialRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsCraftMaterialRuntimePlatform());
+        GameTask.Model.GameUI.GridScreenRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsGridScreenRuntimePlatform());
+        GameTask.Common.Reward.RewardResultRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsRewardResultRuntimePlatform());
         GameTask.Common.BgiVision.BvSimpleOperationPlatform.Configure(
             new Core.Runtime.Windows.WindowsBvSimpleOperationPlatform());
         GameTask.AutoTrackPath.TpTaskRuntimePlatform.Configure(

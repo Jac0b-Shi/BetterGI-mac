@@ -371,6 +371,32 @@
       }
     },
     {
+      "destinationRelativePath": "Assets/Model/ItemV2/item.onnx",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/ItemV2/item.onnx",
+      "sizeBytes": 6334655,
+      "sha256": "f2a25dca70c629eaa2b2253d21229c958e00ff5fc62588a8d6031c58840d4cd8",
+      "transformation": "relocate",
+      "licenseEvidence": {
+        "spdxId": "GPL-3.0",
+        "source": "BetterGI release ItemV2 model asset; bettergi repository root LICENSE GPLv3 and Assets/Model/LICENSE",
+        "redistributionStatus": "allowed-under-GPLv3"
+      }
+    },
+    {
+      "destinationRelativePath": "Assets/Model/ItemV2/item.csv",
+      "sourceId": "bettergi-release-0.62.0-portable-7z",
+      "memberPath": "BetterGI/Assets/Model/ItemV2/item.csv",
+      "sizeBytes": 4757569,
+      "sha256": "24fe4a877932b4f9f7edc52325ea30bf880ade24a7f4d111dc03ba27b39932d3",
+      "transformation": "relocate",
+      "licenseEvidence": {
+        "spdxId": "GPL-3.0",
+        "source": "BetterGI release ItemV2 prototype data; bettergi repository root LICENSE GPLv3 and Assets/Model/LICENSE",
+        "redistributionStatus": "allowed-under-GPLv3"
+      }
+    },
+    {
       "destinationRelativePath": "Assets/Model/Mine/bgi_mine.onnx",
       "sourceId": "bettergi-release-0.62.0-portable-7z",
       "memberPath": "BetterGI/Assets/Model/Mine/bgi_mine.onnx",

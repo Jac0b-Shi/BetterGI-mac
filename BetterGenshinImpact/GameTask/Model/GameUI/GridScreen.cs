@@ -1,8 +1,6 @@
 using BetterGenshinImpact.Core.Recognition.OpenCv;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
-using Fischless.WindowsInput;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -20,7 +18,6 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
         private readonly GridParams @params;
         private readonly CancellationToken ct;
         private readonly ILogger logger;
-        private readonly InputSimulator input = Simulation.SendInput;
         internal Action? OnBeforeScroll { get; set; }
         internal Action<Tuple<ImageRegion, IEnumerable<Tuple<Rect, bool>>>>? OnAfterTurnToNewPage { get; set; }
 
@@ -33,7 +30,11 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
             foreach ((Rect rect, bool isPhantom) in items)
             {
                 using ImageRegion item = page.DeriveCrop(rect);
+#if BGI_FULL_WINDOWS
                 item.DrawSelf($"GridItem{item.GetHashCode()}", isPhantom ? System.Drawing.Pens.Yellow : System.Drawing.Pens.Lime);
+#else
+                item.DrawSelf($"GridItem{item.GetHashCode()}");
+#endif
             }
         };
 
@@ -59,7 +60,7 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
 
         public IAsyncEnumerator<Tuple<ImageRegion, Rect>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
         {
-            return new GridEnumerator(this, @params.Roi, @params.Columns, input, new GridScroller(@params, logger, input, ct), ct);
+            return new GridEnumerator(this, @params.Roi, @params.Columns, new GridScroller(@params, logger, ct), ct);
         }
 
         public class GridEnumerator : IAsyncEnumerator<Tuple<ImageRegion, Rect>>
@@ -67,7 +68,6 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
             private readonly GridScreen owner;
             private readonly Rect roi;
             private readonly CancellationToken ct;
-            private readonly InputSimulator input = Simulation.SendInput;
             private readonly int columns;
             private readonly GridScroller gridScroller;
 
@@ -91,14 +91,12 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
             /// <param name="s2Round">滚过一整页时发出的滚动命令次数</param>
             /// <param name="s3Scale">微调滚动时控制首行距离上边界的参数</param>
             /// <param name="logger"></param>
-            /// <param name="input"></param>
             /// <param name="ct"></param>
-            internal GridEnumerator(GridScreen owner, Rect roi, int columns, InputSimulator input, GridScroller gridScroller, CancellationToken ct)
+            internal GridEnumerator(GridScreen owner, Rect roi, int columns, GridScroller gridScroller, CancellationToken ct)
             {
                 this.owner = owner;
                 this.roi = roi;
                 this.ct = ct;
-                this.input = input;
                 this.columns = columns;
                 this.gridScroller = gridScroller;
             }
@@ -219,17 +217,6 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
             public static Point[][] FindContoursAlpha(Mat src)
             {
                 Point[][] contours;
-                void getLine(Mat edge, Scalar color)
-                {
-                    using Mat threshold = edge.Threshold(30, 255, ThresholdTypes.Binary);
-                    LineSegmentPoint[] lines = threshold.HoughLinesP(1, (Cv2.PI / 180) / 4, 100, maxLineGap: 3);
-                    lines = lines.Where(l => (Math.Abs(l.P1.X - l.P2.X) == 0) || (Math.Abs(l.P1.Y - l.P2.Y) == 0)).ToArray();
-                    foreach (var line in lines)
-                    {
-                        Cv2.Line(src, line.P1, line.P2, color, 1);
-                    }
-                }
-
                 Mat Laplacian(Mat src)
                 {
                     //拉普拉斯算子
@@ -461,12 +448,12 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
                         {
                             if (this.currentPage.AntiRecycling.HasValue)
                             {
-                                using DesktopRegion desktop = new DesktopRegion(this.input.Mouse);
                                 var (x, y, w, h) = (this.currentPage.AntiRecycling.Value.X, this.currentPage.AntiRecycling.Value.Y, this.currentPage.AntiRecycling.Value.Width, this.currentPage.AntiRecycling.Value.Height);
-                                var (gcX, gcY) = (TaskContext.Instance().SystemInfo.CaptureAreaRect.X, TaskContext.Instance().SystemInfo.CaptureAreaRect.Y);
-                                desktop.ClickTo(gcX + this.roi.X + x + (w / 2d), gcY + this.roi.Y + y + (h / 2d));
+                                var (gcX, gcY) = (GridScreenRuntimePlatform.Current.CaptureAreaX,
+                                    GridScreenRuntimePlatform.Current.CaptureAreaY);
+                                DesktopRegion.DesktopRegionClick(gcX + this.roi.X + x + (w / 2d), gcY + this.roi.Y + y + (h / 2d));
                                 await TaskControl.Delay(500, ct);
-                                desktop.ClickTo(gcX + this.roi.X + x + (w / 2d), gcY + this.roi.Y + y + (h / 2d));
+                                DesktopRegion.DesktopRegionClick(gcX + this.roi.X + x + (w / 2d), gcY + this.roi.Y + y + (h / 2d));
                                 await TaskControl.Delay(500, ct);
                             }
 
@@ -488,11 +475,11 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
                             // 第一页采集时，主动操作来避免图标高亮
                             Rect rect12 = new Rect(0, 0, (int)(this.roi.Width * 1.5 / this.columns), this.roi.Height);
                             // 双击第三列，采集第一、二列
-                            using DesktopRegion desktop = new DesktopRegion(this.input.Mouse);
-                            var (gcX, gcY) = (TaskContext.Instance().SystemInfo.CaptureAreaRect.X, TaskContext.Instance().SystemInfo.CaptureAreaRect.Y);
-                            desktop.ClickTo(gcX + this.roi.X + this.roi.Width * 2.5 / this.columns, gcY + this.roi.Y + this.roi.Width * 0.5 / this.columns);
+                            var (gcX, gcY) = (GridScreenRuntimePlatform.Current.CaptureAreaX,
+                                GridScreenRuntimePlatform.Current.CaptureAreaY);
+                            DesktopRegion.DesktopRegionClick(gcX + this.roi.X + this.roi.Width * 2.5 / this.columns, gcY + this.roi.Y + this.roi.Width * 0.5 / this.columns);
                             await TaskControl.Delay(300, ct);
-                            desktop.ClickTo(gcX + this.roi.X + this.roi.Width * 2.5 / this.columns, gcY + this.roi.Y + this.roi.Width * 0.5 / this.columns);
+                            DesktopRegion.DesktopRegionClick(gcX + this.roi.X + this.roi.Width * 2.5 / this.columns, gcY + this.roi.Y + this.roi.Width * 0.5 / this.columns);
                             await TaskControl.Delay(500, ct);
 
                             using ImageRegion ra12 = TaskControl.CaptureToRectArea();
@@ -500,9 +487,9 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
                             using Mat columns12 = new Mat(imageRegion12.SrcMat, rect12);
 
                             // 双击第一列，采集第二列以后的列
-                            desktop.ClickTo(gcX + this.roi.X + this.roi.Width * 0.5 / this.columns, gcY + this.roi.Y + this.roi.Width * 0.5 / this.columns);
+                            DesktopRegion.DesktopRegionClick(gcX + this.roi.X + this.roi.Width * 0.5 / this.columns, gcY + this.roi.Y + this.roi.Width * 0.5 / this.columns);
                             await TaskControl.Delay(300, ct);
-                            desktop.ClickTo(gcX + this.roi.X + this.roi.Width * 0.5 / this.columns, gcY + this.roi.Y + this.roi.Width * 0.5 / this.columns);
+                            DesktopRegion.DesktopRegionClick(gcX + this.roi.X + this.roi.Width * 0.5 / this.columns, gcY + this.roi.Y + this.roi.Width * 0.5 / this.columns);
                             await TaskControl.Delay(500, ct);
 
                             using ImageRegion raRest = TaskControl.CaptureToRectArea();

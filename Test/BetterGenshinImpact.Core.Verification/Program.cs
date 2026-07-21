@@ -33,6 +33,8 @@ using BetterGenshinImpact.GameTask.AutoPathing.Suspend;
 using BetterGenshinImpact.GameTask.AutoPathing.Handler;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Job;
+using BetterGenshinImpact.GameTask.Common.Reward;
+using BetterGenshinImpact.GameTask.Model.GameUI;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Common.Map;
 using BetterGenshinImpact.Core.Simulator.Extensions;
@@ -63,6 +65,10 @@ var combatSceneProvider = new RecordingCombatSceneProvider();
 CombatSceneProvider.Configure(combatSceneProvider);
 var recordingTaskControl = new RecordingTaskControlPlatform();
 TaskControlPlatform.Configure(recordingTaskControl);
+var verificationSystemInfo = new VerificationSystemInfo();
+CraftMaterialRuntimePlatform.Configure(new VerificationCraftMaterialRuntimePlatform());
+GridScreenRuntimePlatform.Configure(new VerificationGridScreenRuntimePlatform(verificationSystemInfo));
+RewardResultRuntimePlatform.Configure(new VerificationRewardResultRuntimePlatform());
 BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory CpuFactory(IOnnxModelPathResolver resolver) =>
     new(new BetterGenshinImpact.Core.Runtime.Portable.CpuOnnxRuntimePlatform(resolver));
 DesktopRegionInputPlatform.Configure(recorder);
@@ -918,7 +924,7 @@ Assert("B11.6.1.4 Lock has artifactSetVersion", lockDoc.TryGetProperty("artifact
 Assert("B11.6.1.4 Lock has sources", lockDoc.TryGetProperty("sources", out var sourcesArray) && sourcesArray.GetArrayLength() > 0, "");
 Assert("B11.6.1.4 Lock has artifacts", lockDoc.TryGetProperty("artifacts", out var artifactsArray), "");
 var lockArtifactsCount = artifactsArray.GetArrayLength();
-Assert("B11.6.1.4 Lock has 32 artifacts", lockArtifactsCount == 32, $"got {lockArtifactsCount}");
+Assert("B11.6.1.4 Lock has 34 artifacts", lockArtifactsCount == 34, $"got {lockArtifactsCount}");
 // Validate each artifact
 var lockDests = new HashSet<string>(StringComparer.Ordinal);
 var lockHashes = new HashSet<string>(StringComparer.Ordinal);
@@ -927,6 +933,8 @@ var manifestPhysicalPaths = manifest.Artifacts.SelectMany(a => new[] { a.Relativ
     .ToHashSet(StringComparer.Ordinal);
 var requiredRuntimeAssetPaths = new HashSet<string>(StringComparer.Ordinal)
 {
+    "Assets/Model/ItemV2/item.onnx",
+    "Assets/Model/ItemV2/item.csv",
     "Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin",
     "Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png"
 };
@@ -957,8 +965,8 @@ foreach (var art in artifactsArray.EnumerateArray())
     var licStatus = art.GetProperty("licenseEvidence").GetProperty("redistributionStatus").GetString();
     Assert($"B11.6.1.4 redistributionStatus non-empty {dest}", !string.IsNullOrEmpty(licStatus), "");
 }
-Assert("B11.6.1.4 32 unique destinations", lockDests.Count == 32, $"got {lockDests.Count}");
-Assert("B11.6.1.4 32 unique hashes", lockHashes.Count == 32, $"got {lockHashes.Count}");
+Assert("B11.6.1.4 34 unique destinations", lockDests.Count == 34, $"got {lockDests.Count}");
+Assert("B11.6.1.4 34 unique hashes", lockHashes.Count == 34, $"got {lockHashes.Count}");
 Assert("B11.6.1.4 covers every model manifest path", manifestPhysicalPaths.IsSubsetOf(lockDests),
     $"missing {string.Join(", ", manifestPhysicalPaths.Except(lockDests))}");
 Assert("B11.6.1.4 contains exact runtime asset set",
@@ -982,7 +990,7 @@ var dlSource = downloaderLock.Sources[0];
 Assert("B11.6.2 Downloader source has url", !string.IsNullOrEmpty(dlSource.Url), "");
 Assert("B11.6.2 Downloader source has sha256", dlSource.Sha256.Length == 64, $"len={dlSource.Sha256.Length}");
 Assert("B11.6.2 Downloader source has provenance", dlSource.Provenance.CommitSha.Length == 40, "");
-Assert("B11.6.2 Downloader has 32 artifacts", downloaderLock.Artifacts.Count == 32, $"got {downloaderLock.Artifacts.Count}");
+Assert("B11.6.2 Downloader has 34 artifacts", downloaderLock.Artifacts.Count == 34, $"got {downloaderLock.Artifacts.Count}");
 // Validate each artifact has required fields for download
 foreach (var art in downloaderLock.Artifacts)
 {
@@ -1179,7 +1187,7 @@ Console.WriteLine("B12.1: Path chain verification — Downloader → Resolver �
         .Select(artifact => artifact.DestinationRelativePath)
         .Distinct(StringComparer.Ordinal)
         .ToList();
-    Assert("B12.1 All 32 destination paths enumerated", allDestinations.Count == 32, $"got {allDestinations.Count}");
+    Assert("B12.1 All 34 destination paths enumerated", allDestinations.Count == 34, $"got {allDestinations.Count}");
 
     var contentDict = new Dictionary<string, byte[]>();
     foreach (var dest in allDestinations)
@@ -1215,7 +1223,7 @@ Console.WriteLine("B12.1: Path chain verification — Downloader → Resolver �
     Directory.CreateDirectory(chainModelRoot);
     var chainResult = await chainDl.DownloadAsync(chainLockPath, chainModelRoot, CancellationToken.None);
     Assert("B12.1 Chain download success", chainResult.Success, $"errors={string.Join("; ", chainResult.Errors)}");
-    Assert("B12.1 Chain all 32 files placed", chainResult.ArtifactsExtracted == 32, $"extracted={chainResult.ArtifactsExtracted}");
+    Assert("B12.1 Chain all 34 files placed", chainResult.ArtifactsExtracted == 34, $"extracted={chainResult.ArtifactsExtracted}");
 
     // Create resolvers with the same modelRoot
     var chainOnnxResolver = new BetterGenshinImpact.Core.Adapters.ModelRootPathResolver(chainModelRoot);
@@ -1306,8 +1314,8 @@ var lockedRuntimeRoot = Path.Combine(Path.GetTempPath(), "bgi-locked-runtime-" +
             lockedTestSourcePath, lockedRuntimeRoot, CancellationToken.None, sharedArchiveCacheDir);
         Assert("B12.2 locked release installation succeeds", installResult.Success,
             string.Join("; ", installResult.Errors));
-        Assert("B12.2 locked release installs all 32 artifacts",
-            installResult.ArtifactsExtracted == 32, $"got {installResult.ArtifactsExtracted}");
+        Assert("B12.2 locked release installs all 34 artifacts",
+            installResult.ArtifactsExtracted == 34, $"got {installResult.ArtifactsExtracted}");
     }
 
     if (File.Exists(temporaryLockPath)) File.Delete(temporaryLockPath);
@@ -1401,6 +1409,27 @@ Console.WriteLine("B12.2: Real ONNX InferenceSession load test");
                 Assert($"B12.2 {name} InferenceSession", false, $"{ex.GetType().Name}: {ex.Message[..Math.Min(200, ex.Message.Length)]}");
             }
         }
+
+        var itemV2ModelPath = Path.Combine(lockedRuntimeRoot, "Assets", "Model", "ItemV2", "item.onnx");
+        try
+        {
+            using var itemV2Session = new InferenceSession(itemV2ModelPath);
+            Assert("B12.2 ItemV2 InferenceSession created", itemV2Session.InputMetadata.Count > 0 &&
+                itemV2Session.OutputMetadata.ContainsKey("embedding"),
+                "ItemV2 model does not expose the upstream input/embedding contract");
+        }
+        catch (Exception exception)
+        {
+            Assert("B12.2 ItemV2 InferenceSession created", false, exception.ToString());
+        }
+
+        var itemV2CsvPath = Path.Combine(lockedRuntimeRoot, "Assets", "Model", "ItemV2", "item.csv");
+        var itemV2Header = File.ReadLines(itemV2CsvPath).FirstOrDefault() ?? string.Empty;
+        Assert("B12.2 ItemV2 prototype CSV preserves required columns",
+            itemV2Header.Contains("item_name", StringComparison.Ordinal) &&
+            itemV2Header.Contains("material_type", StringComparison.Ordinal) &&
+            itemV2Header.Contains("embedding", StringComparison.Ordinal),
+            itemV2Header);
 
         Console.WriteLine($"B12.2: {sessionCount}/{testModels.Length} InferenceSessions created successfully");
     }
@@ -1756,6 +1785,27 @@ Assert("GoToCraftingBench preserves teleport-then-movement route shape",
                                      route.Positions.Skip(1).Any(position =>
                                          position.Type != WaypointType.Teleport.Code)),
     "one or more crafting-bench routes lost its teleport or movement segment");
+Console.WriteLine();
+
+Console.WriteLine("Genshin material crafting: upstream parsing and validation semantics");
+var readPositiveInt = typeof(CraftMaterialTask).GetMethod(
+    "ReadFirstPositiveInt", BindingFlags.Static | BindingFlags.NonPublic)
+    ?? throw new MissingMethodException(typeof(CraftMaterialTask).FullName, "ReadFirstPositiveInt");
+Assert("CraftMaterial preserves upstream full-width quantity parsing",
+    (int)readPositiveInt.Invoke(null,
+        [BetterGenshinImpact.Helpers.StringUtils.ConvertFullWidthNumToHalfWidth(" １２ / ３ ")])! == 12,
+    "full-width OCR quantity did not normalize to the first positive integer");
+try
+{
+    await new CraftMaterialTask("测试材料", 0, "角色与武器培养素材").Start(CancellationToken.None);
+    Assert("CraftMaterial rejects non-positive target quantity", false, "task returned success");
+}
+catch (ArgumentOutOfRangeException exception)
+{
+    Assert("CraftMaterial rejects non-positive target quantity",
+        exception.ActualValue is 0 && exception.Message.Contains("大于 0", StringComparison.Ordinal),
+        exception.ToString());
+}
 Console.WriteLine();
 
 AutoSkipAssets.DestroyInstance();
@@ -2884,6 +2934,25 @@ sealed class VerificationSystemInfo : BetterGenshinImpact.GameTask.Model.ISystem
     public string GameProcessName => "Verification";
     public int GameProcessId => 0;
     public DesktopRegion DesktopRectArea { get; } = new(1920, 1080);
+}
+
+sealed class VerificationCraftMaterialRuntimePlatform : ICraftMaterialRuntimePlatform
+{
+    public Microsoft.Extensions.Logging.ILogger<CraftMaterialTask> Logger => NullLogger<CraftMaterialTask>.Instance;
+}
+
+sealed class VerificationGridScreenRuntimePlatform(VerificationSystemInfo systemInfo) : IGridScreenRuntimePlatform
+{
+    public double AssetScale => systemInfo.AssetScale;
+    public int CaptureAreaX => systemInfo.CaptureAreaRect.X;
+    public int CaptureAreaY => systemInfo.CaptureAreaRect.Y;
+}
+
+sealed class VerificationRewardResultRuntimePlatform : IRewardResultRuntimePlatform
+{
+    public Microsoft.Extensions.Logging.ILogger<RewardResultRecognizer> Logger => NullLogger<RewardResultRecognizer>.Instance;
+    public BetterGenshinImpact.Core.Recognition.OCR.IOcrService OcrService { get; } = new VerificationOcrService();
+    public bool SaveDebugScreenshots => false;
 }
 
 sealed class VerificationTrigger(string name, int priority, bool enabled) : ITaskTrigger

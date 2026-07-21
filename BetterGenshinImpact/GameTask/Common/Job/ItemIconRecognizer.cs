@@ -51,12 +51,12 @@ internal sealed class GridIconRecognizer : IItemIconRecognizer
 
     public GridIconRecognizer()
     {
-        _session = GridIconsAccuracyTestTask.LoadModel(out _prototypes);
+        _session = GridIconClassifier.LoadModel(out _prototypes);
     }
 
     public string? Recognize(Mat icon)
     {
-        return GridIconsAccuracyTestTask.Infer(icon, _session, _prototypes).Item1;
+        return GridIconClassifier.Infer(icon, _session, _prototypes).Item1;
     }
 
     public void Dispose()

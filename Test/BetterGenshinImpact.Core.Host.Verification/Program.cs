@@ -17,6 +17,8 @@ using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Job;
+using BetterGenshinImpact.GameTask.Common.Reward;
+using BetterGenshinImpact.GameTask.Model.GameUI;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.AutoSkip;
@@ -226,7 +228,7 @@ var artifactInitializationCount = 0;
 server.AttachRuntimeArtifactInitializer(() =>
 {
     artifactInitializationCount++;
-    return new RuntimeArtifactStatus(0, 32, "verification-source-lock.json");
+    return new RuntimeArtifactStatus(0, 34, "verification-source-lock.json");
 });
 var scriptHostServices = new MacScriptHostServices(
     loggerFactory, server.PlatformCallbacks, sessionToken, cancellation.Token);
@@ -316,6 +318,12 @@ TaskParameterPlatform.Configure(new MacTaskParameterPlatform(
     autoFishingRuntimePlatform.GameCultureInfoName));
 var craftingBenchPlatform = new MacGoToCraftingBenchRuntimePlatform(layout, imageRegionOcrService);
 GoToCraftingBenchRuntimePlatform.Configure(craftingBenchPlatform);
+CraftMaterialRuntimePlatform.Configure(new MacCraftMaterialRuntimePlatform(
+    loggerFactory.CreateLogger<CraftMaterialTask>()));
+GridScreenRuntimePlatform.Configure(new MacGridScreenRuntimePlatform(
+    () => gameTaskManagerPlatform.SystemInfo));
+RewardResultRuntimePlatform.Configure(new MacRewardResultRuntimePlatform(
+    imageRegionOcrService, loggerFactory.CreateLogger<RewardResultRecognizer>()));
 Require(craftingBenchPlatform.SelectedConfigName == "selected-crafting" &&
         craftingBenchPlatform.LoadConfigs().Any(config =>
             config is { Name: "selected-crafting", MinResinToKeep: 80 }),
@@ -412,7 +420,7 @@ try
             initializedJson.Value<string>("mapMatchingMethod") == "SIFT" &&
             initializedJson.Value<string>("autoFetchDispatchAdventurersGuildCountry") == "璃月" &&
             initializedJson.Value<bool>("runtimeArtifactsReady") &&
-            initializedJson.Value<int>("runtimeArtifactsVerified") == 32 &&
+            initializedJson.Value<int>("runtimeArtifactsVerified") == 34 &&
             artifactInitializationCount == 1,
         "core.initialize did not apply the ScriptService platform configuration");
 
@@ -1226,6 +1234,29 @@ try
         $"genshin.goToCraftingBench talk-UI capture sequence changed: {craftingBenchCaptureCount}.");
     Console.WriteLine(
         "Real BetterGI genshin.goToCraftingBench passed: ClearScript, route loading, PathExecutor and talk-UI recognition.");
+
+    var craftMaterialFixturePath = Path.Combine(layout.UserPath, "JsScript", "GenshinCraftMaterial");
+    Directory.CreateDirectory(craftMaterialFixturePath);
+    await File.WriteAllTextAsync(Path.Combine(craftMaterialFixturePath, "manifest.json"), """
+        {"name":"Genshin CraftMaterial","version":"1.0.0","description":"verification","authors":[{"name":"BetterGI"}],"main":"main.js","settings":[],"library":[]}
+        """);
+    await File.WriteAllTextAsync(Path.Combine(craftMaterialFixturePath, "main.js"),
+        "export {}; await genshin.craftMaterial('测试材料', 0, '角色与武器培养素材');");
+    Exception? craftMaterialException = null;
+    try
+    {
+        await new ScriptProject("GenshinCraftMaterial").ExecuteAsync();
+    }
+    catch (Exception exception)
+    {
+        craftMaterialException = exception;
+    }
+    Require(craftMaterialException is not null &&
+            craftMaterialException.ToString().Contains("大于 0", StringComparison.Ordinal) &&
+            !craftMaterialException.ToString().Contains("CapabilityUnavailable", StringComparison.Ordinal),
+        "genshin.craftMaterial did not reach the upstream argument validation: " + craftMaterialException);
+    Console.WriteLine(
+        "Real BetterGI genshin.craftMaterial passed: ClearScript reached the upstream task and preserved validation errors.");
     using (var restoredFrame = new OpenCvSharp.Mat(
                schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black))
     using (var restoredPaimon = OpenCvSharp.Cv2.ImRead(

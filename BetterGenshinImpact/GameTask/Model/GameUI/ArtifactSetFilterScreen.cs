@@ -39,7 +39,7 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
         }
         public IAsyncEnumerator<Tuple<ImageRegion, Rect>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
         {
-            return new GridEnumerator(this, @params.Roi, @params.Columns, new GridScroller(@params, logger, input, ct), ct);
+            return new GridEnumerator(this, @params.Roi, @params.Columns, new GridScroller(@params, logger, ct), ct);
         }
 
         public class GridEnumerator : IAsyncEnumerator<Tuple<ImageRegion, Rect>>

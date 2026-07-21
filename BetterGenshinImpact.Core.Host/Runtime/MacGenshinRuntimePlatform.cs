@@ -18,8 +18,7 @@ public sealed class MacGenshinRuntimePlatform(
         AutoFishingTaskParam.BuildFromConfig(autoFishing.Config, false);
     public Task<CraftMaterialResult> CraftMaterial(string materialName, int quantity,
         string? materialType, CancellationToken cancellationToken) =>
-        throw new CapabilityUnavailableException(
-            "genshin.CraftMaterial is not composed on macOS because the shared CraftMaterialTask still depends on the WPF input surface.");
+        new CraftMaterialTask(materialName, quantity, materialType).Start(cancellationToken);
     public Task ClaimBattlePassRewards(CancellationToken cancellationToken) =>
         new ClaimBattlePassRewardsTask().Start(cancellationToken);
     public Task GoToCraftingBench(string country, CancellationToken cancellationToken) =>

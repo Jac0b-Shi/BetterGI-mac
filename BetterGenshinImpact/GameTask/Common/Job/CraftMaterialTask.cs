@@ -1,13 +1,11 @@
 using BetterGenshinImpact.Core.BgiVision;
 using BetterGenshinImpact.Core.Config;
-using BetterGenshinImpact.Core.Simulator;
+using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask.Common.Reward;
 using BetterGenshinImpact.GameTask.GetGridIcons;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Model.GameUI;
 using BetterGenshinImpact.Helpers;
-using BetterGenshinImpact.View.Drawable;
-using Fischless.WindowsInput;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualBasic.FileIO;
 using OpenCvSharp;
@@ -31,8 +29,7 @@ public class CraftMaterialTask
     private static readonly Regex FractionRegex = new(@"(\d+)\s*/\s*(\d+)", RegexOptions.Compiled);
     private static readonly Lazy<Dictionary<string, string>> MaterialTypes = new(LoadMaterialTypes);
 
-    private readonly ILogger<CraftMaterialTask> _logger = App.GetLogger<CraftMaterialTask>();
-    private readonly InputSimulator _input = Simulation.SendInput;
+    private readonly ILogger<CraftMaterialTask> _logger = CraftMaterialRuntimePlatform.Current.Logger;
     private readonly string _materialName;
     private readonly int _targetQuantity;
     private readonly string? _materialType;
@@ -267,7 +264,7 @@ public class CraftMaterialTask
         using ItemRecognizer itemRecognizer = new();
         GridScreen gridScreen = new(GridParams.Templates[GridScreenName.Crafting], _logger, _ct);
         gridScreen.OnAfterTurnToNewPage += GridScreen.DrawItemsAfterTurnToNewPage;
-        gridScreen.OnBeforeScroll += () => VisionContext.Instance().DrawContent.ClearAll();
+        gridScreen.OnBeforeScroll += () => OverlayDrawPlatform.Current.ClearAll();
 
         try
         {
@@ -295,7 +292,7 @@ public class CraftMaterialTask
         }
         finally
         {
-            VisionContext.Instance().DrawContent.ClearAll();
+            OverlayDrawPlatform.Current.ClearAll();
         }
 
         return false;
@@ -456,7 +453,7 @@ public class CraftMaterialTask
         var x = sliderStartX + (sliderEndX - sliderStartX) * Math.Clamp(ratio, 0d, 1d);
         GameCaptureRegion.GameRegion1080PPosMove(sliderStartX, sliderY);
         await Delay(80, _ct);
-        _input.Mouse.LeftButtonDown();
+        LeftButtonDown();
         try
         {
             const int steps = 12;
@@ -469,7 +466,7 @@ public class CraftMaterialTask
         }
         finally
         {
-            _input.Mouse.LeftButtonUp();
+            LeftButtonUp();
         }
     }
 
@@ -586,7 +583,7 @@ public class CraftMaterialTask
     /// <returns>当前截图尺寸下的矩形。</returns>
     private static Rect Rect1080(int x, int y, int width, int height)
     {
-        var scale = TaskContext.Instance().SystemInfo.AssetScale;
+        var scale = GridScreenRuntimePlatform.Current.AssetScale;
         return new Rect(
             (int)Math.Round(x * scale),
             (int)Math.Round(y * scale),
