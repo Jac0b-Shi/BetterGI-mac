@@ -2776,9 +2776,9 @@ try
 
     var soloList = await ExchangeAsync(connection, "solo-list", "solo.list", sessionToken, null, cancellation.Token);
     Require(soloList.Error is null && soloList.Result is JArray soloItems &&
-            soloItems.Where(item => item.Value<string>("name") is "AutoFishing" or "AutoCook")
+            soloItems.Where(item => item.Value<string>("name") is "AutoFishing" or "AutoFight" or "AutoCook")
                 .All(item => item.Value<bool>("available")) &&
-            soloItems.Where(item => item.Value<string>("name") is not ("AutoFishing" or "AutoCook"))
+            soloItems.Where(item => item.Value<string>("name") is not ("AutoFishing" or "AutoFight" or "AutoCook"))
                 .All(item => !item.Value<bool>("available")),
         "solo.list did not expose the truthful Core capability catalog");
     var soloStart = await ExchangeAsync(connection, "solo-start", "solo.start", sessionToken,
@@ -2809,6 +2809,19 @@ try
         await Task.Delay(25, cancellation.Token);
     Require(dispatcherRuntime.CookCancelled,
         "solo.stop did not cancel the active Core AutoCook task");
+    var fightStart = await ExchangeAsync(connection, "fight-start", "solo.start", sessionToken,
+        JObject.FromObject(new { name = "AutoFight" }), cancellation.Token);
+    var fightTaskId = (fightStart.Result as JObject)?.Value<string>("taskId");
+    Require(fightStart.Error is null && !string.IsNullOrEmpty(fightTaskId) &&
+            dispatcherRuntime.FightStartCount == 1,
+        "solo.start did not execute the shared AutoFight dispatcher request");
+    var fightStop = await ExchangeAsync(connection, "fight-stop", "solo.stop", sessionToken,
+        JObject.FromObject(new { taskId = fightTaskId }), cancellation.Token);
+    Require(fightStop.Error is null, fightStop.Error?.Message ?? "solo.stop AutoFight failed");
+    for (var attempt = 0; attempt < 20 && !dispatcherRuntime.FightCancelled; attempt++)
+        await Task.Delay(25, cancellation.Token);
+    Require(dispatcherRuntime.FightCancelled,
+        "solo.stop did not cancel the active Core AutoFight task");
     await connection.DisposeAsync();
 
     await using var rejectedConnection = await ConnectAsync(socketPath, cancellation.Token);
@@ -3174,6 +3187,8 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
     public bool FishingCancelled { get; private set; }
     public int CookStartCount { get; private set; }
     public bool CookCancelled { get; private set; }
+    public int FightStartCount { get; private set; }
+    public bool FightCancelled { get; private set; }
     public void ClearTriggers() => ClearCount++;
     public bool AddTrigger(string name, object? config)
     {
@@ -3187,9 +3202,15 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
     public async Task<object?> ExecuteSoloTask(DispatcherSoloTaskRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is not (DispatcherFishingTaskRequest or DispatcherCookTaskRequest))
+        if (request is not (DispatcherFishingTaskRequest or DispatcherFightTaskRequest or DispatcherCookTaskRequest))
             throw new CapabilityUnavailableException(request.Name);
         if (request is DispatcherFishingTaskRequest) FishingStartCount++;
+        else if (request is DispatcherFightTaskRequest fight)
+        {
+            if (fight.Config is not null)
+                throw new InvalidDataException("Solo AutoFight unexpectedly supplied script-group configuration.");
+            FightStartCount++;
+        }
         else CookStartCount++;
         try
         {
@@ -3198,6 +3219,7 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             if (request is DispatcherFishingTaskRequest) FishingCancelled = true;
+            else if (request is DispatcherFightTaskRequest) FightCancelled = true;
             else CookCancelled = true;
             throw;
         }

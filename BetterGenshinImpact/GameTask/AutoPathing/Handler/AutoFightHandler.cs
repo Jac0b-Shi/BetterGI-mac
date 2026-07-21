@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing.Handler;
 
-internal class AutoFightHandler : IActionHandler
+public class AutoFightHandler : IActionHandler
 {
     private readonly ILogger<AutoFightHandler> _logger = AutoFightRuntimePlatform.Current.GetLogger<AutoFightHandler>();
     public async Task RunAsyncByScript(CancellationToken ct, WaypointForTrack? waypointForTrack = null, object? config = null)

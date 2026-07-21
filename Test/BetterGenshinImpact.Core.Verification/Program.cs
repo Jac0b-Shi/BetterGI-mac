@@ -1772,6 +1772,8 @@ using (var cookCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(2
     cookCancellation.Cancel();
     try { await execution; }
     catch (OperationCanceledException) { }
+    catch (BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception.NormalEndException)
+        when (cookCancellation.IsCancellationRequested) { }
 }
 recordingTaskControl.CaptureFrameProvider = null;
 while (cookFrames.Count > 0) cookFrames.Dequeue().Dispose();

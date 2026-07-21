@@ -7,6 +7,7 @@ using BetterGenshinImpact.Platform.Abstractions;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.AutoCook;
+using BetterGenshinImpact.GameTask.AutoPathing.Handler;
 using BetterGenshinImpact.Core.Config;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -68,6 +69,11 @@ public sealed class MacDispatcherRuntimePlatform(
                     systemInfo().AssetScale,
                     loggerFactory.CreateLogger<AutoCookTask>())
                 .Start(cancellationToken);
+            return null;
+        }
+        if (request is DispatcherFightTaskRequest fight)
+        {
+            await new AutoFightHandler().RunAsyncByScript(cancellationToken, null, fight.Config);
             return null;
         }
         throw Unavailable(request.Name);
