@@ -1,4 +1,5 @@
 import CoreGraphics
+import AppKit
 @testable import MacGI
 import Testing
 
@@ -56,6 +57,17 @@ struct QuartzWindowEnumeratorTests {
         #expect(!utility.isLikelyGameWindow)
         #expect(game.isLikelyGameWindow)
         #expect(QuartzWindowEnumerator.bestGameWindow(from: [utility, game]) == game)
+    }
+
+    @Test("HUD frame follows Quartz window geometry")
+    @MainActor
+    func hudFrameFollowsQuartzWindowGeometry() {
+        let frame = HUDPanelController.appKitFrame(
+            forQuartzFrame: CGRect(x: 160, y: 90, width: 1280, height: 720),
+            referenceMaxY: 1080
+        )
+
+        #expect(frame == CGRect(x: 160, y: 270, width: 1280, height: 720))
     }
 
     private func makeWindow(

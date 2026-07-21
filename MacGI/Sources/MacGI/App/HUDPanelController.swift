@@ -6,6 +6,7 @@ final class AppCoordinator: ObservableObject {
     private var appState: AppState?
     private var hudPanelController: HUDPanelController?
     private var heartbeatTimer: Timer?
+    private var windowTrackingTimer: Timer?
 
     func configure(appState: AppState) {
         guard self.appState == nil else { return }
@@ -20,6 +21,14 @@ final class AppCoordinator: ObservableObject {
         }
         if appState.showHUDOnStart && appState.isHUDVisible {
             controller.show()
+        }
+        windowTrackingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) {
+            [weak appState, weak controller] _ in
+            Task { @MainActor in
+                guard let appState, let controller else { return }
+                let window = appState.refreshSelectedWindowGeometry()
+                controller.synchronize(with: window)
+            }
         }
         heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 7, repeats: true) { [weak appState] _ in
             Task { @MainActor in
@@ -63,8 +72,7 @@ final class HUDPanelController {
     func show() {
         let panel = panel ?? makePanel()
         self.panel = panel
-        updateFrame()
-        panel.orderFrontRegardless()
+        synchronize(with: appState.refreshSelectedWindowGeometry())
     }
 
     func hide() {
@@ -92,16 +100,20 @@ final class HUDPanelController {
         return panel
     }
 
-    private func updateFrame() {
+    func synchronize(with window: WindowInfo?) {
         guard let panel else { return }
-        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let padding: CGFloat = 24
-        let width = min(preferredPanelSize.width, max(640, screenFrame.width - padding * 2))
-        let height = min(preferredPanelSize.height, max(360, screenFrame.height - padding * 2), width * 9 / 16)
-        let origin = NSPoint(
-            x: screenFrame.maxX - width - padding,
-            y: screenFrame.minY + padding
-        )
-        panel.setFrame(.init(origin: origin, size: .init(width: width, height: height)), display: true)
+        guard appState.isHUDVisible, let window, window.isOnScreen, !window.isSynthetic else {
+            panel.orderOut(nil)
+            return
+        }
+        let referenceMaxY = NSScreen.screens.first?.frame.maxY ?? NSScreen.main?.frame.maxY ?? 0
+        panel.setFrame(Self.appKitFrame(forQuartzFrame: window.frame, referenceMaxY: referenceMaxY), display: true)
+        if !panel.isVisible {
+            panel.orderFrontRegardless()
+        }
+    }
+
+    static func appKitFrame(forQuartzFrame frame: CGRect, referenceMaxY: CGFloat) -> NSRect {
+        NSRect(x: frame.minX, y: referenceMaxY - frame.maxY, width: frame.width, height: frame.height)
     }
 }
