@@ -397,6 +397,27 @@ struct SchedulerPage: View {
             )
         } content: {
             VStack(alignment: .leading, spacing: 14) {
+                BGISectionCard("输入授权（运行前必需）", subtitle: "三项均满足后，C# Core 才能向当前游戏窗口发送真实输入。", symbolName: "keyboard.badge.ellipsis") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 20) {
+                            Toggle("Dry-Run", isOn: Binding(
+                                get: { appState.safetyGate.dryRun },
+                                set: { appState.safetyGate.dryRun = $0 }
+                            ))
+                            Toggle("真实输入", isOn: Binding(
+                                get: { appState.safetyGate.realInputEnabled },
+                                set: { appState.safetyGate.realInputEnabled = $0 }
+                            ))
+                            Toggle("Core Runtime Input", isOn: $appState.allowRuntimeRealInput)
+                            Spacer()
+                        }
+                        .toggleStyle(.switch)
+                        Text(appState.schedulerRunReadiness)
+                            .font(BGIFonts.console)
+                            .foregroundStyle(appState.canRunScheduler ? BGIColors.secondaryText : BGIColors.warning)
+                    }
+                }
+
                 BGISectionCard("配置组 - \(selectedGroup?.name ?? "未选择")", subtitle: "数据由 BetterGI C# Core 提供；在下方列表中右键可添加配置，拖拽可调整执行顺序。", symbolName: "cpu") {
                     VStack(spacing: 0) {
                         ForEach(selectedGroup?.projects ?? []) { project in
@@ -424,22 +445,6 @@ struct SchedulerPage: View {
 
                 BGISectionCard("操作面板", subtitle: "连续执行、日志分析、更多功能。", symbolName: "square.grid.3x3") {
                     VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 20) {
-                            Toggle("Dry-Run", isOn: Binding(
-                                get: { appState.safetyGate.dryRun },
-                                set: { appState.safetyGate.dryRun = $0 }
-                            ))
-                            Toggle("真实输入", isOn: Binding(
-                                get: { appState.safetyGate.realInputEnabled },
-                                set: { appState.safetyGate.realInputEnabled = $0 }
-                            ))
-                            Toggle("Core Runtime Input", isOn: $appState.allowRuntimeRealInput)
-                            Spacer()
-                        }
-                        .toggleStyle(.switch)
-                        Text(appState.schedulerRunReadiness)
-                            .font(BGIFonts.console)
-                            .foregroundStyle(appState.canRunScheduler ? BGIColors.secondaryText : BGIColors.warning)
                         HStack(spacing: 12) {
                             Button("连续执行") { appState.runSchedulerGroups() }
                                 .disabled(!appState.canRunScheduler)
