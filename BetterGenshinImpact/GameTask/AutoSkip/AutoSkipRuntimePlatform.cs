@@ -27,7 +27,6 @@ public interface IAutoSkipAudioSampleCapture : IDisposable
 
 public interface IAutoSkipRuntimePlatform
 {
-    AutoSkipConfig Config { get; }
     ISystemInfo SystemInfo { get; }
     ILogger<T> GetLogger<T>();
     IOcrService OcrService { get; }

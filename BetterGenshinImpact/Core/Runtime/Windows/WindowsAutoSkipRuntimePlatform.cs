@@ -13,7 +13,6 @@ namespace BetterGenshinImpact.Core.Runtime.Windows;
 
 public sealed class WindowsAutoSkipRuntimePlatform : IAutoSkipRuntimePlatform
 {
-    public AutoSkipConfig Config => TaskContext.Instance().Config.AutoSkipConfig;
     public ISystemInfo SystemInfo => TaskContext.Instance().SystemInfo;
     public ILogger<T> GetLogger<T>() => App.GetLogger<T>();
     public IOcrService OcrService => OcrFactory.Paddle;

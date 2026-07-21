@@ -26,15 +26,21 @@ using BetterGenshinImpact.GameTask.MapMask;
 using BetterGenshinImpact.GameTask.SkillCd;
 using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
 using Microsoft.Extensions.Logging;
+using BetterGenshinImpact.Core.Config;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
 /// <summary>macOS construction boundary for the shared GameTaskManager.</summary>
 public sealed class MacGameTaskManagerPlatform(
+    RuntimeLayout layout,
     PlatformCallbackChannel callbacks, string sessionToken, CancellationToken cancellationToken,
     ILoggerFactory loggerFactory)
     : IGameTaskManagerPlatform
 {
+    private readonly AutoSkipConfig _autoSkipConfig = LoadAutoSkipConfig(layout);
+
     public ISystemInfo SystemInfo => new CallbackSystemInfo(Metrics());
 
     public IReadOnlyList<KeyValuePair<string, ITaskTrigger>> CreateInitialTriggers(
@@ -50,7 +56,7 @@ public sealed class MacGameTaskManagerPlatform(
                 inputBackend, systemInfo, loggerFactory.CreateLogger<AutoPickTrigger>(),
                 paddleRecognizer, yapRecognizer)),
             new("QuickTeleport", new QuickTeleportTrigger()),
-            new("AutoSkip", new AutoSkipTrigger()),
+            new("AutoSkip", new AutoSkipTrigger(_autoSkipConfig)),
             new("AutoFish", new AutoFishingTrigger()),
             new("AutoEat", new AutoEatTrigger()),
             new("MapMask", new MapMaskTrigger()),
@@ -79,7 +85,7 @@ public sealed class MacGameTaskManagerPlatform(
                 name,
                 externalConfig is AutoSkipConfig config
                     ? new AutoSkipTrigger(config)
-                    : new AutoSkipTrigger()),
+                    : new AutoSkipTrigger(_autoSkipConfig)),
             "AutoFish" => new KeyValuePair<string, ITaskTrigger>(name, new AutoFishingTrigger()),
             "QuickTeleport" => new KeyValuePair<string, ITaskTrigger>(name, new QuickTeleportTrigger()),
             "AutoEat" => new KeyValuePair<string, ITaskTrigger>(name, new AutoEatTrigger()),
@@ -103,6 +109,19 @@ public sealed class MacGameTaskManagerPlatform(
         AutoEatAssets.DestroyInstance();
     }
     public void ClearOverlay() => BetterGenshinImpact.Core.Recognition.OverlayDrawPlatform.Current.ClearAll();
+
+    private static AutoSkipConfig LoadAutoSkipConfig(RuntimeLayout layout)
+    {
+        var path = Path.Combine(layout.UserPath, "config.json");
+        if (!File.Exists(path)) return new AutoSkipConfig();
+        var root = JsonNode.Parse(File.ReadAllText(path), documentOptions: new JsonDocumentOptions
+        {
+            AllowTrailingCommas = true,
+            CommentHandling = JsonCommentHandling.Skip
+        }) as JsonObject ?? throw new InvalidDataException("User/config.json root must be an object.");
+        return root["autoSkipConfig"]?.Deserialize<AutoSkipConfig>(ConfigJson.Options)
+            ?? new AutoSkipConfig();
+    }
 
     private void InitializeAssets(ISystemInfo systemInfo, IAutoPickConfigProvider autoPickConfigProvider)
     {

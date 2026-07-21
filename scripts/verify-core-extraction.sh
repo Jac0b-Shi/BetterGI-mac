@@ -238,6 +238,20 @@ rg -q 'scheduler reported success or executed the project after task-lock reject
   Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
   || fail "Core Host verification does not reject scheduler task-lock contention"
 
+if rg -n 'AutoSkipConfig Config|AutoSkipRuntimePlatform\.Current\.Config' \
+  BetterGenshinImpact/GameTask/AutoSkip \
+  BetterGenshinImpact/Core/Runtime/Windows/WindowsAutoSkipRuntimePlatform.cs \
+  BetterGenshinImpact.Core.Host/Runtime/MacAutoSkipRuntimePlatform.cs; then
+  fail "AutoSkip runtime platform owns Core business configuration"
+fi
+rg -q 'ClickChatOption = "优先选择最后一个选项"' \
+  BetterGenshinImpact/GameTask/AutoPathing/PathExecutorAutoSkipPlatform.cs \
+  || fail "PathExecutor AutoSkip policy is not owned by the shared Core factory"
+if rg -n 'class (Mac|Windows)PathExecutorAutoSkipPlatform' \
+  BetterGenshinImpact BetterGenshinImpact.Core.Host; then
+  fail "PathExecutor AutoSkip policy is duplicated by platform adapters"
+fi
+
 if rg -n '由 Rust/OpenCV 提供|Rust.*(脚本|调度|路径|识别)' MacGI/Sources/MacGI; then
   fail "Swift UI assigns BetterGI business authority to Rust"
 fi

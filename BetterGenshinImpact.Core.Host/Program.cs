@@ -76,7 +76,7 @@ var runtimeArtifactProvisioner = new RuntimeArtifactProvisioner(
 server.AttachRuntimeArtifactInitializer(() =>
     runtimeArtifactProvisioner.EnsureInstalled(shutdown.Token));
 var gameTaskManagerPlatform = new MacGameTaskManagerPlatform(
-    server.PlatformCallbacks, sessionToken, shutdown.Token, loggerFactory);
+    layout, server.PlatformCallbacks, sessionToken, shutdown.Token, loggerFactory);
 var captureRing = new SharedCaptureRingReader(
     layout, () => gameTaskManagerPlatform.SystemInfo.DesktopRectArea);
 var globalMethodRuntime = new MacGlobalMethodRuntime(
@@ -135,7 +135,7 @@ BvSimpleOperationPlatform.Configure(bvSimpleOperationPlatform);
 TpTaskRuntimePlatform.Configure(new MacTpTaskRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo));
 AutoSkipRuntimePlatform.Configure(new MacAutoSkipRuntimePlatform(
-    layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory, imageRegionOcrService,
+    () => gameTaskManagerPlatform.SystemInfo, loggerFactory, imageRegionOcrService,
     server.PlatformCallbacks, sessionToken, shutdown.Token));
 AutoEatRuntimePlatform.Configure(new MacAutoEatRuntimePlatform(layout, loggerFactory));
 GameLoadingRuntimePlatform.Configure(new MacGameLoadingRuntimePlatform(
@@ -151,7 +151,7 @@ var pathExecutorPlatform = new MacPathExecutorPlatform(
     layout, imageRegionOcrService,
     server.PlatformCallbacks, sessionToken, shutdown.Token);
 PathExecutorPlatform.Configure(pathExecutorPlatform);
-PathExecutorAutoSkipPlatform.Configure(new MacPathExecutorAutoSkipPlatform());
+PathExecutorAutoSkipPlatform.Configure(new PathExecutorAutoSkipSessionFactory());
 server.AttachPathExecutorPlatform(pathExecutorPlatform);
 NavigationPlatform.Configure(new MacNavigationPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token));

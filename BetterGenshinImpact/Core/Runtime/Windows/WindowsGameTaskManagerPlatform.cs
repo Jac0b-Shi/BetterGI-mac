@@ -42,7 +42,7 @@ public sealed class WindowsGameTaskManagerPlatform : IGameTaskManagerPlatform
             new("AutoPick", new AutoPick.AutoPickTrigger(null, runtimeState, autoPickConfigProvider,
                 inputBackend, systemInfo, App.GetLogger<AutoPick.AutoPickTrigger>(), paddleRecognizer, yapRecognizer)),
             new("QuickTeleport", new QuickTeleport.QuickTeleportTrigger()),
-            new("AutoSkip", new AutoSkip.AutoSkipTrigger()), new("AutoFish", new AutoFishing.AutoFishingTrigger()),
+            new("AutoSkip", new AutoSkip.AutoSkipTrigger(TaskContext.Instance().Config.AutoSkipConfig)), new("AutoFish", new AutoFishing.AutoFishingTrigger()),
             new("AutoEat", new AutoEat.AutoEatTrigger()), new("MapMask", new MapMaskTrigger()),
             new("SkillCd", new SkillCdTrigger()),
         ];
@@ -56,7 +56,8 @@ public sealed class WindowsGameTaskManagerPlatform : IGameTaskManagerPlatform
         "AutoPick" => new("AutoPick", new AutoPick.AutoPickTrigger(externalConfig as AutoPickExternalConfig,
             runtimeState, autoPickConfigProvider, inputBackend, systemInfo,
             App.GetLogger<AutoPick.AutoPickTrigger>(), paddleRecognizer, yapRecognizer)),
-        "AutoSkip" => new("AutoSkip", externalConfig is null ? new AutoSkip.AutoSkipTrigger() : new AutoSkip.AutoSkipTrigger(externalConfig as AutoSkipConfig)),
+        "AutoSkip" => new("AutoSkip", new AutoSkip.AutoSkipTrigger(
+            externalConfig as AutoSkipConfig ?? TaskContext.Instance().Config.AutoSkipConfig)),
         "AutoEat" => new("AutoEat", new AutoEat.AutoEatTrigger()),
         _ => null,
     };

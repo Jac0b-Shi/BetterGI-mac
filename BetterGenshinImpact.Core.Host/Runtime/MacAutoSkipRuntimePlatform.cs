@@ -5,9 +5,6 @@ using Microsoft.Extensions.Logging;
 using BetterGenshinImpact.Core.Host.Transport;
 using Newtonsoft.Json.Linq;
 using BetterGenshinImpact.GameTask.Model;
-using BetterGenshinImpact.Core.Config;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Platform.Abstractions;
 using BetterGenshinImpact.GameTask.Model.Area;
@@ -16,7 +13,6 @@ using BetterGenshinImpact.GameTask.AutoSkip.Audio;
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
 public sealed class MacAutoSkipRuntimePlatform(
-    RuntimeLayout layout,
     Func<ISystemInfo> getSystemInfo,
     ILoggerFactory loggerFactory,
     IOcrService ocrService,
@@ -24,7 +20,6 @@ public sealed class MacAutoSkipRuntimePlatform(
     string sessionToken,
     CancellationToken cancellationToken) : IAutoSkipRuntimePlatform
 {
-    public AutoSkipConfig Config { get; } = LoadConfig(layout);
     public ISystemInfo SystemInfo => getSystemInfo();
     public ILogger<T> GetLogger<T>() => loggerFactory.CreateLogger<T>();
     public IOcrService OcrService { get; } = ocrService;
@@ -65,19 +60,6 @@ public sealed class MacAutoSkipRuntimePlatform(
     {
         if (Invoke(method, parameters).Value<bool?>("acknowledged") != true)
             throw new InvalidDataException($"{method} did not return acknowledged=true.");
-    }
-
-    private static AutoSkipConfig LoadConfig(RuntimeLayout layout)
-    {
-        var path = Path.Combine(layout.UserPath, "config.json");
-        if (!File.Exists(path)) return new AutoSkipConfig();
-        var root = JsonNode.Parse(File.ReadAllText(path), documentOptions: new JsonDocumentOptions
-        {
-            AllowTrailingCommas = true,
-            CommentHandling = JsonCommentHandling.Skip
-        }) as JsonObject ?? throw new InvalidDataException("User/config.json root must be an object.");
-        return root["autoSkipConfig"]?.Deserialize<AutoSkipConfig>(ConfigJson.Options)
-            ?? new AutoSkipConfig();
     }
 
 }

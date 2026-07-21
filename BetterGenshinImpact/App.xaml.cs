@@ -235,7 +235,7 @@ public partial class App : Application
         GameTask.Common.TaskControlPlatform.Configure(new Core.Runtime.Windows.WindowsTaskControlPlatform());
         Core.BgiVision.BvRuntimePlatform.Configure(new Core.Runtime.Windows.WindowsBvRuntimePlatform());
         GameTask.AutoPathing.PathExecutorPlatform.Configure(new Core.Runtime.Windows.WindowsPathExecutorPlatform());
-        GameTask.AutoPathing.PathExecutorAutoSkipPlatform.Configure(new Core.Runtime.Windows.WindowsPathExecutorAutoSkipPlatform());
+        GameTask.AutoPathing.PathExecutorAutoSkipPlatform.Configure(new GameTask.AutoPathing.PathExecutorAutoSkipSessionFactory());
         GameTask.AutoPathing.NavigationPlatform.Configure(new Core.Runtime.Windows.WindowsNavigationPlatform());
         GameTask.QuickTeleport.QuickTeleportRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsQuickTeleportRuntimePlatform());

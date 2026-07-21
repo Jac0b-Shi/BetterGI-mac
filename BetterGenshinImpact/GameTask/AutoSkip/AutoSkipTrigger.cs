@@ -88,14 +88,8 @@ public partial class AutoSkipTrigger : ITaskTrigger
 
     private readonly bool _isCustomConfiguration;
 
-    public AutoSkipTrigger()
-    {
-        _autoSkipAssets = AutoSkipAssets.Instance;
-        _config = AutoSkipRuntimePlatform.Current.Config;
-    }
-    
     /// <summary>
-    /// 用于内部的其他方法调用
+    /// 使用由应用组合层提供的业务配置。
     /// </summary>
     /// <param name="config"></param>
     public AutoSkipTrigger(AutoSkipConfig config)
@@ -242,7 +236,7 @@ public partial class AutoSkipTrigger : ITaskTrigger
             // 自动剧情点击3s内判断
             if ((DateTime.Now - _prevPlayingTime).TotalMilliseconds < 3000)
             {
-                if (!AutoSkipRuntimePlatform.Current.Config.SubmitGoodsEnabled)
+                if (!_config.SubmitGoodsEnabled)
                 {
                     return;
                 }
@@ -258,7 +252,7 @@ public partial class AutoSkipTrigger : ITaskTrigger
         if (isPlaying)
         {
             _prevPlayingTime = DateTime.Now;
-            if (AutoSkipRuntimePlatform.Current.Config.QuicklySkipConversationsEnabled)
+            if (_config.QuicklySkipConversationsEnabled)
             {
                 if (_config.BeforeClickConfirmDelay > 0)
                 {

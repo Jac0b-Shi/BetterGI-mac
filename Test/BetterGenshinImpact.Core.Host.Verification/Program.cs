@@ -245,7 +245,7 @@ scriptHostServices.SetCurrentProject(new ScriptGroupProject(upstreamProject) { A
 ScriptHostServices.Configure(scriptHostServices);
 server.AttachScriptHostServices(scriptHostServices);
 var gameTaskManagerPlatform = new MacGameTaskManagerPlatform(
-    server.PlatformCallbacks, sessionToken, cancellation.Token, loggerFactory);
+    layout, server.PlatformCallbacks, sessionToken, cancellation.Token, loggerFactory);
 GameTaskManagerPlatform.Configure(gameTaskManagerPlatform);
 BvRuntimePlatform.Configure(new MacBvRuntimePlatform(() => gameTaskManagerPlatform.SystemInfo));
 var farmingScriptServicePlatform = new MacScriptServicePlatform(
@@ -349,7 +349,7 @@ var quickTeleportPlatform = new MacQuickTeleportRuntimePlatform(
     layout, server.PlatformCallbacks, sessionToken, cancellation.Token);
 QuickTeleportRuntimePlatform.Configure(quickTeleportPlatform);
 AutoSkipRuntimePlatform.Configure(new MacAutoSkipRuntimePlatform(
-    layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory, imageRegionOcrService,
+    () => gameTaskManagerPlatform.SystemInfo, loggerFactory, imageRegionOcrService,
     server.PlatformCallbacks, sessionToken, cancellation.Token));
 AutoEatRuntimePlatform.Configure(new MacAutoEatRuntimePlatform(layout, loggerFactory));
 var triggerGameLoadingPlatform = new MacGameLoadingRuntimePlatform(
@@ -364,7 +364,7 @@ SkillCdRuntimePlatform.Configure(new MacSkillCdRuntimePlatform(
 var pathExecutorPlatform = new MacPathExecutorPlatform(
     layout, imageRegionOcrService, server.PlatformCallbacks, sessionToken, cancellation.Token);
 PathExecutorPlatform.Configure(pathExecutorPlatform);
-PathExecutorAutoSkipPlatform.Configure(new MacPathExecutorAutoSkipPlatform());
+PathExecutorAutoSkipPlatform.Configure(new PathExecutorAutoSkipSessionFactory());
 server.AttachPathExecutorPlatform(pathExecutorPlatform);
 var navigationPlatform = new MacNavigationPlatform(
     server.PlatformCallbacks, sessionToken, cancellation.Token);
@@ -684,7 +684,6 @@ try
     autoEatPlatform.SimulateAction(GIActions.QuickUseGadget);
     await autoEatResponder;
     var autoSkipPlatform = new MacAutoSkipRuntimePlatform(
-        layout,
         () => throw new InvalidOperationException("Verification did not request AutoSkip system metrics."),
         loggerFactory, imageRegionOcrService,
         server.PlatformCallbacks, sessionToken, cancellation.Token);
@@ -1059,7 +1058,6 @@ try
         ScriptGroupProject.BuildShellProject($"printf scheduler-locked > '{lockedSchedulerMarker}'"));
     await File.WriteAllTextAsync(
         Path.Combine(layout.ScriptGroupPath, lockedSchedulerGroup.Name + ".json"), lockedSchedulerGroup.ToJson());
-
     var sourceRoot = Path.Combine(Directory.GetCurrentDirectory(), "BetterGenshinImpact", "GameTask");
     foreach (var relativeAsset in new[]
     {

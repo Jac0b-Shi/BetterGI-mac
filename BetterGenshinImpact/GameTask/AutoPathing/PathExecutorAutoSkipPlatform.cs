@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using BetterGenshinImpact.GameTask.AutoSkip;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing;
 
@@ -20,6 +21,26 @@ public interface IPathExecutorAutoSkipSession
 public interface IPathExecutorAutoSkipPlatform
 {
     IPathExecutorAutoSkipSession CreateSession();
+}
+
+public sealed class PathExecutorAutoSkipSessionFactory : IPathExecutorAutoSkipPlatform
+{
+    public IPathExecutorAutoSkipSession CreateSession() => new AutoSkipTriggerSession();
+
+    private sealed class AutoSkipTriggerSession : IPathExecutorAutoSkipSession
+    {
+        private readonly AutoSkipTrigger _trigger = new(new AutoSkipConfig
+        {
+            Enabled = true,
+            QuicklySkipConversationsEnabled = true,
+            ClosePopupPagedEnabled = true,
+            ClickChatOption = "优先选择最后一个选项",
+        });
+
+        public AutoSkipTriggerSession() => _trigger.Init();
+
+        public void OnCapture(CaptureContent content) => _trigger.OnCapture(content);
+    }
 }
 
 public static class PathExecutorAutoSkipPlatform
