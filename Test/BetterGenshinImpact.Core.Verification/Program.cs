@@ -2945,6 +2945,9 @@ try
         return frame;
     }).ToList();
     var pathingCaptureIndex = 0;
+    const string pathingLogMessage = "真实用户路径 log_output 执行门禁";
+    var pathingLogger = new RecordingLogger();
+    recordingTaskControl.Logger = pathingLogger;
     recordingTaskControl.Calls.Clear();
     recordingTaskControl.ActionStateQueries.Clear();
     recordingTaskControl.CaptureFrameProvider = () =>
@@ -3011,7 +3014,9 @@ try
                 X = localizedTargetGame.X,
                 Y = localizedTargetGame.Y,
                 Type = WaypointType.Path.Code,
-                MoveMode = MoveModeEnum.Walk.Code
+                MoveMode = MoveModeEnum.Walk.Code,
+                Action = ActionEnum.LogOutput.Code,
+                ActionParams = pathingLogMessage
             },
             new Waypoint
             {
@@ -3057,6 +3062,9 @@ try
     Assert("PathExecutor Pathing completes the shared waypoint orchestration",
         fullPathExecutor.SuccessEnd && fullPathExecutor.SuccessFight == 1,
         $"successEnd={fullPathExecutor.SuccessEnd} successFight={fullPathExecutor.SuccessFight}");
+    Assert("PathExecutor Pathing executes the upstream log_output action exactly once",
+        pathingLogger.Messages.Count(message => message == pathingLogMessage) == 1,
+        string.Join(" | ", pathingLogger.Messages));
     Assert("PathExecutor Pathing executes the upstream use-gadget action handler",
         recordingTaskControl.Calls.Count(call => call == "action:QuickUseGadget:KeyPress") == 2,
         string.Join(" | ", recordingTaskControl.Calls));
@@ -3336,7 +3344,7 @@ sealed class RecordingTaskControlPlatform : ITaskControlPlatform
     public Func<Mat>? CaptureFrameProvider { get; set; }
     public bool RecordCaptures { get; set; }
     public bool RecordMiddleClicks { get; set; }
-    public Microsoft.Extensions.Logging.ILogger Logger => NullLogger.Instance;
+    public Microsoft.Extensions.Logging.ILogger Logger { get; set; } = NullLogger.Instance;
     public double DpiScale => 1;
     public bool IsHdrCapture => false;
     public void EnsureGameActive() { }
@@ -3377,6 +3385,24 @@ sealed class RecordingTaskControlPlatform : ITaskControlPlatform
         if (CaptureFrameProvider is null) throw new NotSupportedException();
         if (RecordCaptures) Calls.Add("capture");
         return new ImageRegion(CaptureFrameProvider(), 0, 0);
+    }
+}
+
+sealed class RecordingLogger : Microsoft.Extensions.Logging.ILogger
+{
+    public List<string> Messages { get; } = [];
+
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+    public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+    public void Log<TState>(
+        Microsoft.Extensions.Logging.LogLevel logLevel,
+        Microsoft.Extensions.Logging.EventId eventId,
+        TState state,
+        Exception? exception,
+        Func<TState, Exception?, string> formatter)
+    {
+        Messages.Add(formatter(state, exception));
     }
 }
 
