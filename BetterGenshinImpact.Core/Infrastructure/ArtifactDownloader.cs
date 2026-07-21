@@ -253,7 +253,7 @@ public sealed class ArtifactDownloader : IDisposable
                 {
                     if (File.Exists(cachedPath)) File.Delete(cachedPath);
                     Console.WriteLine($"Downloading {source.Url}");
-                    await DownloadFileAsync(source.Url, archivePath, ct);
+                    await DownloadFileAsync(source.Url, archivePath, source.SizeBytes, ct);
                     Console.WriteLine($"Downloaded {new FileInfo(archivePath).Length:N0} bytes");
                     var downloadedHash = await ComputeSha256Async(archivePath);
                     if (downloadedHash != expectedHash)
@@ -269,7 +269,7 @@ public sealed class ArtifactDownloader : IDisposable
             else
             {
                 Console.WriteLine($"Downloading {source.Url}");
-                await DownloadFileAsync(source.Url, archivePath, ct);
+                await DownloadFileAsync(source.Url, archivePath, source.SizeBytes, ct);
                 Console.WriteLine($"Downloaded {new FileInfo(archivePath).Length:N0} bytes");
             }
 
@@ -404,7 +404,7 @@ public sealed class ArtifactDownloader : IDisposable
     //  Helpers
     // ──────────────────────────────────────────────
 
-    private async Task DownloadFileAsync(string url, string path, CancellationToken ct)
+    private async Task DownloadFileAsync(string url, string path, long expectedSize, CancellationToken ct)
     {
         if (url.StartsWith("file://"))
         {
@@ -418,7 +418,21 @@ public sealed class ArtifactDownloader : IDisposable
 
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
         await using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-        await stream.CopyToAsync(fs, ct);
+        var buffer = new byte[1024 * 1024];
+        long downloaded = 0;
+        long nextReport = 16L * 1024 * 1024;
+        while (true)
+        {
+            var count = await stream.ReadAsync(buffer, ct);
+            if (count == 0) break;
+            await fs.WriteAsync(buffer.AsMemory(0, count), ct);
+            downloaded += count;
+            if (downloaded >= nextReport || downloaded == expectedSize)
+            {
+                Console.WriteLine($"Runtime archive download: {downloaded:N0} / {expectedSize:N0} bytes");
+                nextReport = downloaded + 16L * 1024 * 1024;
+            }
+        }
     }
 
     private static async Task<string> ComputeSha256Async(string path)

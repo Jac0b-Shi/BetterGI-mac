@@ -227,7 +227,7 @@ await File.WriteAllTextAsync(Path.Combine(oneDragonDirectory, "first.json"),
     """{"Name":"first-crafting","MinResinToKeep":20}""");
 await File.WriteAllTextAsync(Path.Combine(oneDragonDirectory, "selected.json"),
     """{"Name":"selected-crafting","MinResinToKeep":80}""");
-var server = new CoreRpcServer(socketPath, sessionToken, layout);
+var server = new CoreRpcServer(socketPath, sessionToken, layout, NativeDependencySmoke.Run());
 using var loggerFactory = LoggerFactory.Create(builder => builder.AddSimpleConsole());
 var artifactInitializationCount = 0;
 server.AttachRuntimeArtifactInitializer(() =>

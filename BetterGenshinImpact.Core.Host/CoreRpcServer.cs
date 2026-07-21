@@ -10,7 +10,11 @@ using BetterGenshinImpact.GameTask;
 namespace BetterGenshinImpact.Core.Host;
 
 [SupportedOSPlatform("macos")]
-public sealed class CoreRpcServer(string socketPath, string sessionToken, RuntimeLayout layout)
+public sealed class CoreRpcServer(
+    string socketPath,
+    string sessionToken,
+    RuntimeLayout layout,
+    NativeDependencyStatus nativeDependencies)
 {
     public const int ProtocolVersion = 1;
     private readonly ScriptGroupCatalog _catalog = new(layout);
@@ -181,14 +185,13 @@ public sealed class CoreRpcServer(string socketPath, string sessionToken, Runtim
 
     private object Handshake()
     {
-        var dependencies = NativeDependencySmoke.Run();
         return new
         {
             protocolVersion = ProtocolVersion,
-            runtimeVersion = dependencies.RuntimeVersion,
-            architecture = dependencies.Architecture,
-            openCvVersion = dependencies.OpenCvVersion,
-            clearScriptReady = dependencies.ClearScriptReady,
+            runtimeVersion = nativeDependencies.RuntimeVersion,
+            architecture = nativeDependencies.Architecture,
+            openCvVersion = nativeDependencies.OpenCvVersion,
+            clearScriptReady = nativeDependencies.ClearScriptReady,
             capabilities = new[]
             {
                 "catalog.script-groups",

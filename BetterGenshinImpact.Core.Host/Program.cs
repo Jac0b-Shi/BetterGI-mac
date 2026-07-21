@@ -60,7 +60,8 @@ if (System.Text.Encoding.UTF8.GetByteCount(socketPath) > 103)
 
 using var shutdown = new CancellationTokenSource();
 Console.CancelKeyPress += (_, eventArgs) => { eventArgs.Cancel = true; shutdown.Cancel(); };
-var server = new CoreRpcServer(socketPath, sessionToken, layout);
+var nativeDependencies = NativeDependencySmoke.Run();
+var server = new CoreRpcServer(socketPath, sessionToken, layout, nativeDependencies);
 using var loggerFactory = LoggerFactory.Create(builder => builder.AddSimpleConsole(options =>
 {
     options.SingleLine = true;
