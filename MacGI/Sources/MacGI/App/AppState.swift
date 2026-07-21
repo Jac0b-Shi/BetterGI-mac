@@ -310,6 +310,7 @@ final class AppState: ObservableObject {
     private var betterGICoreSupervisor: BetterGICoreProcessSupervisor?
     private var coreStartupTask: Task<Void, Never>?
     private var coreStartupInFlight = false
+    private var autoStartRuntimePending: Bool
     private var runtimeGeometryPixelSize: CGSize?
     private var pendingRuntimeGeometryPixelSize: CGSize?
     private var runtimeGeometryRefreshTask: Task<Void, Never>?
@@ -341,11 +342,13 @@ final class AppState: ObservableObject {
     init(
         resourceStore: BGIRuntimeResourceStore = .defaultStore(),
         inputDispatcher: any InputDispatching = CGEventInputDispatcher(),
-        isTargetWindowFrontmost: @escaping (WindowInfo) -> Bool = ForegroundWindowGuard.isTargetFrontmost
+        isTargetWindowFrontmost: @escaping (WindowInfo) -> Bool = ForegroundWindowGuard.isTargetFrontmost,
+        launchArguments: [String] = ProcessInfo.processInfo.arguments
     ) {
         runtimeResourceStore = resourceStore
         self.inputDispatcher = inputDispatcher
         self.isTargetWindowFrontmost = isTargetWindowFrontmost
+        autoStartRuntimePending = launchArguments.contains("--start-runtime")
         addLog(.info, "betterGI-mac Swift UI initialized")
         addLog(.info, "Waiting for BetterGI C# Core Host")
         refreshWindows()
@@ -407,6 +410,7 @@ final class AppState: ObservableObject {
             await loadTriggerStatesFromCore()
             await loadSchedulerGroupsFromCore()
             await loadScriptProjectsFromCore()
+            attemptAutoStartRuntime()
         } catch {
             betterGICoreSupervisor = nil
             coreStatus = .error
@@ -467,6 +471,17 @@ final class AppState: ObservableObject {
                 self.addLog(.error, "Cannot start runtime: \(error.localizedDescription)")
             }
         }
+    }
+
+    private func attemptAutoStartRuntime() {
+        guard autoStartRuntimePending,
+              coreStatus == .ok,
+              isWindowValid,
+              !selectedWindow.isSynthetic,
+              runtimeLifecycle == .stopped else { return }
+        autoStartRuntimePending = false
+        addLog(.info, "--start-runtime conditions satisfied; starting BetterGI runtime.")
+        startRuntime()
     }
 
     func stopRuntime() {
@@ -922,6 +937,7 @@ final class AppState: ObservableObject {
         let likelyCount = windows.filter(\.isLikelyGameWindow).count
         addLog(.debug, "Quartz window list refreshed — \(windows.count) windows, \(likelyCount) likely game windows")
         addLog(.info, "Selected game window: \(selectedWindow.displayName)")
+        attemptAutoStartRuntime()
     }
 
     @discardableResult
