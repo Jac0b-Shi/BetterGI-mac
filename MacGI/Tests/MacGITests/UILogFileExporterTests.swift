@@ -28,4 +28,29 @@ struct UILogFileExporterTests {
         #expect(content.range(of: "Core ready")!.lowerBound < content.range(of: "Input ACK failed")!.lowerBound)
         #expect(content.hasSuffix("\n"))
     }
+
+    @Test("retains only bounded UI log exports without deleting other runtime logs")
+    func prunesOldUIExports() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let unrelated = root.appendingPathComponent("FarmingPlan.json")
+        try "statistics".write(to: unrelated, atomically: true, encoding: .utf8)
+
+        for second in 1...3 {
+            _ = try UILogFileExporter.export(
+                entries: [LogEntry(timestamp: Date(), level: .info, message: "export-\(second)")],
+                to: root,
+                now: Date(timeIntervalSince1970: TimeInterval(second)),
+                maximumFileCount: 2,
+                maximumTotalBytes: 1_024
+            )
+        }
+
+        let exports = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix("macgi-ui-") }
+        #expect(exports.count == 2)
+        #expect(FileManager.default.fileExists(atPath: unrelated.path))
+    }
 }
