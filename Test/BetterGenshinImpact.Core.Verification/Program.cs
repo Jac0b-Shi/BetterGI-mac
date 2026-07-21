@@ -1728,6 +1728,59 @@ Assert("MiningHandler leaves movement actions released",
     string.Join(" | ", recordingTaskControl.Calls));
 Console.WriteLine();
 
+Console.WriteLine("Pathing pyro collect: upstream elemental handler and real Avatar attack");
+using var pyroCollectFrame = new Mat(1080, 1920, MatType.CV_8UC4, Scalar.Black);
+var paimonTemplate = ElementAssets.Instance.PaimonMenuRo.TemplateImageMat
+    ?? throw new InvalidOperationException("Paimon template is not initialized.");
+using var pyroCollectPaimon = new Mat();
+Cv2.CvtColor(paimonTemplate, pyroCollectPaimon, ColorConversionCodes.BGR2BGRA);
+using (var paimonTarget = new Mat(pyroCollectFrame,
+           new Rect(24, 20, pyroCollectPaimon.Width, pyroCollectPaimon.Height)))
+{
+    pyroCollectPaimon.CopyTo(paimonTarget);
+}
+foreach (var indexRect in AutoFightAssets.Instance.AvatarIndexRectList.Skip(1))
+{
+    using var inactiveIndex = new Mat(pyroCollectFrame, indexRect);
+    inactiveIndex.SetTo(Scalar.White);
+}
+recordingTaskControl.Calls.Clear();
+var pyroCollectCaptureCount = 0;
+string[] pyroCollectTeamNames = [];
+var originalTeamNames = verificationAutoFightConfig.TeamNames;
+verificationAutoFightConfig.TeamNames = "烟绯,钟离,夜兰,纳西妲";
+RunnerContext.Instance.Reset();
+try
+{
+    recordingTaskControl.CaptureFrameProvider = () =>
+    {
+        pyroCollectCaptureCount++;
+        return pyroCollectFrame.Clone();
+    };
+    var pyroCollectHandler = ActionFactory.GetAfterHandler(ActionEnum.PyroCollect.Code);
+    Assert("ActionFactory selects the upstream Pyro ElementalCollectHandler",
+        pyroCollectHandler is ElementalCollectHandler,
+        pyroCollectHandler.GetType().FullName ?? "null");
+    await pyroCollectHandler.RunAsync(CancellationToken.None);
+    var pyroCollectScenes = await RunnerContext.Instance.GetCombatScenes(CancellationToken.None);
+    pyroCollectTeamNames = pyroCollectScenes?.GetAvatars().Select(avatar => avatar.Name).ToArray() ?? [];
+}
+finally
+{
+    RunnerContext.Instance.Reset();
+    verificationAutoFightConfig.TeamNames = originalTeamNames;
+    recordingTaskControl.CaptureFrameProvider = null;
+}
+Assert("Pyro ElementalCollectHandler uses the configured real CombatScenes team",
+    pyroCollectTeamNames.SequenceEqual(["烟绯", "钟离", "夜兰", "纳西妲"]),
+    string.Join(",", pyroCollectTeamNames));
+Assert("Pyro ElementalCollectHandler preserves Yanfei normal-attack behavior",
+    recordingTaskControl.Calls.SequenceEqual(["action:NormalAttack:KeyPress"]),
+    string.Join(" | ", recordingTaskControl.Calls));
+Assert("Pyro ElementalCollectHandler consumes main-UI, team and active-avatar captures",
+    pyroCollectCaptureCount == 3, $"captures={pyroCollectCaptureCount}");
+Console.WriteLine();
+
 Console.WriteLine("Pathing stop-flying: upstream before-handler and motion recognition");
 recordingTaskControl.Calls.Clear();
 var stopFlyingCaptureCount = 0;
