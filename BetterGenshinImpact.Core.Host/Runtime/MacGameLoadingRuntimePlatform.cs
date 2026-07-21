@@ -15,7 +15,8 @@ public sealed class MacGameLoadingRuntimePlatform(
     ILoggerFactory loggerFactory,
     PlatformCallbackChannel callbacks,
     string sessionToken,
-    CancellationToken cancellationToken) : IGameLoadingRuntimePlatform
+    CancellationToken cancellationToken,
+    ForegroundInputCoordinator inputCoordinator) : IGameLoadingRuntimePlatform
 {
     public GenshinStartConfig Config { get; } = LoadConfig(layout);
     public ILogger<GameLoadingTrigger> Logger { get; } = loggerFactory.CreateLogger<GameLoadingTrigger>();
@@ -56,14 +57,14 @@ public sealed class MacGameLoadingRuntimePlatform(
     public void MoveToGame1080P(double x, double y)
     {
         var size = getSystemInfo().GameScreenSize;
-        RequireAcknowledgement("input.dispatch", JObject.FromObject(new
+        inputCoordinator.Dispatch(JObject.FromObject(new
         {
             action = "moveMouseToGame",
             x = (int)Math.Round(x * size.Width / 1920d),
             y = (int)Math.Round(y * size.Height / 1080d),
             gameWidth = size.Width,
             gameHeight = size.Height
-        }));
+        }), cancellationToken);
     }
 
     public void ClickGame1080P(double x, double y)

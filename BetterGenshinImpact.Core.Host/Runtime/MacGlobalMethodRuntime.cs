@@ -16,7 +16,8 @@ public sealed class MacGlobalMethodRuntime(
     PlatformCallbackChannel callbacks,
     string sessionToken,
     CancellationToken cancellationToken,
-    SharedCaptureRingReader captureRing) : IGlobalMethodRuntime
+    SharedCaptureRingReader captureRing,
+    ForegroundInputCoordinator inputCoordinator) : IGlobalMethodRuntime
 {
     public CancellationToken CancellationToken => cancellationToken;
 
@@ -54,9 +55,7 @@ public sealed class MacGlobalMethodRuntime(
 
     private void Dispatch(object operation)
     {
-        var response = Invoke("input.dispatch", JObject.FromObject(operation));
-        if (response.Value<bool?>("acknowledged") != true)
-            throw new InvalidDataException("input.dispatch did not return acknowledged=true.");
+        inputCoordinator.Dispatch(JObject.FromObject(operation), cancellationToken);
     }
 
     private JToken Invoke(string method, JObject? parameters) =>

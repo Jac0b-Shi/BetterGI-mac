@@ -25,6 +25,11 @@ and has behaviour coverage. Compiling a substitute API is not completion.
 | OCR/ONNX/OpenCV pipeline | linked under `Core/Recognition`; the canonical manifest/source-lock covers all 19 registry task/OCR ONNX models, the ItemV2 material model and prototype CSV, 11 model sidecars/fixtures and the two upstream Teyvat big-map SIFT files required by `TpTask` | portable CPU ONNX runtime plus lazy real Paddle OCR; production `core.initialize` verifies or installs every locked artifact before trigger assets initialize, retaining the verified 0.62.0 archive under `Cache/Downloads`; the in-process SharpCompress installer reads the official solid 7z without Homebrew and verifies archive/member size plus SHA-256 | partial | Core verification installs all 34 locked files from the real 0.62.0 portable archive, creates 19/19 registry ONNX Runtime 1.21.0 sessions plus the ItemV2 session, validates its `embedding` output and required CSV columns, and still decodes the real Paddle OCR fixture as `Hello`. Host verification proves the production initialization boundary invokes artifact provisioning exactly once. `ImageRegion` OCR/OcrMatch/ColorRangeAndOcr use the composed real service on macOS and process teardown disposes `OrtEnv`. Task-level composition remains pending; artifact installation does not. |
 | `GameTaskManager`, regions, draw output | linked shared manager/regions/overlay command boundary | macOS window metrics, semantic input and acknowledged `overlay.command` callbacks; all template loads use the canonical runtime `GameTask` tree; task adapters defer `ISystemInfo` until Swift has attached the callback channel | partial | All Core `Shim/` files are deleted. Host verification invokes the production asset initializer after callback attach, loads real templates through `GameTaskManager.LoadAssetImage`, ACKs the initialization overlay clear, and requires the exact eight-trigger set: GameLoading, AutoPick, QuickTeleport, AutoSkip, AutoFish, AutoEat, MapMask and SkillCd. Asset initialization no longer implicitly starts capture: Core-owned `runtime.status/start/stop` RPCs drive a restartable dispatcher lifecycle. Verification requires initially stopped state, active loop iterations after start, no iterations after stop ACK, and a successful restart. Each trigger invocation remains isolated so one exception cannot stop later triggers on the same frame. AutoFight, AutoFishing, TpTask and Bv composition before server start no longer query an unattached callback; a published self-contained Host creates its 0600 socket before any callback exists. Remaining task/overlay behavior coverage keeps this row partial. |
 
+Pathing host composition note: the production `pathingScript` receives
+`IScriptGroupExecutionServices` in its constructor and creates executors through
+that instance. Its `run`, `runFile`, and `runFileFromUser` paths no longer resolve
+process-global PathExecutor services during script execution.
+
 ## First-step completion gate
 
 | Requirement | State | Reproducible evidence |
@@ -41,6 +46,13 @@ and has behaviour coverage. Compiling a substitute API is not completion.
 The CI gate intentionally does not replace the last row with a synthetic fixture: hosted runners do not contain the user's `User` tree or a running game. A real window, Core startup, provisioning, capture and catalog discovery are now recorded, but the overall first-step status remains **partial** until the four game-dependent projects complete through explicitly authorized real input.
 
 ## Non-negotiable production boundary
+
+### macOS input focus policy
+
+- Production input uses `pauseUntilFocused`: Core waits while Genshin is unfocused and resumes only after the user returns to it.
+- macOS adapters do not call `window.activate`, use AX to steal focus, or use `CGEvent.postToPid` for background game input.
+- After focus returns, Core sends `releaseAll` before the pending operation; Swift `InputSafetyGate` still verifies the selected game PID before every real dispatch.
+- Focus waits honor task cancellation and never silently fall back to global input.
 
 `scheduler.run`, `scheduler.pause`, `scheduler.resume`, and `scheduler.stop`
 are owned by Core and call the shared `ScriptService.RunMulti` chain. Swift may

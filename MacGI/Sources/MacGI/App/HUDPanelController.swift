@@ -5,7 +5,6 @@ import SwiftUI
 final class AppCoordinator: ObservableObject {
     private var appState: AppState?
     private var hudPanelController: HUDPanelController?
-    private var heartbeatTimer: Timer?
     private var windowTrackingTimer: Timer?
 
     func configure(appState: AppState) {
@@ -28,14 +27,6 @@ final class AppCoordinator: ObservableObject {
                 guard let appState, let controller else { return }
                 let window = appState.refreshSelectedWindowGeometry()
                 controller.synchronize(with: window)
-            }
-        }
-        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 7, repeats: true) { [weak appState] _ in
-            Task { @MainActor in
-                guard let appState else { return }
-                if appState.appStatus == .running {
-                    appState.addTestLog()
-                }
             }
         }
     }

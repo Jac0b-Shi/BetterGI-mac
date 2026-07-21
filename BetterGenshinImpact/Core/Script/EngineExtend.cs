@@ -15,6 +15,7 @@ using BetterGenshinImpact.GameTask.AutoDomain;
 using BetterGenshinImpact.GameTask.AutoBoss;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
+using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
 using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.AutoStygianOnslaught;
@@ -36,7 +37,8 @@ public class EngineExtend
 
         // 添加我的自定义实例化对象
         engine.AddHostObject("keyMouseScript", new KeyMouseScript(workDir));
-        engine.AddHostObject("pathingScript", new AutoPathingScript(workDir, config));
+        engine.AddHostObject("pathingScript", new AutoPathingScript(
+            workDir, config, ScriptGroupExecutionServices.Current));
         engine.AddHostObject("genshin", new Dependence.Genshin());
         engine.AddHostObject("log", new Log());
         engine.AddHostObject("file", new LimitedFile(workDir)); // 限制文件访问

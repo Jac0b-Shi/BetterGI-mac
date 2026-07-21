@@ -2,7 +2,6 @@ import CoreGraphics
 import Foundation
 @testable import MacGI
 import Testing
-
 @Suite("BetterGI Core input acknowledgement")
 struct BetterGICoreInputAcknowledgementTests {
     @MainActor
@@ -83,6 +82,7 @@ struct BetterGICoreInputAcknowledgementTests {
         #expect(result.isBlocked)
         #expect(result.reason == "Automation runtime is not running")
     }
+
 }
 
 private struct RejectingInputDispatcher: InputDispatching {

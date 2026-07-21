@@ -270,12 +270,15 @@ ScriptHostServices.Configure(scriptHostServices);
 server.AttachScriptHostServices(scriptHostServices);
 var gameTaskManagerPlatform = new MacGameTaskManagerPlatform(
     layout, server.PlatformCallbacks, sessionToken, cancellation.Token, loggerFactory);
+var foregroundInputCoordinator = new ForegroundInputCoordinator(
+    server.PlatformCallbacks, sessionToken, cancellation.Token,
+    focusProbe: () => true);
 GameTaskManagerPlatform.Configure(gameTaskManagerPlatform);
 BvRuntimePlatform.Configure(new MacBvRuntimePlatform(() => gameTaskManagerPlatform.SystemInfo));
 var farmingScriptServicePlatform = new MacScriptServicePlatform(
     layout, loggerFactory.CreateLogger("BetterGenshinImpact.Service.ScriptService"), scriptHostServices,
     server.PlatformCallbacks, sessionToken, cancellation.Token, new SharedCaptureRingReader(layout),
-    gameTaskManagerPlatform);
+    gameTaskManagerPlatform, foregroundInputCoordinator);
 Require(farmingScriptServicePlatform.FarmingPlanEnabled,
     "macOS scheduler ignored the upstream farming-plan configuration");
 Require(farmingScriptServicePlatform.RestartPolicy is
@@ -324,7 +327,7 @@ await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "config.json"), execu
 var scriptServicePlatform = new MacScriptServicePlatform(
     layout, loggerFactory.CreateLogger("BetterGenshinImpact.Service.ScriptService"), scriptHostServices,
     server.PlatformCallbacks, sessionToken, cancellation.Token, new SharedCaptureRingReader(layout),
-    gameTaskManagerPlatform);
+    gameTaskManagerPlatform, foregroundInputCoordinator);
 Require(!scriptServicePlatform.FarmingPlanEnabled,
     "Host Shell fixture must not enter the upstream farming-path cap check");
 ScriptServicePlatform.Configure(scriptServicePlatform);
@@ -332,10 +335,12 @@ server.AttachScriptServicePlatform(scriptServicePlatform);
 TaskRunnerPlatform.Configure(new MacTaskRunnerPlatform(
     server.PlatformCallbacks, sessionToken, cancellation.Token,
     loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.TaskRunner"),
-    loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.RunnerContext")));
+    loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.RunnerContext"),
+    foregroundInputCoordinator));
 TaskControlPlatform.Configure(new MacTaskControlPlatform(
     server.PlatformCallbacks, sessionToken, cancellation.Token, new SharedCaptureRingReader(layout),
-    loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.Common.TaskControl")));
+    loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.Common.TaskControl"),
+    foregroundInputCoordinator));
 var imageRegionOcrService = new MacImageRegionOcrService(
     layout, loggerFactory.CreateLogger<BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory>());
 BetterGenshinImpact.Core.Recognition.OCR.ImageRegionOcrPlatform.Configure(imageRegionOcrService);
@@ -374,11 +379,11 @@ var quickTeleportPlatform = new MacQuickTeleportRuntimePlatform(
 QuickTeleportRuntimePlatform.Configure(quickTeleportPlatform);
 AutoSkipRuntimePlatform.Configure(new MacAutoSkipRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, loggerFactory, imageRegionOcrService,
-    server.PlatformCallbacks, sessionToken, cancellation.Token));
+    server.PlatformCallbacks, sessionToken, cancellation.Token, foregroundInputCoordinator));
 AutoEatRuntimePlatform.Configure(new MacAutoEatRuntimePlatform(layout, loggerFactory));
 var triggerGameLoadingPlatform = new MacGameLoadingRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory,
-    server.PlatformCallbacks, sessionToken, cancellation.Token);
+    server.PlatformCallbacks, sessionToken, cancellation.Token, foregroundInputCoordinator);
 GameLoadingRuntimePlatform.Configure(triggerGameLoadingPlatform);
 MapMaskRuntimePlatform.Configure(new MacMapMaskRuntimePlatform(
     layout, loggerFactory, server.PlatformCallbacks, sessionToken, cancellation.Token));
@@ -394,12 +399,12 @@ var navigationPlatform = new MacNavigationPlatform(
     server.PlatformCallbacks, sessionToken, cancellation.Token);
 NavigationPlatform.Configure(navigationPlatform);
 var verificationInputBackend = new MacSemanticInputBackend(
-    server.PlatformCallbacks, sessionToken, cancellation.Token);
+    foregroundInputCoordinator, cancellation.Token);
 DesktopRegionInputPlatform.Configure(verificationInputBackend);
 var verificationAutoPickConfig = new BetterGenshinImpact.GameTask.AutoPick.AutoPickConfig();
 var verificationAutoPickConfigProvider = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     verificationAutoPickConfig, BetterGenshinImpact.Core.Recognition.PaddleOcrModelConfig.V5Auto, "zh-Hans");
-ScriptGroupExecutionServices.Configure(new MacScriptGroupExecutionServices(
+var scriptGroupExecutionServices = new MacScriptGroupExecutionServices(
     layout,
     new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(
         () => RunnerContext.Instance.AutoPickTriggerStopCount),
@@ -407,7 +412,8 @@ ScriptGroupExecutionServices.Configure(new MacScriptGroupExecutionServices(
     () => throw new InvalidOperationException("Verification did not request AutoPick system metrics."),
     verificationAutoPickConfigProvider,
     imageRegionOcrService.CreatePaddleAutoPickTextRecognizer(),
-    imageRegionOcrService.CreateYapAutoPickTextRecognizer(layout)));
+    imageRegionOcrService.CreateYapAutoPickTextRecognizer(layout));
+ScriptGroupExecutionServices.Configure(scriptGroupExecutionServices);
 server.AttachPlatformAssetInitializer(() =>
 {
     GameTaskManager.LoadInitialTriggers(
@@ -418,7 +424,7 @@ server.AttachPlatformAssetInitializer(() =>
         imageRegionOcrService.CreatePaddleAutoPickTextRecognizer(),
         imageRegionOcrService.CreateYapAutoPickTextRecognizer(layout));
 });
-var shellPlatform = new MacShellTaskPlatform(server.PlatformCallbacks, sessionToken, cancellation.Token);
+var shellPlatform = new MacShellTaskPlatform(foregroundInputCoordinator, cancellation.Token);
 ShellTaskPlatform.Configure(shellPlatform);
 var shellResult = await shellPlatform.ExecuteAsync(
     ShellTaskParam.BuildFromConfig(
@@ -590,6 +596,54 @@ try
     await callbackRecoveryResponder;
     Require(recoveredCallback?.Value<bool>("acknowledged") == true,
         "A platform business rejection detached the reusable callback channel.");
+    var gameFocused = 0;
+    var pausedInputCoordinator = new ForegroundInputCoordinator(
+        server.PlatformCallbacks, sessionToken, cancellation.Token,
+        TimeSpan.FromMilliseconds(5), () => Volatile.Read(ref gameFocused) != 0);
+    var pausedInputTask = Task.Run(() => pausedInputCoordinator.Dispatch(
+        JObject.FromObject(new { action = "keyPress", key = "F" }), cancellation.Token),
+        cancellation.Token);
+    await Task.Delay(50, cancellation.Token);
+    Require(!pausedInputTask.IsCompleted,
+        "macOS input did not pause while the selected game was unfocused");
+    var resumedInputResponder = Task.Run(async () =>
+    {
+        var release = await callbackConnection.ReadRequestAsync(cancellation.Token)
+            ?? throw new EndOfStreamException("Focus-resume release callback was missing.");
+        Require(release.Method == "input.dispatch" &&
+                release.Params?.Value<string>("action") == "releaseAll",
+            "focus resume did not release stale input state before continuing");
+        await callbackConnection.WriteResponseAsync(
+            RpcResponse.Success(release.Id, new { acknowledged = true }), cancellation.Token);
+
+        var input = await callbackConnection.ReadRequestAsync(cancellation.Token)
+            ?? throw new EndOfStreamException("Focus-resume input callback was missing.");
+        Require(input.Method == "input.dispatch" &&
+                input.Params?.Value<string>("action") == "keyPress" &&
+                input.Params?.Value<string>("key") == "F",
+            "focus resume changed or reordered the pending input operation");
+        await callbackConnection.WriteResponseAsync(
+            RpcResponse.Success(input.Id, new { acknowledged = true }), cancellation.Token);
+    }, cancellation.Token);
+    Volatile.Write(ref gameFocused, 1);
+    await pausedInputTask;
+    await resumedInputResponder;
+
+    Volatile.Write(ref gameFocused, 0);
+    using var focusWaitCancellation = new CancellationTokenSource();
+    var cancelledFocusWait = Task.Run(() => pausedInputCoordinator.WaitForGameFocus(
+        focusWaitCancellation.Token), cancellation.Token);
+    await Task.Delay(30, cancellation.Token);
+    focusWaitCancellation.Cancel();
+    try
+    {
+        await cancelledFocusWait;
+        throw new InvalidDataException("Unfocused input wait ignored cancellation.");
+    }
+    catch (OperationCanceledException)
+    {
+    }
+    Console.WriteLine("Foreground input passed: unfocused pause, cancellation and release-before-resume without window activation.");
     var productionTriggerList = await ExchangeAsync(
         connection, "production-trigger-list", "trigger.list", sessionToken, null, cancellation.Token);
     var productionTriggerNames = JArray.FromObject(productionTriggerList.Result!)
@@ -636,7 +690,8 @@ try
     var gameLoadingPlatform = new MacGameLoadingRuntimePlatform(
         layout,
         () => throw new InvalidOperationException("GameLoading verification did not request screen metrics."),
-        loggerFactory, server.PlatformCallbacks, sessionToken, cancellation.Token);
+        loggerFactory, server.PlatformCallbacks, sessionToken, cancellation.Token,
+        foregroundInputCoordinator);
     var gameLoadingResponder = Task.Run(async () =>
     {
         foreach (var expectedMethod in new[] { "window.metrics", "url.canOpen", "window.biliLogin" })
@@ -701,7 +756,8 @@ try
         }
     }, cancellation.Token);
     var globalRuntime = new MacGlobalMethodRuntime(
-        server.PlatformCallbacks, sessionToken, cancellation.Token, new SharedCaptureRingReader(layout));
+        server.PlatformCallbacks, sessionToken, cancellation.Token, new SharedCaptureRingReader(layout),
+        foregroundInputCoordinator);
     globalRuntime.KeyPress("VK_F");
     new BetterGenshinImpact.Core.Script.Dependence.Notification().Send("verification notification");
     await callbackResponder;
@@ -710,7 +766,6 @@ try
     {
         var expected = new Queue<(string Method, string? Action, string? KeyType)>([
             ("input.dispatch", "gameAction", "keyDown"),
-            ("window.activate", null, null),
             ("input.dispatch", "gameAction", "keyUp"),
             ("input.query", "isGameActionDown", null)
         ]);
@@ -779,7 +834,7 @@ try
     var autoSkipPlatform = new MacAutoSkipRuntimePlatform(
         () => throw new InvalidOperationException("Verification did not request AutoSkip system metrics."),
         loggerFactory, imageRegionOcrService,
-        server.PlatformCallbacks, sessionToken, cancellation.Token);
+        server.PlatformCallbacks, sessionToken, cancellation.Token, foregroundInputCoordinator);
     var autoSkipResponder = Task.Run(async () =>
     {
         var input = await callbackConnection.ReadRequestAsync(cancellation.Token)
@@ -857,17 +912,7 @@ try
     await processControlResponder;
 
     var reloginPlatform = new MacExitAndReloginPlatform();
-    var focusResponder = Task.Run(async () =>
-    {
-        var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
-            ?? throw new EndOfStreamException("Exit-and-relogin focus callback ended unexpectedly.");
-        Require(callback.Method == "window.activate",
-            "Exit-and-relogin did not request real game-window activation.");
-        await callbackConnection.WriteResponseAsync(
-            RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
-    }, cancellation.Token);
     reloginPlatform.FocusGameWindow();
-    await focusResponder;
     Require(!reloginPlatform.TryLoginThirdParty(cancellation.Token),
         "macOS incorrectly reported the Windows-only Bilibili channel login as available.");
     Console.WriteLine("Shared TaskControl passed: hold action, focus check, key-up ordering, raw key and platform key-state query.");
@@ -934,12 +979,12 @@ try
     GlobalMethod.Configure(globalRuntime);
     var dispatcherRuntime = new VerificationDispatcherRuntimePlatform(cancellation.Token);
     DispatcherRuntimePlatform.Configure(dispatcherRuntime);
-    ScriptProjectHost.Configure(new MacScriptProjectHostInitializer());
+    ScriptProjectHost.Configure(new MacScriptProjectHostInitializer(scriptGroupExecutionServices));
     using (var hostSurfaceEngine = new V8ScriptEngine(
                V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding |
                V8ScriptEngineFlags.EnableTaskPromiseConversion))
     {
-        new MacScriptProjectHostInitializer().Initialize(
+        new MacScriptProjectHostInitializer(scriptGroupExecutionServices).Initialize(
             hostSurfaceEngine, Path.Combine(layout.UserPath, "JsScript"), [], null);
         var missingHostNames = Convert.ToString(hostSurfaceEngine.Evaluate("""
             ["keyMouseScript", "pathingScript", "genshin", "dispatcher", "RecognitionObject", "BvPage", "BvLocator", "BvImage", "DesktopRegion", "GameCaptureRegion", "ImageRegion", "Region",
@@ -997,7 +1042,7 @@ try
 
     var macroPlatform = new MacKeyMouseMacroPlatform(
         server.PlatformCallbacks, sessionToken, cancellation.Token,
-        loggerFactory.CreateLogger("MacroVerification"));
+        loggerFactory.CreateLogger("MacroVerification"), foregroundInputCoordinator);
     KeyMouseMacroPlatform.Configure(macroPlatform);
     var macroCallbackResponder = Task.Run(async () =>
     {
@@ -1057,16 +1102,7 @@ try
     shellGroup.Config.EnableShellConfig = true;
     shellGroup.Config.ShellConfig.Output = true;
     shellGroup.AddProject(shellProject);
-    var shellActivationResponder = Task.Run(async () =>
-    {
-        var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
-            ?? throw new EndOfStreamException("Shell completion did not request window activation.");
-        Require(callback.Method == "window.activate", "Shell completion emitted an unexpected callback.");
-        await callbackConnection.WriteResponseAsync(
-            RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
-    }, cancellation.Token);
     await shellProject.Run();
-    await shellActivationResponder;
     Require(await File.ReadAllTextAsync(shellMarker) == "shell-project",
         "ScriptGroupProject.Run did not execute its real Shell branch.");
 
@@ -1168,10 +1204,16 @@ try
     await File.WriteAllTextAsync(
         Path.Combine(layout.ScriptGroupPath, cancelledSchedulerGroup.Name + ".json"),
         cancelledSchedulerGroup.ToJson());
-    var rejectedSchedulerGroup = new ScriptGroup { Name = "SchedulerShellRejected" };
-    rejectedSchedulerGroup.Config.EnableShellConfig = true;
-    rejectedSchedulerGroup.Config.ShellConfig.Output = false;
-    rejectedSchedulerGroup.AddProject(ScriptGroupProject.BuildShellProject("printf scheduler-rejected"));
+    var rejectedSchedulerProjectPath = Path.Combine(
+        layout.UserPath, "JsScript", "SchedulerInputRejected");
+    Directory.CreateDirectory(rejectedSchedulerProjectPath);
+    await File.WriteAllTextAsync(Path.Combine(rejectedSchedulerProjectPath, "manifest.json"),
+        """{"manifest_version":1,"name":"Scheduler Input Rejected","version":"1.0.0","main":"main.js"}""");
+    await File.WriteAllTextAsync(Path.Combine(rejectedSchedulerProjectPath, "main.js"),
+        "keyPress('F');");
+    var rejectedSchedulerGroup = new ScriptGroup { Name = "SchedulerInputRejected" };
+    rejectedSchedulerGroup.AddProject(new ScriptGroupProject(
+        new ScriptProject("SchedulerInputRejected")));
     await File.WriteAllTextAsync(
         Path.Combine(layout.ScriptGroupPath, rejectedSchedulerGroup.Name + ".json"), rejectedSchedulerGroup.ToJson());
     var lockedSchedulerMarker = Path.Combine(root, "scheduler-locked.marker");
@@ -1317,8 +1359,8 @@ try
         $"genshin.claimBattlePassRewards capture sequence changed: {battlePassCaptureCount}.");
     Require(battlePassMetricsCount == 4,
         $"genshin.claimBattlePassRewards metrics sequence changed: {battlePassMetricsCount}.");
-    Require(battlePassActivationCount >= 1 && battlePassActivationCount <= battlePassCaptureCount,
-        $"genshin.claimBattlePassRewards activation sequence changed: {battlePassActivationCount}.");
+    Require(battlePassActivationCount == 0,
+        "genshin.claimBattlePassRewards forced the game window to the foreground.");
     Require(battlePassInputs.SequenceEqual([
             "gameAction:openBattlePassScreen:keyPress",
             "moveMouseToScreen:960,45", "mouseDown:left", "mouseUp:left",
@@ -1412,8 +1454,8 @@ try
     await craftingBenchResponder;
     Require(craftingBenchMetricsCount >= 1,
         "genshin.goToCraftingBench bypassed PathExecutor game metrics.");
-    Require(craftingBenchActivationCount >= 1,
-        "genshin.goToCraftingBench did not activate the real game window.");
+    Require(craftingBenchActivationCount == 0,
+        "genshin.goToCraftingBench forced the game window to the foreground.");
     Require(craftingBenchCaptureCount == 1,
         $"genshin.goToCraftingBench talk-UI capture sequence changed: {craftingBenchCaptureCount}.");
     Console.WriteLine(
@@ -1496,7 +1538,7 @@ try
                V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding |
                V8ScriptEngineFlags.EnableTaskPromiseConversion))
     {
-        new MacScriptProjectHostInitializer().Initialize(
+        new MacScriptProjectHostInitializer(scriptGroupExecutionServices).Initialize(
             bvEngine, Path.Combine(layout.UserPath, "JsScript"), [], null);
         var bvFound = bvEngine.Evaluate("""
             const page = new BvPage();
@@ -1529,7 +1571,7 @@ try
     }, cancellation.Token);
     using (var metricsEngine = new V8ScriptEngine(V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding))
     {
-        new MacScriptProjectHostInitializer().Initialize(
+        new MacScriptProjectHostInitializer(scriptGroupExecutionServices).Initialize(
             metricsEngine, Path.Combine(layout.UserPath, "JsScript"), [], null);
         var metricsJson = Convert.ToString(metricsEngine.Evaluate("""
             JSON.stringify({ width: genshin.width, height: genshin.height, dpi: genshin.screenDpiScale });
@@ -1577,7 +1619,7 @@ try
                V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding |
                V8ScriptEngineFlags.EnableTaskPromiseConversion))
     {
-        new MacScriptProjectHostInitializer().Initialize(
+        new MacScriptProjectHostInitializer(scriptGroupExecutionServices).Initialize(
             mapEngine, Path.Combine(layout.UserPath, "JsScript"), [], null);
         var positionJson = Convert.ToString(mapEngine.Evaluate("""
             const position = genshin.getPositionFromMapWithMatchingMethod("Teyvat", "TemplateMatch", 0);
@@ -1687,7 +1729,7 @@ try
         await teleportResponder;
         Require(teleportCaptureCount == 8,
             $"genshin.tp capture sequence changed: {teleportCaptureCount}.");
-        Require(teleportMetricsCount == 3 && teleportActivationCount == 5,
+        Require(teleportMetricsCount == 3 && teleportActivationCount == 0,
             $"genshin.tp platform sequence changed: metrics={teleportMetricsCount}, " +
             $"activations={teleportActivationCount}.");
         Require(teleportInputActions.SequenceEqual([
@@ -1846,7 +1888,7 @@ try
             "PathExecutor did not complete and publish the real force_tp route.");
         Require(forceTeleportSetupCaptureCount == 6 && forceTeleportCaptureCount == 8 &&
                 forceTeleportMetricsCount == 9 &&
-                forceTeleportActivationCount == 9,
+                forceTeleportActivationCount == 0,
             $"force_tp platform sequence changed: setupCaptures={forceTeleportSetupCaptureCount}, " +
             $"teleportCaptures={forceTeleportCaptureCount}, " +
             $"metrics={forceTeleportMetricsCount}, activations={forceTeleportActivationCount}.");
@@ -1899,7 +1941,7 @@ try
         var statueInputActions = new List<string>();
         var statueResponder = Task.Run(async () =>
         {
-            while (statueCaptureCount < 9 || statueActivationCount < 6)
+            while (statueCaptureCount < 9)
             {
                 var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
                     ?? throw new EndOfStreamException("genshin.tpToStatueOfTheSeven callback channel ended unexpectedly.");
@@ -1952,7 +1994,7 @@ try
         await new ScriptProject("GenshinStatueTeleport").ExecuteAsync();
         var statueElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(statueStartedAt);
         await statueResponder;
-        Require(statueCaptureCount == 9 && statueMetricsCount == 3 && statueActivationCount == 6,
+        Require(statueCaptureCount == 9 && statueMetricsCount == 3 && statueActivationCount == 0,
             $"genshin.tpToStatueOfTheSeven platform sequence changed: captures={statueCaptureCount}, " +
             $"metrics={statueMetricsCount}, activations={statueActivationCount}.");
         Require(statueInputActions.SequenceEqual([
@@ -2062,7 +2104,7 @@ try
         {
             var dropObserved = false;
             var moveForwardPressed = false;
-            while (!dropObserved || movementActivationCount < 6)
+            while (!dropObserved)
             {
                 var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
                     ?? throw new EndOfStreamException("genshin statue ShouldMove callback channel ended unexpectedly.");
@@ -2166,7 +2208,7 @@ try
         var movementElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(movementStartedAt);
         await movementResponder;
         movementOrientationAlignedFrame?.Dispose();
-        Require(movementMetricsCount == 5 && movementActivationCount == 6,
+        Require(movementMetricsCount == 5 && movementActivationCount == 0,
             $"ShouldMove platform sequence changed: metrics={movementMetricsCount}, " +
             $"activations={movementActivationCount}.");
         Require(movementCaptureCount >= 12 && movementPositionCount >= 2,
@@ -2247,7 +2289,7 @@ try
         {
             var dropObserved = false;
             var moveForwardPressed = false;
-            while (!dropObserved || nearestActivationCount < 6)
+            while (!dropObserved)
             {
                 var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
                     ?? throw new EndOfStreamException("nearest-statue callback channel ended unexpectedly.");
@@ -2354,7 +2396,7 @@ try
         var nearestElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(nearestStartedAt);
         await nearestResponder;
         nearestOrientationFrame?.Dispose();
-        Require(nearestCaptureCount >= 13 && nearestMetricsCount == 5 && nearestActivationCount == 6,
+        Require(nearestCaptureCount >= 13 && nearestMetricsCount == 5 && nearestActivationCount == 0,
             $"nearest-statue platform sequence changed: captures={nearestCaptureCount}, " +
             $"metrics={nearestMetricsCount}, activations={nearestActivationCount}.");
         Require(nearestPositionCount >= 2 && nearestStateQueryCount >= 1,
@@ -2455,7 +2497,7 @@ try
     await new ScriptProject("GenshinSwitchParty").ExecuteAsync();
     await switchPartyResponder;
     Require(switchPartyMetricsCount == 1 && switchPartyCaptureCount == 2 &&
-            switchPartyActivationCount == 1,
+            switchPartyActivationCount == 0,
         $"genshin.switchParty callbacks changed: metrics={switchPartyMetricsCount}, " +
         $"captures={switchPartyCaptureCount}, activations={switchPartyActivationCount}.");
     Console.WriteLine("Real BetterGI genshin.switchParty passed: ClearScript, party-view template and locked Paddle OCR.");
@@ -2607,18 +2649,18 @@ try
         "scheduler.stop did not preserve running/cancelled lifecycle");
 
     var rejectedSchedulerStates = new List<string>();
-    var rejectedSchedulerActivationCount = 0;
+    var rejectedSchedulerInputCount = 0;
     var rejectedSchedulerResponder = Task.Run(async () =>
     {
         while (!rejectedSchedulerStates.Contains("failed"))
         {
             var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
                 ?? throw new EndOfStreamException("Rejected scheduler callback channel ended unexpectedly.");
-            if (callback.Method == "window.activate")
+            if (callback.Method == "input.dispatch")
             {
-                rejectedSchedulerActivationCount++;
-                var response = rejectedSchedulerActivationCount == 3
-                    ? RpcResponse.Failure(callback.Id, "InputRejected", "verification activation failure")
+                rejectedSchedulerInputCount++;
+                var response = rejectedSchedulerInputCount == 1
+                    ? RpcResponse.Failure(callback.Id, "InputRejected", "verification input failure")
                     : RpcResponse.Success(callback.Id, new { acknowledged = true });
                 await callbackConnection.WriteResponseAsync(response, cancellation.Token);
                 continue;
@@ -2638,7 +2680,7 @@ try
                     width = schedulerWidth, height = schedulerHeight, stride = schedulerStride, pixelFormat = "BGRA8"
                 },
                 "scheduler.event" => RecordSchedulerState(callback.Params, rejectedSchedulerStates),
-                "input.dispatch" or "notification.emit" => new { acknowledged = true },
+                "notification.emit" => new { acknowledged = true },
                 _ => throw new InvalidDataException($"Unexpected rejected scheduler callback: {callback.Method}")
             };
             await callbackConnection.WriteResponseAsync(RpcResponse.Success(callback.Id, result), cancellation.Token);
@@ -2649,7 +2691,7 @@ try
         JObject.FromObject(new { groupName = rejectedSchedulerGroup.Name }), cancellation.Token);
     Require(rejectedSchedulerRun.Error is null, rejectedSchedulerRun.Error?.Message ?? "rejected scheduler.run failed");
     await rejectedSchedulerResponder;
-    Require(rejectedSchedulerActivationCount == 3 &&
+    Require(rejectedSchedulerInputCount >= 1 &&
             rejectedSchedulerStates.FirstOrDefault() == "running" &&
             rejectedSchedulerStates.LastOrDefault() == "failed",
         "scheduler did not publish failed after a platform input rejection");

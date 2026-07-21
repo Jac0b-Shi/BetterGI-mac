@@ -116,13 +116,6 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                 "workingAreaWidth": Int(workingArea.width), "workingAreaHeight": Int(workingArea.height),
                 "isActive": isActive,
             ]
-        case "window.activate":
-            guard let application = NSRunningApplication(processIdentifier: appState.selectedWindow.ownerPID),
-                  application.activate(options: [.activateAllWindows])
-            else {
-                throw BetterGICorePlatformAdapterError.invalidParameters("Unable to activate the selected game process.")
-            }
-            return ["acknowledged": true]
         case "audio.start":
             guard let parameters,
                   let processID = (parameters["processId"] as? NSNumber)?.int32Value,

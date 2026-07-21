@@ -94,8 +94,10 @@ var gameTaskManagerPlatform = new MacGameTaskManagerPlatform(
     layout, server.PlatformCallbacks, sessionToken, shutdown.Token, loggerFactory);
 var captureRing = new SharedCaptureRingReader(
     layout, () => gameTaskManagerPlatform.SystemInfo.DesktopRectArea);
+var foregroundInputCoordinator = new ForegroundInputCoordinator(
+    server.PlatformCallbacks, sessionToken, shutdown.Token);
 var globalMethodRuntime = new MacGlobalMethodRuntime(
-    server.PlatformCallbacks, sessionToken, shutdown.Token, captureRing);
+    server.PlatformCallbacks, sessionToken, shutdown.Token, captureRing, foregroundInputCoordinator);
 BetterGenshinImpact.Core.BgiVision.BvRuntimePlatform.Configure(
     new MacBvRuntimePlatform(() => gameTaskManagerPlatform.SystemInfo));
 var bvSimpleOperationPlatform = new MacBvSimpleOperationPlatform(
@@ -107,7 +109,7 @@ var autoPickConfigProvider = new BetterGenshinImpact.Core.Adapters.MacCoreRuntim
 var autoPickRuntimeState = new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(
     () => RunnerContext.Instance.AutoPickTriggerStopCount);
 var semanticInputBackend = new MacSemanticInputBackend(
-    server.PlatformCallbacks, sessionToken, shutdown.Token);
+    foregroundInputCoordinator, shutdown.Token);
 var paddleAutoPickRecognizer = imageRegionOcrService.CreatePaddleAutoPickTextRecognizer();
 var yapAutoPickRecognizer = imageRegionOcrService.CreateYapAutoPickTextRecognizer(layout);
 var triggerDispatcher = new MacTriggerDispatcher(
@@ -122,7 +124,8 @@ server.AttachPlatformAssetInitializer(() =>
 BetterGenshinImpact.Core.Recognition.OCR.ImageRegionOcrPlatform.Configure(imageRegionOcrService);
 TaskControlPlatform.Configure(new MacTaskControlPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token, captureRing,
-    loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.Common.TaskControl")));
+    loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.Common.TaskControl"),
+    foregroundInputCoordinator));
 AutoFightRuntimePlatform.Configure(new MacAutoFightRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory));
 var autoFishingRuntimePlatform = new MacAutoFishingRuntimePlatform(
@@ -151,11 +154,11 @@ TpTaskRuntimePlatform.Configure(new MacTpTaskRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo));
 AutoSkipRuntimePlatform.Configure(new MacAutoSkipRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, loggerFactory, imageRegionOcrService,
-    server.PlatformCallbacks, sessionToken, shutdown.Token));
+    server.PlatformCallbacks, sessionToken, shutdown.Token, foregroundInputCoordinator));
 AutoEatRuntimePlatform.Configure(new MacAutoEatRuntimePlatform(layout, loggerFactory));
 GameLoadingRuntimePlatform.Configure(new MacGameLoadingRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory,
-    server.PlatformCallbacks, sessionToken, shutdown.Token));
+    server.PlatformCallbacks, sessionToken, shutdown.Token, foregroundInputCoordinator));
 MapMaskRuntimePlatform.Configure(new MacMapMaskRuntimePlatform(
     layout, loggerFactory, server.PlatformCallbacks, sessionToken, shutdown.Token));
 SkillCdRuntimePlatform.Configure(new MacSkillCdRuntimePlatform(
@@ -178,28 +181,32 @@ BetterGenshinImpact.GameTask.AutoFight.Script.CombatSceneProvider.Configure(
     new MacCombatSceneProvider());
 var scriptServicePlatform = new MacScriptServicePlatform(
     layout, loggerFactory.CreateLogger("BetterGenshinImpact.Service.ScriptService"), scriptHostServices,
-    server.PlatformCallbacks, sessionToken, shutdown.Token, captureRing, gameTaskManagerPlatform);
+    server.PlatformCallbacks, sessionToken, shutdown.Token, captureRing, gameTaskManagerPlatform,
+    foregroundInputCoordinator);
 ScriptServicePlatform.Configure(scriptServicePlatform);
 FarmingStatsRuntimePlatform.Configure(new MacFarmingStatsRuntimePlatform(
     layout, loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.FarmingPlan.FarmingStatsRecorder")));
 server.AttachScriptServicePlatform(scriptServicePlatform);
-ShellTaskPlatform.Configure(new MacShellTaskPlatform(server.PlatformCallbacks, sessionToken, shutdown.Token));
+ShellTaskPlatform.Configure(new MacShellTaskPlatform(foregroundInputCoordinator, shutdown.Token));
 KeyMouseMacroPlatform.Configure(new MacKeyMouseMacroPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token,
-    loggerFactory.CreateLogger("BetterGenshinImpact.Core.Recorder.KeyMouseMacroPlayer")));
-ScriptGroupExecutionServices.Configure(new MacScriptGroupExecutionServices(
+    loggerFactory.CreateLogger("BetterGenshinImpact.Core.Recorder.KeyMouseMacroPlayer"),
+    foregroundInputCoordinator));
+var scriptGroupExecutionServices = new MacScriptGroupExecutionServices(
     layout, autoPickRuntimeState, semanticInputBackend, () => gameTaskManagerPlatform.SystemInfo,
-    autoPickConfigProvider, paddleAutoPickRecognizer, yapAutoPickRecognizer));
+    autoPickConfigProvider, paddleAutoPickRecognizer, yapAutoPickRecognizer);
+ScriptGroupExecutionServices.Configure(scriptGroupExecutionServices);
 DesktopRegionInputPlatform.Configure(semanticInputBackend);
 TaskRunnerPlatform.Configure(new MacTaskRunnerPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token,
     loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.TaskRunner"),
-    loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.RunnerContext")));
+    loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.RunnerContext"),
+    foregroundInputCoordinator));
 GameTaskManagerPlatform.Configure(gameTaskManagerPlatform);
 OverlayDrawPlatform.Configure(new MacOverlayDrawPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token));
 GlobalMethod.Configure(globalMethodRuntime);
-ScriptProjectHost.Configure(new MacScriptProjectHostInitializer());
+ScriptProjectHost.Configure(new MacScriptProjectHostInitializer(scriptGroupExecutionServices));
 await server.RunAsync(shutdown.Token);
 shutdown.Cancel();
 if (parentLifetimeTask is not null)

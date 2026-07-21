@@ -6,8 +6,7 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 
 /// <summary>macOS semantic input adapter. Every operation requires an ACK from Swift's InputSafetyGate.</summary>
 public sealed class MacSemanticInputBackend(
-    PlatformCallbackChannel callbacks,
-    string sessionToken,
+    ForegroundInputCoordinator inputCoordinator,
     CancellationToken cancellationToken) : IInputBackend
 {
     public void KeyDown(BgiKey key) => Dispatch(new { action = "keyDown", key = KeyName(key) });
@@ -28,11 +27,7 @@ public sealed class MacSemanticInputBackend(
 
     private void Dispatch(object parameters)
     {
-        var response = callbacks.InvokeAsync(
-            "input.dispatch", JObject.FromObject(parameters), sessionToken, cancellationToken)
-            .GetAwaiter().GetResult();
-        if (response?.Value<bool?>("acknowledged") != true)
-            throw new InvalidDataException("input.dispatch did not return acknowledged=true.");
+        inputCoordinator.Dispatch(JObject.FromObject(parameters), cancellationToken);
     }
 
     private static string KeyName(BgiKey key) => key switch

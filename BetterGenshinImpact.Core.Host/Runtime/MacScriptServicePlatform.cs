@@ -26,7 +26,8 @@ public sealed class MacScriptServicePlatform(
     string sessionToken,
     CancellationToken hostCancellationToken,
     SharedCaptureRingReader captureRing,
-    MacGameTaskManagerPlatform gameTaskManagerPlatform) : IScriptServicePlatform
+    MacGameTaskManagerPlatform gameTaskManagerPlatform,
+    ForegroundInputCoordinator inputCoordinator) : IScriptServicePlatform
 {
     private string _mapMatchingMethod = "TemplateMatch";
     private readonly JsonObject? _configRoot = LoadConfigRoot(layout);
@@ -66,7 +67,7 @@ public sealed class MacScriptServicePlatform(
 
     public async Task StartGameTask(bool waitForMainUi)
     {
-        RequireAcknowledgement("window.activate", null);
+        inputCoordinator.WaitForGameFocus(hostCancellationToken);
         if (!waitForMainUi)
             return;
 
@@ -181,18 +182,18 @@ public sealed class MacScriptServicePlatform(
     private void MoveTo1080P(int x, int y)
     {
         var size = gameTaskManagerPlatform.SystemInfo.GameScreenSize;
-        RequireAcknowledgement("input.dispatch", JObject.FromObject(new
+        inputCoordinator.Dispatch(JObject.FromObject(new
         {
             action = "moveMouseToGame",
             x = (int)Math.Round(x * size.Width / 1920d),
             y = (int)Math.Round(y * size.Height / 1080d),
             gameWidth = size.Width,
             gameHeight = size.Height
-        }));
+        }), hostCancellationToken);
     }
 
-    private void Click() => RequireAcknowledgement("input.dispatch",
-        JObject.FromObject(new { action = "mouseClick", button = "left" }));
+    private void Click() => inputCoordinator.Dispatch(
+        JObject.FromObject(new { action = "mouseClick", button = "left" }), hostCancellationToken);
 
     private void Notify(string kind, string message) => RequireAcknowledgement(
         "notification.emit", JObject.FromObject(new { kind, message }));

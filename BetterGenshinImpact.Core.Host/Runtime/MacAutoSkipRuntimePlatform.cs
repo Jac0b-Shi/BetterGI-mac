@@ -18,22 +18,23 @@ public sealed class MacAutoSkipRuntimePlatform(
     IOcrService ocrService,
     PlatformCallbackChannel callbacks,
     string sessionToken,
-    CancellationToken cancellationToken) : IAutoSkipRuntimePlatform
+    CancellationToken cancellationToken,
+    ForegroundInputCoordinator inputCoordinator) : IAutoSkipRuntimePlatform
 {
     public ISystemInfo SystemInfo => getSystemInfo();
     public ILogger<T> GetLogger<T>() => loggerFactory.CreateLogger<T>();
     public IOcrService OcrService { get; } = ocrService;
     public bool IsGameActive() => Invoke("window.metrics", null).Value<bool?>("isActive")
         ?? throw new InvalidDataException("window.metrics did not return isActive.");
-    public void ActivateGameWindow() => RequireAcknowledgement("window.activate", null);
+    public void ActivateGameWindow() => inputCoordinator.WaitForGameFocus(cancellationToken);
     public IAutoSkipAudioWaiter CreateAudioWaiter() => new DialogueOptionAudioWaiter(
         () => SystemInfo.GameProcessId,
         processId => new MacProcessAudioSampleCapture(
             processId, callbacks, sessionToken, cancellationToken));
     public void SimulateBackgroundAction(GIActions action) =>
         TaskControlPlatform.Current.SimulateAction(action, KeyType.KeyPress);
-    public void PressBackgroundKey(BgiKey key) => RequireAcknowledgement(
-        "input.dispatch", JObject.FromObject(new { action = "keyPress", key = key.ToString() }));
+    public void PressBackgroundKey(BgiKey key) => inputCoordinator.Dispatch(
+        JObject.FromObject(new { action = "keyPress", key = key.ToString() }), cancellationToken);
     public void BackgroundLeftButtonClick() => TaskControlPlatform.Current.LeftButtonClick();
     public void BackgroundClick(Region region)
     {

@@ -40,9 +40,9 @@ rg -q 'AddHostObject\("dispatcher", new Dispatcher' \
 real_user_verifier=Test/BetterGenshinImpact.RealUser.Verification/Program.cs
 rg -q 'Test/BetterGenshinImpact.RealUser.Verification/\*\*' .github/workflows/mac-core.yml \
   || fail "macOS Core workflow does not run when the real User verifier changes"
-rg -q 'VerifyProductionHostSurface\(javascriptProjects\)' "$real_user_verifier" \
+rg -q 'VerifyProductionHostSurface\(javascriptProjects, scriptGroupExecutionServices\)' "$real_user_verifier" \
   || fail "real User verification does not audit the production ClearScript host surface"
-rg -q 'new MacScriptProjectHostInitializer\(\)\.Initialize' "$real_user_verifier" \
+rg -q 'new MacScriptProjectHostInitializer\(scriptGroupExecutionServices\)\.Initialize' "$real_user_verifier" \
   || fail "real User host audit does not use the production macOS initializer"
 rg -q 'Real User projects reference missing production host members' "$real_user_verifier" \
   || fail "real User host audit does not reject missing host members"
@@ -256,6 +256,20 @@ if rg -n 'PathExecutorPlatform\.Current|PathExecutorAutoSkipPlatform\.Current|Sc
   BetterGenshinImpact/GameTask/AutoPathing/PathExecutor.cs; then
   fail "PathExecutor still resolves process-global services during execution"
 fi
+if rg -n '"window\.activate"' BetterGenshinImpact.Core.Host/Runtime MacGI/Sources/MacGI; then
+  fail "macOS production task adapters can still force the game window to the foreground"
+fi
+if rg -n 'postToPid' MacGI/Sources/MacGI BetterGenshinImpact.Core.Host; then
+  fail "experimental targeted CGEvent input entered a production target"
+fi
+rg -q 'macOS input did not pause while the selected game was unfocused' \
+  Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
+  && rg -q 'focus resume did not release stale input state before continuing' \
+  Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
+  || fail "Core Host verification does not enforce pause-until-focused input semantics"
+if rg -n 'addTestLog\(\)' MacGI/Sources/MacGI/App/HUDPanelController.swift; then
+  fail "production HUD still emits synthetic Core heartbeat logs"
+fi
 rg -q 'mac-core-extraction' .github/workflows/wpf-build.yml \
   || fail "Windows WPF build does not gate mac-core-extraction pushes"
 rg -q 'startupPollLimit = 4_800' MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \
@@ -281,6 +295,13 @@ rg -q 'guard runtimeLifecycle == \.running' MacGI/Sources/MacGI/App/AppState.swi
 rg -q 'catalog\.setScriptGroupProjectEnabled' BetterGenshinImpact.Core.Host/CoreRpcServer.cs \
   && rg -q 'setSchedulerProjectEnabled' MacGI/Sources/MacGI/Views/Pages/WorkflowPages.swift \
   || fail "Script-group project status is not edited through the Core catalog"
+if rg -n 'PathExecutorPlatform\.Current|PathExecutorAutoSkipPlatform\.Current|ScriptGroupExecutionServices\.Current' \
+  BetterGenshinImpact/Core/Script/Dependence/AutoPathingScript.cs; then
+  fail "The production pathingScript host still resolves process-global execution services"
+fi
+rg -q '_executionServices\.CreatePathExecutor' \
+  BetterGenshinImpact/Core/Script/Dependence/AutoPathingScript.cs \
+  || fail "The production pathingScript host is not constructor-injected"
 if rg -n 'Toggle\("", isOn: \.constant\(project\.status' MacGI/Sources/MacGI/Views/Pages/WorkflowPages.swift; then
   fail "Scheduler project controls regressed to a read-only fake toggle"
 fi

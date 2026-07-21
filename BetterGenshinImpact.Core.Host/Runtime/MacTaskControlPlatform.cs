@@ -14,15 +14,16 @@ public sealed class MacTaskControlPlatform(
     string sessionToken,
     CancellationToken cancellationToken,
     SharedCaptureRingReader captureRing,
-    ILogger logger) : ITaskControlPlatform
+    ILogger logger,
+    ForegroundInputCoordinator inputCoordinator) : ITaskControlPlatform
 {
     public ILogger Logger { get; } = logger;
     public bool IsHdrCapture => false;
     public double DpiScale => Invoke("window.metrics", null).Value<double?>("dpiScale")
         ?? throw new InvalidDataException("window.metrics did not return dpiScale.");
 
-    public void EnsureGameActive() => RequireAcknowledgement("window.activate", null);
-    public void ReleasePressedInputs() => Dispatch(new { action = "releaseAll" });
+    public void EnsureGameActive() => inputCoordinator.WaitForGameFocus(cancellationToken);
+    public void ReleasePressedInputs() => inputCoordinator.ReleaseAllWhenFocused(cancellationToken);
     public void SimulateAction(GIActions action, KeyType keyType) => Dispatch(new
     {
         action = "gameAction",
@@ -63,8 +64,8 @@ public sealed class MacTaskControlPlatform(
         return captureRing.Read(response);
     }
 
-    private void Dispatch(object value) => RequireAcknowledgement(
-        "input.dispatch", JObject.FromObject(value));
+    private void Dispatch(object value) =>
+        inputCoordinator.Dispatch(JObject.FromObject(value), cancellationToken);
 
     private void RequireAcknowledgement(string method, JObject? parameters)
     {

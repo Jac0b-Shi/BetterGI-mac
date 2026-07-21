@@ -6,6 +6,7 @@ using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.BgiVision;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
+using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.Model.Area;
 using Microsoft.ClearScript;
@@ -17,14 +18,15 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 /// Registers the upstream host objects whose real shared implementations are composed on macOS.
 /// Unsupported upstream objects are added only when their complete source slice is linked.
 /// </summary>
-public sealed class MacScriptProjectHostInitializer : IScriptProjectHostInitializer
+public sealed class MacScriptProjectHostInitializer(
+    IScriptGroupExecutionServices executionServices) : IScriptProjectHostInitializer
 {
     public void Initialize(IScriptEngine engine, string workDir, string[] searchPaths, object? config)
     {
         ArgumentNullException.ThrowIfNull(engine);
         engine.AddHostObject("log", new Log());
         engine.AddHostObject("keyMouseScript", new KeyMouseScript(workDir));
-        engine.AddHostObject("pathingScript", new AutoPathingScript(workDir, config));
+        engine.AddHostObject("pathingScript", new AutoPathingScript(workDir, config, executionServices));
         engine.AddHostObject("genshin", new Genshin());
         engine.AddHostObject("dispatcher", new Dispatcher(config ?? new object()));
         engine.AddHostObject("file", new LimitedFile(workDir));

@@ -12,7 +12,8 @@ public sealed class MacKeyMouseMacroPlatform(
     PlatformCallbackChannel callbacks,
     string sessionToken,
     CancellationToken cancellationToken,
-    ILogger logger) : IKeyMouseMacroPlatform
+    ILogger logger,
+    ForegroundInputCoordinator inputCoordinator) : IKeyMouseMacroPlatform
 {
     public ILogger Logger { get; } = logger;
     public bool IsInitialized => Metrics().Value<int?>("captureWidth") > 0;
@@ -39,7 +40,7 @@ public sealed class MacKeyMouseMacroPlatform(
         }
     }
 
-    public void ActivateGameWindow() => Acknowledged("window.activate", null);
+    public void ActivateGameWindow() => inputCoordinator.WaitForGameFocus(cancellationToken);
     public double GetCameraOrientation()
     {
         using var region = TaskControl.CaptureToRectArea();
@@ -56,7 +57,8 @@ public sealed class MacKeyMouseMacroPlatform(
 
     private JObject Metrics() => Invoke("window.metrics", null) as JObject
         ?? throw new InvalidDataException("window.metrics did not return an object.");
-    private void Input(object value) => Acknowledged("input.dispatch", JObject.FromObject(value));
+    private void Input(object value) =>
+        inputCoordinator.Dispatch(JObject.FromObject(value), cancellationToken);
 
     private void Acknowledged(string method, JObject? parameters)
     {

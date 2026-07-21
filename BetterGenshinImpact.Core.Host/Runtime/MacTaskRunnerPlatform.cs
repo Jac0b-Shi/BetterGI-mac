@@ -11,7 +11,8 @@ public sealed class MacTaskRunnerPlatform(
     string sessionToken,
     CancellationToken hostCancellationToken,
     ILogger logger,
-    ILogger runnerLogger) : ITaskRunnerPlatform
+    ILogger runnerLogger,
+    ForegroundInputCoordinator inputCoordinator) : ITaskRunnerPlatform
 {
     public ILogger Logger { get; } = logger;
     public ILogger RunnerLogger { get; } = runnerLogger;
@@ -22,11 +23,10 @@ public sealed class MacTaskRunnerPlatform(
     public void InitializeTask()
     {
         _ = Invoke("window.metrics", null);
-        RequireAcknowledgement("window.activate", null);
+        inputCoordinator.WaitForGameFocus(hostCancellationToken);
     }
 
-    public void EndTask() => RequireAcknowledgement(
-        "input.dispatch", JObject.FromObject(new { action = "releaseAll" }));
+    public void EndTask() => inputCoordinator.ReleaseAllWhenFocused(hostCancellationToken);
 
     public void NotifyCancellation(string message) => Notify("info", message);
 

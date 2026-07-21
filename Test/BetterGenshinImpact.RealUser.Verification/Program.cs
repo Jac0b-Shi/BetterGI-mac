@@ -5,6 +5,7 @@ using BetterGenshinImpact.Core.Script.Project;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.Core.Script.Dependence;
 using BetterGenshinImpact.GameTask.AutoPathing.Handler;
+using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Model.Enum;
 using BetterGenshinImpact.GameTask.Model.Area;
 using Newtonsoft.Json.Linq;
@@ -53,8 +54,9 @@ foreach (var groupProject in javascriptProjects)
 var recordingRuntime = new RecordingGlobalMethodRuntime();
 GlobalMethod.Configure(recordingRuntime);
 ScriptHostServices.Configure(new VerificationScriptHostServices());
-ScriptProjectHost.Configure(new MacScriptProjectHostInitializer());
-VerifyProductionHostSurface(javascriptProjects);
+var scriptGroupExecutionServices = new VerificationScriptGroupExecutionServices();
+ScriptProjectHost.Configure(new MacScriptProjectHostInitializer(scriptGroupExecutionServices));
+VerifyProductionHostSurface(javascriptProjects, scriptGroupExecutionServices);
 VerifyPathingActionSurface(javascriptProjects);
 
 var executableProject = javascriptProjects.SingleOrDefault(project =>
@@ -147,7 +149,9 @@ static void VerifyPathingActionSurface(IEnumerable<ScriptGroupProject> projects)
         $"actions={string.Join(",", actionCounts.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}:{pair.Value}"))}");
 }
 
-static void VerifyProductionHostSurface(IEnumerable<ScriptGroupProject> projects)
+static void VerifyProductionHostSurface(
+    IEnumerable<ScriptGroupProject> projects,
+    IScriptGroupExecutionServices scriptGroupExecutionServices)
 {
     string[] hostObjectNames =
     [
@@ -181,7 +185,7 @@ static void VerifyProductionHostSurface(IEnumerable<ScriptGroupProject> projects
     using var engine = new V8ScriptEngine(
         V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding |
         V8ScriptEngineFlags.EnableTaskPromiseConversion);
-    new MacScriptProjectHostInitializer().Initialize(
+    new MacScriptProjectHostInitializer(scriptGroupExecutionServices).Initialize(
         engine, firstProjectPath, [".", "./packages"], firstProject.JsScriptSettingsObject);
 
     var hostTypes = new Dictionary<string, Type>(StringComparer.Ordinal)
@@ -344,4 +348,20 @@ sealed class VerificationScriptHostServices : IScriptHostServices
     public bool JsNotificationEnabled => false;
     public void EmitNotification(ScriptNotificationKind kind, string message) =>
         throw new InvalidOperationException("Real User execution unexpectedly emitted a notification.");
+}
+
+sealed class VerificationScriptGroupExecutionServices : IScriptGroupExecutionServices
+{
+    public IPathExecutor CreatePathExecutor(CancellationToken cancellationToken) =>
+        throw new InvalidOperationException("Real User host-surface verification unexpectedly executed Pathing.");
+    public PathingPartyConfig DefaultPartyConfig =>
+        throw new InvalidOperationException("Real User host-surface verification unexpectedly requested Pathing config.");
+    public void AddAutoPickTrigger() =>
+        throw new InvalidOperationException("Real User host-surface verification unexpectedly added AutoPick.");
+    public PathingFailurePolicy PathingFailurePolicy =>
+        throw new InvalidOperationException("Real User host-surface verification unexpectedly requested failure policy.");
+    public void RecordFarmingSession(
+        BetterGenshinImpact.GameTask.FarmingPlan.FarmingSession session,
+        BetterGenshinImpact.GameTask.FarmingPlan.FarmingRouteInfo route) =>
+        throw new InvalidOperationException("Real User host-surface verification unexpectedly recorded farming stats.");
 }

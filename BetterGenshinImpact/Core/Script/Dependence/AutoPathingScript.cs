@@ -13,11 +13,16 @@ public class AutoPathingScript
     private object? _config = null;
     private string _rootPath;
     private readonly LimitedFile _autoPathingFile;
+    private readonly IScriptGroupExecutionServices _executionServices;
 
-    public AutoPathingScript(string rootPath, object? config)
+    public AutoPathingScript(
+        string rootPath,
+        object? config,
+        IScriptGroupExecutionServices executionServices)
     {
         _config = config;
         _rootPath = rootPath;
+        _executionServices = executionServices ?? throw new ArgumentNullException(nameof(executionServices));
         _autoPathingFile = new LimitedFile(Global.Absolute(@"User\AutoPathing"));
     }
 
@@ -26,9 +31,7 @@ public class AutoPathingScript
         try
         {
             var task = PathingTask.BuildFromJson(json);
-            var pathExecutor = new PathExecutor(
-                CancellationContext.Instance.Cts.Token, PathExecutorPlatform.Current,
-                PathExecutorAutoSkipPlatform.Current, ScriptGroupExecutionServices.Current);
+            var pathExecutor = _executionServices.CreatePathExecutor(CancellationContext.Instance.Cts.Token);
             if (_config != null && _config is PathingPartyConfig patyConfig)
             {
                 pathExecutor.PartyConfig = patyConfig;

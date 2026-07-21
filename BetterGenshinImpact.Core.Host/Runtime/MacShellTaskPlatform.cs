@@ -5,17 +5,10 @@ using System.Diagnostics;
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
 public sealed class MacShellTaskPlatform(
-    Transport.PlatformCallbackChannel callbacks,
-    string sessionToken,
+    ForegroundInputCoordinator inputCoordinator,
     CancellationToken cancellationToken) : IShellTaskPlatform
 {
-    public void ActivateGameWindow()
-    {
-        var response = callbacks.InvokeAsync("window.activate", null, sessionToken, cancellationToken)
-            .GetAwaiter().GetResult();
-        if (response?.Value<bool?>("acknowledged") != true)
-            throw new InvalidDataException("window.activate did not return acknowledged=true.");
-    }
+    public void ActivateGameWindow() => inputCoordinator.WaitForGameFocus(cancellationToken);
 
     public async Task<ShellExecutionRecord> ExecuteAsync(
         ShellTaskParam param, bool waitForExit, CancellationToken cancellationToken)
