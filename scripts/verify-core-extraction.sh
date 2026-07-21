@@ -270,6 +270,27 @@ rg -q 'macOS input did not pause while the selected game was unfocused' \
 if rg -n 'addTestLog\(\)' MacGI/Sources/MacGI/App/HUDPanelController.swift; then
   fail "production HUD still emits synthetic Core heartbeat logs"
 fi
+
+if ! rg -q 'runtime\.refreshGeometry' BetterGenshinImpact.Core.Host/CoreRpcServer.cs \
+    || ! rg -q 'runtime\.geometry-refresh' BetterGenshinImpact.Core.Host/CoreRpcServer.cs \
+    || ! rg -q 'scheduleRuntimeGeometryRefresh\(for: refreshed\.capturePixelSize\)' MacGI/Sources/MacGI/App/AppState.swift; then
+    echo "Core geometry refresh is not wired from pixel-size changes" >&2
+    exit 1
+fi
+
+if ! rg -q 'window\.captureRect' MacGI/Sources/MacGI/App/HUDPanelController.swift \
+    || rg -q 'setFrame\(Self\.appKitFrame\(forQuartzFrame: window\.frame' MacGI/Sources/MacGI/App/HUDPanelController.swift; then
+    echo "HUD must follow the game client rectangle, not the Wine frame" >&2
+    exit 1
+fi
+
+if ! rg -q 'x: size\.width - 235 \* scale' MacGI/Sources/MacGI/Views/HUDView.swift \
+    || ! rg -q 'y: size\.height - 27 \* scale' MacGI/Sources/MacGI/Views/HUDView.swift \
+    || ! rg -q 'width: 178 \* scale' MacGI/Sources/MacGI/Views/HUDView.swift \
+    || ! rg -q 'height: 22 \* scale' MacGI/Sources/MacGI/Views/HUDView.swift; then
+    echo "UID cover no longer matches the upstream right-bottom rectangle" >&2
+    exit 1
+fi
 rg -q 'mac-core-extraction' .github/workflows/wpf-build.yml \
   || fail "Windows WPF build does not gate mac-core-extraction pushes"
 rg -q 'startupPollLimit = 4_800' MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \

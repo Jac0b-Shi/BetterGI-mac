@@ -528,8 +528,6 @@ try
     var initializedWithPlatform = await ExchangeAsync(
         connection, "initialize-with-platform", "core.initialize", sessionToken,
         JObject.FromObject(new { runtimeRoot = layout.RootPath }), cancellation.Token);
-    initializationMetricsCancellation.Cancel();
-    await initializationMetricsResponder;
     Require(initializedWithPlatform.Error is null &&
             JObject.FromObject(initializedWithPlatform.Result!).Value<bool>("platformAssetsInitialized") &&
             initializationMetricsCount > 0 && initializationOverlayCount > 0,
@@ -548,6 +546,20 @@ try
         await Task.Delay(10, cancellation.Token);
     Require(Volatile.Read(ref runtimeDispatcherIterations) > 0,
         "runtime.start did not execute the trigger dispatcher loop");
+    var triggerToPreserve = GameTaskManager.TriggerDictionary!.First();
+    triggerToPreserve.Value.IsEnabled = false;
+    var metricsBeforeRunningGeometryRefresh = Volatile.Read(ref initializationMetricsCount);
+    var runningGeometryRefresh = await ExchangeAsync(
+        connection, "runtime-refresh-geometry-running", "runtime.refreshGeometry",
+        sessionToken, null, cancellation.Token);
+    Require(runningGeometryRefresh.Error is null &&
+            JObject.FromObject(runningGeometryRefresh.Result!).Value<bool>("assetsReloaded") &&
+            JObject.FromObject(runningGeometryRefresh.Result!).Value<bool>("running") &&
+            Volatile.Read(ref initializationMetricsCount) > metricsBeforeRunningGeometryRefresh &&
+            GameTaskManager.TriggerDictionary!.TryGetValue(triggerToPreserve.Key, out var refreshedTrigger) &&
+            refreshedTrigger is { IsEnabled: false },
+        runningGeometryRefresh.Error?.Message ??
+        "runtime.refreshGeometry did not reload assets, preserve trigger state, and restart a running dispatcher");
     var runtimeStopped = await ExchangeAsync(
         connection, "runtime-stop", "runtime.stop", sessionToken, null, cancellation.Token);
     Require(runtimeStopped.Error is null &&
@@ -557,6 +569,16 @@ try
     await Task.Delay(50, cancellation.Token);
     Require(Volatile.Read(ref runtimeDispatcherIterations) == iterationsAfterStop,
         "trigger dispatcher continued capturing after runtime.stop acknowledged");
+    var stoppedGeometryRefresh = await ExchangeAsync(
+        connection, "runtime-refresh-geometry-stopped", "runtime.refreshGeometry",
+        sessionToken, null, cancellation.Token);
+    Require(stoppedGeometryRefresh.Error is null &&
+            JObject.FromObject(stoppedGeometryRefresh.Result!).Value<bool>("assetsReloaded") &&
+            !JObject.FromObject(stoppedGeometryRefresh.Result!).Value<bool>("running"),
+        stoppedGeometryRefresh.Error?.Message ??
+        "runtime.refreshGeometry restarted a dispatcher that was stopped");
+    initializationMetricsCancellation.Cancel();
+    await initializationMetricsResponder;
     var runtimeRestarted = await ExchangeAsync(
         connection, "runtime-restart", "runtime.start", sessionToken, null, cancellation.Token);
     Require(runtimeRestarted.Error is null &&

@@ -98,7 +98,7 @@ final class HUDPanelController {
             return
         }
         let referenceMaxY = NSScreen.screens.first?.frame.maxY ?? NSScreen.main?.frame.maxY ?? 0
-        panel.setFrame(Self.appKitFrame(forQuartzFrame: window.frame, referenceMaxY: referenceMaxY), display: true)
+        panel.setFrame(Self.appKitFrame(forQuartzFrame: window.captureRect, referenceMaxY: referenceMaxY), display: true)
         if !panel.isVisible {
             panel.orderFrontRegardless()
         }

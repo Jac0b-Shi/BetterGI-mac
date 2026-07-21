@@ -310,6 +310,9 @@ final class AppState: ObservableObject {
     private var betterGICoreSupervisor: BetterGICoreProcessSupervisor?
     private var coreStartupTask: Task<Void, Never>?
     private var coreStartupInFlight = false
+    private var runtimeGeometryPixelSize: CGSize?
+    private var pendingRuntimeGeometryPixelSize: CGSize?
+    private var runtimeGeometryRefreshTask: Task<Void, Never>?
     private var captureTimestamps: [Date] = []
     @Published private(set) var measuredCaptureFPS = 0
 
@@ -454,6 +457,7 @@ final class AppState: ObservableObject {
                 if self.showHUDOnStart {
                     self.isHUDVisible = true
                 }
+                self.runtimeGeometryPixelSize = self.selectedWindow.capturePixelSize
                 self.runtimeLifecycle = .running
                 self.addLog(.info, "BetterGI runtime started with a verified ScreenCaptureKit frame.")
             } catch {
@@ -477,6 +481,7 @@ final class AppState: ObservableObject {
             }
             do {
                 try await supervisor.stopRuntime()
+                self.cancelRuntimeGeometryRefresh()
                 self.captureTimestamps = []
                 self.measuredCaptureFPS = 0
                 self.captureStatus = .missing
@@ -930,8 +935,46 @@ final class AppState: ObservableObject {
         if refreshed != selectedWindow {
             selectedWindow = refreshed
         }
+        if runtimeLifecycle == .running,
+           runtimeGeometryPixelSize != refreshed.capturePixelSize {
+            scheduleRuntimeGeometryRefresh(for: refreshed.capturePixelSize)
+        }
         gameWindowStatus = refreshed.isLikelyGameWindow ? .detected : .missing
         return refreshed
+    }
+
+    private func scheduleRuntimeGeometryRefresh(for pixelSize: CGSize) {
+        guard runtimeLifecycle == .running, betterGICoreSupervisor != nil,
+              pendingRuntimeGeometryPixelSize != pixelSize else { return }
+        pendingRuntimeGeometryPixelSize = pixelSize
+        runtimeGeometryRefreshTask?.cancel()
+        runtimeGeometryRefreshTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(250))
+                guard let self, self.runtimeLifecycle == .running,
+                      self.pendingRuntimeGeometryPixelSize == pixelSize,
+                      let supervisor = self.betterGICoreSupervisor else { return }
+                try await supervisor.refreshRuntimeGeometry()
+                self.runtimeGeometryPixelSize = pixelSize
+                self.pendingRuntimeGeometryPixelSize = nil
+                self.addLog(.info,
+                    "Game resolution changed to \(Int(pixelSize.width))x\(Int(pixelSize.height)); Core assets reloaded.")
+            } catch is CancellationError {
+                return
+            } catch {
+                guard let self, self.pendingRuntimeGeometryPixelSize == pixelSize else { return }
+                self.pendingRuntimeGeometryPixelSize = nil
+                self.addLog(.error,
+                    "Core geometry refresh failed for \(Int(pixelSize.width))x\(Int(pixelSize.height)): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func cancelRuntimeGeometryRefresh() {
+        runtimeGeometryRefreshTask?.cancel()
+        runtimeGeometryRefreshTask = nil
+        pendingRuntimeGeometryPixelSize = nil
+        runtimeGeometryPixelSize = nil
     }
 
     func setSelectedWindow(_ window: WindowInfo) {
@@ -1081,6 +1124,7 @@ final class AppState: ObservableObject {
     func resetUIState() {
         schedulerExecutionTask?.cancel()
         schedulerExecutionTask = nil
+        cancelRuntimeGeometryRefresh()
         appStatus = .idle
         runtimeLifecycle = .stopped
         gameWindowStatus = .missing

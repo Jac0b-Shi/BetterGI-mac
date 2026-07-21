@@ -70,6 +70,33 @@ struct QuartzWindowEnumeratorTests {
         #expect(frame == CGRect(x: 160, y: 270, width: 1280, height: 720))
     }
 
+    @Test("Wine title bar is excluded from the game client geometry")
+    func wineTitleBarIsExcludedFromCaptureRect() {
+        let game = WindowInfo(
+            id: 551, ownerPID: 7960, ownerName: "wine", title: "原神",
+            frame: CGRect(x: 633, y: 131, width: 1280, height: 752),
+            layer: 0, isOnScreen: true, scaleFactor: 2
+        )
+
+        #expect(game.captureRect == CGRect(x: 633, y: 163, width: 1280, height: 720))
+        #expect(game.capturePixelSize == CGSize(width: 2560, height: 1440))
+    }
+
+    @Test("HUD follows the Wine game client instead of its title bar")
+    @MainActor
+    func hudFrameFollowsWineGameClient() {
+        let game = WindowInfo(
+            id: 551, ownerPID: 7960, ownerName: "wine", title: "原神",
+            frame: CGRect(x: 633, y: 131, width: 1280, height: 752),
+            layer: 0, isOnScreen: true, scaleFactor: 2
+        )
+        let frame = HUDPanelController.appKitFrame(
+            forQuartzFrame: game.captureRect, referenceMaxY: 1080
+        )
+
+        #expect(frame == CGRect(x: 633, y: 197, width: 1280, height: 720))
+    }
+
     private func makeWindow(
         id: CGWindowID,
         ownerName: String,

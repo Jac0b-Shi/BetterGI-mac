@@ -47,6 +47,13 @@ The CI gate intentionally does not replace the last row with a synthetic fixture
 
 ## Non-negotiable production boundary
 
+### macOS client geometry policy
+
+- Wine's title bar is excluded from both ScreenCaptureKit/Quartz frames and the HUD; `window.metrics` reports the client area's physical pixels rather than Quartz points.
+- HUD compass and UID masking use the upstream 1920x1080 coordinate constants. At 2560x1440 the observed `1280x752 pt @2x` Wine frame resolves to a `1280x720 pt` / `2560x1440 px` game client.
+- Window movement only repositions the HUD. A client pixel-size change is debounced and calls the Core-owned `runtime.refreshGeometry` lifecycle, which stops capture, reloads the real upstream assets/triggers, preserves trigger enabled states, and resumes only when the runtime was previously running.
+- `runtime.start`, `runtime.stop`, and geometry refresh share one mutation lock, so a stop request cannot be undone by a late resolution refresh. Host verification covers running and stopped refresh behavior, and shared asset loading closes its source stream before returning the decoded OpenCV `Mat`.
+
 ### macOS input focus policy
 
 - Production input uses `pauseUntilFocused`: Core waits while Genshin is unfocused and resumes only after the user returns to it.

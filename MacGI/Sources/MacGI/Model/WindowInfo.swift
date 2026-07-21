@@ -70,9 +70,28 @@ struct WindowInfo: Identifiable, Equatable, Hashable, Sendable {
 
     // MARK: Derived
 
-    /// Estimated capture rectangle in screen coordinates.
-    /// For Wine/YAAGL the title-bar offset may need per-window tuning.
-    var captureRect: CGRect { frame }
+    /// Game client rectangle in Quartz screen points, excluding the Wine title bar.
+    var captureRect: CGRect {
+        guard isLikelyGameWindow, ownerName.localizedCaseInsensitiveContains("wine") else {
+            return frame
+        }
+        let expectedContentHeight = frame.width * 9 / 16
+        let titleBarHeight = frame.height - expectedContentHeight
+        guard (18...40).contains(titleBarHeight) else { return frame }
+        return CGRect(
+            x: frame.minX,
+            y: frame.minY + titleBarHeight,
+            width: frame.width,
+            height: expectedContentHeight
+        )
+    }
+
+    var capturePixelSize: CGSize {
+        CGSize(
+            width: captureRect.width * scaleFactor,
+            height: captureRect.height * scaleFactor
+        )
+    }
 
     /// Human-readable label for UI pickers and status lines.
     var displayName: String {

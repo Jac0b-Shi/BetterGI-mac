@@ -106,14 +106,16 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             }
             let rect = window.captureRect
             let workingArea = NSScreen.main?.visibleFrame ?? rect
+            let pixelSize = window.capturePixelSize
+            let scale = window.scaleFactor
             let isActive = NSWorkspace.shared.frontmostApplication?.processIdentifier == window.ownerPID
             return [
-                "width": Int(rect.width), "height": Int(rect.height),
-                "captureX": Int(rect.minX), "captureY": Int(rect.minY),
-                "captureWidth": Int(rect.width), "captureHeight": Int(rect.height),
-                "dpiScale": Double(window.scaleFactor), "processId": Int(window.ownerPID),
-                "workingAreaX": Int(workingArea.minX), "workingAreaY": Int(workingArea.minY),
-                "workingAreaWidth": Int(workingArea.width), "workingAreaHeight": Int(workingArea.height),
+                "width": Int(pixelSize.width), "height": Int(pixelSize.height),
+                "captureX": Int(rect.minX * scale), "captureY": Int(rect.minY * scale),
+                "captureWidth": Int(pixelSize.width), "captureHeight": Int(pixelSize.height),
+                "dpiScale": Double(scale), "processId": Int(window.ownerPID),
+                "workingAreaX": Int(workingArea.minX * scale), "workingAreaY": Int(workingArea.minY * scale),
+                "workingAreaWidth": Int(workingArea.width * scale), "workingAreaHeight": Int(workingArea.height * scale),
                 "isActive": isActive,
             ]
         case "audio.start":

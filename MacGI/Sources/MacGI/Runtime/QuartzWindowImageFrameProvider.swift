@@ -45,7 +45,8 @@ final class QuartzWindowImageFrameProvider {
             throw QuartzWindowImageFrameError.emptyImage(window.id)
         }
 
-        let image = imageRef.takeRetainedValue()
+        let fullImage = imageRef.takeRetainedValue()
+        let image = cropToGameClient(fullImage, window: window)
         guard image.width > 0, image.height > 0 else {
             throw QuartzWindowImageFrameError.emptyImage(window.id)
         }
@@ -69,6 +70,17 @@ final class QuartzWindowImageFrameProvider {
             cgImage: image,
             backendName: "CGWindowListCreateImage"
         )
+    }
+
+    private func cropToGameClient(_ image: CGImage, window: WindowInfo) -> CGImage {
+        let expectedWidth = Int(window.capturePixelSize.width.rounded())
+        let expectedHeight = Int(window.capturePixelSize.height.rounded())
+        guard image.width >= expectedWidth, image.height > expectedHeight,
+              image.width - expectedWidth <= 2 else { return image }
+        let topInset = image.height - expectedHeight
+        return image.cropping(to: CGRect(
+            x: 0, y: topInset, width: expectedWidth, height: expectedHeight
+        )) ?? image
     }
 
     private typealias CGWindowListCreateImageFunction = @convention(c) (

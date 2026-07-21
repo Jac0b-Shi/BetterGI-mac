@@ -32,6 +32,7 @@ public sealed class CoreRpcServer(
     private Action? _platformAssetInitializer;
     private MacTriggerDispatcher? _triggerDispatcher;
     private int _platformAssetsInitialized;
+    private readonly SemaphoreSlim _runtimeMutationLock = new(1, 1);
     public PlatformCallbackChannel PlatformCallbacks => _platformCallbacks;
 
     private SchedulerCoordinator Scheduler => _scheduler ??= new SchedulerCoordinator(
@@ -150,8 +151,18 @@ public sealed class CoreRpcServer(
         {
             if (request.Method == "runtime.stop")
             {
-                await RequiredTriggerDispatcher().StopAsync();
-                return RpcResponse.Success(request.Id, RuntimeStatus());
+                return RpcResponse.Success(
+                    request.Id, await StopRuntimeAsync(_shutdown.Token));
+            }
+            if (request.Method == "runtime.start")
+            {
+                return RpcResponse.Success(
+                    request.Id, await StartRuntimeAsync(_shutdown.Token));
+            }
+            if (request.Method == "runtime.refreshGeometry")
+            {
+                return RpcResponse.Success(
+                    request.Id, await RefreshRuntimeGeometryAsync(_shutdown.Token));
             }
             object? result = request.Method switch
             {
@@ -176,7 +187,6 @@ public sealed class CoreRpcServer(
                     request.Params?.Value<bool?>("enabled")
                         ?? throw new ArgumentException("enabled is required.")),
                 "runtime.status" => RuntimeStatus(),
-                "runtime.start" => StartRuntime(),
                 "scheduler.run" => Scheduler.Run(RequiredString(request.Params, "groupName")),
                 "scheduler.pause" => Scheduler.Pause(RequiredString(request.Params, "taskId")),
                 "scheduler.resume" => Scheduler.Resume(RequiredString(request.Params, "taskId")),
@@ -223,6 +233,7 @@ public sealed class CoreRpcServer(
                 "clearscript-v8",
                 "trigger-control",
                 "runtime-control",
+                "runtime.geometry-refresh",
                 "scheduler.run"
             }
         };
@@ -277,18 +288,73 @@ public sealed class CoreRpcServer(
         return new { stopping = true };
     }
 
-    private object StartRuntime()
+    private async Task<object> StartRuntimeAsync(CancellationToken cancellationToken)
     {
-        if (Volatile.Read(ref _platformAssetsInitialized) != 1)
-            throw new CapabilityUnavailableException(
-                "The macOS trigger runtime is unavailable until core.initialize completes with the platform attached.");
-        var dispatcher = RequiredTriggerDispatcher();
-        if (!dispatcher.IsRunning)
-            dispatcher.Start();
-        return RuntimeStatus();
+        await _runtimeMutationLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (Volatile.Read(ref _platformAssetsInitialized) != 1)
+                throw new CapabilityUnavailableException(
+                    "The macOS trigger runtime is unavailable until core.initialize completes with the platform attached.");
+            var dispatcher = RequiredTriggerDispatcher();
+            if (!dispatcher.IsRunning)
+                dispatcher.Start();
+            return RuntimeStatus();
+        }
+        finally
+        {
+            _runtimeMutationLock.Release();
+        }
+    }
+
+    private async Task<object> StopRuntimeAsync(CancellationToken cancellationToken)
+    {
+        await _runtimeMutationLock.WaitAsync(cancellationToken);
+        try
+        {
+            await RequiredTriggerDispatcher().StopAsync();
+            return RuntimeStatus();
+        }
+        finally
+        {
+            _runtimeMutationLock.Release();
+        }
     }
 
     private object RuntimeStatus() => new { running = RequiredTriggerDispatcher().IsRunning };
+
+    private async Task<object> RefreshRuntimeGeometryAsync(CancellationToken cancellationToken)
+    {
+        await _runtimeMutationLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (Volatile.Read(ref _platformAssetsInitialized) != 1 || _platformAssetInitializer is null)
+                throw new CapabilityUnavailableException(
+                    "Runtime geometry cannot refresh before platform assets are initialized.");
+            var dispatcher = RequiredTriggerDispatcher();
+            var restart = dispatcher.IsRunning;
+            if (restart)
+                await dispatcher.StopAsync();
+
+            var enabledStates = GameTaskManager.TriggerDictionary?
+                .ToDictionary(pair => pair.Key, pair => pair.Value.IsEnabled, StringComparer.Ordinal)
+                ?? new Dictionary<string, bool>(StringComparer.Ordinal);
+            _platformAssetInitializer();
+            if (GameTaskManager.TriggerDictionary is { } triggers)
+            {
+                foreach (var (name, enabled) in enabledStates)
+                    if (triggers.TryGetValue(name, out var trigger))
+                        trigger.IsEnabled = enabled;
+            }
+            if (restart)
+                dispatcher.Start();
+            return new { running = dispatcher.IsRunning, assetsReloaded = true };
+        }
+        finally
+        {
+            _runtimeMutationLock.Release();
+        }
+    }
 
     private MacTriggerDispatcher RequiredTriggerDispatcher() =>
         _triggerDispatcher ?? throw new CapabilityUnavailableException(

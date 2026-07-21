@@ -87,7 +87,8 @@ public static class GameTaskManager
         var filePath = Path.Combine(assetsFolder, assetName);
         if (!File.Exists(filePath))
             throw new FileNotFoundException($"未找到{featureName}中的{assetName}文件");
-        var mat = Mat.FromStream(File.OpenRead(filePath), flags);
+        using var stream = File.OpenRead(filePath);
+        var mat = Mat.FromStream(stream, flags);
         return systemInfo.GameScreenSize.Width == 1920
             ? mat
             : ResizeHelper.Resize(mat, systemInfo.AssetScale);

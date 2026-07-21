@@ -140,22 +140,24 @@ struct HUDView: View {
     }
 
     private func directionMarkers(size: CGSize) -> some View {
-        let compassSize = min(size.width, size.height) * 0.22
+        let frame = HUDOverlayGeometry.directionFrame(in: size)
+        let compassSize = frame.width
+        let edgeInset = compassSize * 13 / 250
         return ZStack {
             Text("北")
-                .position(x: compassSize / 2, y: 18)
+                .position(x: compassSize / 2, y: edgeInset)
             Text("南")
-                .position(x: compassSize / 2, y: compassSize - 18)
+                .position(x: compassSize / 2, y: compassSize - edgeInset)
             Text("西")
-                .position(x: 18, y: compassSize / 2)
+                .position(x: edgeInset, y: compassSize / 2)
             Text("东")
-                .position(x: compassSize - 18, y: compassSize / 2)
+                .position(x: compassSize - edgeInset, y: compassSize / 2)
         }
-        .font(.system(size: 23, weight: .semibold))
+        .font(.system(size: max(12, 34 * size.width / 1920), weight: .semibold))
         .foregroundStyle(Color.white.opacity(appState.hudOpacity))
         .shadow(color: .black.opacity(0.7), radius: 8)
         .frame(width: compassSize, height: compassSize)
-        .position(x: size.width * 0.14, y: size.height * 0.14)
+        .position(x: frame.midX, y: frame.midY)
         .allowsHitTesting(false)
     }
 
@@ -210,11 +212,29 @@ struct HUDView: View {
     }
 
     private func uidCover(size: CGSize) -> some View {
-        Rectangle()
+        let rect = HUDOverlayGeometry.uidCoverRect(in: size)
+        return Rectangle()
             .fill(Color.white.opacity(0.92))
-            .frame(width: max(90, size.width * 178 / 1920), height: max(12, size.height * 22 / 1080))
-            .position(x: size.width - max(118, size.width * 235 / 1920), y: size.height - max(26, size.height * 27 / 1080))
+            .frame(width: rect.width, height: rect.height)
+            .position(x: rect.midX, y: rect.midY)
             .allowsHitTesting(false)
+    }
+}
+
+enum HUDOverlayGeometry {
+    static func directionFrame(in size: CGSize) -> CGRect {
+        let scale = size.width / 1920
+        return CGRect(x: 43 * scale, y: 0, width: 250 * scale, height: 250 * scale)
+    }
+
+    static func uidCoverRect(in size: CGSize) -> CGRect {
+        let scale = min(size.width / 1920, size.height / 1080)
+        return CGRect(
+            x: size.width - 235 * scale,
+            y: size.height - 27 * scale,
+            width: 178 * scale,
+            height: 22 * scale
+        )
     }
 }
 

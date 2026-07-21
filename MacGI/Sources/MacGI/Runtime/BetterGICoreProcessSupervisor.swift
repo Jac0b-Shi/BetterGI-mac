@@ -197,6 +197,16 @@ actor BetterGICoreProcessSupervisor {
         }
     }
 
+    func refreshRuntimeGeometry() throws {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        guard let result = try client.request(method: "runtime.refreshGeometry") as? [String: Any],
+              result["assetsReloaded"] as? Bool == true else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid runtime.refreshGeometry result.")
+        }
+    }
+
     func listScriptProjects() throws -> [BetterGIScriptProjectSummary] {
         guard case .running = state, let client else {
             throw BetterGICoreRPCError.socket("BetterGI Core is not running.")

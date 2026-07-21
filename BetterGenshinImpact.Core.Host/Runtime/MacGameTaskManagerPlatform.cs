@@ -97,6 +97,7 @@ public sealed class MacGameTaskManagerPlatform(
 
     public void ReloadAssets()
     {
+        MapAssets.DestroyInstance();
         AutoPickAssets.DestroyInstance();
         AutoSkipAssets.DestroyInstance();
         AutoFishingAssets.DestroyInstance();
