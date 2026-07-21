@@ -326,9 +326,10 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                     "scheduler.event requires taskId and state."
                 )
             }
-            appState.schedulerExecutionStatus = state
-            if let error = parameters["error"] as? [String: Any],
-               let message = error["message"] as? String {
+            let error = parameters["error"] as? [String: Any]
+            let message = error?["message"] as? String
+            try appState.handleCoreSchedulerEvent(taskID: taskID, state: state, error: message)
+            if let message {
                 appState.addLog(.error, "Core scheduler \(taskID) \(state): \(message)")
             } else {
                 appState.addLog(.info, "Core scheduler \(taskID) \(state)")

@@ -258,6 +258,7 @@ final class AppState: ObservableObject {
     @Published var schedulerCatalogStatus = "Core unavailable"
     @Published var selectedSchedulerGroupName = ""
     @Published var schedulerExecutionStatus = "Idle"
+    @Published var schedulerExecutionError: String?
     @Published var currentSchedulerProjectID: String?
 
     // MARK: Window & capture (typed — not strings)
@@ -588,20 +589,65 @@ final class AppState: ObservableObject {
         }
         let groupName = selectedSchedulerGroupName
         schedulerExecutionStatus = "Starting"
+        schedulerExecutionError = nil
         schedulerExecutionTask = Task { [weak self] in
             do {
                 let taskID = try await supervisor.runSchedulerGroup(name: groupName)
                 guard !Task.isCancelled else { return }
-                self?.currentSchedulerProjectID = taskID
-                self?.appStatus = .running
-                self?.schedulerExecutionStatus = "running"
-                self?.addLog(.info, "Core scheduler started group \(groupName) as \(taskID)")
+                guard let self else { return }
+                self.handleCoreSchedulerRunAccepted(taskID: taskID, groupName: groupName)
             } catch {
                 self?.schedulerExecutionStatus = "Failed"
+                self?.schedulerExecutionError = error.localizedDescription
+                self?.currentSchedulerProjectID = nil
+                self?.appStatus = .error
                 self?.addLog(.error, "Core scheduler start failed: \(error.localizedDescription)")
             }
         }
     }
+
+    func handleCoreSchedulerRunAccepted(taskID: String, groupName: String) {
+        guard !Self.terminalSchedulerStates.contains(schedulerExecutionStatus) else { return }
+        currentSchedulerProjectID = taskID
+        appStatus = .running
+        schedulerExecutionStatus = "running"
+        addLog(.info, "Core scheduler started group \(groupName) as \(taskID)")
+    }
+
+    func handleCoreSchedulerEvent(taskID: String, state: String, error: String?) throws {
+        if let currentSchedulerProjectID, currentSchedulerProjectID != taskID {
+            throw BetterGICorePlatformAdapterError.invalidParameters(
+                "scheduler.event taskId \(taskID) does not match active task \(currentSchedulerProjectID)."
+            )
+        }
+
+        schedulerExecutionStatus = state
+        switch state {
+        case "running":
+            currentSchedulerProjectID = taskID
+            schedulerExecutionError = nil
+            appStatus = .running
+        case "paused":
+            currentSchedulerProjectID = taskID
+            appStatus = .paused
+        case "completed", "cancelled":
+            currentSchedulerProjectID = nil
+            schedulerExecutionError = nil
+            schedulerExecutionTask = nil
+            appStatus = .idle
+        case "failed":
+            currentSchedulerProjectID = nil
+            schedulerExecutionError = error ?? "Core scheduler failed without error details."
+            schedulerExecutionTask = nil
+            appStatus = .error
+        default:
+            throw BetterGICorePlatformAdapterError.invalidParameters(
+                "scheduler.event contains unsupported state \(state)."
+            )
+        }
+    }
+
+    private static let terminalSchedulerStates = ["completed", "cancelled", "failed"]
 
     func schedulerGroupsForCurrentSelection() -> [BetterGIScriptGroupSummary] {
         let selectedGroups = schedulerGroups.filter { $0.name == selectedSchedulerGroupName }

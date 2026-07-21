@@ -205,6 +205,14 @@ rg -q 'Core input callback rejects a platform dispatch failure' \
   || fail "Swift tests do not prove failed CGEvent dispatch is rejected back to Core"
 rg -q 'return \.blocked\(reason: reason\)' MacGI/Sources/MacGI/App/AppState.swift \
   || fail "Swift input dispatch failures can still be acknowledged to Core"
+rg -q 'Failed event clears the active task and exposes the Core error' \
+  MacGI/Tests/MacGITests/BetterGICoreSchedulerEventTests.swift \
+  || fail "Swift tests do not prove scheduler failed state reaches AppState"
+rg -q 'Terminal event cannot be overwritten by a late run response' \
+  MacGI/Tests/MacGITests/BetterGICoreSchedulerEventTests.swift \
+  || fail "Swift tests do not cover the scheduler event/run response race"
+rg -q 'Text\(schedulerError\)' MacGI/Sources/MacGI/Views/Pages/WorkflowPages.swift \
+  || fail "Swift scheduler UI does not expose the Core terminal error"
 rg -q 'catch \(PlatformCallbackException\)' \
   BetterGenshinImpact.Core.Host/Transport/PlatformCallbackChannel.cs \
   || fail "Core detaches the callback channel after a platform business rejection"

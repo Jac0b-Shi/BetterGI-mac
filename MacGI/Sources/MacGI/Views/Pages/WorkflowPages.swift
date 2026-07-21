@@ -620,6 +620,12 @@ struct JSScriptPage: View {
                     Text(appState.currentSchedulerProjectID ?? "无")
                         .foregroundStyle(BGIColors.mutedText)
                 }
+                if let schedulerError = appState.schedulerExecutionError {
+                    Text(schedulerError)
+                        .font(BGIFonts.caption)
+                        .foregroundStyle(BGIColors.danger)
+                        .textSelection(.enabled)
+                }
             }
         }
     }
