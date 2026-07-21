@@ -4,6 +4,33 @@ import Testing
 
 @Suite("AppState scheduler catalog")
 struct AppStateSchedulerCatalogTests {
+    @Test("Debug Core resolver locates the staged SwiftPM helper")
+    func debugCoreResolverLocatesStagedHelper() throws {
+        let buildRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("bettergi-core-resolver-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: buildRoot.deletingLastPathComponent()) }
+        let helper = buildRoot
+            .appendingPathComponent("BetterGICore", isDirectory: true)
+            .appendingPathComponent("BetterGenshinImpact.Core.Host")
+        try FileManager.default.createDirectory(
+            at: helper.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("#!/bin/sh\n".utf8).write(to: helper)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: helper.path
+        )
+        let appExecutable = buildRoot
+            .appendingPathComponent("arm64-apple-macosx/debug", isDirectory: true)
+            .appendingPathComponent("betterGI-mac")
+
+        #expect(BetterGICoreProcessSupervisor.resolveDevelopmentExecutableURL(
+            from: appExecutable
+        ) == helper)
+    }
+
     @MainActor
     @Test("AppState does not report capture throughput before a real frame")
     func appStateStartsWithoutSyntheticCaptureMetrics() {

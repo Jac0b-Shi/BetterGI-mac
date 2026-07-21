@@ -261,6 +261,9 @@ rg -q 'mac-core-extraction' .github/workflows/wpf-build.yml \
 rg -q 'startupPollLimit = 4_800' MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \
   && test "$(rg -c '0\.\.<Self\.startupPollLimit' MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift)" -eq 2 \
   || fail "Swift does not allow the Core Host a bounded 120-second native cold-start window"
+rg -q '#if DEBUG' MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \
+  && rg -q 'resolveDevelopmentExecutableURL' MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \
+  || fail "SwiftPM Debug builds cannot locate the staged BetterGI Core Helper"
 rg -q 'appState\.startRuntime\(\)' MacGI/Sources/MacGI/Views/Pages/OverviewPage.swift \
   || fail "The global runtime button does not start the Core runtime"
 if rg -n 'runSchedulerGroups\(\)|toggleStartPause\(\)' MacGI/Sources/MacGI/Views/Pages/OverviewPage.swift; then

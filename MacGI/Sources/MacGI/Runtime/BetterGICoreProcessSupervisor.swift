@@ -322,9 +322,31 @@ actor BetterGICoreProcessSupervisor {
            FileManager.default.isExecutableFile(atPath: bundled.path) {
             return bundled
         }
+#if DEBUG
+        if let appExecutableURL = Bundle.main.executableURL,
+           let development = resolveDevelopmentExecutableURL(from: appExecutableURL) {
+            return development
+        }
+#endif
         throw BetterGICoreRPCError.socket(
             "BetterGI Core Host is not bundled. Set BETTERGI_CORE_HOST for development builds."
         )
+    }
+
+    static func resolveDevelopmentExecutableURL(from appExecutableURL: URL) -> URL? {
+        var directory = appExecutableURL.deletingLastPathComponent()
+        while directory.path != "/" {
+            if directory.lastPathComponent == ".build" {
+                let candidate = directory
+                    .appendingPathComponent("BetterGICore", isDirectory: true)
+                    .appendingPathComponent("BetterGenshinImpact.Core.Host")
+                return FileManager.default.isExecutableFile(atPath: candidate.path)
+                    ? candidate
+                    : nil
+            }
+            directory.deleteLastPathComponent()
+        }
+        return nil
     }
 
     private static func makeSessionToken() -> String {
