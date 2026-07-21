@@ -44,13 +44,13 @@ struct BGIRuntimeResourceStore: Equatable, Sendable {
     }
 
     func synchronizeBundledGameTaskResources(
-        sourceURL: URL? = Bundle.module.resourceURL?
+        sourceURL: URL? = Bundle.macGIResources.resourceURL?
             .appendingPathComponent("GameTask", isDirectory: true),
         fileManager: FileManager = .default
     ) throws {
         guard let sourceURL else {
             throw CocoaError(.fileNoSuchFile, userInfo: [
-                NSFilePathErrorKey: "Bundle.module/GameTask"
+                NSFilePathErrorKey: "Bundle.macGIResources/GameTask"
             ])
         }
         var isDirectory: ObjCBool = false

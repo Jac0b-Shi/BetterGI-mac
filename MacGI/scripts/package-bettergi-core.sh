@@ -31,7 +31,7 @@ fi
 ${host} --dependency-smoke
 
 if [[ -n ${TARGET_BUILD_DIR:-} && -n ${WRAPPER_NAME:-} ]]; then
-  destination=${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Helpers/BetterGICore
+  destination=${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources/BetterGICore
   rm -rf ${destination}
   mkdir -p ${destination:h}
   cp -R ${publish_dir} ${destination}

@@ -299,6 +299,18 @@ rg -q 'startupPollLimit = 4_800' MacGI/Sources/MacGI/Runtime/BetterGICoreProcess
 rg -q '#if DEBUG' MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \
   && rg -q 'resolveDevelopmentExecutableURL' MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \
   || fail "SwiftPM Debug builds cannot locate the staged BetterGI Core Helper"
+rg -q 'setActivationPolicy\(\.regular\)' MacGI/Sources/MacGI/App/MacGIApp.swift \
+  || fail "macOS frontend does not register as a regular Dock application"
+rg -q 'CFBundlePackageType string APPL' MacGI/scripts/package-macgi-app.sh \
+  && rg -q 'CFBundleIdentifier string \$\{bundle_identifier\}' MacGI/scripts/package-macgi-app.sh \
+  || fail "macOS App packaging does not create a standard APPL bundle identity"
+rg -q 'Contents/Resources/BetterGICore' MacGI/scripts/package-bettergi-core.sh \
+  && rg -q 'Resources/BetterGICore/BetterGenshinImpact.Core.Host' \
+    MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \
+  || fail "macOS App and Swift runtime disagree on the sealed Core publish-tree location"
+if rg -n 'LSUIElement|LSBackgroundOnly' MacGI/scripts/package-macgi-app.sh; then
+  fail "macOS App packaging hides the frontend from the Dock"
+fi
 rg -q '"--parent-pid", String\(ProcessInfo\.processInfo\.processIdentifier\)' \
   MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \
   && rg -q 'OptionalPositiveIntArgument\(args, "--parent-pid"\)' BetterGenshinImpact.Core.Host/Program.cs \

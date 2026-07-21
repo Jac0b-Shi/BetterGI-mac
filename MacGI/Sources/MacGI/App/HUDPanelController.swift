@@ -41,8 +41,8 @@ final class AppCoordinator: ObservableObject {
     }
 
     private func setApplicationIcon() {
-        guard let url = Bundle.module.url(forResource: "bettergi-logo", withExtension: "png", subdirectory: "Images")
-            ?? Bundle.module.url(forResource: "bettergi-logo", withExtension: "png"),
+        guard let url = Bundle.macGIResources.url(forResource: "bettergi-logo", withExtension: "png", subdirectory: "Images")
+            ?? Bundle.macGIResources.url(forResource: "bettergi-logo", withExtension: "png"),
               let image = NSImage(contentsOf: url) else {
             return
         }

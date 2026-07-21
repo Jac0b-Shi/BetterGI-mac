@@ -6,7 +6,7 @@ Production script catalog, scheduling, ClearScript execution and BetterGI task d
 
 The project is intended to be released under GPLv3, matching upstream BetterGI. Upstream BetterGI visual assets used by this prototype are listed in `NOTICE`.
 
-The runtime root is `~/Library/Application Support/betterGI-mac/`. The app starts the bundled `Contents/Helpers/BetterGICore/BetterGenshinImpact.Core.Host`, negotiates the versioned local RPC protocol, and obtains script groups and scheduler state from that process.
+The runtime root is `~/Library/Application Support/betterGI-mac/`. The app starts the bundled `Contents/Resources/BetterGICore/BetterGenshinImpact.Core.Host`, negotiates the versioned local RPC protocol, and obtains script groups and scheduler state from that process. The self-contained .NET publish tree lives under Resources so the outer App signature seals its managed assemblies as resources; `Contents/Helpers` is reserved for independently bundled nested code.
 
 Build:
 

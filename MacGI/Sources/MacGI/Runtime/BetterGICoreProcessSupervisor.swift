@@ -363,7 +363,7 @@ actor BetterGICoreProcessSupervisor {
         if let bundled = Bundle.main.executableURL?
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Helpers/BetterGICore/BetterGenshinImpact.Core.Host"),
+            .appendingPathComponent("Resources/BetterGICore/BetterGenshinImpact.Core.Host"),
            FileManager.default.isExecutableFile(atPath: bundled.path) {
             return bundled
         }

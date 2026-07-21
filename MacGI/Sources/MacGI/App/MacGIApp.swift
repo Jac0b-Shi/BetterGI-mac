@@ -1,8 +1,15 @@
 import AppKit
 import SwiftUI
 
+final class MacGIApplicationDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.regular)
+    }
+}
+
 @main
 struct MacGIApp: App {
+    @NSApplicationDelegateAdaptor(MacGIApplicationDelegate.self) private var applicationDelegate
     @StateObject private var appState = AppState()
     @StateObject private var coordinator = AppCoordinator()
 

@@ -7,8 +7,8 @@ struct BGIBundledImage: View {
     var contentMode: ContentMode = .fit
 
     var body: some View {
-        if let url = Bundle.module.url(forResource: resource, withExtension: fileExtension, subdirectory: "Images")
-            ?? Bundle.module.url(forResource: resource, withExtension: fileExtension),
+        if let url = Bundle.macGIResources.url(forResource: resource, withExtension: fileExtension, subdirectory: "Images")
+            ?? Bundle.macGIResources.url(forResource: resource, withExtension: fileExtension),
            let image = NSImage(contentsOf: url) {
             Image(nsImage: image)
                 .resizable()
