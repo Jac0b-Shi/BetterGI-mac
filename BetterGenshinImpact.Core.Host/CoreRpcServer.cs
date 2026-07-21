@@ -30,6 +30,7 @@ public sealed class CoreRpcServer(
     private Func<RuntimeArtifactStatus>? _runtimeArtifactInitializer;
     private RuntimeArtifactStatus? _runtimeArtifactStatus;
     private Action? _platformAssetInitializer;
+    private MacTriggerDispatcher? _triggerDispatcher;
     private int _platformAssetsInitialized;
     public PlatformCallbackChannel PlatformCallbacks => _platformCallbacks;
 
@@ -55,6 +56,13 @@ public sealed class CoreRpcServer(
         ArgumentNullException.ThrowIfNull(initializer);
         if (Interlocked.CompareExchange(ref _platformAssetInitializer, initializer, null) is not null)
             throw new InvalidOperationException("Platform asset initializer has already been attached.");
+    }
+
+    public void AttachTriggerDispatcher(MacTriggerDispatcher dispatcher)
+    {
+        ArgumentNullException.ThrowIfNull(dispatcher);
+        if (Interlocked.CompareExchange(ref _triggerDispatcher, dispatcher, null) is not null)
+            throw new InvalidOperationException("Trigger dispatcher has already been attached.");
     }
 
     public void AttachRuntimeArtifactInitializer(Func<RuntimeArtifactStatus> initializer)
@@ -133,13 +141,18 @@ public sealed class CoreRpcServer(
         }
     }
 
-    private Task<RpcResponse> DispatchAsync(RpcRequest request)
+    private async Task<RpcResponse> DispatchAsync(RpcRequest request)
     {
         if (!TokenIsValid(request.SessionToken))
-            return Task.FromResult(RpcResponse.Failure(request.Id, "Unauthorized", "Invalid session token."));
+            return RpcResponse.Failure(request.Id, "Unauthorized", "Invalid session token.");
 
         try
         {
+            if (request.Method == "runtime.stop")
+            {
+                await RequiredTriggerDispatcher().StopAsync();
+                return RpcResponse.Success(request.Id, RuntimeStatus());
+            }
             object? result = request.Method switch
             {
                 "core.handshake" => Handshake(),
@@ -156,6 +169,8 @@ public sealed class CoreRpcServer(
                     RequiredString(request.Params, "name"),
                     request.Params?.Value<bool?>("enabled")
                         ?? throw new ArgumentException("enabled is required.")),
+                "runtime.status" => RuntimeStatus(),
+                "runtime.start" => StartRuntime(),
                 "scheduler.run" => Scheduler.Run(RequiredString(request.Params, "groupName")),
                 "scheduler.pause" => Scheduler.Pause(RequiredString(request.Params, "taskId")),
                 "scheduler.resume" => Scheduler.Resume(RequiredString(request.Params, "taskId")),
@@ -163,15 +178,15 @@ public sealed class CoreRpcServer(
                 "core.shutdown" => Shutdown(),
                 _ => throw new MissingMethodException($"Unknown RPC method: {request.Method}")
             };
-            return Task.FromResult(RpcResponse.Success(request.Id, result));
+            return RpcResponse.Success(request.Id, result);
         }
         catch (CapabilityUnavailableException ex)
         {
-            return Task.FromResult(RpcResponse.Failure(request.Id, "CapabilityUnavailable", ex.Message));
+            return RpcResponse.Failure(request.Id, "CapabilityUnavailable", ex.Message);
         }
         catch (Exception ex)
         {
-            return Task.FromResult(RpcResponse.Failure(request.Id, ex.GetType().Name, ex.Message));
+            return RpcResponse.Failure(request.Id, ex.GetType().Name, ex.Message);
         }
     }
 
@@ -201,6 +216,7 @@ public sealed class CoreRpcServer(
                 "opencv",
                 "clearscript-v8",
                 "trigger-control",
+                "runtime-control",
                 "scheduler.run"
             }
         };
@@ -254,6 +270,23 @@ public sealed class CoreRpcServer(
         _shutdown.Cancel();
         return new { stopping = true };
     }
+
+    private object StartRuntime()
+    {
+        if (Volatile.Read(ref _platformAssetsInitialized) != 1)
+            throw new CapabilityUnavailableException(
+                "The macOS trigger runtime is unavailable until core.initialize completes with the platform attached.");
+        var dispatcher = RequiredTriggerDispatcher();
+        if (!dispatcher.IsRunning)
+            dispatcher.Start();
+        return RuntimeStatus();
+    }
+
+    private object RuntimeStatus() => new { running = RequiredTriggerDispatcher().IsRunning };
+
+    private MacTriggerDispatcher RequiredTriggerDispatcher() =>
+        _triggerDispatcher ?? throw new CapabilityUnavailableException(
+            "The macOS trigger dispatcher is unavailable until Core composition completes.");
 
     private static object ListTriggers()
     {

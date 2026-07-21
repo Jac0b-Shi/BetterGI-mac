@@ -127,7 +127,7 @@ final class InputSafetyGate: ObservableObject {
         // 2. Not running
         if !isAppRunning {
             blockedActionCount += 1
-            return .blocked(reason: "Automation not running (appStatus != .running)")
+            return .blocked(reason: "Automation runtime is not running")
         }
 
         // 3. Invalid window

@@ -67,6 +67,18 @@ enum RuntimeStatus: String, CaseIterable, Identifiable {
     }
 }
 
+enum RuntimeLifecycle: String, CaseIterable, Identifiable {
+    case stopped
+    case starting
+    case running
+    case stopping
+    case failed
+
+    var id: String { rawValue }
+
+    var isTransitioning: Bool { self == .starting || self == .stopping }
+}
+
 enum LogLevel: String, CaseIterable, Identifiable {
     case trace
     case debug
@@ -236,6 +248,7 @@ final class AppState: ObservableObject {
     @Published var captureStatus: RuntimeStatus = .missing
     @Published var inputStatus: RuntimeStatus = .missing
     @Published var coreStatus: RuntimeStatus = .starting
+    @Published var runtimeLifecycle: RuntimeLifecycle = .stopped
     @Published var isHUDVisible = true {
         didSet { onHUDVisibilityChanged?(isHUDVisible) }
     }
@@ -392,11 +405,13 @@ final class AppState: ObservableObject {
     }
 
     func startRuntime() {
+        guard !runtimeLifecycle.isTransitioning, runtimeLifecycle != .running else { return }
         guard isWindowValid, !selectedWindow.isSynthetic else {
-            appStatus = .error
+            runtimeLifecycle = .failed
             addLog(.error, "Cannot start runtime: no real on-screen game window is selected.")
             return
         }
+        runtimeLifecycle = .starting
         Task { [weak self] in
             guard let self else { return }
             if self.betterGICoreSupervisor == nil {
@@ -406,20 +421,55 @@ final class AppState: ObservableObject {
                     await self.startBetterGICore()
                 }
             }
-            guard self.betterGICoreSupervisor != nil, self.coreStatus == .ok else {
-                self.appStatus = .error
+            guard let supervisor = self.betterGICoreSupervisor, self.coreStatus == .ok else {
+                self.runtimeLifecycle = .failed
                 self.addLog(.error, "Cannot start runtime: BetterGI Core is not ready.")
                 return
             }
             do {
+                try await supervisor.startRuntime()
                 _ = try await self.captureFrameForBetterGICore()
-                self.appStatus = .idle
-                self.addLog(.info, "BetterGI runtime ready with a verified ScreenCaptureKit frame.")
+                self.runtimeLifecycle = .running
+                self.addLog(.info, "BetterGI runtime started with a verified ScreenCaptureKit frame.")
             } catch {
+                try? await supervisor.stopRuntime()
                 self.captureStatus = .error
-                self.appStatus = .error
-                self.addLog(.error, "ScreenCaptureKit capture failed: \(error.localizedDescription)")
+                self.runtimeLifecycle = .failed
+                self.addLog(.error, "Cannot start runtime: \(error.localizedDescription)")
             }
+        }
+    }
+
+    func stopRuntime() {
+        guard runtimeLifecycle == .running else { return }
+        runtimeLifecycle = .stopping
+        Task { [weak self] in
+            guard let self else { return }
+            guard let supervisor = self.betterGICoreSupervisor else {
+                self.runtimeLifecycle = .failed
+                self.addLog(.error, "Cannot stop runtime: BetterGI Core is not ready.")
+                return
+            }
+            do {
+                try await supervisor.stopRuntime()
+                self.captureTimestamps = []
+                self.measuredCaptureFPS = 0
+                self.captureStatus = .missing
+                self.isHUDVisible = false
+                self.runtimeLifecycle = .stopped
+                self.addLog(.info, "BetterGI runtime stopped.")
+            } catch {
+                self.runtimeLifecycle = .failed
+                self.addLog(.error, "Cannot stop runtime: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func toggleRuntime() {
+        if runtimeLifecycle == .running {
+            stopRuntime()
+        } else {
+            startRuntime()
         }
     }
 
@@ -919,7 +969,9 @@ final class AppState: ObservableObject {
 
         let result = safetyGate.check(
             window: selectedWindow,
-            isAppRunning: appStatus == .running,
+            isAppRunning: source == .runtimeTrigger
+                ? runtimeLifecycle == .running
+                : appStatus == .running,
             source: source,
             allowRuntimeRealInput: allowRuntimeRealInput,
             isTargetFrontmost: foregroundOK
@@ -998,6 +1050,7 @@ final class AppState: ObservableObject {
         schedulerExecutionTask?.cancel()
         schedulerExecutionTask = nil
         appStatus = .idle
+        runtimeLifecycle = .stopped
         gameWindowStatus = .missing
         captureStatus = .missing
         inputStatus = .missing

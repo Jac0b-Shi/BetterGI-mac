@@ -112,12 +112,12 @@ var paddleAutoPickRecognizer = imageRegionOcrService.CreatePaddleAutoPickTextRec
 var yapAutoPickRecognizer = imageRegionOcrService.CreateYapAutoPickTextRecognizer(layout);
 var triggerDispatcher = new MacTriggerDispatcher(
     loggerFactory.CreateLogger<MacTriggerDispatcher>(), shutdown.Token);
+server.AttachTriggerDispatcher(triggerDispatcher);
 server.AttachPlatformAssetInitializer(() =>
 {
     GameTaskManager.LoadInitialTriggers(
         semanticInputBackend, gameTaskManagerPlatform.SystemInfo, autoPickRuntimeState,
         autoPickConfigProvider, paddleAutoPickRecognizer, yapAutoPickRecognizer);
-    triggerDispatcher.Start();
 });
 BetterGenshinImpact.Core.Recognition.OCR.ImageRegionOcrPlatform.Configure(imageRegionOcrService);
 TaskControlPlatform.Configure(new MacTaskControlPlatform(

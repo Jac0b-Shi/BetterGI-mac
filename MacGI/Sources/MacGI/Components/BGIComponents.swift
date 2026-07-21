@@ -356,12 +356,13 @@ struct BGIHeaderBar: View {
             .foregroundStyle(BGIColors.accent)
             BGIStatusBadge(text: appState.appStatus.label, tint: appState.appStatus.tint)
             Button {
-                appState.startRuntime()
+                appState.toggleRuntime()
             } label: {
-                Image(systemName: "play.fill")
+                Image(systemName: appState.runtimeLifecycle == .running ? "stop.fill" : "play.fill")
             }
             .buttonStyle(.plain)
             .foregroundStyle(BGIColors.secondaryText)
+            .disabled(appState.runtimeLifecycle.isTransitioning)
         }
         .frame(height: 54)
         .padding(.horizontal, 20)

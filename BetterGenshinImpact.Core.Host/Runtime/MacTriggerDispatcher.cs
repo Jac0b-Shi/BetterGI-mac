@@ -17,6 +17,7 @@ public sealed class MacTriggerDispatcher(
     private const int IntervalMilliseconds = 50;
     private readonly object _startLock = new();
     private Task? _loop;
+    private CancellationTokenSource? _runCancellation;
     private int _frameIndex;
     private GameUiCategory _previousCategory = GameUiCategory.Unknown;
     private DateTime _categoryChangedAt = DateTime.MinValue;
@@ -36,20 +37,37 @@ public sealed class MacTriggerDispatcher(
         {
             if (_loop is { IsCompleted: false })
                 throw new InvalidOperationException("macOS trigger dispatcher has already been started.");
-            _loop = Task.Run(RunConfiguredLoopAsync, CancellationToken.None);
+            _runCancellation?.Dispose();
+            _runCancellation = CancellationTokenSource.CreateLinkedTokenSource(shutdown);
+            var cancellationToken = _runCancellation.Token;
+            _loop = Task.Run(() => RunConfiguredLoopAsync(cancellationToken), CancellationToken.None);
         }
     }
 
-    private async Task RunConfiguredLoopAsync()
+    public async Task StopAsync()
+    {
+        Task? loop;
+        lock (_startLock)
+        {
+            loop = _loop;
+            if (loop is null || loop.IsCompleted)
+                return;
+            _runCancellation?.Cancel();
+        }
+
+        await loop;
+    }
+
+    private async Task RunConfiguredLoopAsync(CancellationToken cancellationToken)
     {
         try
         {
             if (runLoop is null)
-                await RunAsync();
+                await RunAsync(cancellationToken);
             else
-                await runLoop(shutdown);
+                await runLoop(cancellationToken);
         }
-        catch (OperationCanceledException) when (shutdown.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
         catch (Exception exception)
@@ -58,10 +76,10 @@ public sealed class MacTriggerDispatcher(
         }
     }
 
-    private async Task RunAsync()
+    private async Task RunAsync(CancellationToken cancellationToken)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(IntervalMilliseconds));
-        while (await timer.WaitForNextTickAsync(shutdown))
+        while (await timer.WaitForNextTickAsync(cancellationToken))
         {
             var triggers = GameTaskManager.TriggerDictionary?.Values
                 .Where(trigger => trigger.IsEnabled)

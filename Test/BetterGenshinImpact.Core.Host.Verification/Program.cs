@@ -241,6 +241,18 @@ await File.WriteAllTextAsync(Path.Combine(oneDragonDirectory, "selected.json"),
     """{"Name":"selected-crafting","MinResinToKeep":80}""");
 var server = new CoreRpcServer(socketPath, sessionToken, layout, NativeDependencySmoke.Run());
 using var loggerFactory = LoggerFactory.Create(builder => builder.AddSimpleConsole());
+var runtimeDispatcherIterations = 0;
+var runtimeDispatcher = new MacTriggerDispatcher(
+    loggerFactory.CreateLogger<MacTriggerDispatcher>(), cancellation.Token,
+    async token =>
+    {
+        while (true)
+        {
+            await Task.Delay(10, token);
+            Interlocked.Increment(ref runtimeDispatcherIterations);
+        }
+    });
+server.AttachTriggerDispatcher(runtimeDispatcher);
 var artifactInitializationCount = 0;
 server.AttachRuntimeArtifactInitializer(() =>
 {
@@ -452,6 +464,10 @@ try
             initializedJson.Value<int>("runtimeArtifactsVerified") == 34 &&
             artifactInitializationCount == 1,
         "core.initialize did not apply the ScriptService platform configuration");
+    var runtimeBeforeAssets = await ExchangeAsync(
+        connection, "runtime-start-before-assets", "runtime.start", sessionToken, null, cancellation.Token);
+    Require(runtimeBeforeAssets.Error?.Code == "CapabilityUnavailable",
+        "runtime.start succeeded before platform trigger assets were initialized");
 
     await using var callbackConnection = await ConnectAsync(socketPath, cancellation.Token);
     await callbackConnection.WriteRequestAsync(
@@ -512,6 +528,35 @@ try
             JObject.FromObject(initializedWithPlatform.Result!).Value<bool>("platformAssetsInitialized") &&
             initializationMetricsCount > 0 && initializationOverlayCount > 0,
         initializedWithPlatform.Error?.Message ?? "core.initialize did not initialize production trigger assets");
+    var initialRuntimeStatus = await ExchangeAsync(
+        connection, "runtime-status-stopped", "runtime.status", sessionToken, null, cancellation.Token);
+    Require(initialRuntimeStatus.Error is null &&
+            JObject.FromObject(initialRuntimeStatus.Result!).Value<bool>("running") == false,
+        initialRuntimeStatus.Error?.Message ?? "runtime was not initially stopped");
+    var runtimeStarted = await ExchangeAsync(
+        connection, "runtime-start", "runtime.start", sessionToken, null, cancellation.Token);
+    Require(runtimeStarted.Error is null &&
+            JObject.FromObject(runtimeStarted.Result!).Value<bool>("running"),
+        runtimeStarted.Error?.Message ?? "runtime.start did not start the trigger dispatcher");
+    for (var attempt = 0; attempt < 100 && Volatile.Read(ref runtimeDispatcherIterations) == 0; attempt++)
+        await Task.Delay(10, cancellation.Token);
+    Require(Volatile.Read(ref runtimeDispatcherIterations) > 0,
+        "runtime.start did not execute the trigger dispatcher loop");
+    var runtimeStopped = await ExchangeAsync(
+        connection, "runtime-stop", "runtime.stop", sessionToken, null, cancellation.Token);
+    Require(runtimeStopped.Error is null &&
+            JObject.FromObject(runtimeStopped.Result!).Value<bool>("running") == false,
+        runtimeStopped.Error?.Message ?? "runtime.stop did not stop the trigger dispatcher");
+    var iterationsAfterStop = Volatile.Read(ref runtimeDispatcherIterations);
+    await Task.Delay(50, cancellation.Token);
+    Require(Volatile.Read(ref runtimeDispatcherIterations) == iterationsAfterStop,
+        "trigger dispatcher continued capturing after runtime.stop acknowledged");
+    var runtimeRestarted = await ExchangeAsync(
+        connection, "runtime-restart", "runtime.start", sessionToken, null, cancellation.Token);
+    Require(runtimeRestarted.Error is null &&
+            JObject.FromObject(runtimeRestarted.Result!).Value<bool>("running"),
+        runtimeRestarted.Error?.Message ?? "runtime did not restart after a completed stop");
+    await ExchangeAsync(connection, "runtime-restop", "runtime.stop", sessionToken, null, cancellation.Token);
     var callbackRejectionResponder = Task.Run(async () =>
     {
         var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)

@@ -163,6 +163,26 @@ actor BetterGICoreProcessSupervisor {
         return try client.listScriptGroups()
     }
 
+    func startRuntime() throws {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        guard let result = try client.request(method: "runtime.start") as? [String: Any],
+              result["running"] as? Bool == true else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid runtime.start result.")
+        }
+    }
+
+    func stopRuntime() throws {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        guard let result = try client.request(method: "runtime.stop") as? [String: Any],
+              result["running"] as? Bool == false else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid runtime.stop result.")
+        }
+    }
+
     func listScriptProjects() throws -> [BetterGIScriptProjectSummary] {
         guard case .running = state, let client else {
             throw BetterGICoreRPCError.socket("BetterGI Core is not running.")

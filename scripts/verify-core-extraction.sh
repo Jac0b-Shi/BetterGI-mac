@@ -270,7 +270,11 @@ rg -q '"--parent-pid", String\(ProcessInfo\.processInfo\.processIdentifier\)' \
   && rg -q 'new ParentProcessLifetime\(processId\)\.MonitorAsync' BetterGenshinImpact.Core.Host/Program.cs \
   || fail "Core Host is not bound to the Swift parent-process lifetime"
 rg -q 'appState\.startRuntime\(\)' MacGI/Sources/MacGI/Views/Pages/OverviewPage.swift \
-  || fail "The global runtime button does not start the Core runtime"
+  && fail "The global runtime button regressed to a start-only action"
+rg -q 'appState\.toggleRuntime\(\)' MacGI/Sources/MacGI/Views/Pages/OverviewPage.swift \
+  && rg -q 'runtime\.start' BetterGenshinImpact.Core.Host/CoreRpcServer.cs \
+  && rg -q 'runtime\.stop' BetterGenshinImpact.Core.Host/CoreRpcServer.cs \
+  || fail "The global runtime control is not backed by Core start/stop RPC"
 if rg -n 'runSchedulerGroups\(\)|toggleStartPause\(\)' MacGI/Sources/MacGI/Views/Pages/OverviewPage.swift; then
   fail "The global runtime button still starts the scheduler"
 fi

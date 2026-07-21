@@ -50,11 +50,14 @@ struct MacGICommands: Commands {
 
             Divider()
 
-            Button("Start Runtime") {
-                appState.startRuntime()
-                coordinator.showHUDIfNeeded()
+            Button(appState.runtimeLifecycle == .running ? "Stop Runtime" : "Start Runtime") {
+                appState.toggleRuntime()
+                if appState.runtimeLifecycle != .running {
+                    coordinator.showHUDIfNeeded()
+                }
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
+            .disabled(appState.runtimeLifecycle.isTransitioning)
 
             Button(appState.isHUDVisible ? "Hide HUD" : "Show HUD") {
                 appState.toggleHUD()
@@ -79,10 +82,13 @@ struct MenuBarControls: View {
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }
-        Button("Start Runtime") {
-            appState.startRuntime()
-            coordinator.showHUDIfNeeded()
+        Button(appState.runtimeLifecycle == .running ? "Stop Runtime" : "Start Runtime") {
+            appState.toggleRuntime()
+            if appState.runtimeLifecycle != .running {
+                coordinator.showHUDIfNeeded()
+            }
         }
+        .disabled(appState.runtimeLifecycle.isTransitioning)
         Button(appState.isHUDVisible ? "Hide HUD" : "Show HUD") {
             appState.toggleHUD()
         }

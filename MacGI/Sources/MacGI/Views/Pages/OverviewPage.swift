@@ -9,11 +9,15 @@ struct OverviewPage: View {
 
             BGISettingGroup(icon: "play", title: "BetterGI 截图器，启动！", subtitle: "截图器启动后才能使用各项功能，点击展开启动相关配置。") {
                 Button {
-                    appState.startRuntime()
+                    appState.toggleRuntime()
                 } label: {
-                    Label("启动运行时", systemImage: "play.fill")
+                    Label(
+                        appState.runtimeLifecycle == .running ? "停止" : "启动",
+                        systemImage: appState.runtimeLifecycle == .running ? "stop.fill" : "play.fill"
+                    )
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(appState.runtimeLifecycle.isTransitioning)
             } content: {
                 BGISettingLine(title: "截图后端", subtitle: "macOS 平台回调使用 ScreenCaptureKit 捕获目标窗口。") {
                     Text("ScreenCaptureKit")

@@ -27,6 +27,7 @@ struct BetterGICoreInputAcknowledgementTests {
             scaleFactor: 1
         )
         appState.appStatus = .running
+        appState.runtimeLifecycle = .running
         appState.safetyGate.dryRun = false
         appState.safetyGate.realInputEnabled = true
         appState.allowRuntimeRealInput = true
@@ -51,6 +52,36 @@ struct BetterGICoreInputAcknowledgementTests {
         }
         #expect(reason.contains("CGEvent dispatch failed"))
         #expect(appState.inputStatus == .error)
+    }
+
+    @MainActor
+    @Test("Stopped runtime rejects trigger input even while scheduler is running")
+    func stoppedRuntimeRejectsTriggerInput() async throws {
+        let appState = AppState(
+            resourceStore: BGIRuntimeResourceStore(
+                rootURL: FileManager.default.temporaryDirectory
+                    .appendingPathComponent("bettergi-runtime-stopped-\(UUID().uuidString)", isDirectory: true)
+            ),
+            inputDispatcher: RejectingInputDispatcher(),
+            isTargetWindowFrontmost: { _ in true }
+        )
+        appState.selectedWindow = WindowInfo(
+            id: 42,
+            ownerPID: 42,
+            ownerName: "wine64-preloader",
+            title: "Genshin Impact",
+            frame: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+            layer: 0,
+            isOnScreen: true,
+            scaleFactor: 1
+        )
+        appState.appStatus = .running
+        appState.runtimeLifecycle = .stopped
+
+        let result = appState.dispatchInput(.keyPress(key: .a), source: .runtimeTrigger)
+
+        #expect(result.isBlocked)
+        #expect(result.reason == "Automation runtime is not running")
     }
 }
 
