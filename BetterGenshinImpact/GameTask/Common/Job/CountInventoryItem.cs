@@ -57,7 +57,7 @@ namespace BetterGenshinImpact.GameTask.Common.Job
                 logger.LogInformation("打开背包并在{grid}寻找{first}等{count}类物品……", this.gridScreenName, this.itemNames!.First(), this.itemNames!.Count());
             }
             await new ReturnMainUiTask().Start(ct);
-            await AutoArtifactSalvageTask.OpenInventory(this.gridScreenName, input, logger, this.ct);
+            await AutoArtifactSalvageTask.OpenInventory(this.gridScreenName, logger, this.ct);
 
             using IItemIconRecognizer iconRecognizer = ItemIconRecognizerFactory.Create(this.iconRecognitionMode);
 

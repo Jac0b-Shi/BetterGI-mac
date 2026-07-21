@@ -29,6 +29,8 @@ using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.AutoCook;
 using BetterGenshinImpact.GameTask.AutoWood;
 using BetterGenshinImpact.GameTask.AutoMusicGame;
+using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
+using BetterGenshinImpact.GameTask.GetGridIcons;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.AutoPathing.Model.Enum;
 using BetterGenshinImpact.GameTask.AutoPathing;
@@ -1601,6 +1603,70 @@ var verificationOcrService = new VerificationOcrService();
 BetterGenshinImpact.Core.Recognition.OCR.ImageRegionOcrPlatform.Configure(verificationOcrService);
 BetterGenshinImpact.GameTask.Model.TaskParameterPlatform.Configure(
     new VerificationTaskParameterPlatform("zh-CN"));
+
+Console.WriteLine("AutoArtifactSalvage: real Grid, Paddle OCR, ONNX and ClearScript");
+var artifactGridFixture = Path.Combine(
+    AppContext.BaseDirectory, "Fixtures", "AutoArtifactSalvage", "ArtifactGrid.png");
+using (var artifactGrid = Cv2.ImRead(artifactGridFixture))
+{
+    var gridItems = GridScreen.GridEnumerator.GetGridItems(artifactGrid, 2).ToArray();
+    Assert("AutoArtifactSalvage detects all fixture grid cells", gridItems.Length == 4,
+        $"got {gridItems.Length}");
+    var statuses = gridItems.Select(rect =>
+    {
+        using var item = artifactGrid.SubMat(rect);
+        return AutoArtifactSalvageTask.GetArtifactStatus(item);
+    }).ToArray();
+    Assert("AutoArtifactSalvage preserves selected/locked status detection",
+        statuses.Count(value => value == AutoArtifactSalvageTask.ArtifactStatus.Selected) == 2 &&
+        statuses.Count(value => value == AutoArtifactSalvageTask.ArtifactStatus.Locked) == 2,
+        string.Join(",", statuses));
+}
+
+using (var artifactOcrFactory = new BetterGenshinImpact.Core.Recognition.OCR.OcrFactory(
+           NullLogger<BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory>.Instance,
+           CpuFactory(new ModelRootPathResolver(lockedRuntimeRoot)),
+           new MacCoreRuntimeAdapter(new AutoPickConfig(), PaddleOcrModelConfig.V5, "zh-Hans"),
+           new OcrResourcePathResolver(lockedRuntimeRoot)))
+using (var artifactCard = Cv2.ImRead(Path.Combine(
+           AppContext.BaseDirectory, "Fixtures", "AutoArtifactSalvage", "ArtifactAffixes.png")))
+{
+    var artifactTask = new AutoArtifactSalvageTask(
+        new AutoArtifactSalvageTaskParam(5, null, null, null, null,
+            new CultureInfo("zh-Hans"),
+            BetterGenshinImpact.GameTask.Model.TaskParameterPlatform.Current
+                .GetStringLocalizer<AutoArtifactSalvageTask>()),
+        artifactOcrFactory.Service,
+        1,
+        NullLogger<AutoArtifactSalvageTask>.Instance);
+    var artifact = artifactTask.GetArtifactStat(artifactCard, artifactOcrFactory.Service, out _);
+    Assert("AutoArtifactSalvage real OCR reads artifact name and affixes",
+        artifact.Name.Contains("异种", StringComparison.Ordinal) &&
+        artifact.MainAffix.Type == ArtifactAffixType.HP &&
+        artifact.MinorAffixes.Length >= 4,
+        artifact.ToStructuredString());
+    var selected = await AutoArtifactSalvageTask.IsMatchJavaScript(
+        artifact,
+        "Output = ArtifactStat.Level == 0 && Array.from(ArtifactStat.MinorAffixes).length >= 4;",
+        NullLogger<AutoArtifactSalvageTask>.Instance);
+    Assert("AutoArtifactSalvage ClearScript filter consumes real OCR model", selected, "Output=false");
+}
+
+var previousGlobalRoot = Global.StartUpPath;
+Global.StartUpPath = lockedRuntimeRoot;
+try
+{
+    using var gridIconSession = GridIconClassifier.LoadModel(out var gridIconPrototypes);
+    Assert("AutoArtifactSalvage grid icon ONNX and prototypes load",
+        gridIconSession.InputMetadata.Count > 0 && gridIconPrototypes.Count > 0,
+        $"inputs={gridIconSession.InputMetadata.Count}, prototypes={gridIconPrototypes.Count}");
+}
+finally
+{
+    Global.StartUpPath = previousGlobalRoot;
+}
+Console.WriteLine();
+
 var verificationAutoFightConfig = new AutoFightConfig
 {
     TeamNames = "钟离,夜兰,纳西妲,久岐忍"

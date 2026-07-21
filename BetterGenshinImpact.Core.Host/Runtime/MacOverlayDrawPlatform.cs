@@ -22,6 +22,23 @@ public sealed class MacOverlayDrawPlatform(
     public void RemoveRectangles(string name) => Emit(name, "removeRectangles", Array.Empty<object>());
     public void ClearAll() => Emit(string.Empty, "clearAll", Array.Empty<object>());
 
+    public void SetLabels(string name, Region source, IReadOnlyList<OverlayLabel> labels)
+    {
+        var mapped = labels.Select(label =>
+        {
+            var rect = source.ConvertPositionToGameCaptureRegion(
+                label.Rectangle.X, label.Rectangle.Y,
+                label.Rectangle.Width, label.Rectangle.Height);
+            return new
+            {
+                x = rect.X, y = rect.Y, width = rect.Width, height = rect.Height,
+                text = label.Text, recognized = label.Recognized,
+            };
+        }).ToArray();
+        Emit(name, "setLabels", mapped);
+    }
+    public void RemoveLabels(string name) => Emit(name, "removeLabels", Array.Empty<object>());
+
     private void Emit(string name, string operation, object rectangles)
     {
         var response = callbacks.InvokeAsync("overlay.command", JObject.FromObject(new

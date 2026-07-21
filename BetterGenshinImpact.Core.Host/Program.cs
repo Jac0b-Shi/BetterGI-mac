@@ -142,7 +142,7 @@ var dispatcherRuntimePlatform = new MacDispatcherRuntimePlatform(
     shutdown.Token, autoPickRuntimeState, semanticInputBackend,
     () => gameTaskManagerPlatform.SystemInfo, autoPickConfigProvider,
     paddleAutoPickRecognizer, yapAutoPickRecognizer, autoWoodRuntimePlatform,
-    autoMusicGameRuntimePlatform, layout, loggerFactory);
+    autoMusicGameRuntimePlatform, imageRegionOcrService, layout, loggerFactory);
 DispatcherRuntimePlatform.Configure(dispatcherRuntimePlatform);
 server.AttachSoloTaskCoordinator(new SoloTaskCoordinator(
     dispatcherRuntimePlatform, shutdown.Token));

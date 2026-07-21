@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using BetterGenshinImpact.GameTask.Model.Area;
 using OpenCvSharp;
 using System.Threading;
@@ -11,7 +12,12 @@ public interface IOverlayDrawPlatform
     void SetRectangles(string name, Region source, IReadOnlyList<Rect> rectangles);
     void RemoveRectangles(string name);
     void ClearAll();
+    void SetLabels(string name, Region source, IReadOnlyList<OverlayLabel> labels) =>
+        SetRectangles(name, source, labels.Select(label => label.Rectangle).ToArray());
+    void RemoveLabels(string name) => RemoveRectangles(name);
 }
+
+public readonly record struct OverlayLabel(Rect Rectangle, string Text, bool Recognized);
 
 public static class OverlayDrawPlatform
 {

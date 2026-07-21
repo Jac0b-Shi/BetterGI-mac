@@ -15,6 +15,7 @@ using BetterGenshinImpact.GameTask.AutoPathing.Handler;
 using BetterGenshinImpact.GameTask.AutoStygianOnslaught;
 using BetterGenshinImpact.GameTask.AutoWood;
 using BetterGenshinImpact.GameTask.AutoMusicGame;
+using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.ViewModel.Pages;
 using BetterGenshinImpact.GameTask;
@@ -89,6 +90,16 @@ public sealed class WindowsDispatcherRuntimePlatform(
             case DispatcherCookTaskRequest:
                 await new AutoCookTask().Start(cancellationToken);
                 return null;
+            case DispatcherArtifactSalvageTaskRequest:
+            {
+                var config = TaskContext.Instance().Config.AutoArtifactSalvageConfig;
+                await new AutoArtifactSalvageTask(new AutoArtifactSalvageTaskParam(
+                        int.Parse(config.MaxArtifactStar), config.JavaScript,
+                        config.ArtifactSetFilter, config.MaxNumToCheck,
+                        config.RecognitionFailurePolicy))
+                    .Start(cancellationToken);
+                return null;
+            }
             case DispatcherEatTaskRequest eat:
                 return await new AutoEatTask(new AutoEatParam
                 {

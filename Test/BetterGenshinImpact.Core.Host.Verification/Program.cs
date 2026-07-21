@@ -2794,9 +2794,9 @@ try
 
     var soloList = await ExchangeAsync(connection, "solo-list", "solo.list", sessionToken, null, cancellation.Token);
     Require(soloList.Error is null && soloList.Result is JArray soloItems &&
-            soloItems.Where(item => item.Value<string>("name") is "AutoFishing" or "AutoWood" or "AutoFight" or "AutoCook" or "AutoMusicGame")
+            soloItems.Where(item => item.Value<string>("name") is "AutoFishing" or "AutoWood" or "AutoFight" or "AutoCook" or "AutoMusicGame" or "AutoArtifactSalvage")
                 .All(item => item.Value<bool>("available")) &&
-            soloItems.Where(item => item.Value<string>("name") is not ("AutoFishing" or "AutoWood" or "AutoFight" or "AutoCook" or "AutoMusicGame"))
+            soloItems.Where(item => item.Value<string>("name") is not ("AutoFishing" or "AutoWood" or "AutoFight" or "AutoCook" or "AutoMusicGame" or "AutoArtifactSalvage"))
                 .All(item => !item.Value<bool>("available")),
         "solo.list did not expose the truthful Core capability catalog");
     var soloStart = await ExchangeAsync(connection, "solo-start", "solo.start", sessionToken,
@@ -2855,6 +2855,20 @@ try
         await Task.Delay(25, cancellation.Token);
     Require(dispatcherRuntime.MusicCancelled,
         "solo.stop did not cancel the active Core AutoMusicGame task");
+    var artifactStart = await ExchangeAsync(connection, "artifact-start", "solo.start", sessionToken,
+        JObject.FromObject(new { name = "AutoArtifactSalvage" }), cancellation.Token);
+    var artifactTaskId = (artifactStart.Result as JObject)?.Value<string>("taskId");
+    Require(artifactStart.Error is null && !string.IsNullOrEmpty(artifactTaskId) &&
+            dispatcherRuntime.ArtifactSalvageStartCount == 1,
+        "solo.start did not execute the shared AutoArtifactSalvage dispatcher request");
+    var artifactStop = await ExchangeAsync(connection, "artifact-stop", "solo.stop", sessionToken,
+        JObject.FromObject(new { taskId = artifactTaskId }), cancellation.Token);
+    Require(artifactStop.Error is null,
+        artifactStop.Error?.Message ?? "solo.stop AutoArtifactSalvage failed");
+    for (var attempt = 0; attempt < 20 && !dispatcherRuntime.ArtifactSalvageCancelled; attempt++)
+        await Task.Delay(25, cancellation.Token);
+    Require(dispatcherRuntime.ArtifactSalvageCancelled,
+        "solo.stop did not cancel the active Core AutoArtifactSalvage task");
     var fightStart = await ExchangeAsync(connection, "fight-start", "solo.start", sessionToken,
         JObject.FromObject(new { name = "AutoFight" }), cancellation.Token);
     var fightTaskId = (fightStart.Result as JObject)?.Value<string>("taskId");
@@ -3241,6 +3255,8 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
     public int? LastWoodDailyMaxCount { get; private set; }
     public int MusicStartCount { get; private set; }
     public bool MusicCancelled { get; private set; }
+    public int ArtifactSalvageStartCount { get; private set; }
+    public bool ArtifactSalvageCancelled { get; private set; }
     public void ClearTriggers() => ClearCount++;
     public bool AddTrigger(string name, object? config)
     {
@@ -3254,7 +3270,7 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
     public async Task<object?> ExecuteSoloTask(DispatcherSoloTaskRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is not (DispatcherFishingTaskRequest or DispatcherWoodTaskRequest or DispatcherFightTaskRequest or DispatcherCookTaskRequest or DispatcherMusicGameTaskRequest))
+        if (request is not (DispatcherFishingTaskRequest or DispatcherWoodTaskRequest or DispatcherFightTaskRequest or DispatcherCookTaskRequest or DispatcherMusicGameTaskRequest or DispatcherArtifactSalvageTaskRequest))
             throw new CapabilityUnavailableException(request.Name);
         if (request is DispatcherFishingTaskRequest) FishingStartCount++;
         else if (request is DispatcherWoodTaskRequest wood)
@@ -3270,6 +3286,7 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
             FightStartCount++;
         }
         else if (request is DispatcherMusicGameTaskRequest) MusicStartCount++;
+        else if (request is DispatcherArtifactSalvageTaskRequest) ArtifactSalvageStartCount++;
         else CookStartCount++;
         try
         {
@@ -3281,6 +3298,7 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
             else if (request is DispatcherWoodTaskRequest) WoodCancelled = true;
             else if (request is DispatcherFightTaskRequest) FightCancelled = true;
             else if (request is DispatcherMusicGameTaskRequest) MusicCancelled = true;
+            else if (request is DispatcherArtifactSalvageTaskRequest) ArtifactSalvageCancelled = true;
             else CookCancelled = true;
             throw;
         }

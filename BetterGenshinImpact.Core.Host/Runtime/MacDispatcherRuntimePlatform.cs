@@ -10,6 +10,8 @@ using BetterGenshinImpact.GameTask.AutoCook;
 using BetterGenshinImpact.GameTask.AutoPathing.Handler;
 using BetterGenshinImpact.GameTask.AutoWood;
 using BetterGenshinImpact.GameTask.AutoMusicGame;
+using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
+using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Config;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -27,6 +29,7 @@ public sealed class MacDispatcherRuntimePlatform(
     IYapAutoPickTextRecognizer yapRecognizer,
     IAutoWoodRuntimePlatform autoWoodRuntimePlatform,
     IAutoMusicGameRuntimePlatform autoMusicGameRuntimePlatform,
+    IOcrService ocrService,
     RuntimeLayout layout,
     ILoggerFactory loggerFactory) : IDispatcherRuntimePlatform
 {
@@ -95,6 +98,20 @@ public sealed class MacDispatcherRuntimePlatform(
                 .Start(cancellationToken);
             return null;
         }
+        if (request is DispatcherArtifactSalvageTaskRequest)
+        {
+            var config = LoadAutoArtifactSalvageConfig(layout);
+            await new AutoArtifactSalvageTask(
+                    new AutoArtifactSalvageTaskParam(
+                        int.Parse(config.MaxArtifactStar), config.JavaScript,
+                        config.ArtifactSetFilter, config.MaxNumToCheck,
+                        config.RecognitionFailurePolicy),
+                    ocrService,
+                    systemInfo().AssetScale,
+                    loggerFactory.CreateLogger<AutoArtifactSalvageTask>())
+                .Start(cancellationToken);
+            return null;
+        }
         throw Unavailable(request.Name);
     }
 
@@ -138,5 +155,18 @@ public sealed class MacDispatcherRuntimePlatform(
         }) as JsonObject ?? throw new InvalidDataException("User/config.json root must be an object.");
         return root["autoWoodConfig"]?.Deserialize<AutoWoodConfig>(ConfigJson.Options)
                ?? new AutoWoodConfig();
+    }
+
+    private static AutoArtifactSalvageConfig LoadAutoArtifactSalvageConfig(RuntimeLayout layout)
+    {
+        var path = Path.Combine(layout.UserPath, "config.json");
+        if (!File.Exists(path)) return new AutoArtifactSalvageConfig();
+        var root = JsonNode.Parse(File.ReadAllText(path), documentOptions: new JsonDocumentOptions
+        {
+            AllowTrailingCommas = true,
+            CommentHandling = JsonCommentHandling.Skip,
+        }) as JsonObject ?? throw new InvalidDataException("User/config.json root must be an object.");
+        return root["autoArtifactSalvageConfig"]?.Deserialize<AutoArtifactSalvageConfig>(ConfigJson.Options)
+               ?? new AutoArtifactSalvageConfig();
     }
 }

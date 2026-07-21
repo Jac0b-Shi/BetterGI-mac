@@ -345,6 +345,7 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingTrigger.cs" Link="GameTask/AutoFishing/AutoFishingTrigger.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoCook/AutoCookConfig.cs" Link="GameTask/AutoCook/AutoCookConfig.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoCook/AutoCookTask.cs" Link="GameTask/AutoCook/AutoCookTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoArtifactSalvage/*.cs" Link="GameTask/AutoArtifactSalvage/%(Filename)%(Extension)" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoEat/AutoEatRuntimePlatform.cs" Link="GameTask/AutoEat/AutoEatRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoEat/AutoEatTrigger.cs" Link="GameTask/AutoEat/AutoEatTrigger.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Model/BaseTaskParam.cs" Link="GameTask/Model/BaseTaskParam.cs" />
@@ -355,6 +356,7 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridScroller.cs" Link="GameTask/Model/GameUI/GridScroller.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridParams.cs" Link="GameTask/Model/GameUI/GridParams.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridCell.cs" Link="GameTask/Model/GameUI/GridCell.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/ArtifactSetFilterScreen.cs" Link="GameTask/Model/GameUI/ArtifactSetFilterScreen.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ItemIconRecognizer.cs" Link="GameTask/Common/Job/ItemIconRecognizer.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ItemIconRecognitionMode.cs" Link="GameTask/Common/Job/ItemIconRecognitionMode.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Reward/RewardResultRecognizer.cs" Link="GameTask/Common/Reward/RewardResultRecognizer.cs" />
@@ -503,6 +505,14 @@
                       LogicalName="BetterGenshinImpact.GameTask.AutoFishing.AutoFishingTask.en.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingTask.fr.resx"
                       LogicalName="BetterGenshinImpact.GameTask.AutoFishing.AutoFishingTask.fr.resources" />
+    <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoArtifactSalvage/AutoArtifactSalvageTask.zh-Hans.resx"
+                      LogicalName="BetterGenshinImpact.GameTask.AutoArtifactSalvage.AutoArtifactSalvageTask.zh-Hans.resources" />
+    <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoArtifactSalvage/AutoArtifactSalvageTask.zh-Hant.resx"
+                      LogicalName="BetterGenshinImpact.GameTask.AutoArtifactSalvage.AutoArtifactSalvageTask.zh-Hant.resources" />
+    <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoArtifactSalvage/AutoArtifactSalvageTask.en.resx"
+                      LogicalName="BetterGenshinImpact.GameTask.AutoArtifactSalvage.AutoArtifactSalvageTask.en.resources" />
+    <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoArtifactSalvage/AutoArtifactSalvageTask.fr.resx"
+                      LogicalName="BetterGenshinImpact.GameTask.AutoArtifactSalvage.AutoArtifactSalvageTask.fr.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvResxHelper.zh-Hans.resx"
                       LogicalName="BetterGenshinImpact.GameTask.Common.BgiVision.BvResxHelper.zh-Hans.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvResxHelper.zh-Hant.resx"

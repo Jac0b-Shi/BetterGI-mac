@@ -33,6 +33,7 @@ public sealed record DispatcherBossTaskRequest(string StrategyPath) : Dispatcher
 public sealed record DispatcherFishingTaskRequest(object? Config) : DispatcherSoloTaskRequest("AutoFishing");
 public sealed record DispatcherCookTaskRequest() : DispatcherSoloTaskRequest("AutoCook");
 public sealed record DispatcherMusicGameTaskRequest() : DispatcherSoloTaskRequest("AutoMusicGame");
+public sealed record DispatcherArtifactSalvageTaskRequest() : DispatcherSoloTaskRequest("AutoArtifactSalvage");
 public sealed record DispatcherEatTaskRequest(string? FoodName, DispatcherAutoEatSettings Settings) : DispatcherSoloTaskRequest("AutoEat");
 public sealed record DispatcherCountInventoryTaskRequest(
     int GridScreenName, string? ItemName, IReadOnlyList<string> ItemNames) : DispatcherSoloTaskRequest("CountInventoryItem");

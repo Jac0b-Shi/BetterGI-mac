@@ -26,12 +26,12 @@ public sealed class SoloTaskCoordinator(
         Descriptor("AutoLeyLineOutcrop", "自动地脉花", false),
         Descriptor("AutoMusicGame", "自动千音雅集", true),
         Descriptor("AutoCook", "自动烹饪", true),
-        Descriptor("AutoArtifactSalvage", "自动分解圣遗物", false),
+        Descriptor("AutoArtifactSalvage", "自动分解圣遗物", true),
     };
 
     public object Start(string name)
     {
-        if (name is not ("AutoWood" or "AutoFishing" or "AutoFight" or "AutoCook" or "AutoMusicGame"))
+        if (name is not ("AutoWood" or "AutoFishing" or "AutoFight" or "AutoCook" or "AutoMusicGame" or "AutoArtifactSalvage"))
             throw new CapabilityUnavailableException(
                 $"solo task '{name}' is not composed in the macOS Core yet; no task was executed.");
 
@@ -86,6 +86,7 @@ public sealed class SoloTaskCoordinator(
                 "AutoFight" => new DispatcherFightTaskRequest(null),
                 "AutoCook" => new DispatcherCookTaskRequest(),
                 "AutoMusicGame" => new DispatcherMusicGameTaskRequest(),
+                "AutoArtifactSalvage" => new DispatcherArtifactSalvageTaskRequest(),
                 _ => throw new CapabilityUnavailableException($"Unknown composed solo task '{name}'.")
             };
             await platform.ExecuteSoloTask(request, cancellationToken);

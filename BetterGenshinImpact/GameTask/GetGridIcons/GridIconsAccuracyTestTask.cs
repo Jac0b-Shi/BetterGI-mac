@@ -1,13 +1,11 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition.OCR;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Model.GameUI;
 using BetterGenshinImpact.Helpers.Extensions;
 using BetterGenshinImpact.View.Drawable;
-using Fischless.WindowsInput;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -28,8 +26,6 @@ namespace BetterGenshinImpact.GameTask.GetGridIcons;
 public class GridIconsAccuracyTestTask : ISoloTask
 {
     private readonly ILogger logger = App.GetLogger<GetGridIconsTask>();
-    private readonly InputSimulator input = Simulation.SendInput;
-
     private CancellationToken ct;
 
     public string Name => "获取Grid界面物品图标独立任务";
@@ -69,7 +65,7 @@ public class GridIconsAccuracyTestTask : ISoloTask
             case GridScreenName.PreciousItems:
             case GridScreenName.Furnishings:
                 await new ReturnMainUiTask().Start(ct);
-                await AutoArtifactSalvageTask.OpenInventory(this.gridScreenName, this.input, this.logger, this.ct);
+                await AutoArtifactSalvageTask.OpenInventory(this.gridScreenName, this.logger, this.ct);
                 break;
             default:
                 logger.LogInformation("{name}暂不支持自动打开，请提前手动打开界面", gridScreenName.GetDescription());

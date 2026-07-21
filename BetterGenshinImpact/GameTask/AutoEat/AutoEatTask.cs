@@ -83,7 +83,7 @@ public class AutoEatTask : BaseIndependentTask, ISoloTask<int?>
         {
             _logger.LogInformation("打开背包寻找{name}……", _taskParam.FoodName);
             await new ReturnMainUiTask().Start(ct);
-            await AutoArtifactSalvageTask.OpenInventory(GridScreenName.Food, _input, _logger, _ct);
+            await AutoArtifactSalvageTask.OpenInventory(GridScreenName.Food, _logger, _ct);
 
             using InferenceSession session = GridIconsAccuracyTestTask.LoadModel(out Dictionary<string, float[]> prototypes);
 
