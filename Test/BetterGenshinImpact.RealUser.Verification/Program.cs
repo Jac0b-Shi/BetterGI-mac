@@ -11,6 +11,7 @@ using Microsoft.ClearScript.V8;
 using Microsoft.ClearScript.JavaScript;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Text.RegularExpressions;
 
 var root = args.Length == 1
     ? Path.GetFullPath(args[0])
@@ -47,13 +48,15 @@ foreach (var groupProject in javascriptProjects)
         $"saved_files={scriptProject.Manifest.SavedFiles?.Length ?? 0}, libraries={scriptProject.Manifest.Library?.Length ?? 0}");
 }
 
-var executableProject = javascriptProjects.SingleOrDefault(project =>
-    project.FolderName == "ExitGameMultipleMode")
-    ?? throw new InvalidDataException("狗粮+锄地 must reference ExitGameMultipleMode for execution verification.");
 var recordingRuntime = new RecordingGlobalMethodRuntime();
 GlobalMethod.Configure(recordingRuntime);
 ScriptHostServices.Configure(new VerificationScriptHostServices());
 ScriptProjectHost.Configure(new MacScriptProjectHostInitializer());
+VerifyProductionHostSurface(javascriptProjects);
+
+var executableProject = javascriptProjects.SingleOrDefault(project =>
+    project.FolderName == "ExitGameMultipleMode")
+    ?? throw new InvalidDataException("狗粮+锄地 must reference ExitGameMultipleMode for execution verification.");
 await new ScriptProject(executableProject.FolderName).ExecuteAsync(executableProject.JsScriptSettingsObject);
 var expectedInput = new[] { "down:MENU", "down:F4", "up:MENU", "up:F4" };
 if (!recordingRuntime.Input.SequenceEqual(expectedInput, StringComparer.Ordinal))
@@ -64,6 +67,108 @@ Console.WriteLine(
     "input=down:MENU,down:F4,up:MENU,up:F4");
 
 Console.WriteLine($"Real User verification passed: group={group.Name}, projects={group.Projects.Count}, javascript={javascriptProjects.Length}.");
+
+static void VerifyProductionHostSurface(IEnumerable<ScriptGroupProject> projects)
+{
+    string[] hostObjectNames =
+    [
+        "genshin", "dispatcher", "pathingScript", "keyMouseScript", "file", "log",
+        "notification", "http", "strategyFile", "host"
+    ];
+    var hostPattern = new Regex(
+        $@"\b(?<host>{string.Join("|", hostObjectNames.Select(Regex.Escape))})\s*\.\s*(?<member>[A-Za-z_$][A-Za-z0-9_$]*)",
+        RegexOptions.CultureInvariant);
+    var timerPattern = new Regex(
+        "\\bnew\\s+RealtimeTimer\\s*\\(\\s*['\"](?<name>[^'\"]+)['\"]",
+        RegexOptions.CultureInvariant);
+    var memberReferences = new HashSet<(string Host, string Member)>();
+    var timerNames = new HashSet<string>(StringComparer.Ordinal);
+
+    foreach (var project in projects)
+    {
+        var projectPath = new ScriptProject(project.FolderName).ProjectPath;
+        foreach (var sourcePath in Directory.EnumerateFiles(projectPath, "*.js", SearchOption.AllDirectories))
+        {
+            var source = File.ReadAllText(sourcePath);
+            foreach (Match match in hostPattern.Matches(source))
+                memberReferences.Add((match.Groups["host"].Value, match.Groups["member"].Value));
+            foreach (Match match in timerPattern.Matches(source))
+                timerNames.Add(match.Groups["name"].Value);
+        }
+    }
+
+    var firstProject = projects.First();
+    var firstProjectPath = new ScriptProject(firstProject.FolderName).ProjectPath;
+    using var engine = new V8ScriptEngine(
+        V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding |
+        V8ScriptEngineFlags.EnableTaskPromiseConversion);
+    new MacScriptProjectHostInitializer().Initialize(
+        engine, firstProjectPath, [".", "./packages"], firstProject.JsScriptSettingsObject);
+
+    var hostTypes = new Dictionary<string, Type>(StringComparer.Ordinal)
+    {
+        ["genshin"] = typeof(Genshin),
+        ["dispatcher"] = typeof(Dispatcher),
+        ["pathingScript"] = typeof(AutoPathingScript),
+        ["keyMouseScript"] = typeof(KeyMouseScript),
+        ["file"] = typeof(LimitedFile),
+        ["log"] = typeof(Log),
+        ["notification"] = typeof(Notification),
+        ["http"] = typeof(Http),
+        ["strategyFile"] = typeof(StrategyFile),
+        ["host"] = typeof(CustomHostFunctions)
+    };
+    var missingRoots = hostObjectNames
+        .Where(name => !Convert.ToBoolean(engine.Evaluate(
+            $"typeof globalThis['{name}'] !== 'undefined'")))
+        .ToArray();
+    if (missingRoots.Length > 0)
+        throw new InvalidDataException(
+            "Production script host is missing roots: " + string.Join(", ", missingRoots));
+
+    var missingMembers = memberReferences
+        .Where(reference => !hostTypes[reference.Host].GetMembers(
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Any(member => string.Equals(
+                member.Name, reference.Member, StringComparison.OrdinalIgnoreCase)))
+        .Select(reference => $"{reference.Host}.{reference.Member}")
+        .OrderBy(name => name, StringComparer.Ordinal)
+        .ToArray();
+    if (missingMembers.Length > 0)
+        throw new InvalidDataException(
+            "Real User projects reference missing production host members: " + string.Join(", ", missingMembers));
+
+    string[] requiredGlobals =
+    [
+        "sleep", "getVersion", "keyDown", "keyUp", "keyPress", "setGameMetrics", "getGameMetrics",
+        "moveMouseBy", "moveMouseTo", "click", "leftButtonClick", "leftButtonDown", "leftButtonUp",
+        "rightButtonClick", "rightButtonDown", "rightButtonUp", "middleButtonClick", "middleButtonDown",
+        "middleButtonUp", "verticalScroll", "captureGameRegion", "getAvatars", "inputText",
+        "RealtimeTimer", "RecognitionObject", "BvPage", "BvLocator", "BvImage"
+    ];
+    var missingGlobals = requiredGlobals
+        .Where(name => !Convert.ToBoolean(engine.Evaluate(
+            $"typeof globalThis['{name}'] !== 'undefined'")))
+        .ToArray();
+    if (missingGlobals.Length > 0)
+        throw new InvalidDataException(
+            "Production script host is missing canonical globals: " + string.Join(", ", missingGlobals));
+
+    var unsupportedTimers = timerNames
+        .Where(name => name is not ("AutoPick" or "AutoSkip"))
+        .OrderBy(name => name, StringComparer.Ordinal)
+        .ToArray();
+    if (unsupportedTimers.Length > 0)
+        throw new InvalidDataException(
+            "Real User projects request uncomposed realtime triggers: " + string.Join(", ", unsupportedTimers));
+    if (!timerNames.SetEquals(["AutoPick", "AutoSkip"]))
+        throw new InvalidDataException(
+            "Real User realtime trigger surface changed: " + string.Join(", ", timerNames.Order()));
+
+    Console.WriteLine(
+        $"PASS production host surface: members={memberReferences.Count}, globals={requiredGlobals.Length}, " +
+        $"realtimeTriggers={string.Join(",", timerNames.Order())}");
+}
 
 static void VerifyJavaScriptGraph(ScriptProject project, PackageDocumentLoader loader)
 {
