@@ -9,6 +9,7 @@ using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.AutoCook;
 using BetterGenshinImpact.GameTask.AutoPathing.Handler;
 using BetterGenshinImpact.GameTask.AutoWood;
+using BetterGenshinImpact.GameTask.AutoMusicGame;
 using BetterGenshinImpact.Core.Config;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -25,6 +26,7 @@ public sealed class MacDispatcherRuntimePlatform(
     IPaddleAutoPickTextRecognizer paddleRecognizer,
     IYapAutoPickTextRecognizer yapRecognizer,
     IAutoWoodRuntimePlatform autoWoodRuntimePlatform,
+    IAutoMusicGameRuntimePlatform autoMusicGameRuntimePlatform,
     RuntimeLayout layout,
     ILoggerFactory loggerFactory) : IDispatcherRuntimePlatform
 {
@@ -84,6 +86,12 @@ public sealed class MacDispatcherRuntimePlatform(
                     new WoodTaskParam(wood.RoundNum, wood.DailyMaxCount),
                     LoadAutoWoodConfig(layout),
                     autoWoodRuntimePlatform)
+                .Start(cancellationToken);
+            return null;
+        }
+        if (request is DispatcherMusicGameTaskRequest)
+        {
+            await new AutoMusicGameTask(new AutoMusicGameParam(), autoMusicGameRuntimePlatform)
                 .Start(cancellationToken);
             return null;
         }

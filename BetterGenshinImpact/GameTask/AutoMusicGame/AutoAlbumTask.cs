@@ -17,17 +17,19 @@ namespace BetterGenshinImpact.GameTask.AutoMusicGame;
 /// <summary>
 /// 自动音乐专辑
 /// </summary>
-public class AutoAlbumTask(AutoMusicGameParam taskParam) : ISoloTask
+public class AutoAlbumTask(
+    AutoMusicGameParam taskParam,
+    IAutoMusicGameRuntimePlatform runtimePlatform) : ISoloTask
 {
     public string Name => "自动音游专辑";
 
-    private AutoMusicGameTask _autoMusicGameTask = new AutoMusicGameTask(taskParam);
+    private readonly AutoMusicGameTask _autoMusicGameTask = new(taskParam, runtimePlatform);
 
     public async Task Start(CancellationToken ct)
     {
         try
         {
-            AutoMusicGameTask.Init();
+            AutoMusicGameTask.Init(runtimePlatform);
             Notify.Event(NotificationEvent.AlbumStart).Success("自动音游专辑启动");
             Logger.LogInformation("开始自动演奏整个专辑未完成的音乐");
             await StartOneAlbum(ct);

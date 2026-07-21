@@ -33,7 +33,9 @@ public sealed class MacGameTaskManagerPlatform(
 {
     private readonly AutoSkipConfig _autoSkipConfig = LoadAutoSkipConfig(layout);
 
-    public ISystemInfo SystemInfo => new CallbackSystemInfo(Metrics());
+    public ISystemInfo SystemInfo => CreateSystemInfo(Metrics());
+
+    internal static ISystemInfo CreateSystemInfo(JObject metrics) => new CallbackSystemInfo(metrics);
 
     public IReadOnlyList<KeyValuePair<string, ITaskTrigger>> CreateInitialTriggers(
         IInputBackend inputBackend, ISystemInfo systemInfo, IAutoPickRuntimeState runtimeState,
@@ -124,10 +126,10 @@ public sealed class MacGameTaskManagerPlatform(
             DisplaySize = new(displayWidth, displayHeight);
             GameScreenSize = new(0, 0, width, height);
             CaptureAreaRect = new(x, y, width, height);
-            var scale = Math.Min(1d, 1920d / width);
+            var scale = Math.Min(1d, width / 1920d);
             AssetScale = scale;
             ZoomOutMax1080PRatio = scale;
-            ScaleTo1080PRatio = 1d / scale;
+            ScaleTo1080PRatio = width / 1920d;
             ScaleMax1080PCaptureRect = new(0, 0, Math.Min(width, 1920), Math.Min(height, 1080));
             GameProcessId = Required(metrics, "processId");
             DesktopRectArea = new DesktopRegion(displayWidth, displayHeight);

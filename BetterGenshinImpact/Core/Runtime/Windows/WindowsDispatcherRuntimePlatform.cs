@@ -14,13 +14,16 @@ using BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
 using BetterGenshinImpact.GameTask.AutoPathing.Handler;
 using BetterGenshinImpact.GameTask.AutoStygianOnslaught;
 using BetterGenshinImpact.GameTask.AutoWood;
+using BetterGenshinImpact.GameTask.AutoMusicGame;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.ViewModel.Pages;
 using BetterGenshinImpact.GameTask;
 
 namespace BetterGenshinImpact.Core.Script.Dependence;
 
-public sealed class WindowsDispatcherRuntimePlatform(IAutoWoodRuntimePlatform autoWoodRuntimePlatform)
+public sealed class WindowsDispatcherRuntimePlatform(
+    IAutoWoodRuntimePlatform autoWoodRuntimePlatform,
+    IAutoMusicGameRuntimePlatform autoMusicGameRuntimePlatform)
     : IDispatcherRuntimePlatform
 {
     public CancellationToken GlobalCancellationToken => CancellationContext.Instance.Cts.Token;
@@ -69,6 +72,10 @@ public sealed class WindowsDispatcherRuntimePlatform(IAutoWoodRuntimePlatform au
                 return null;
             case DispatcherFightTaskRequest fight:
                 await new AutoFightHandler().RunAsyncByScript(cancellationToken, null, fight.Config);
+                return null;
+            case DispatcherMusicGameTaskRequest:
+                await new AutoMusicGameTask(new AutoMusicGameParam(), autoMusicGameRuntimePlatform)
+                    .Start(cancellationToken);
                 return null;
             case DispatcherDomainTaskRequest domain:
                 return await new AutoDomainTask(new AutoDomainParam(0, domain.StrategyPath))

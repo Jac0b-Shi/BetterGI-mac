@@ -253,6 +253,15 @@ if rg -n 'AutoSkipConfig Config|AutoSkipRuntimePlatform\.Current\.Config' \
   BetterGenshinImpact.Core.Host/Runtime/MacAutoSkipRuntimePlatform.cs; then
   fail "AutoSkip runtime platform owns Core business configuration"
 fi
+
+if rg -n 'TaskContext|Simulation|Vanara|User32|Gdi32|SystemControl' \
+  BetterGenshinImpact/GameTask/AutoMusicGame/AutoMusicGameTask.cs \
+  BetterGenshinImpact/GameTask/AutoMusicGame/AutoMusicGameRuntimePlatform.cs; then
+  fail "shared AutoMusicGame task regained Windows runtime dependencies"
+fi
+rg -q 'AutoMusicGame holds and releases only the darkened A lane' \
+  Test/BetterGenshinImpact.Core.Verification/Program.cs \
+  || fail "Core verification does not execute the AutoMusicGame lane state machine"
 rg -q 'ClickChatOption = "优先选择最后一个选项"' \
   BetterGenshinImpact/GameTask/AutoPathing/PathExecutorAutoSkipPlatform.cs \
   || fail "PathExecutor AutoSkip policy is not owned by the shared Core factory"

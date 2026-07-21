@@ -51,6 +51,7 @@ public partial class TaskSettingsPageViewModel : ViewModel
     private readonly INavigationService _navigationService;
     private readonly TaskTriggerDispatcher _taskDispatcher;
     private readonly IAutoWoodRuntimePlatform _autoWoodRuntimePlatform;
+    private readonly IAutoMusicGameRuntimePlatform _autoMusicGameRuntimePlatform;
 
     private CancellationTokenSource? _cts;
     private static readonly object _locker = new();
@@ -229,12 +230,14 @@ public partial class TaskSettingsPageViewModel : ViewModel
         IConfigService configService,
         INavigationService navigationService,
         TaskTriggerDispatcher taskTriggerDispatcher,
-        IAutoWoodRuntimePlatform autoWoodRuntimePlatform)
+        IAutoWoodRuntimePlatform autoWoodRuntimePlatform,
+        IAutoMusicGameRuntimePlatform autoMusicGameRuntimePlatform)
     {
         Config = configService.Get();
         _navigationService = navigationService;
         _taskDispatcher = taskTriggerDispatcher;
         _autoWoodRuntimePlatform = autoWoodRuntimePlatform;
+        _autoMusicGameRuntimePlatform = autoMusicGameRuntimePlatform;
         NormalizeLeyLineOutcropType();
         _scanDropsAfterRewardEnabledUi = Config.AutoLeyLineOutcropConfig.ScanDropsAfterRewardEnabled;
 
@@ -633,7 +636,8 @@ public partial class TaskSettingsPageViewModel : ViewModel
     {
         SwitchAutoMusicGameEnabled = true;
         await new TaskRunner()
-            .RunSoloTaskAsync(new AutoMusicGameTask(new AutoMusicGameParam()));
+            .RunSoloTaskAsync(new AutoMusicGameTask(
+                new AutoMusicGameParam(), _autoMusicGameRuntimePlatform));
         SwitchAutoMusicGameEnabled = false;
     }
 
@@ -648,7 +652,8 @@ public partial class TaskSettingsPageViewModel : ViewModel
     {
         SwitchAutoAlbumEnabled = true;
         await new TaskRunner()
-            .RunSoloTaskAsync(new AutoAlbumTask(new AutoMusicGameParam()));
+            .RunSoloTaskAsync(new AutoAlbumTask(
+                new AutoMusicGameParam(), _autoMusicGameRuntimePlatform));
         SwitchAutoAlbumEnabled = false;
     }
 

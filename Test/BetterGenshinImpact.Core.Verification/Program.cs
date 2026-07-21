@@ -28,6 +28,7 @@ using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.AutoCook;
 using BetterGenshinImpact.GameTask.AutoWood;
+using BetterGenshinImpact.GameTask.AutoMusicGame;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.AutoPathing.Model.Enum;
 using BetterGenshinImpact.GameTask.AutoPathing;
@@ -1821,6 +1822,33 @@ Assert("AutoWood clears overlay state after the completed round",
     string.Join(" | ", overlayRecorder.Commands));
 Console.WriteLine();
 
+Console.WriteLine("AutoMusicGame: upstream six-lane blue-channel hold state machine");
+var musicRuntime = new RecordingAutoMusicGameRuntimePlatform();
+recordingTaskControl.Calls.Clear();
+using (var musicCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(2)))
+{
+    var musicTask = new AutoMusicGameTask(new AutoMusicGameParam(), musicRuntime);
+    var execution = musicTask.Start(musicCancellation.Token);
+    for (var attempt = 0;
+         attempt < 200 && !recordingTaskControl.Calls.Contains("keyUp:65");
+         attempt++)
+        await Task.Delay(5);
+    musicCancellation.Cancel();
+    try { await execution; }
+    catch (OperationCanceledException) when (musicCancellation.IsCancellationRequested) { }
+}
+Assert("AutoMusicGame validates the supported capture resolution",
+    musicRuntime.ValidateCount == 1, $"validate={musicRuntime.ValidateCount}");
+Assert("AutoMusicGame holds and releases only the darkened A lane",
+    recordingTaskControl.Calls.Count(call => call == "keyDown:65") == 1 &&
+    recordingTaskControl.Calls.Count(call => call == "keyUp:65") == 1 &&
+    !recordingTaskControl.Calls.Any(call => call.StartsWith("keyDown:") && call != "keyDown:65"),
+    string.Join(" | ", recordingTaskControl.Calls));
+Assert("AutoMusicGame releases all pressed input on cancellation",
+    recordingTaskControl.Calls.LastOrDefault() == "releaseAll",
+    string.Join(" | ", recordingTaskControl.Calls));
+Console.WriteLine();
+
 Console.WriteLine("Pathing pyro collect: upstream elemental handler and real Avatar attack");
 using var pyroCollectFrame = new Mat(1080, 1920, MatType.CV_8UC4, Scalar.Black);
 var paimonTemplate = ElementRecognition.Get("PaimonMenu", 1920, 1080).TemplateImageMat
@@ -3199,6 +3227,19 @@ sealed class RecordingAutoWoodRuntimePlatform : IAutoWoodRuntimePlatform
     public IAutoWoodLoginSession CreateLoginSession() => LoginSession;
 }
 
+sealed class RecordingAutoMusicGameRuntimePlatform : IAutoMusicGameRuntimePlatform
+{
+    private int _aLaneSamples;
+    public double AssetScale => 1;
+    public int ValidateCount { get; private set; }
+    public void ValidateResolution() => ValidateCount++;
+    public byte ReadBlueChannel(int x, int y)
+    {
+        if (x != 417) return 255;
+        return Interlocked.Increment(ref _aLaneSamples) <= 2 ? (byte)100 : (byte)255;
+    }
+}
+
 sealed class RecordingAutoWoodLoginSession : IAutoWoodLoginSession
 {
     public bool IsAvailable => false;
@@ -3417,7 +3458,7 @@ sealed class RecordingTaskControlPlatform : ITaskControlPlatform
     public double DpiScale => 1;
     public bool IsHdrCapture => false;
     public void EnsureGameActive() { }
-    public void ReleasePressedInputs() { }
+    public void ReleasePressedInputs() => Calls.Add("releaseAll");
     public void SimulateAction(GIActions action, KeyType keyType)
     {
         if (keyType == KeyType.KeyDown) _pressedActions.Add(action);
@@ -3444,8 +3485,8 @@ sealed class RecordingTaskControlPlatform : ITaskControlPlatform
         if (RecordMiddleClicks) Calls.Add("middleClick");
     }
     public void VerticalScroll(int scrollAmountInClicks) { }
-    public void KeyDown(int windowsVirtualKey) { }
-    public void KeyUp(int windowsVirtualKey) { }
+    public void KeyDown(int windowsVirtualKey) => Calls.Add($"keyDown:{windowsVirtualKey}");
+    public void KeyUp(int windowsVirtualKey) => Calls.Add($"keyUp:{windowsVirtualKey}");
     public void PressKey(int windowsVirtualKey) => Calls.Add($"press:{windowsVirtualKey}");
     public void InputText(string text) { }
     public void PressEscape() { }

@@ -130,6 +130,8 @@ TaskControlPlatform.Configure(new MacTaskControlPlatform(
 AutoFightRuntimePlatform.Configure(new MacAutoFightRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory));
 var autoWoodRuntimePlatform = new MacAutoWoodRuntimePlatform();
+var autoMusicGameRuntimePlatform = new MacAutoMusicGameRuntimePlatform(
+    () => gameTaskManagerPlatform.SystemInfo.AssetScale);
 var autoFishingRuntimePlatform = new MacAutoFishingRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
 AutoFishingRuntimePlatform.Configure(autoFishingRuntimePlatform);
@@ -139,7 +141,8 @@ GenshinRuntimePlatform.Configure(new MacGenshinRuntimePlatform(
 var dispatcherRuntimePlatform = new MacDispatcherRuntimePlatform(
     shutdown.Token, autoPickRuntimeState, semanticInputBackend,
     () => gameTaskManagerPlatform.SystemInfo, autoPickConfigProvider,
-    paddleAutoPickRecognizer, yapAutoPickRecognizer, autoWoodRuntimePlatform, layout, loggerFactory);
+    paddleAutoPickRecognizer, yapAutoPickRecognizer, autoWoodRuntimePlatform,
+    autoMusicGameRuntimePlatform, layout, loggerFactory);
 DispatcherRuntimePlatform.Configure(dispatcherRuntimePlatform);
 server.AttachSoloTaskCoordinator(new SoloTaskCoordinator(
     dispatcherRuntimePlatform, shutdown.Token));

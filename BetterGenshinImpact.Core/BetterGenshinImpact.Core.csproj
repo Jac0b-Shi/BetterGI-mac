@@ -83,6 +83,9 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoWood/AutoWoodRuntimePlatform.cs" Link="GameTask/AutoWood/AutoWoodRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoWood/AutoWoodTask.cs" Link="GameTask/AutoWood/AutoWoodTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoWood/WoodTaskParam.cs" Link="GameTask/AutoWood/WoodTaskParam.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoMusicGame/AutoMusicGameParam.cs" Link="GameTask/AutoMusicGame/AutoMusicGameParam.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoMusicGame/AutoMusicGameRuntimePlatform.cs" Link="GameTask/AutoMusicGame/AutoMusicGameRuntimePlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoMusicGame/AutoMusicGameTask.cs" Link="GameTask/AutoMusicGame/AutoMusicGameTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/Avatar.cs" Link="GameTask/AutoFight/Model/Avatar.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/AvatarActiveCheckContext.cs" Link="GameTask/AutoFight/Model/AvatarActiveCheckContext.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/AvatarMacro.cs" Link="GameTask/AutoFight/Model/AvatarMacro.cs" />

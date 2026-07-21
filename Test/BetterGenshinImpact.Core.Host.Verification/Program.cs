@@ -474,6 +474,24 @@ try
             initializedJson.Value<int>("runtimeArtifactsVerified") == 34 &&
             artifactInitializationCount == 1,
         "core.initialize did not apply the ScriptService platform configuration");
+    foreach (var (width, height, expectedAssetScale, expectedScaleTo1080) in new[]
+             {
+                 (1280, 720, 1280d / 1920d, 1280d / 1920d),
+                 (1920, 1080, 1d, 1d),
+                 (2560, 1440, 1d, 2560d / 1920d),
+             })
+    {
+        var systemInfo = MacGameTaskManagerPlatform.CreateSystemInfo(JObject.FromObject(new
+        {
+            captureWidth = width, captureHeight = height,
+            workingAreaWidth = 2560, workingAreaHeight = 1440,
+            captureX = 0, captureY = 0, processId = Environment.ProcessId
+        }));
+        Require(Math.Abs(systemInfo.AssetScale - expectedAssetScale) < 0.0001 &&
+                Math.Abs(systemInfo.ScaleTo1080PRatio - expectedScaleTo1080) < 0.0001,
+            $"macOS system info scale mismatch for {width}x{height}: " +
+            $"asset={systemInfo.AssetScale}, to1080={systemInfo.ScaleTo1080PRatio}");
+    }
     var runtimeBeforeAssets = await ExchangeAsync(
         connection, "runtime-start-before-assets", "runtime.start", sessionToken, null, cancellation.Token);
     Require(runtimeBeforeAssets.Error?.Code == "CapabilityUnavailable",
@@ -2776,9 +2794,9 @@ try
 
     var soloList = await ExchangeAsync(connection, "solo-list", "solo.list", sessionToken, null, cancellation.Token);
     Require(soloList.Error is null && soloList.Result is JArray soloItems &&
-            soloItems.Where(item => item.Value<string>("name") is "AutoFishing" or "AutoWood" or "AutoFight" or "AutoCook")
+            soloItems.Where(item => item.Value<string>("name") is "AutoFishing" or "AutoWood" or "AutoFight" or "AutoCook" or "AutoMusicGame")
                 .All(item => item.Value<bool>("available")) &&
-            soloItems.Where(item => item.Value<string>("name") is not ("AutoFishing" or "AutoWood" or "AutoFight" or "AutoCook"))
+            soloItems.Where(item => item.Value<string>("name") is not ("AutoFishing" or "AutoWood" or "AutoFight" or "AutoCook" or "AutoMusicGame"))
                 .All(item => !item.Value<bool>("available")),
         "solo.list did not expose the truthful Core capability catalog");
     var soloStart = await ExchangeAsync(connection, "solo-start", "solo.start", sessionToken,
@@ -2824,6 +2842,19 @@ try
         await Task.Delay(25, cancellation.Token);
     Require(dispatcherRuntime.WoodCancelled,
         "solo.stop did not cancel the active Core AutoWood task");
+    var musicStart = await ExchangeAsync(connection, "music-start", "solo.start", sessionToken,
+        JObject.FromObject(new { name = "AutoMusicGame" }), cancellation.Token);
+    var musicTaskId = (musicStart.Result as JObject)?.Value<string>("taskId");
+    Require(musicStart.Error is null && !string.IsNullOrEmpty(musicTaskId) &&
+            dispatcherRuntime.MusicStartCount == 1,
+        "solo.start did not execute the shared AutoMusicGame dispatcher request");
+    var musicStop = await ExchangeAsync(connection, "music-stop", "solo.stop", sessionToken,
+        JObject.FromObject(new { taskId = musicTaskId }), cancellation.Token);
+    Require(musicStop.Error is null, musicStop.Error?.Message ?? "solo.stop AutoMusicGame failed");
+    for (var attempt = 0; attempt < 20 && !dispatcherRuntime.MusicCancelled; attempt++)
+        await Task.Delay(25, cancellation.Token);
+    Require(dispatcherRuntime.MusicCancelled,
+        "solo.stop did not cancel the active Core AutoMusicGame task");
     var fightStart = await ExchangeAsync(connection, "fight-start", "solo.start", sessionToken,
         JObject.FromObject(new { name = "AutoFight" }), cancellation.Token);
     var fightTaskId = (fightStart.Result as JObject)?.Value<string>("taskId");
@@ -3208,6 +3239,8 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
     public bool WoodCancelled { get; private set; }
     public int? LastWoodRoundNum { get; private set; }
     public int? LastWoodDailyMaxCount { get; private set; }
+    public int MusicStartCount { get; private set; }
+    public bool MusicCancelled { get; private set; }
     public void ClearTriggers() => ClearCount++;
     public bool AddTrigger(string name, object? config)
     {
@@ -3221,7 +3254,7 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
     public async Task<object?> ExecuteSoloTask(DispatcherSoloTaskRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is not (DispatcherFishingTaskRequest or DispatcherWoodTaskRequest or DispatcherFightTaskRequest or DispatcherCookTaskRequest))
+        if (request is not (DispatcherFishingTaskRequest or DispatcherWoodTaskRequest or DispatcherFightTaskRequest or DispatcherCookTaskRequest or DispatcherMusicGameTaskRequest))
             throw new CapabilityUnavailableException(request.Name);
         if (request is DispatcherFishingTaskRequest) FishingStartCount++;
         else if (request is DispatcherWoodTaskRequest wood)
@@ -3236,6 +3269,7 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
                 throw new InvalidDataException("Solo AutoFight unexpectedly supplied script-group configuration.");
             FightStartCount++;
         }
+        else if (request is DispatcherMusicGameTaskRequest) MusicStartCount++;
         else CookStartCount++;
         try
         {
@@ -3246,6 +3280,7 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
             if (request is DispatcherFishingTaskRequest) FishingCancelled = true;
             else if (request is DispatcherWoodTaskRequest) WoodCancelled = true;
             else if (request is DispatcherFightTaskRequest) FightCancelled = true;
+            else if (request is DispatcherMusicGameTaskRequest) MusicCancelled = true;
             else CookCancelled = true;
             throw;
         }
