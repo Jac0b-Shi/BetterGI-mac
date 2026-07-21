@@ -51,6 +51,7 @@ struct BetterGICoreSchedulerEventTests {
             appState.handleCoreSchedulerControlAccepted(taskID: "task-1", state: state)
         }
         appState.handleCoreSchedulerControlFailed(
+            taskID: "task-1",
             operation: "stop",
             error: BetterGICoreRPCError.protocolViolation("late failure")
         )
@@ -59,6 +60,26 @@ struct BetterGICoreSchedulerEventTests {
         #expect(appState.schedulerExecutionError == "verification failure")
         #expect(appState.currentSchedulerProjectID == nil)
         #expect(appState.appStatus == .error)
+    }
+
+    @MainActor
+    @Test("Old task control failure cannot overwrite a newer running task")
+    func staleControlFailureDoesNotOverwriteNewTask() throws {
+        let appState = makeSchedulerEventAppState()
+        try appState.handleCoreSchedulerEvent(taskID: "task-1", state: "running", error: nil)
+        try appState.handleCoreSchedulerEvent(taskID: "task-1", state: "completed", error: nil)
+        try appState.handleCoreSchedulerEvent(taskID: "task-2", state: "running", error: nil)
+
+        appState.handleCoreSchedulerControlFailed(
+            taskID: "task-1",
+            operation: "stop",
+            error: BetterGICoreRPCError.protocolViolation("late failure")
+        )
+
+        #expect(appState.schedulerExecutionStatus == "running")
+        #expect(appState.schedulerExecutionError == nil)
+        #expect(appState.currentSchedulerProjectID == "task-2")
+        #expect(appState.appStatus == .running)
     }
 
     @MainActor

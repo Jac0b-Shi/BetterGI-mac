@@ -500,7 +500,7 @@ final class AppState: ObservableObject {
                     try await supervisor.resumeScheduler(taskID: taskID)
                     self?.handleCoreSchedulerControlAccepted(taskID: taskID, state: "running")
                 } catch {
-                    self?.handleCoreSchedulerControlFailed(operation: "resume", error: error)
+                    self?.handleCoreSchedulerControlFailed(taskID: taskID, operation: "resume", error: error)
                 }
             }
             return
@@ -524,7 +524,7 @@ final class AppState: ObservableObject {
                 try await supervisor.pauseScheduler(taskID: taskID)
                 self?.handleCoreSchedulerControlAccepted(taskID: taskID, state: "paused")
             } catch {
-                self?.handleCoreSchedulerControlFailed(operation: "pause", error: error)
+                self?.handleCoreSchedulerControlFailed(taskID: taskID, operation: "pause", error: error)
             }
         }
     }
@@ -628,7 +628,8 @@ final class AppState: ObservableObject {
         }
     }
 
-    func handleCoreSchedulerControlFailed(operation: String, error: Error) {
+    func handleCoreSchedulerControlFailed(taskID: String, operation: String, error: Error) {
+        guard currentSchedulerProjectID == taskID else { return }
         guard !Self.terminalSchedulerStates.contains(schedulerExecutionStatus) else { return }
         schedulerExecutionStatus = "\(operation.capitalized) failed"
         schedulerExecutionError = error.localizedDescription
@@ -691,7 +692,7 @@ final class AppState: ObservableObject {
                 try await supervisor.stopScheduler(taskID: taskID)
                 self?.handleCoreSchedulerControlAccepted(taskID: taskID, state: "stopping")
             } catch {
-                self?.handleCoreSchedulerControlFailed(operation: "stop", error: error)
+                self?.handleCoreSchedulerControlFailed(taskID: taskID, operation: "stop", error: error)
             }
         }
     }
