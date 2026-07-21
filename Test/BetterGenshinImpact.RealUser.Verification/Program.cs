@@ -138,6 +138,30 @@ static void VerifyProductionHostSurface(IEnumerable<ScriptGroupProject> projects
         throw new InvalidDataException(
             "Real User projects reference missing production host members: " + string.Join(", ", missingMembers));
 
+    var referencedGenshinMembers = memberReferences
+        .Where(reference => reference.Host == "genshin")
+        .Select(reference => reference.Member)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    string[] verifiedGenshinMembers =
+    [
+        "getPositionFromMap", "getPositionFromMapWithMatchingMethod", "height", "returnMainUi",
+        "switchParty", "tp", "tpToStatueOfTheSeven", "width"
+    ];
+    if (!referencedGenshinMembers.SetEquals(verifiedGenshinMembers))
+        throw new InvalidDataException(
+            "Real User genshin surface is not fully behavior-verified: " +
+            string.Join(", ", referencedGenshinMembers.Order(StringComparer.OrdinalIgnoreCase)));
+
+    var referencedDispatcherMembers = memberReferences
+        .Where(reference => reference.Host == "dispatcher")
+        .Select(reference => reference.Member)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    string[] verifiedDispatcherMembers = ["addTimer", "addTrigger", "getLinkedCancellationToken"];
+    if (!referencedDispatcherMembers.SetEquals(verifiedDispatcherMembers))
+        throw new InvalidDataException(
+            "Real User dispatcher surface is not fully behavior-verified: " +
+            string.Join(", ", referencedDispatcherMembers.Order(StringComparer.OrdinalIgnoreCase)));
+
     string[] requiredGlobals =
     [
         "sleep", "getVersion", "keyDown", "keyUp", "keyPress", "setGameMetrics", "getGameMetrics",
@@ -167,6 +191,7 @@ static void VerifyProductionHostSurface(IEnumerable<ScriptGroupProject> projects
 
     Console.WriteLine(
         $"PASS production host surface: members={memberReferences.Count}, globals={requiredGlobals.Length}, " +
+        $"genshin={referencedGenshinMembers.Count}, dispatcher={referencedDispatcherMembers.Count}, " +
         $"realtimeTriggers={string.Join(",", timerNames.Order())}");
 }
 

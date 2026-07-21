@@ -46,6 +46,10 @@ rg -q 'new MacScriptProjectHostInitializer\(\)\.Initialize' "$real_user_verifier
   || fail "real User host audit does not use the production macOS initializer"
 rg -q 'Real User projects reference missing production host members' "$real_user_verifier" \
   || fail "real User host audit does not reject missing host members"
+rg -q 'Real User genshin surface is not fully behavior-verified' "$real_user_verifier" \
+  || fail "real User host audit does not reject unverified genshin members"
+rg -q 'Real User dispatcher surface is not fully behavior-verified' "$real_user_verifier" \
+  || fail "real User host audit does not reject unverified dispatcher members"
 rg -q 'Production script host is missing canonical globals' "$real_user_verifier" \
   || fail "real User host audit does not reject missing canonical globals"
 rg -q 'name is not \("AutoPick" or "AutoSkip"\)' "$real_user_verifier" \
