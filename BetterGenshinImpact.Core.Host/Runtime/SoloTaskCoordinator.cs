@@ -24,7 +24,7 @@ public sealed class SoloTaskCoordinator(
         Descriptor("AutoBoss", "自动首领讨伐", true, true),
         Descriptor("AutoStygianOnslaught", "自动幽境危战", false),
         Descriptor("AutoFishing", "全自动钓鱼（单个鱼塘）", true, true),
-        Descriptor("AutoLeyLineOutcrop", "自动地脉花", false),
+        Descriptor("AutoLeyLineOutcrop", "自动地脉花", true, true),
         Descriptor("AutoMusicGame", "自动千音雅集", true, true),
         Descriptor("AutoCook", "自动烹饪", true, true),
         Descriptor("AutoArtifactSalvage", "自动分解圣遗物", true, true),
@@ -32,7 +32,7 @@ public sealed class SoloTaskCoordinator(
 
     public object Start(string name)
     {
-        if (name is not ("AutoWood" or "AutoFishing" or "AutoFight" or "AutoCook" or "AutoMusicGame" or "AutoArtifactSalvage" or "AutoDomain" or "AutoBoss"))
+        if (name is not ("AutoWood" or "AutoFishing" or "AutoFight" or "AutoCook" or "AutoMusicGame" or "AutoArtifactSalvage" or "AutoDomain" or "AutoBoss" or "AutoLeyLineOutcrop"))
             throw new CapabilityUnavailableException(
                 $"solo task '{name}' is not composed in the macOS Core yet; no task was executed.");
 
@@ -89,6 +89,8 @@ public sealed class SoloTaskCoordinator(
                 "AutoCook" => new DispatcherCookTaskRequest(),
                 "AutoMusicGame" => new DispatcherMusicGameTaskRequest(),
                 "AutoArtifactSalvage" => new DispatcherArtifactSalvageTaskRequest(),
+                "AutoLeyLineOutcrop" => new DispatcherLeyLineTaskRequest(
+                    settings.BuildAutoLeyLineOutcropConfig()),
                 "AutoDomain" => new DispatcherDomainTaskRequest(
                     !platform.GetFightStrategy(null, out var path)
                         ? path

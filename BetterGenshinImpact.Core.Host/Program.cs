@@ -222,6 +222,12 @@ var scriptGroupExecutionServices = new MacScriptGroupExecutionServices(
     layout, autoPickRuntimeState, semanticInputBackend, () => gameTaskManagerPlatform.SystemInfo,
     autoPickConfigProvider, paddleAutoPickRecognizer, yapAutoPickRecognizer);
 ScriptGroupExecutionServices.Configure(scriptGroupExecutionServices);
+var tpConfig = MacDispatcherRuntimePlatform.LoadUserConfig<
+    BetterGenshinImpact.GameTask.AutoTrackPath.TpConfig>(layout, "tpConfig");
+var autoLeyLineOutcropRuntimePlatform = new MacAutoLeyLineOutcropRuntimePlatform(
+    () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService,
+    autoFightRuntimePlatform, autoPickConfigProvider, tpConfig.MapScaleFactor,
+    loggerFactory, server.PlatformCallbacks, sessionToken, shutdown.Token);
 var autoFightConfig = MacDispatcherRuntimePlatform.LoadUserConfig<AutoFightConfig>(
     layout, "autoFightConfig");
 var autoBossRuntimePlatform = new MacAutoBossRuntimePlatform(
@@ -235,7 +241,9 @@ var dispatcherRuntimePlatform = new MacDispatcherRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, autoPickConfigProvider,
     paddleAutoPickRecognizer, yapAutoPickRecognizer, autoWoodRuntimePlatform,
     autoMusicGameRuntimePlatform, autoDomainRuntimePlatform, autoBossRuntimePlatform,
-    autoBossPathExecutorFactory, autoEatRuntimePlatform, imageRegionOcrService, layout, loggerFactory);
+    autoBossPathExecutorFactory, autoEatRuntimePlatform,
+    autoLeyLineOutcropRuntimePlatform, scriptGroupExecutionServices,
+    imageRegionOcrService, layout, loggerFactory);
 DispatcherRuntimePlatform.Configure(dispatcherRuntimePlatform);
 server.AttachSoloTaskCoordinator(new SoloTaskCoordinator(
     dispatcherRuntimePlatform, server.SoloTaskSettings, shutdown.Token));

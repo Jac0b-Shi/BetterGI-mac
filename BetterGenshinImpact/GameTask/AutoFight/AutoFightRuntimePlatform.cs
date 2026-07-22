@@ -17,6 +17,7 @@ public interface IAutoFightRuntimePlatform
     int CombatMacroPriority { get; }
     ILogger<T> GetLogger<T>();
     BgiYoloPredictor CreateYoloPredictor(BgiOnnxModel model);
+    IDisposable UseConfig(AutoFightConfig config);
 }
 
 public static class AutoFightRuntimePlatform

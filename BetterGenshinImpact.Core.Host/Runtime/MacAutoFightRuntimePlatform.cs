@@ -36,6 +36,12 @@ public sealed class MacAutoFightRuntimePlatform : IAutoFightRuntimePlatform
     public BgiYoloPredictor CreateYoloPredictor(BgiOnnxModel model) => _recognition.CreateYoloPredictor(model);
     public void UpdateConfig(AutoFightConfig config) =>
         Volatile.Write(ref _autoFightConfig, config ?? throw new ArgumentNullException(nameof(config)));
+    public IDisposable UseConfig(AutoFightConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        var original = Interlocked.Exchange(ref _autoFightConfig, config);
+        return new ConfigScope(() => Interlocked.Exchange(ref _autoFightConfig, original));
+    }
 
     private static (AutoFightConfig Config, int CombatMacroPriority) LoadConfig(RuntimeLayout layout)
     {
@@ -49,5 +55,11 @@ public sealed class MacAutoFightRuntimePlatform : IAutoFightRuntimePlatform
         return (
             root["autoFightConfig"]?.Deserialize<AutoFightConfig>(ConfigJson.Options) ?? new AutoFightConfig(),
             root["macroConfig"]?["combatMacroPriority"]?.GetValue<int>() ?? 0);
+    }
+
+    private sealed class ConfigScope(Action restore) : IDisposable
+    {
+        private Action? _restore = restore;
+        public void Dispose() => Interlocked.Exchange(ref _restore, null)?.Invoke();
     }
 }

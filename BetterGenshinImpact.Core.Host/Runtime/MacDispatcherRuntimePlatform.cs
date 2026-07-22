@@ -15,6 +15,8 @@ using BetterGenshinImpact.GameTask.AutoDomain;
 using BetterGenshinImpact.GameTask.AutoBoss;
 using BetterGenshinImpact.GameTask.AutoEat;
 using BetterGenshinImpact.GameTask.AutoPick;
+using BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
+using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Config;
@@ -39,6 +41,8 @@ public sealed class MacDispatcherRuntimePlatform(
     IAutoBossRuntimePlatform autoBossRuntimePlatform,
     IAutoBossPathExecutorFactory autoBossPathExecutorFactory,
     IAutoEatRuntimePlatform autoEatRuntimePlatform,
+    IAutoLeyLineOutcropRuntimePlatform autoLeyLineOutcropRuntimePlatform,
+    IScriptGroupExecutionServices scriptGroupExecutionServices,
     IOcrService ocrService,
     RuntimeLayout layout,
     ILoggerFactory loggerFactory) : IDispatcherRuntimePlatform
@@ -191,6 +195,15 @@ public sealed class MacDispatcherRuntimePlatform(
                     parameter, autoBossRuntimePlatform, autoBossPathExecutorFactory)
                 .Start(cancellationToken);
         }
+        if (request is DispatcherLeyLineTaskRequest leyLine)
+        {
+            await new AutoLeyLineOutcropTask(
+                    new AutoLeyLineOutcropParam(leyLine.Config),
+                    autoLeyLineOutcropRuntimePlatform,
+                    scriptGroupExecutionServices)
+                .Start(cancellationToken);
+            return null;
+        }
         throw Unavailable(request.Name);
     }
 
@@ -213,6 +226,14 @@ public sealed class MacDispatcherRuntimePlatform(
         if (name == "CountInventoryItem" && parameter is CountInventoryItemParam countInventoryItemParam)
         {
             return await RunCountInventory(countInventoryItemParam, cancellationToken);
+        }
+        if (name == "AutoLeyLineOutcrop" && parameter is AutoLeyLineOutcropParam leyLineParam)
+        {
+            await new AutoLeyLineOutcropTask(
+                    leyLineParam, autoLeyLineOutcropRuntimePlatform,
+                    scriptGroupExecutionServices)
+                .Start(cancellationToken);
+            return null;
         }
         throw Unavailable(name);
     }

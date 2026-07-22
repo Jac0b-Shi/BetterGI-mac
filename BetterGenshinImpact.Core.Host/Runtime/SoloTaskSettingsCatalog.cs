@@ -9,6 +9,7 @@ using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
 using BetterGenshinImpact.GameTask.AutoMusicGame;
 using BetterGenshinImpact.GameTask.AutoWood;
+using BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using Newtonsoft.Json.Linq;
 
@@ -39,6 +40,15 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         }
     }
 
+    public AutoLeyLineOutcropConfig BuildAutoLeyLineOutcropConfig()
+    {
+        lock (_lock)
+        {
+            return LoadConfig<AutoLeyLineOutcropConfig>(
+                LoadRoot(), "autoLeyLineOutcropConfig");
+        }
+    }
+
     public object Get(string name)
     {
         lock (_lock)
@@ -60,6 +70,8 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
                     LoadConfig<AutoArtifactSalvageConfig>(root, "autoArtifactSalvageConfig")),
                 "AutoArtifactSalvage" => Describe(
                     LoadConfig<AutoArtifactSalvageConfig>(root, "autoArtifactSalvageConfig")),
+                "AutoLeyLineOutcrop" => Describe(
+                    LoadConfig<AutoLeyLineOutcropConfig>(root, "autoLeyLineOutcropConfig")),
                 _ => throw Unavailable(name),
             };
         }
@@ -77,6 +89,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             "AutoFight" => SaveAutoFight(settings),
             "AutoDomain" => SaveAutoDomain(settings),
             "AutoArtifactSalvage" => SaveAutoArtifactSalvage(settings),
+            "AutoLeyLineOutcrop" => SaveAutoLeyLineOutcrop(settings),
             _ => throw Unavailable(name),
         };
     }
@@ -338,6 +351,72 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         }
     }
 
+    private object SaveAutoLeyLineOutcrop(JObject settings)
+    {
+        var leyLineOutcropType = RequiredString(settings, "leyLineOutcropType");
+        if (!LeyLineOutcropTypes.Contains(leyLineOutcropType, StringComparer.Ordinal))
+            throw new ArgumentException($"Unsupported leyLineOutcropType: {leyLineOutcropType}");
+        var country = RequiredString(settings, "country");
+        if (!LeyLineOutcropCountries.Contains(country, StringComparer.Ordinal))
+            throw new ArgumentException($"Unsupported country: {country}");
+        var strategyName = RequiredString(settings, "strategyName");
+        if (!string.IsNullOrEmpty(strategyName) &&
+            !StrategyOptions().Contains(strategyName, StringComparer.Ordinal))
+            throw new ArgumentException($"Unknown AutoFight strategy: {strategyName}");
+        var seekEnemyRotaryFactor = RequiredInt(settings, "seekEnemyRotaryFactor");
+        if (seekEnemyRotaryFactor is < 1 or > 13)
+            throw new ArgumentOutOfRangeException(nameof(seekEnemyRotaryFactor));
+        var seekEnemyIntervalSeconds = RequiredInt(settings, "seekEnemyIntervalSeconds");
+        if (seekEnemyIntervalSeconds is < 1 or > 60)
+            throw new ArgumentOutOfRangeException(nameof(seekEnemyIntervalSeconds));
+        var scanDropsAfterRewardSeconds = RequiredInt(settings, "scanDropsAfterRewardSeconds");
+        if (scanDropsAfterRewardSeconds is < 0 or > 60)
+            throw new ArgumentOutOfRangeException(nameof(scanDropsAfterRewardSeconds));
+        var count = RequiredInt(settings, "count");
+        if (count is < 1 or > 999)
+            throw new ArgumentOutOfRangeException(nameof(count));
+        var timeout = RequiredInt(settings, "timeout");
+        if (timeout is < 1 or > 9999)
+            throw new ArgumentOutOfRangeException(nameof(timeout));
+
+        lock (_lock)
+        {
+            var root = LoadRoot();
+            var config = LoadConfig<AutoLeyLineOutcropConfig>(
+                root, "autoLeyLineOutcropConfig");
+            config.LeyLineOutcropType = leyLineOutcropType;
+            config.Country = country;
+            config.FightConfig ??= new AutoLeyLineOutcropFightConfig();
+            config.FightConfig.StrategyName = strategyName;
+            config.FightConfig.ActionSchedulerByCd =
+                RequiredString(settings, "actionSchedulerByCd");
+            config.FightConfig.SeekEnemyEnabled = RequiredBool(settings, "seekEnemyEnabled");
+            config.FightConfig.SeekEnemyRotaryFactor = seekEnemyRotaryFactor;
+            config.FightConfig.SeekEnemyIntervalSeconds = seekEnemyIntervalSeconds;
+            config.FightConfig.KazuhaPickupEnabled =
+                RequiredBool(settings, "kazuhaPickupEnabled");
+            config.FightConfig.QinDoublePickUp = RequiredBool(settings, "qinDoublePickUp");
+            config.ScanDropsAfterRewardEnabled =
+                RequiredBool(settings, "scanDropsAfterRewardEnabled");
+            config.ScanDropsAfterRewardSeconds = scanDropsAfterRewardSeconds;
+            config.IsResinExhaustionMode = RequiredBool(settings, "isResinExhaustionMode");
+            config.OpenModeCountMin = RequiredBool(settings, "openModeCountMin");
+            config.Count = count;
+            config.UseTransientResin = RequiredBool(settings, "useTransientResin");
+            config.UseFragileResin = RequiredBool(settings, "useFragileResin");
+            config.Team = RequiredString(settings, "team");
+            config.FriendshipTeam = RequiredString(settings, "friendshipTeam");
+            config.Timeout = timeout;
+            config.FightConfig.Timeout = timeout;
+            config.UseAdventurerHandbook = RequiredBool(settings, "useAdventurerHandbook");
+            config.IsNotification = RequiredBool(settings, "isNotification");
+            root["autoLeyLineOutcropConfig"] =
+                JsonSerializer.SerializeToNode(config, ConfigJson.Options);
+            SaveRoot(root);
+            return Describe(config);
+        }
+    }
+
     private static object Describe(AutoCookConfig config) => new
     {
         name = "AutoCook",
@@ -471,6 +550,43 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             new { value = RecognitionFailurePolicy.Abort.ToString(), displayName = "终止" },
         },
     };
+
+    private static readonly string[] LeyLineOutcropTypes = ["启示之花", "藏金之花"];
+    private static readonly string[] LeyLineOutcropCountries =
+        ["蒙德", "璃月", "稻妻", "须弥", "枫丹", "纳塔", "挪德卡莱"];
+
+    private object Describe(AutoLeyLineOutcropConfig config)
+    {
+        var fightConfig = config.FightConfig ?? new AutoLeyLineOutcropFightConfig();
+        return new
+        {
+            name = "AutoLeyLineOutcrop",
+            leyLineOutcropType = config.LeyLineOutcropType,
+            leyLineOutcropTypeOptions = LeyLineOutcropTypes,
+            country = config.Country,
+            countryOptions = LeyLineOutcropCountries,
+            strategyName = fightConfig.StrategyName,
+            strategyOptions = StrategyOptions(),
+            actionSchedulerByCd = fightConfig.ActionSchedulerByCd,
+            seekEnemyEnabled = fightConfig.SeekEnemyEnabled,
+            seekEnemyRotaryFactor = fightConfig.SeekEnemyRotaryFactor,
+            seekEnemyIntervalSeconds = fightConfig.SeekEnemyIntervalSeconds,
+            kazuhaPickupEnabled = fightConfig.KazuhaPickupEnabled,
+            qinDoublePickUp = fightConfig.QinDoublePickUp,
+            scanDropsAfterRewardEnabled = config.ScanDropsAfterRewardEnabled,
+            scanDropsAfterRewardSeconds = config.ScanDropsAfterRewardSeconds,
+            isResinExhaustionMode = config.IsResinExhaustionMode,
+            openModeCountMin = config.OpenModeCountMin,
+            count = config.Count,
+            useTransientResin = config.UseTransientResin,
+            useFragileResin = config.UseFragileResin,
+            team = config.Team,
+            friendshipTeam = config.FriendshipTeam,
+            timeout = fightConfig.Timeout > 0 ? fightConfig.Timeout : config.Timeout,
+            useAdventurerHandbook = config.UseAdventurerHandbook,
+            isNotification = config.IsNotification,
+        };
+    }
 
     private string[] StrategyOptions()
     {

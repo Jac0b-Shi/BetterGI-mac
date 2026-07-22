@@ -348,6 +348,7 @@ final class AppState: ObservableObject {
     @Published private(set) var autoWoodSettings: BetterGICoreAutoWoodSettings?
     @Published private(set) var autoMusicGameSettings: BetterGICoreAutoMusicGameSettings?
     @Published private(set) var autoBossSettings: BetterGICoreAutoBossSettings?
+    @Published private(set) var autoLeyLineOutcropSettings: BetterGICoreAutoLeyLineOutcropSettings?
     @Published private(set) var autoDomainSettings: BetterGICoreAutoDomainSettings?
     @Published private(set) var autoArtifactSalvageSettings: BetterGICoreAutoArtifactSalvageSettings?
     @Published private(set) var autoFightSettings: BetterGICoreAutoFightSettings?
@@ -1141,6 +1142,7 @@ final class AppState: ObservableObject {
             autoWoodSettings = try await supervisor.autoWoodSettings()
             autoMusicGameSettings = try await supervisor.autoMusicGameSettings()
             autoBossSettings = try await supervisor.autoBossSettings()
+            autoLeyLineOutcropSettings = try await supervisor.autoLeyLineOutcropSettings()
             autoDomainSettings = try await supervisor.autoDomainSettings()
             autoArtifactSalvageSettings = try await supervisor.autoArtifactSalvageSettings()
             autoFightSettings = try await supervisor.autoFightSettings()
@@ -1151,6 +1153,7 @@ final class AppState: ObservableObject {
             autoWoodSettings = nil
             autoMusicGameSettings = nil
             autoBossSettings = nil
+            autoLeyLineOutcropSettings = nil
             autoDomainSettings = nil
             autoArtifactSalvageSettings = nil
             autoFightSettings = nil
@@ -1257,6 +1260,61 @@ final class AppState: ObservableObject {
         Task { [weak self] in
             do { self?.autoBossSettings = try await supervisor.saveAutoBossSettings(next) }
             catch { self?.addLog(.error, "AutoBoss settings save failed: \(error.localizedDescription)") }
+        }
+    }
+
+    func saveAutoLeyLineOutcropSettings(
+        leyLineOutcropType: String? = nil, country: String? = nil,
+        strategyName: String? = nil, actionSchedulerByCd: String? = nil,
+        seekEnemyEnabled: Bool? = nil, seekEnemyRotaryFactor: Int? = nil,
+        seekEnemyIntervalSeconds: Int? = nil, kazuhaPickupEnabled: Bool? = nil,
+        qinDoublePickUp: Bool? = nil, scanDropsAfterRewardEnabled: Bool? = nil,
+        scanDropsAfterRewardSeconds: Int? = nil, isResinExhaustionMode: Bool? = nil,
+        openModeCountMin: Bool? = nil, count: Int? = nil,
+        useTransientResin: Bool? = nil, useFragileResin: Bool? = nil,
+        team: String? = nil, friendshipTeam: String? = nil, timeout: Int? = nil,
+        useAdventurerHandbook: Bool? = nil, isNotification: Bool? = nil
+    ) {
+        guard let supervisor = betterGICoreSupervisor,
+              let current = autoLeyLineOutcropSettings else { return }
+        let next = BetterGICoreAutoLeyLineOutcropSettings(
+            leyLineOutcropType: leyLineOutcropType ?? current.leyLineOutcropType,
+            leyLineOutcropTypeOptions: current.leyLineOutcropTypeOptions,
+            country: country ?? current.country, countryOptions: current.countryOptions,
+            strategyName: strategyName ?? current.strategyName,
+            strategyOptions: current.strategyOptions,
+            actionSchedulerByCd: actionSchedulerByCd ?? current.actionSchedulerByCd,
+            seekEnemyEnabled: seekEnemyEnabled ?? current.seekEnemyEnabled,
+            seekEnemyRotaryFactor:
+                seekEnemyRotaryFactor ?? current.seekEnemyRotaryFactor,
+            seekEnemyIntervalSeconds:
+                seekEnemyIntervalSeconds ?? current.seekEnemyIntervalSeconds,
+            kazuhaPickupEnabled: kazuhaPickupEnabled ?? current.kazuhaPickupEnabled,
+            qinDoublePickUp: qinDoublePickUp ?? current.qinDoublePickUp,
+            scanDropsAfterRewardEnabled:
+                scanDropsAfterRewardEnabled ?? current.scanDropsAfterRewardEnabled,
+            scanDropsAfterRewardSeconds:
+                scanDropsAfterRewardSeconds ?? current.scanDropsAfterRewardSeconds,
+            isResinExhaustionMode:
+                isResinExhaustionMode ?? current.isResinExhaustionMode,
+            openModeCountMin: openModeCountMin ?? current.openModeCountMin,
+            count: count ?? current.count,
+            useTransientResin: useTransientResin ?? current.useTransientResin,
+            useFragileResin: useFragileResin ?? current.useFragileResin,
+            team: team ?? current.team,
+            friendshipTeam: friendshipTeam ?? current.friendshipTeam,
+            timeout: timeout ?? current.timeout,
+            useAdventurerHandbook:
+                useAdventurerHandbook ?? current.useAdventurerHandbook,
+            isNotification: isNotification ?? current.isNotification)
+        Task { [weak self] in
+            do {
+                self?.autoLeyLineOutcropSettings =
+                    try await supervisor.saveAutoLeyLineOutcropSettings(next)
+            } catch {
+                self?.addLog(.error,
+                    "AutoLeyLineOutcrop settings save failed: \(error.localizedDescription)")
+            }
         }
     }
 

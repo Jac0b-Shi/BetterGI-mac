@@ -83,6 +83,11 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoWood/AutoWoodRuntimePlatform.cs" Link="GameTask/AutoWood/AutoWoodRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoWood/AutoWoodTask.cs" Link="GameTask/AutoWood/AutoWoodTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoWood/WoodTaskParam.cs" Link="GameTask/AutoWood/WoodTaskParam.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoLeyLineOutcrop/AutoLeyLineOutcropConfig.cs" Link="GameTask/AutoLeyLineOutcrop/AutoLeyLineOutcropConfig.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoLeyLineOutcrop/AutoLeyLineOutcropFightConfig.cs" Link="GameTask/AutoLeyLineOutcrop/AutoLeyLineOutcropFightConfig.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoLeyLineOutcrop/AutoLeyLineOutcropParam.cs" Link="GameTask/AutoLeyLineOutcrop/AutoLeyLineOutcropParam.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoLeyLineOutcrop/AutoLeyLineOutcropRuntimePlatform.cs" Link="GameTask/AutoLeyLineOutcrop/AutoLeyLineOutcropRuntimePlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoLeyLineOutcrop/AutoLeyLineOutcropTask.cs" Link="GameTask/AutoLeyLineOutcrop/AutoLeyLineOutcropTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoMusicGame/AutoMusicGameParam.cs" Link="GameTask/AutoMusicGame/AutoMusicGameParam.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoMusicGame/AutoMusicGameConfig.cs" Link="GameTask/AutoMusicGame/AutoMusicGameConfig.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoMusicGame/AutoMusicGameRuntimePlatform.cs" Link="GameTask/AutoMusicGame/AutoMusicGameRuntimePlatform.cs" />

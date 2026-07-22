@@ -1,3 +1,5 @@
+using System;
+using System.Threading;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.GameTask.AutoFight;
@@ -19,4 +21,18 @@ public sealed class WindowsAutoFightRuntimePlatform : IAutoFightRuntimePlatform
     public ILogger<T> GetLogger<T>() => App.GetLogger<T>();
     public BgiYoloPredictor CreateYoloPredictor(BgiOnnxModel model) =>
         App.ServiceProvider.GetRequiredService<BgiOnnxFactory>().CreateYoloPredictor(model);
+    public IDisposable UseConfig(AutoFightConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        var allConfig = TaskContext.Instance().Config;
+        var original = allConfig.AutoFightConfig;
+        allConfig.AutoFightConfig = config;
+        return new ConfigScope(() => allConfig.AutoFightConfig = original);
+    }
+
+    private sealed class ConfigScope(Action restore) : IDisposable
+    {
+        private Action? _restore = restore;
+        public void Dispose() => Interlocked.Exchange(ref _restore, null)?.Invoke();
+    }
 }

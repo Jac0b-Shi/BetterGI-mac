@@ -197,6 +197,7 @@ struct SoloTasksPage: View {
         case "AutoWood": autoWoodSettings
         case "AutoMusicGame": autoMusicGameSettings
         case "AutoBoss": autoBossSettings
+        case "AutoLeyLineOutcrop": autoLeyLineOutcropSettings
         case "AutoDomain": autoDomainSettings
         case "AutoArtifactSalvage": autoArtifactSalvageSettings
         case "AutoFight": autoFightSettings
@@ -544,6 +545,126 @@ struct SoloTasksPage: View {
                     .frame(width: 90).multilineTextAlignment(.trailing)
             }
         } else { settingsLoading }
+    }
+
+    @ViewBuilder
+    private var autoLeyLineOutcropSettings: some View {
+        if let settings = appState.autoLeyLineOutcropSettings {
+            BGISettingLine(title: "地脉花类型", subtitle: "启示之花（经验书）或藏金之花（摩拉）") {
+                Picker("", selection: Binding(
+                    get: { settings.leyLineOutcropType },
+                    set: { appState.saveAutoLeyLineOutcropSettings(leyLineOutcropType: $0) })) {
+                    ForEach(settings.leyLineOutcropTypeOptions, id: \.self) { Text($0).tag($0) }
+                }.labelsHidden().frame(width: 150)
+            }
+            BGISettingLine(title: "国家", subtitle: "按国家选择刷取对应的地脉花") {
+                Picker("", selection: Binding(
+                    get: { settings.country },
+                    set: { appState.saveAutoLeyLineOutcropSettings(country: $0) })) {
+                    ForEach(settings.countryOptions, id: \.self) { Text($0).tag($0) }
+                }.labelsHidden().frame(width: 130)
+            }
+            BGISettingLine(title: "选择战斗策略", subtitle: "用于地脉花战斗") {
+                Picker("", selection: Binding(
+                    get: { settings.strategyName },
+                    set: { appState.saveAutoLeyLineOutcropSettings(strategyName: $0) })) {
+                    Text("跟随自动战斗配置").tag("")
+                    ForEach(settings.strategyOptions, id: \.self) { Text($0).tag($0) }
+                }.labelsHidden().frame(width: 220)
+            }
+            CoreTextSettingLine(
+                title: "根据技能 CD 优化出招人员",
+                subtitle: "填写角色名或角色名与 CD，多个配置以分号分隔",
+                value: settings.actionSchedulerByCd,
+                onSave: { appState.saveAutoLeyLineOutcropSettings(actionSchedulerByCd: $0) })
+            leyLineToggle("旋转寻找敌人位置", "战斗时按设置间隔靠近或旋转寻找敌人",
+                value: Binding(get: { settings.seekEnemyEnabled },
+                    set: { appState.saveAutoLeyLineOutcropSettings(seekEnemyEnabled: $0) }))
+            if settings.seekEnemyEnabled {
+                BGISettingLine(title: "旋转寻找敌人速度", subtitle: "上游建议单次旋转约 360 度") {
+                    Slider(value: Binding(
+                        get: { Double(settings.seekEnemyRotaryFactor) },
+                        set: { appState.saveAutoLeyLineOutcropSettings(
+                            seekEnemyRotaryFactor: Int($0.rounded())) }), in: 1...13, step: 1)
+                        .frame(width: 180)
+                }
+                BGISettingLine(title: "寻敌间隔（秒）", subtitle: "最小 1 秒") {
+                    Stepper(value: Binding(
+                        get: { settings.seekEnemyIntervalSeconds },
+                        set: { appState.saveAutoLeyLineOutcropSettings(
+                            seekEnemyIntervalSeconds: $0) }), in: 1...60) {
+                        Text("\(settings.seekEnemyIntervalSeconds)").frame(minWidth: 36)
+                    }
+                }
+            }
+            leyLineToggle("聚集材料动作", "战斗结束后使用万叶或琴长 E 聚集材料",
+                value: Binding(get: { settings.kazuhaPickupEnabled },
+                    set: { appState.saveAutoLeyLineOutcropSettings(kazuhaPickupEnabled: $0) }))
+            if settings.kazuhaPickupEnabled {
+                leyLineToggle("琴二次拾取", "首次拾取为空时再次执行拾取",
+                    value: Binding(get: { settings.qinDoublePickUp },
+                        set: { appState.saveAutoLeyLineOutcropSettings(qinDoublePickUp: $0) }))
+            }
+            leyLineToggle("领取奖励后扫描掉落物光柱", "短时间扫描周围掉落物并靠近拾取",
+                value: Binding(get: { settings.scanDropsAfterRewardEnabled },
+                    set: { appState.saveAutoLeyLineOutcropSettings(
+                        scanDropsAfterRewardEnabled: $0) }))
+            if settings.scanDropsAfterRewardEnabled {
+                BGISettingLine(title: "领奖后扫描时长（秒）", subtitle: "0 表示不扫描") {
+                    Stepper(value: Binding(
+                        get: { settings.scanDropsAfterRewardSeconds },
+                        set: { appState.saveAutoLeyLineOutcropSettings(
+                            scanDropsAfterRewardSeconds: $0) }), in: 0...60) {
+                        Text("\(settings.scanDropsAfterRewardSeconds)").frame(minWidth: 36)
+                    }
+                }
+            }
+            leyLineToggle("树脂耗尽模式", "按当前树脂与库存自动计算可刷次数",
+                value: Binding(get: { settings.isResinExhaustionMode },
+                    set: { appState.saveAutoLeyLineOutcropSettings(
+                        isResinExhaustionMode: $0) }))
+            leyLineToggle("刷取次数取小值", "与手动次数取最小值，避免超过树脂可用次数",
+                value: Binding(get: { settings.openModeCountMin },
+                    set: { appState.saveAutoLeyLineOutcropSettings(openModeCountMin: $0) }))
+            BGISettingLine(title: "刷取次数", subtitle: "树脂耗尽模式关闭或统计失败时使用") {
+                Stepper(value: Binding(get: { settings.count },
+                    set: { appState.saveAutoLeyLineOutcropSettings(count: $0) }), in: 1...999) {
+                    Text("\(settings.count)").frame(minWidth: 36)
+                }
+            }
+            leyLineToggle("使用须臾树脂", "原粹与浓缩耗尽后允许继续刷取",
+                value: Binding(get: { settings.useTransientResin },
+                    set: { appState.saveAutoLeyLineOutcropSettings(useTransientResin: $0) }))
+            leyLineToggle("使用脆弱树脂", "原粹与浓缩耗尽后允许继续刷取",
+                value: Binding(get: { settings.useFragileResin },
+                    set: { appState.saveAutoLeyLineOutcropSettings(useFragileResin: $0) }))
+            CoreTextSettingLine(title: "战斗队伍名称", subtitle: "留空则不切换；配置好感队时必须填写",
+                value: settings.team,
+                onSave: { appState.saveAutoLeyLineOutcropSettings(team: $0) })
+            CoreTextSettingLine(title: "好感队名称", subtitle: "领取奖励前切换；留空则不切换",
+                value: settings.friendshipTeam,
+                onSave: { appState.saveAutoLeyLineOutcropSettings(friendshipTeam: $0) })
+            BGISettingLine(title: "战斗超时时间（秒）", subtitle: "到达指定时间后自动停止战斗") {
+                Stepper(value: Binding(get: { settings.timeout },
+                    set: { appState.saveAutoLeyLineOutcropSettings(timeout: $0) }), in: 1...9999) {
+                    Text("\(settings.timeout)").frame(minWidth: 48)
+                }
+            }
+            leyLineToggle("不使用冒险之证寻路", "改用内置路线定位地脉花",
+                value: Binding(get: { settings.useAdventurerHandbook },
+                    set: { appState.saveAutoLeyLineOutcropSettings(useAdventurerHandbook: $0) }))
+            leyLineToggle("发送通知", "任务完成或失败时通过通知系统发送提醒",
+                value: Binding(get: { settings.isNotification },
+                    set: { appState.saveAutoLeyLineOutcropSettings(isNotification: $0) }))
+        } else { settingsLoading }
+    }
+
+    private func leyLineToggle(
+        _ title: String, _ subtitle: String, value: Binding<Bool>
+    ) -> some View {
+        BGISettingLine(title: title, subtitle: subtitle) {
+            Toggle("", isOn: value).toggleStyle(.switch).labelsHidden()
+        }
     }
 
     @ViewBuilder

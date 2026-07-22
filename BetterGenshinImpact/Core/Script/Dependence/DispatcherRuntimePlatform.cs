@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoFishing;
+using BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
 
 namespace BetterGenshinImpact.Core.Script.Dependence;
 
@@ -36,6 +37,8 @@ public sealed record DispatcherFishingTaskRequest(
 public sealed record DispatcherCookTaskRequest() : DispatcherSoloTaskRequest("AutoCook");
 public sealed record DispatcherMusicGameTaskRequest() : DispatcherSoloTaskRequest("AutoMusicGame");
 public sealed record DispatcherArtifactSalvageTaskRequest() : DispatcherSoloTaskRequest("AutoArtifactSalvage");
+public sealed record DispatcherLeyLineTaskRequest(AutoLeyLineOutcropConfig Config) :
+    DispatcherSoloTaskRequest("AutoLeyLineOutcrop");
 public sealed record DispatcherEatTaskRequest(string? FoodName, DispatcherAutoEatSettings Settings) : DispatcherSoloTaskRequest("AutoEat");
 public sealed record DispatcherCountInventoryTaskRequest(
     int GridScreenName, string? ItemName, IReadOnlyList<string> ItemNames) : DispatcherSoloTaskRequest("CountInventoryItem");

@@ -91,6 +91,33 @@ struct BetterGICoreAutoBossSettings: Sendable, Equatable {
     let reviveRetryCount: Int
 }
 
+struct BetterGICoreAutoLeyLineOutcropSettings: Sendable, Equatable {
+    let leyLineOutcropType: String
+    let leyLineOutcropTypeOptions: [String]
+    let country: String
+    let countryOptions: [String]
+    let strategyName: String
+    let strategyOptions: [String]
+    let actionSchedulerByCd: String
+    let seekEnemyEnabled: Bool
+    let seekEnemyRotaryFactor: Int
+    let seekEnemyIntervalSeconds: Int
+    let kazuhaPickupEnabled: Bool
+    let qinDoublePickUp: Bool
+    let scanDropsAfterRewardEnabled: Bool
+    let scanDropsAfterRewardSeconds: Int
+    let isResinExhaustionMode: Bool
+    let openModeCountMin: Bool
+    let count: Int
+    let useTransientResin: Bool
+    let useFragileResin: Bool
+    let team: String
+    let friendshipTeam: String
+    let timeout: Int
+    let useAdventurerHandbook: Bool
+    let isNotification: Bool
+}
+
 struct BetterGICoreAutoDomainSettings: Sendable, Equatable {
     let strategyName: String
     let strategyOptions: [String]
@@ -669,6 +696,42 @@ actor BetterGICoreProcessSupervisor {
         ))
     }
 
+    func autoLeyLineOutcropSettings() throws -> BetterGICoreAutoLeyLineOutcropSettings {
+        try decodeAutoLeyLineOutcropSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "AutoLeyLineOutcrop"]
+        ))
+    }
+
+    func saveAutoLeyLineOutcropSettings(_ settings: BetterGICoreAutoLeyLineOutcropSettings) throws
+        -> BetterGICoreAutoLeyLineOutcropSettings {
+        try decodeAutoLeyLineOutcropSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "AutoLeyLineOutcrop", "settings": [
+                "leyLineOutcropType": settings.leyLineOutcropType,
+                "country": settings.country,
+                "strategyName": settings.strategyName,
+                "actionSchedulerByCd": settings.actionSchedulerByCd,
+                "seekEnemyEnabled": settings.seekEnemyEnabled,
+                "seekEnemyRotaryFactor": settings.seekEnemyRotaryFactor,
+                "seekEnemyIntervalSeconds": settings.seekEnemyIntervalSeconds,
+                "kazuhaPickupEnabled": settings.kazuhaPickupEnabled,
+                "qinDoublePickUp": settings.qinDoublePickUp,
+                "scanDropsAfterRewardEnabled": settings.scanDropsAfterRewardEnabled,
+                "scanDropsAfterRewardSeconds": settings.scanDropsAfterRewardSeconds,
+                "isResinExhaustionMode": settings.isResinExhaustionMode,
+                "openModeCountMin": settings.openModeCountMin,
+                "count": settings.count,
+                "useTransientResin": settings.useTransientResin,
+                "useFragileResin": settings.useFragileResin,
+                "team": settings.team,
+                "friendshipTeam": settings.friendshipTeam,
+                "timeout": settings.timeout,
+                "useAdventurerHandbook": settings.useAdventurerHandbook,
+                "isNotification": settings.isNotification,
+            ]]
+        ))
+    }
+
     func saveAutoDomainSettings(_ settings: BetterGICoreAutoDomainSettings) throws
         -> BetterGICoreAutoDomainSettings {
         try decodeAutoDomainSettings(requestSoloSettings(
@@ -890,6 +953,57 @@ actor BetterGICoreProcessSupervisor {
                      walkToF: walkToF, leftRightMoveTimes: moveTimes, autoEat: autoEat,
                      rewardRecognitionEnabled: rewardRecognition,
                      reviveRetryCount: reviveRetryCount)
+    }
+
+    private func decodeAutoLeyLineOutcropSettings(_ value: Any) throws
+        -> BetterGICoreAutoLeyLineOutcropSettings {
+        guard let value = value as? [String: Any],
+              value["name"] as? String == "AutoLeyLineOutcrop",
+              let leyLineOutcropType = value["leyLineOutcropType"] as? String,
+              let leyLineOutcropTypeOptions = value["leyLineOutcropTypeOptions"] as? [String],
+              let country = value["country"] as? String,
+              let countryOptions = value["countryOptions"] as? [String],
+              let strategyName = value["strategyName"] as? String,
+              let strategyOptions = value["strategyOptions"] as? [String],
+              let actionSchedulerByCd = value["actionSchedulerByCd"] as? String,
+              let seekEnemyEnabled = value["seekEnemyEnabled"] as? Bool,
+              let seekEnemyRotaryFactor = value["seekEnemyRotaryFactor"] as? Int,
+              let seekEnemyIntervalSeconds = value["seekEnemyIntervalSeconds"] as? Int,
+              let kazuhaPickupEnabled = value["kazuhaPickupEnabled"] as? Bool,
+              let qinDoublePickUp = value["qinDoublePickUp"] as? Bool,
+              let scanDropsAfterRewardEnabled = value["scanDropsAfterRewardEnabled"] as? Bool,
+              let scanDropsAfterRewardSeconds = value["scanDropsAfterRewardSeconds"] as? Int,
+              let isResinExhaustionMode = value["isResinExhaustionMode"] as? Bool,
+              let openModeCountMin = value["openModeCountMin"] as? Bool,
+              let count = value["count"] as? Int,
+              let useTransientResin = value["useTransientResin"] as? Bool,
+              let useFragileResin = value["useFragileResin"] as? Bool,
+              let team = value["team"] as? String,
+              let friendshipTeam = value["friendshipTeam"] as? String,
+              let timeout = value["timeout"] as? Int,
+              let useAdventurerHandbook = value["useAdventurerHandbook"] as? Bool,
+              let isNotification = value["isNotification"] as? Bool else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoLeyLineOutcrop settings.")
+        }
+        return .init(
+            leyLineOutcropType: leyLineOutcropType,
+            leyLineOutcropTypeOptions: leyLineOutcropTypeOptions,
+            country: country, countryOptions: countryOptions,
+            strategyName: strategyName, strategyOptions: strategyOptions,
+            actionSchedulerByCd: actionSchedulerByCd,
+            seekEnemyEnabled: seekEnemyEnabled,
+            seekEnemyRotaryFactor: seekEnemyRotaryFactor,
+            seekEnemyIntervalSeconds: seekEnemyIntervalSeconds,
+            kazuhaPickupEnabled: kazuhaPickupEnabled,
+            qinDoublePickUp: qinDoublePickUp,
+            scanDropsAfterRewardEnabled: scanDropsAfterRewardEnabled,
+            scanDropsAfterRewardSeconds: scanDropsAfterRewardSeconds,
+            isResinExhaustionMode: isResinExhaustionMode,
+            openModeCountMin: openModeCountMin, count: count,
+            useTransientResin: useTransientResin, useFragileResin: useFragileResin,
+            team: team, friendshipTeam: friendshipTeam, timeout: timeout,
+            useAdventurerHandbook: useAdventurerHandbook,
+            isNotification: isNotification)
     }
 
     private func decodeAutoArtifactSalvageSettings(_ value: Any) throws
