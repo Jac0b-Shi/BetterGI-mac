@@ -387,13 +387,18 @@ Require(craftingBenchPlatform.SelectedConfigName == "selected-crafting" &&
 var quickTeleportPlatform = new MacQuickTeleportRuntimePlatform(
     layout, server.PlatformCallbacks, sessionToken, cancellation.Token);
 QuickTeleportRuntimePlatform.Configure(quickTeleportPlatform);
-AutoEatRuntimePlatform.Configure(new MacAutoEatRuntimePlatform(layout, loggerFactory));
+server.TriggerSettings.AttachQuickTeleportUpdated(quickTeleportPlatform.UpdateConfig);
+var autoEatTriggerPlatform = new MacAutoEatRuntimePlatform(layout, loggerFactory);
+AutoEatRuntimePlatform.Configure(autoEatTriggerPlatform);
+server.TriggerSettings.AttachAutoEatUpdated(autoEatTriggerPlatform.UpdateConfig);
 var triggerGameLoadingPlatform = new MacGameLoadingRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory,
     server.PlatformCallbacks, sessionToken, cancellation.Token, foregroundInputCoordinator);
 GameLoadingRuntimePlatform.Configure(triggerGameLoadingPlatform);
-MapMaskRuntimePlatform.Configure(new MacMapMaskRuntimePlatform(
-    layout, loggerFactory, server.PlatformCallbacks, sessionToken, cancellation.Token));
+var mapMaskPlatform = new MacMapMaskRuntimePlatform(
+    layout, loggerFactory, server.PlatformCallbacks, sessionToken, cancellation.Token);
+MapMaskRuntimePlatform.Configure(mapMaskPlatform);
+server.TriggerSettings.AttachMapMaskUpdated(mapMaskPlatform.UpdateConfig);
 SkillCdRuntimePlatform.Configure(new MacSkillCdRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory,
     server.PlatformCallbacks, sessionToken, cancellation.Token));
@@ -698,6 +703,43 @@ try
     Require(productionTriggerList.Error is null && productionTriggerNames.SetEquals(new[]
         { "GameLoading", "AutoPick", "QuickTeleport", "AutoSkip", "AutoFish", "AutoEat", "MapMask", "SkillCd" }),
         productionTriggerList.Error?.Message ?? "core.initialize did not register the exact production trigger set");
+    var autoEatTriggerSettings = await ExchangeAsync(
+        connection, "auto-eat-trigger-settings", "trigger.settings.get", sessionToken,
+        JObject.FromObject(new { name = "AutoEat" }), cancellation.Token);
+    var autoEatTriggerSettingsJson = JObject.FromObject(autoEatTriggerSettings.Result!);
+    Require(autoEatTriggerSettings.Error is null &&
+            autoEatTriggerSettingsJson["eatInterval"]?.Value<int>() == 1234,
+        autoEatTriggerSettings.Error?.Message ?? "AutoEat trigger settings did not read User/config.json.");
+    var savedAutoEatTriggerSettings = await ExchangeAsync(
+        connection, "save-auto-eat-trigger-settings", "trigger.settings.save", sessionToken,
+        JObject.FromObject(new
+        {
+            name = "AutoEat",
+            settings = new { checkInterval = 275, eatInterval = 1600 }
+        }), cancellation.Token);
+    Require(savedAutoEatTriggerSettings.Error is null &&
+            autoEatTriggerPlatform.Config.CheckInterval == 275 &&
+            autoEatTriggerPlatform.Config.EatInterval == 1600,
+        savedAutoEatTriggerSettings.Error?.Message ??
+        "AutoEat trigger settings did not update the running platform configuration.");
+    var disabledAutoEat = await ExchangeAsync(
+        connection, "disable-auto-eat-trigger", "trigger.setEnabled", sessionToken,
+        JObject.FromObject(new { name = "AutoEat", enabled = false }), cancellation.Token);
+    var persistedTriggerRoot = JObject.Parse(await File.ReadAllTextAsync(
+        Path.Combine(layout.UserPath, "config.json"), cancellation.Token));
+    Require(disabledAutoEat.Error is null &&
+            persistedTriggerRoot["autoEatConfig"]?["enabled"]?.Value<bool>() == false,
+        disabledAutoEat.Error?.Message ?? "trigger.setEnabled did not persist the upstream config value.");
+    _ = await ExchangeAsync(
+        connection, "reenable-auto-eat-trigger", "trigger.setEnabled", sessionToken,
+        JObject.FromObject(new { name = "AutoEat", enabled = true }), cancellation.Token);
+    _ = await ExchangeAsync(
+        connection, "restore-auto-eat-trigger-settings", "trigger.settings.save", sessionToken,
+        JObject.FromObject(new
+        {
+            name = "AutoEat",
+            settings = new { checkInterval = 150, eatInterval = 1234 }
+        }), cancellation.Token);
     var successfulTriggerFrames = 0;
     var isolatedDispatcher = new MacTriggerDispatcher(
         loggerFactory.CreateLogger<MacTriggerDispatcher>(), cancellation.Token);

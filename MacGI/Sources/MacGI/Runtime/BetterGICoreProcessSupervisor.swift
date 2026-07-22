@@ -8,6 +8,22 @@ struct BetterGICoreTriggerState: Sendable, Equatable {
     let enabled: Bool
     let priority: Int
     let exclusive: Bool
+    let settingsAvailable: Bool
+}
+
+struct BetterGICoreAutoEatTriggerSettings: Sendable, Equatable {
+    let checkInterval: Int
+    let eatInterval: Int
+}
+
+struct BetterGICoreQuickTeleportTriggerSettings: Sendable, Equatable {
+    let teleportListClickDelay: Int
+    let waitTeleportPanelDelay: Int
+    let hotkeyTpEnabled: Bool
+}
+
+struct BetterGICoreMapMaskTriggerSettings: Sendable, Equatable {
+    let miniMapMaskEnabled: Bool
 }
 
 struct BetterGICoreSoloTask: Sendable, Equatable, Identifiable {
@@ -366,14 +382,100 @@ actor BetterGICoreProcessSupervisor {
                   let displayName = item["displayName"] as? String,
                   let enabled = item["enabled"] as? Bool,
                   let priority = item["priority"] as? Int,
-                  let exclusive = item["exclusive"] as? Bool else {
+                  let exclusive = item["exclusive"] as? Bool,
+                  let settingsAvailable = item["settingsAvailable"] as? Bool else {
                 throw BetterGICoreRPCError.protocolViolation("Invalid trigger state.")
             }
             return BetterGICoreTriggerState(
                 name: name, displayName: displayName, enabled: enabled,
-                priority: priority, exclusive: exclusive
+                priority: priority, exclusive: exclusive,
+                settingsAvailable: settingsAvailable
             )
         }
+    }
+
+    func autoEatTriggerSettings() throws -> BetterGICoreAutoEatTriggerSettings {
+        let value = try requestTriggerSettings(method: "trigger.settings.get", name: "AutoEat")
+        guard let checkInterval = value["checkInterval"] as? Int,
+              let eatInterval = value["eatInterval"] as? Int else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoEat trigger settings.")
+        }
+        return .init(checkInterval: checkInterval, eatInterval: eatInterval)
+    }
+
+    func saveAutoEatTriggerSettings(_ settings: BetterGICoreAutoEatTriggerSettings) throws
+        -> BetterGICoreAutoEatTriggerSettings {
+        let value = try requestTriggerSettings(method: "trigger.settings.save", name: "AutoEat", settings: [
+            "checkInterval": settings.checkInterval,
+            "eatInterval": settings.eatInterval,
+        ])
+        guard let checkInterval = value["checkInterval"] as? Int,
+              let eatInterval = value["eatInterval"] as? Int else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoEat trigger settings.")
+        }
+        return .init(checkInterval: checkInterval, eatInterval: eatInterval)
+    }
+
+    func quickTeleportTriggerSettings() throws -> BetterGICoreQuickTeleportTriggerSettings {
+        try decodeQuickTeleportTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.get", name: "QuickTeleport"))
+    }
+
+    func saveQuickTeleportTriggerSettings(_ settings: BetterGICoreQuickTeleportTriggerSettings) throws
+        -> BetterGICoreQuickTeleportTriggerSettings {
+        try decodeQuickTeleportTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.save", name: "QuickTeleport", settings: [
+                "teleportListClickDelay": settings.teleportListClickDelay,
+                "waitTeleportPanelDelay": settings.waitTeleportPanelDelay,
+                "hotkeyTpEnabled": settings.hotkeyTpEnabled,
+            ]))
+    }
+
+    func mapMaskTriggerSettings() throws -> BetterGICoreMapMaskTriggerSettings {
+        try decodeMapMaskTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.get", name: "MapMask"))
+    }
+
+    func saveMapMaskTriggerSettings(_ settings: BetterGICoreMapMaskTriggerSettings) throws
+        -> BetterGICoreMapMaskTriggerSettings {
+        try decodeMapMaskTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.save", name: "MapMask", settings: [
+                "miniMapMaskEnabled": settings.miniMapMaskEnabled,
+            ]))
+    }
+
+    private func requestTriggerSettings(
+        method: String, name: String, settings: [String: Any]? = nil
+    ) throws -> [String: Any] {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        var parameters: [String: Any] = ["name": name]
+        if let settings { parameters["settings"] = settings }
+        guard let value = try client.request(method: method, parameters: parameters) as? [String: Any] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid trigger settings result.")
+        }
+        return value
+    }
+
+    private func decodeQuickTeleportTriggerSettings(_ value: [String: Any]) throws
+        -> BetterGICoreQuickTeleportTriggerSettings {
+        guard let listDelay = value["teleportListClickDelay"] as? Int,
+              let panelDelay = value["waitTeleportPanelDelay"] as? Int,
+              let hotkeyEnabled = value["hotkeyTpEnabled"] as? Bool else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid QuickTeleport trigger settings.")
+        }
+        return .init(teleportListClickDelay: listDelay,
+                     waitTeleportPanelDelay: panelDelay,
+                     hotkeyTpEnabled: hotkeyEnabled)
+    }
+
+    private func decodeMapMaskTriggerSettings(_ value: [String: Any]) throws
+        -> BetterGICoreMapMaskTriggerSettings {
+        guard let enabled = value["miniMapMaskEnabled"] as? Bool else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask trigger settings.")
+        }
+        return .init(miniMapMaskEnabled: enabled)
     }
 
     func setTriggerEnabled(name: String, enabled: Bool) throws {

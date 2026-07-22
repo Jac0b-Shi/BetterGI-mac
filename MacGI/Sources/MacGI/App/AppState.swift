@@ -193,6 +193,7 @@ struct MacGIFeature: Identifiable, Equatable {
     var statusText: String
     var icon: BGIIcon
     var isEnabled: Bool
+    var settingsAvailable: Bool
 }
 
 struct LogEntry: Identifiable, Equatable {
@@ -350,6 +351,9 @@ final class AppState: ObservableObject {
     @Published private(set) var autoDomainSettings: BetterGICoreAutoDomainSettings?
     @Published private(set) var autoArtifactSalvageSettings: BetterGICoreAutoArtifactSalvageSettings?
     @Published private(set) var autoFightSettings: BetterGICoreAutoFightSettings?
+    @Published private(set) var autoEatTriggerSettings: BetterGICoreAutoEatTriggerSettings?
+    @Published private(set) var quickTeleportTriggerSettings: BetterGICoreQuickTeleportTriggerSettings?
+    @Published private(set) var mapMaskTriggerSettings: BetterGICoreMapMaskTriggerSettings?
     @Published var recentLogs: [LogEntry] = []
 
     var onHUDVisibilityChanged: ((Bool) -> Void)?
@@ -996,12 +1000,58 @@ final class AppState: ObservableObject {
                     detail: presentation?.detail ?? "BetterGI C# Core 实时触发器。",
                     statusText: "C# Core · P\(state.priority)\(state.exclusive ? " · Exclusive" : "")",
                     icon: presentation?.icon ?? .symbol("bolt"),
-                    isEnabled: state.enabled
+                    isEnabled: state.enabled,
+                    settingsAvailable: state.settingsAvailable
                 )
             }
+            autoEatTriggerSettings = try await supervisor.autoEatTriggerSettings()
+            quickTeleportTriggerSettings = try await supervisor.quickTeleportTriggerSettings()
+            mapMaskTriggerSettings = try await supervisor.mapMaskTriggerSettings()
         } catch {
             features = []
+            autoEatTriggerSettings = nil
+            quickTeleportTriggerSettings = nil
+            mapMaskTriggerSettings = nil
             addLog(.error, "BetterGI Core trigger catalog failed: \(error.localizedDescription)")
+        }
+    }
+
+    func saveAutoEatTriggerSettings(checkInterval: Int? = nil, eatInterval: Int? = nil) {
+        guard let supervisor = betterGICoreSupervisor, let current = autoEatTriggerSettings else { return }
+        let next = BetterGICoreAutoEatTriggerSettings(
+            checkInterval: checkInterval ?? current.checkInterval,
+            eatInterval: eatInterval ?? current.eatInterval)
+        Task { [weak self] in
+            do { self?.autoEatTriggerSettings = try await supervisor.saveAutoEatTriggerSettings(next) }
+            catch { self?.addLog(.error, "Core failed to save AutoEat settings: \(error.localizedDescription)") }
+        }
+    }
+
+    func saveQuickTeleportTriggerSettings(
+        teleportListClickDelay: Int? = nil,
+        waitTeleportPanelDelay: Int? = nil,
+        hotkeyTpEnabled: Bool? = nil
+    ) {
+        guard let supervisor = betterGICoreSupervisor, let current = quickTeleportTriggerSettings else { return }
+        let next = BetterGICoreQuickTeleportTriggerSettings(
+            teleportListClickDelay: teleportListClickDelay ?? current.teleportListClickDelay,
+            waitTeleportPanelDelay: waitTeleportPanelDelay ?? current.waitTeleportPanelDelay,
+            hotkeyTpEnabled: hotkeyTpEnabled ?? current.hotkeyTpEnabled)
+        Task { [weak self] in
+            do { self?.quickTeleportTriggerSettings = try await supervisor.saveQuickTeleportTriggerSettings(next) }
+            catch { self?.addLog(.error, "Core failed to save QuickTeleport settings: \(error.localizedDescription)") }
+        }
+    }
+
+    func saveMapMaskTriggerSettings(miniMapMaskEnabled: Bool) {
+        guard let supervisor = betterGICoreSupervisor else { return }
+        Task { [weak self] in
+            do {
+                self?.mapMaskTriggerSettings = try await supervisor.saveMapMaskTriggerSettings(
+                    .init(miniMapMaskEnabled: miniMapMaskEnabled))
+            } catch {
+                self?.addLog(.error, "Core failed to save MapMask settings: \(error.localizedDescription)")
+            }
         }
     }
 

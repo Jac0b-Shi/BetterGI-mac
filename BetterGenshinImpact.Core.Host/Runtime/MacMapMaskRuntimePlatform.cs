@@ -30,6 +30,9 @@ public sealed class MacMapMaskRuntimePlatform : IMapMaskRuntimePlatform
     public string MapMatchingMethod { get; }
     public ILogger<MapMaskTrigger> Logger { get; }
 
+    public void UpdateConfig(MapMaskConfig config) =>
+        Config.MiniMapMaskEnabled = config.MiniMapMaskEnabled;
+
     public void Publish(MapMaskDrawCommand command)
     {
         var response = _callbacks.InvokeAsync("overlay.command", JObject.FromObject(new

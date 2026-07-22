@@ -7,18 +7,98 @@ struct FeaturesPage: View {
         VStack(alignment: .leading, spacing: 14) {
             BGIPageTitle(title: "实时触发的自动化任务设置")
             ForEach(appState.features) { feature in
-                BGITaskCard(icon: feature.icon, title: feature.name, subtitle: feature.detail) {
-                    Toggle(
-                        "",
-                        isOn: Binding(
-                            get: { appState.featureEnabled(feature.id) },
-                            set: { appState.setFeature(feature.id, enabled: $0) }
-                        )
-                    )
-                    .toggleStyle(.switch)
-                    .labelsHidden()
-                    .disabled(!appState.canControlFeature(feature.id))
+                if feature.settingsAvailable {
+                    BGIExpandableTaskCard(
+                        icon: feature.icon, title: feature.name, subtitle: feature.detail
+                    ) {
+                        featureToggle(feature)
+                    } content: {
+                        triggerSettings(for: feature.id)
+                    }
+                } else {
+                    BGITaskCard(icon: feature.icon, title: feature.name, subtitle: feature.detail) {
+                        featureToggle(feature)
+                    }
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func featureToggle(_ feature: MacGIFeature) -> some View {
+        Toggle("", isOn: Binding(
+            get: { appState.featureEnabled(feature.id) },
+            set: { appState.setFeature(feature.id, enabled: $0) }))
+            .toggleStyle(.switch)
+            .labelsHidden()
+            .disabled(!appState.canControlFeature(feature.id))
+    }
+
+    @ViewBuilder
+    private func triggerSettings(for name: String) -> some View {
+        switch name {
+        case "AutoFish":
+            BGISettingLine(
+                title: "全自动钓鱼已迁移至独立任务下",
+                subtitle: "请到独立任务页配合快捷键使用"
+            ) { EmptyView() }
+        case "AutoEat": autoEatSettings
+        case "QuickTeleport": quickTeleportSettings
+        case "MapMask": mapMaskSettings
+        default: EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private var autoEatSettings: some View {
+        if let settings = appState.autoEatTriggerSettings {
+            BGISettingLine(title: "触发时间间隔（毫秒）", subtitle: "多少时间检查一次是否红血或需要复活") {
+                TextField("", value: Binding(
+                    get: { settings.checkInterval },
+                    set: { appState.saveAutoEatTriggerSettings(checkInterval: $0) }), format: .number)
+                    .frame(width: 90).multilineTextAlignment(.trailing)
+            }
+            BGISettingLine(title: "吃药时间间隔（毫秒）", subtitle: "防止频繁吃药") {
+                TextField("", value: Binding(
+                    get: { settings.eatInterval },
+                    set: { appState.saveAutoEatTriggerSettings(eatInterval: $0) }), format: .number)
+                    .frame(width: 90).multilineTextAlignment(.trailing)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var quickTeleportSettings: some View {
+        if let settings = appState.quickTeleportTriggerSettings {
+            BGISettingLine(title: "点击候选列表传送点的间隔时间（毫秒）", subtitle: "需要根据文字识别耗时配置，太低会导致点击失败") {
+                TextField("", value: Binding(
+                    get: { settings.teleportListClickDelay },
+                    set: { appState.saveQuickTeleportTriggerSettings(teleportListClickDelay: $0) }), format: .number)
+                    .frame(width: 90).multilineTextAlignment(.trailing)
+            }
+            BGISettingLine(title: "等待右侧传送弹出界面的时间（毫秒）", subtitle: "不建议低于 80ms，太低会导致传送按钮识别不到") {
+                TextField("", value: Binding(
+                    get: { settings.waitTeleportPanelDelay },
+                    set: { appState.saveQuickTeleportTriggerSettings(waitTeleportPanelDelay: $0) }), format: .number)
+                    .frame(width: 90).multilineTextAlignment(.trailing)
+            }
+            BGISettingLine(title: "启用快捷键传送", subtitle: "按下手动触发快速传送快捷键后才进行快速传送") {
+                Toggle("", isOn: Binding(
+                    get: { settings.hotkeyTpEnabled },
+                    set: { appState.saveQuickTeleportTriggerSettings(hotkeyTpEnabled: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var mapMaskSettings: some View {
+        if let settings = appState.mapMaskTriggerSettings {
+            BGISettingLine(title: "启用小地图遮罩", subtitle: "在小地图上显示点位") {
+                Toggle("", isOn: Binding(
+                    get: { settings.miniMapMaskEnabled },
+                    set: { appState.saveMapMaskTriggerSettings(miniMapMaskEnabled: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
             }
         }
     }

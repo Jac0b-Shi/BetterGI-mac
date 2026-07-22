@@ -19,6 +19,12 @@ public sealed class MacAutoEatRuntimePlatform(
     public void SimulateAction(GIActions action) =>
         TaskControlPlatform.Current.SimulateAction(action, KeyType.KeyPress);
 
+    public void UpdateConfig(AutoEatConfig config)
+    {
+        Config.CheckInterval = config.CheckInterval;
+        Config.EatInterval = config.EatInterval;
+    }
+
     private static AutoEatConfig LoadConfig(RuntimeLayout layout)
     {
         var path = Path.Combine(layout.UserPath, "config.json");

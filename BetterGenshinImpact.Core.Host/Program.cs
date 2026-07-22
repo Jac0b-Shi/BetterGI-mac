@@ -175,11 +175,14 @@ TpTaskRuntimePlatform.Configure(new MacTpTaskRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo));
 var autoEatRuntimePlatform = new MacAutoEatRuntimePlatform(layout, loggerFactory);
 AutoEatRuntimePlatform.Configure(autoEatRuntimePlatform);
+server.TriggerSettings.AttachAutoEatUpdated(autoEatRuntimePlatform.UpdateConfig);
 GameLoadingRuntimePlatform.Configure(new MacGameLoadingRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory,
     server.PlatformCallbacks, sessionToken, shutdown.Token, foregroundInputCoordinator));
-MapMaskRuntimePlatform.Configure(new MacMapMaskRuntimePlatform(
-    layout, loggerFactory, server.PlatformCallbacks, sessionToken, shutdown.Token));
+var mapMaskRuntimePlatform = new MacMapMaskRuntimePlatform(
+    layout, loggerFactory, server.PlatformCallbacks, sessionToken, shutdown.Token);
+MapMaskRuntimePlatform.Configure(mapMaskRuntimePlatform);
+server.TriggerSettings.AttachMapMaskUpdated(mapMaskRuntimePlatform.UpdateConfig);
 SkillCdRuntimePlatform.Configure(new MacSkillCdRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory,
     server.PlatformCallbacks, sessionToken, shutdown.Token));
@@ -192,8 +195,10 @@ PathExecutorAutoSkipPlatform.Configure(new PathExecutorAutoSkipSessionFactory())
 server.AttachPathExecutorPlatform(pathExecutorPlatform);
 NavigationPlatform.Configure(new MacNavigationPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token));
-QuickTeleportRuntimePlatform.Configure(new MacQuickTeleportRuntimePlatform(
-    layout, server.PlatformCallbacks, sessionToken, shutdown.Token));
+var quickTeleportRuntimePlatform = new MacQuickTeleportRuntimePlatform(
+    layout, server.PlatformCallbacks, sessionToken, shutdown.Token);
+QuickTeleportRuntimePlatform.Configure(quickTeleportRuntimePlatform);
+server.TriggerSettings.AttachQuickTeleportUpdated(quickTeleportRuntimePlatform.UpdateConfig);
 BetterGenshinImpact.GameTask.AutoFight.Script.CombatCommandPlatform.Configure(
     new MacCombatCommandPlatform(globalMethodRuntime));
 BetterGenshinImpact.GameTask.AutoFight.Script.CombatSceneProvider.Configure(

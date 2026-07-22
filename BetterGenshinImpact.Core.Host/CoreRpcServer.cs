@@ -20,6 +20,7 @@ public sealed class CoreRpcServer(
     private readonly ScriptGroupCatalog _catalog = new(layout);
     private readonly ScriptProjectCatalog _scriptProjectCatalog = new(layout);
     private readonly SoloTaskSettingsCatalog _soloTaskSettings = new(layout);
+    private readonly TriggerSettingsCatalog _triggerSettings = new(layout);
     private readonly PlatformCallbackChannel _platformCallbacks = new();
     private SchedulerCoordinator? _scheduler;
     private readonly CancellationTokenSource _shutdown = new();
@@ -37,6 +38,7 @@ public sealed class CoreRpcServer(
     private readonly SemaphoreSlim _runtimeMutationLock = new(1, 1);
     public PlatformCallbackChannel PlatformCallbacks => _platformCallbacks;
     public SoloTaskSettingsCatalog SoloTaskSettings => _soloTaskSettings;
+    public TriggerSettingsCatalog TriggerSettings => _triggerSettings;
 
     private SchedulerCoordinator Scheduler => _scheduler ??= new SchedulerCoordinator(
         layout, _platformCallbacks, sessionToken, _shutdown.Token);
@@ -198,6 +200,12 @@ public sealed class CoreRpcServer(
                     RequiredString(request.Params, "name"),
                     request.Params?.Value<bool?>("enabled")
                         ?? throw new ArgumentException("enabled is required.")),
+                "trigger.settings.get" => _triggerSettings.Get(
+                    RequiredString(request.Params, "name")),
+                "trigger.settings.save" => _triggerSettings.Save(
+                    RequiredString(request.Params, "name"),
+                    request.Params?["settings"] as JObject
+                    ?? throw new ArgumentException("settings is required.")),
                 "solo.list" => SoloTasks.List(),
                 "solo.start" => SoloTasks.Start(RequiredString(request.Params, "name")),
                 "solo.stop" => SoloTasks.Stop(RequiredString(request.Params, "taskId")),
@@ -381,7 +389,7 @@ public sealed class CoreRpcServer(
         _triggerDispatcher ?? throw new CapabilityUnavailableException(
             "The macOS trigger dispatcher is unavailable until Core composition completes.");
 
-    private static object ListTriggers()
+    private object ListTriggers()
     {
         var triggers = GameTaskManager.TriggerDictionary
             ?? throw new CapabilityUnavailableException(
@@ -394,12 +402,13 @@ public sealed class CoreRpcServer(
                 displayName = pair.Value.Name,
                 enabled = pair.Value.IsEnabled,
                 priority = pair.Value.Priority,
-                exclusive = pair.Value.IsExclusive
+                exclusive = pair.Value.IsExclusive,
+                settingsAvailable = _triggerSettings.IsAvailable(pair.Key)
             })
             .ToArray();
     }
 
-    private static object SetTriggerEnabled(string name, bool enabled)
+    private object SetTriggerEnabled(string name, bool enabled)
     {
         var triggers = GameTaskManager.TriggerDictionary
             ?? throw new CapabilityUnavailableException(
@@ -407,6 +416,7 @@ public sealed class CoreRpcServer(
         if (!triggers.TryGetValue(name, out var trigger))
             throw new CapabilityUnavailableException($"Trigger '{name}' is not composed in the macOS Core.");
         trigger.IsEnabled = enabled;
+        _triggerSettings.SaveEnabled(name, enabled);
         return new { name, enabled = trigger.IsEnabled };
     }
 

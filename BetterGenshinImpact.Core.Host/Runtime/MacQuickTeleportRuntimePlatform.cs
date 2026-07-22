@@ -33,6 +33,13 @@ public sealed class MacQuickTeleportRuntimePlatform : IQuickTeleportRuntimePlatf
     public string TickHotkey { get; }
     public bool IsHdrCapture { get; }
 
+    public void UpdateConfig(QuickTeleportConfig config)
+    {
+        Config.TeleportListClickDelay = config.TeleportListClickDelay;
+        Config.WaitTeleportPanelDelay = config.WaitTeleportPanelDelay;
+        Config.HotkeyTpEnabled = config.HotkeyTpEnabled;
+    }
+
     public bool IsTickHotkeyPressed()
     {
         if (string.IsNullOrEmpty(TickHotkey)) return false;
