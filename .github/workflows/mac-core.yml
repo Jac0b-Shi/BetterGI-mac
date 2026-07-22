@@ -15,10 +15,15 @@ on:
       - "Test/BetterGenshinImpact.Core.Verification/**"
       - "Test/BetterGenshinImpact.Core.Host.Verification/**"
       - "Test/BetterGenshinImpact.Core.Host.Fast.Verification/**"
+      - "Test/BetterGenshinImpact.Pathing.Verification/**"
       - "Test/BetterGenshinImpact.Verification.Framework/**"
       - "Test/BetterGenshinImpact.RealUser.Verification/**"
       - "MacGI/**"
       - "scripts/verify-core-extraction.sh"
+      - "scripts/verify-core-fast.sh"
+      - "scripts/verify-core-full.sh"
+      - "scripts/verify-core-static.sh"
+      - "scripts/verify-pathing-library.sh"
       - ".github/workflows/mac-core.yml"
 
 concurrency:

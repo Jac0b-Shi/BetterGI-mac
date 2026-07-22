@@ -20,6 +20,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGenshinImpact.Verific
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGenshinImpact.Core.Host.Fast.Verification", "Test\BetterGenshinImpact.Core.Host.Fast.Verification\BetterGenshinImpact.Core.Host.Fast.Verification.csproj", "{FBF62B53-2792-42ED-B565-CA38077AEF73}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGenshinImpact.Pathing.Verification", "Test\BetterGenshinImpact.Pathing.Verification\BetterGenshinImpact.Pathing.Verification.csproj", "{CF9BB6BE-750A-4291-8061-A4D0BB195899}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -58,11 +60,16 @@ Global
 		{FBF62B53-2792-42ED-B565-CA38077AEF73}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FBF62B53-2792-42ED-B565-CA38077AEF73}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FBF62B53-2792-42ED-B565-CA38077AEF73}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CF9BB6BE-750A-4291-8061-A4D0BB195899}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CF9BB6BE-750A-4291-8061-A4D0BB195899}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CF9BB6BE-750A-4291-8061-A4D0BB195899}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CF9BB6BE-750A-4291-8061-A4D0BB195899}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{7A99AF98-591D-4D1C-A866-53EB8179A40A} = {F8012B43-387D-44AE-B174-532C7F0EEAA9}
 		{E398A716-C0DF-4D67-95C0-81E932BD433F} = {F8012B43-387D-44AE-B174-532C7F0EEAA9}
 		{7F1E38CC-2864-46E4-9927-26362BA81419} = {F8012B43-387D-44AE-B174-532C7F0EEAA9}
 		{FBF62B53-2792-42ED-B565-CA38077AEF73} = {F8012B43-387D-44AE-B174-532C7F0EEAA9}
+		{CF9BB6BE-750A-4291-8061-A4D0BB195899} = {F8012B43-387D-44AE-B174-532C7F0EEAA9}
 	EndGlobalSection
 EndGlobal

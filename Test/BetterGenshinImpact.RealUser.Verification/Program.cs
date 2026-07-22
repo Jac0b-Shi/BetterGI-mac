@@ -4,9 +4,7 @@ using BetterGenshinImpact.Core.Script.Group;
 using BetterGenshinImpact.Core.Script.Project;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.Core.Script.Dependence;
-using BetterGenshinImpact.GameTask.AutoPathing.Handler;
 using BetterGenshinImpact.GameTask.AutoPathing;
-using BetterGenshinImpact.GameTask.AutoPathing.Model.Enum;
 using BetterGenshinImpact.GameTask.Model.Area;
 using Newtonsoft.Json.Linq;
 using Microsoft.ClearScript;
@@ -102,34 +100,12 @@ static void VerifyPathingActionSurface(IEnumerable<ScriptGroupProject> projects)
     if (pathingDocumentCount == 0)
         throw new InvalidDataException("Real User projects contain no pathing documents.");
 
-    var behaviorVerifiedActions = new HashSet<string>(StringComparer.Ordinal)
-    {
-        ActionEnum.CombatScript.Code,
-        ActionEnum.Fight.Code,
-        ActionEnum.ForceTp.Code,
-        ActionEnum.LogOutput.Code,
-        ActionEnum.Mining.Code,
-        ActionEnum.PickAround.Code,
-        ActionEnum.PyroCollect.Code,
-        ActionEnum.StopFlying.Code,
-        ActionEnum.UpDownGrabLeaf.Code
-    };
-    var unresolvedActions = new List<string>();
-    foreach (var action in actionCounts.Keys.Order(StringComparer.Ordinal))
-    {
-        if (behaviorVerifiedActions.Contains(action))
-            continue;
-        try
-        {
-            _ = ActionFactory.GetAfterHandler(action);
-        }
-        catch (ArgumentException)
-        {
-            unresolvedActions.Add(action);
-        }
-    }
+    var unresolvedActions = actionCounts.Keys
+        .Where(action => !PathExecutor.SupportsAction(action))
+        .Order(StringComparer.Ordinal)
+        .ToArray();
 
-    if (unresolvedActions.Count > 0)
+    if (unresolvedActions.Length > 0)
         throw new InvalidDataException(
             "Real User pathing documents reference unsupported actions: " +
             string.Join(", ", unresolvedActions));

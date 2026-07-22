@@ -46,6 +46,33 @@ tools rather than normal automation tasks and are intentionally absent from the
 production macOS task catalog. One-dragon execution remains a separate workflow
 surface and must not be represented as an independent task card.
 
+## Runtime pathing actions
+
+`PathExecutor` and `ActionFactory` now share one handler registry. The runtime
+library verifier uses the production `PathingTask` serializer and asks
+`PathExecutor.SupportsAction` for every non-empty waypoint action, so the gate
+cannot pass by maintaining a second test-only list.
+
+The current user runtime library contains 4,978 route documents, 79,469
+waypoints and 18 action codes. All are resolved by the production executor:
+
+```text
+anemo_collect      combat_script     electro_collect
+fight              fishing           force_tp
+hydro_collect      linnea_mining      log_output
+mining             nahida_collect    pick_around
+pick_up_collect    pyro_collect      set_time
+stop_flying        up_down_grab_leaf use_gadget
+```
+
+This is a local runtime-data gate because CI does not contain the user's
+downloaded route library:
+
+```bash
+scripts/verify-pathing-library.sh
+scripts/verify-pathing-library.sh "/path/to/runtime-root"
+```
+
 ## Verification tiers
 
 Use the smallest tier that owns the changed behavior:
@@ -53,6 +80,9 @@ Use the smallest tier that owns the changed behavior:
 ```bash
 # Settings, catalogs, scheduler editing and other contract changes.
 scripts/verify-core-fast.sh all
+
+# Any PathExecutor, action-handler or downloaded route-library change.
+scripts/verify-pathing-library.sh
 
 # Static architecture and production-fallback gate.
 scripts/verify-core-static.sh
@@ -63,6 +93,14 @@ scripts/verify-core-full.sh
 
 The legacy Core and Host verifier programs remain full integration gates. New
 pure contract checks belong in `BetterGenshinImpact.Core.Host.Fast.Verification`
-so editing a verifier does not recompile either 4,000-line integration program.
-The full tier builds the dependency graph once and runs each verifier with
-`--no-build`; local iteration must not use an implicit `dotnet run` build.
+and route-library closure checks belong in the Core-only
+`BetterGenshinImpact.Pathing.Verification` project. Editing either verifier no
+longer recompiles a 4,000-line integration program. The full tier builds the
+dependency graph once and runs each verifier with `--no-build`; local iteration
+must not use an implicit `dotnet run` build.
+
+Measured on Apple Silicon with a warm package cache, rebuilding the legacy Core
+verifier took about 16 seconds while `dotnet run --no-build` took about 96
+seconds. The runtime pathing verifier completed its isolated warm loop in under
+9 seconds. The expensive full gate is therefore reserved for model,
+recognition, artifact, native-runtime and phase-completion changes.

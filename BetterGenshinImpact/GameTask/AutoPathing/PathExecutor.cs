@@ -38,6 +38,15 @@ namespace BetterGenshinImpact.GameTask.AutoPathing;
 
 public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
 {
+    public static bool SupportsAction(string? action)
+    {
+        return string.IsNullOrEmpty(action)
+               || action == ActionEnum.ForceTp.Code
+               || action == ActionEnum.LogOutput.Code
+               || ActionFactory.CanHandleBefore(action)
+               || ActionFactory.CanExecuteAfterWaypoint(action);
+    }
+
     private readonly CameraRotateTask _rotateTask;
     private readonly TrapEscaper _trapEscaper;
     private readonly BlessingOfTheWelkinMoonTask _blessingOfTheWelkinMoonTask = new();
@@ -1143,22 +1152,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
 
     private async Task AfterMoveToTarget(WaypointForTrack waypoint)
     {
-        if (waypoint.Action == ActionEnum.NahidaCollect.Code
-            || waypoint.Action == ActionEnum.PickAround.Code
-            || waypoint.Action == ActionEnum.Fight.Code
-            || waypoint.Action == ActionEnum.HydroCollect.Code
-            || waypoint.Action == ActionEnum.ElectroCollect.Code
-            || waypoint.Action == ActionEnum.AnemoCollect.Code
-            || waypoint.Action == ActionEnum.PyroCollect.Code
-            || waypoint.Action == ActionEnum.CombatScript.Code
-            || waypoint.Action == ActionEnum.Mining.Code
-            || waypoint.Action == ActionEnum.LinneaMining.Code
-            || waypoint.Action == ActionEnum.Fishing.Code
-            || waypoint.Action == ActionEnum.ExitAndRelogin.Code
-            || waypoint.Action == ActionEnum.EnterAndExitWonderland.Code
-            || waypoint.Action == ActionEnum.SetTime.Code
-            || waypoint.Action == ActionEnum.UseGadget.Code
-            || waypoint.Action == ActionEnum.PickUpCollect.Code)
+        if (ActionFactory.CanExecuteAfterWaypoint(waypoint.Action))
         {
             var handler = ActionFactory.GetAfterHandler(waypoint.Action);
             //,PartyConfig
