@@ -61,6 +61,25 @@ struct BetterGICoreMapMaskTriggerSettings: Sendable, Equatable {
     let miniMapMaskEnabled: Bool
 }
 
+struct BetterGICoreSkillCdRule: Sendable, Equatable {
+    var roleName: String
+    var cdValueText: String
+}
+
+struct BetterGICoreSkillCdTriggerSettings: Sendable, Equatable {
+    let customCdList: [BetterGICoreSkillCdRule]
+    let triggerOnSkillUse: Bool
+    let hideWhenZero: Bool
+    let pX: Double
+    let pY: Double
+    let gap: Double
+    let scale: Double
+    let textNormalColor: String
+    let backgroundNormalColor: String
+    let textReadyColor: String
+    let backgroundReadyColor: String
+}
+
 struct BetterGICoreMapMaskPickerSettings: Sendable, Equatable {
     let mapPointApiProvider: String
     let mapPointApiProviderOptions: [String]
@@ -702,6 +721,31 @@ actor BetterGICoreProcessSupervisor {
             method: "trigger.settings.get", name: "MapMask"))
     }
 
+    func skillCdTriggerSettings() throws -> BetterGICoreSkillCdTriggerSettings {
+        try decodeSkillCdTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.get", name: "SkillCd"))
+    }
+
+    func saveSkillCdTriggerSettings(_ settings: BetterGICoreSkillCdTriggerSettings) throws
+        -> BetterGICoreSkillCdTriggerSettings {
+        try decodeSkillCdTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.save", name: "SkillCd", settings: [
+                "customCdList": settings.customCdList.map {
+                    ["roleName": $0.roleName, "cdValueText": $0.cdValueText]
+                },
+                "triggerOnSkillUse": settings.triggerOnSkillUse,
+                "hideWhenZero": settings.hideWhenZero,
+                "pX": settings.pX,
+                "pY": settings.pY,
+                "gap": settings.gap,
+                "scale": settings.scale,
+                "textNormalColor": settings.textNormalColor,
+                "backgroundNormalColor": settings.backgroundNormalColor,
+                "textReadyColor": settings.textReadyColor,
+                "backgroundReadyColor": settings.backgroundReadyColor,
+            ]))
+    }
+
     func saveMapMaskTriggerSettings(_ settings: BetterGICoreMapMaskTriggerSettings) throws
         -> BetterGICoreMapMaskTriggerSettings {
         try decodeMapMaskTriggerSettings(requestTriggerSettings(
@@ -855,6 +899,42 @@ actor BetterGICoreProcessSupervisor {
             throw BetterGICoreRPCError.protocolViolation("Invalid MapMask trigger settings.")
         }
         return .init(miniMapMaskEnabled: enabled)
+    }
+
+    private func decodeSkillCdTriggerSettings(_ value: [String: Any]) throws
+        -> BetterGICoreSkillCdTriggerSettings {
+        guard let rawRules = value["customCdList"] as? [[String: Any]],
+              let triggerOnSkillUse = value["triggerOnSkillUse"] as? Bool,
+              let hideWhenZero = value["hideWhenZero"] as? Bool,
+              let pX = value["pX"] as? Double,
+              let pY = value["pY"] as? Double,
+              let gap = value["gap"] as? Double,
+              let scale = value["scale"] as? Double,
+              let textNormalColor = value["textNormalColor"] as? String,
+              let backgroundNormalColor = value["backgroundNormalColor"] as? String,
+              let textReadyColor = value["textReadyColor"] as? String,
+              let backgroundReadyColor = value["backgroundReadyColor"] as? String else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid SkillCd trigger settings.")
+        }
+        let rules = try rawRules.map { rule in
+            guard let roleName = rule["roleName"] as? String,
+                  let cdValueText = rule["cdValueText"] as? String else {
+                throw BetterGICoreRPCError.protocolViolation("Invalid SkillCd role rule.")
+            }
+            return BetterGICoreSkillCdRule(roleName: roleName, cdValueText: cdValueText)
+        }
+        return .init(
+            customCdList: rules,
+            triggerOnSkillUse: triggerOnSkillUse,
+            hideWhenZero: hideWhenZero,
+            pX: pX,
+            pY: pY,
+            gap: gap,
+            scale: scale,
+            textNormalColor: textNormalColor,
+            backgroundNormalColor: backgroundNormalColor,
+            textReadyColor: textReadyColor,
+            backgroundReadyColor: backgroundReadyColor)
     }
 
     private func decodeMapMaskPickerSettings(_ value: [String: Any]) throws

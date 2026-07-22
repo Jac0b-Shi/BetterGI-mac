@@ -379,6 +379,12 @@ final class AppState: ObservableObject {
     @Published var autoSkipCustomPriorityOptionsDraft = ""
     @Published private(set) var quickTeleportTriggerSettings: BetterGICoreQuickTeleportTriggerSettings?
     @Published private(set) var mapMaskTriggerSettings: BetterGICoreMapMaskTriggerSettings?
+    @Published private(set) var skillCdTriggerSettings: BetterGICoreSkillCdTriggerSettings?
+    @Published var skillCdRulesDraft: [BetterGICoreSkillCdRule] = []
+    @Published var skillCdTextNormalColorDraft = ""
+    @Published var skillCdBackgroundNormalColorDraft = ""
+    @Published var skillCdTextReadyColorDraft = ""
+    @Published var skillCdBackgroundReadyColorDraft = ""
     @Published private(set) var mapMaskPickerSettings: BetterGICoreMapMaskPickerSettings?
     @Published private(set) var mapMaskLabelCategories: [BetterGICoreMapMaskLabel] = []
     @Published private(set) var mapMaskSelectedLabelIDs: Set<String> = []
@@ -1220,6 +1226,9 @@ final class AppState: ObservableObject {
             autoEatTriggerSettings = try await supervisor.autoEatTriggerSettings()
             quickTeleportTriggerSettings = try await supervisor.quickTeleportTriggerSettings()
             mapMaskTriggerSettings = try await supervisor.mapMaskTriggerSettings()
+            let skillCdSettings = try await supervisor.skillCdTriggerSettings()
+            skillCdTriggerSettings = skillCdSettings
+            applySkillCdDrafts(skillCdSettings)
         } catch {
             features = []
             autoPickTriggerSettings = nil
@@ -1227,6 +1236,7 @@ final class AppState: ObservableObject {
             autoEatTriggerSettings = nil
             quickTeleportTriggerSettings = nil
             mapMaskTriggerSettings = nil
+            skillCdTriggerSettings = nil
             mapMaskPickerSettings = nil
             mapMaskLabelCategories = []
             mapMaskSelectedLabelIDs = []
@@ -1402,6 +1412,76 @@ final class AppState: ObservableObject {
                 self?.addLog(.error, "Core failed to save MapMask settings: \(error.localizedDescription)")
             }
         }
+    }
+
+    func saveSkillCdTriggerSettings(
+        customCdList: [BetterGICoreSkillCdRule]? = nil,
+        triggerOnSkillUse: Bool? = nil,
+        hideWhenZero: Bool? = nil,
+        pX: Double? = nil,
+        pY: Double? = nil,
+        gap: Double? = nil,
+        scale: Double? = nil,
+        textNormalColor: String? = nil,
+        backgroundNormalColor: String? = nil,
+        textReadyColor: String? = nil,
+        backgroundReadyColor: String? = nil,
+        refreshDrafts: Bool = false
+    ) {
+        guard let supervisor = betterGICoreSupervisor, let current = skillCdTriggerSettings else { return }
+        let next = BetterGICoreSkillCdTriggerSettings(
+            customCdList: customCdList ?? current.customCdList,
+            triggerOnSkillUse: triggerOnSkillUse ?? current.triggerOnSkillUse,
+            hideWhenZero: hideWhenZero ?? current.hideWhenZero,
+            pX: pX ?? current.pX,
+            pY: pY ?? current.pY,
+            gap: gap ?? current.gap,
+            scale: scale ?? current.scale,
+            textNormalColor: textNormalColor ?? current.textNormalColor,
+            backgroundNormalColor: backgroundNormalColor ?? current.backgroundNormalColor,
+            textReadyColor: textReadyColor ?? current.textReadyColor,
+            backgroundReadyColor: backgroundReadyColor ?? current.backgroundReadyColor)
+        Task { [weak self] in
+            do {
+                let saved = try await supervisor.saveSkillCdTriggerSettings(next)
+                self?.skillCdTriggerSettings = saved
+                if refreshDrafts { self?.applySkillCdDrafts(saved) }
+            } catch {
+                self?.addLog(.error, "Core failed to save SkillCd settings: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func addSkillCdRule() {
+        skillCdRulesDraft.append(.init(roleName: "", cdValueText: ""))
+    }
+
+    func removeSkillCdRule(at index: Int) {
+        guard skillCdRulesDraft.indices.contains(index) else { return }
+        skillCdRulesDraft.remove(at: index)
+    }
+
+    func saveSkillCdRules() {
+        saveSkillCdTriggerSettings(customCdList: skillCdRulesDraft, refreshDrafts: true)
+    }
+
+    func saveSkillCdColors() {
+        saveSkillCdTriggerSettings(
+            textNormalColor: skillCdTextNormalColorDraft,
+            backgroundNormalColor: skillCdBackgroundNormalColorDraft,
+            textReadyColor: skillCdTextReadyColorDraft,
+            backgroundReadyColor: skillCdBackgroundReadyColorDraft,
+            refreshDrafts: true)
+    }
+
+    private func applySkillCdDrafts(_ settings: BetterGICoreSkillCdTriggerSettings) {
+        skillCdRulesDraft = settings.customCdList.isEmpty
+            ? [.init(roleName: "", cdValueText: "")]
+            : settings.customCdList
+        skillCdTextNormalColorDraft = settings.textNormalColor
+        skillCdBackgroundNormalColorDraft = settings.backgroundNormalColor
+        skillCdTextReadyColorDraft = settings.textReadyColor
+        skillCdBackgroundReadyColorDraft = settings.backgroundReadyColor
     }
 
     func toggleMapMaskPicker() {

@@ -196,9 +196,11 @@ var mapMaskRuntimePlatform = new MacMapMaskRuntimePlatform(
 MapMaskRuntimePlatform.Configure(mapMaskRuntimePlatform);
 server.AttachMapMaskRuntimePlatform(mapMaskRuntimePlatform);
 server.TriggerSettings.AttachMapMaskUpdated(mapMaskRuntimePlatform.UpdateConfig);
-SkillCdRuntimePlatform.Configure(new MacSkillCdRuntimePlatform(
+var skillCdRuntimePlatform = new MacSkillCdRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory,
-    server.PlatformCallbacks, sessionToken, shutdown.Token));
+    server.PlatformCallbacks, sessionToken, shutdown.Token);
+SkillCdRuntimePlatform.Configure(skillCdRuntimePlatform);
+server.TriggerSettings.AttachSkillCdUpdated(skillCdRuntimePlatform.UpdateConfig);
 ExitAndReloginPlatform.Configure(new MacExitAndReloginPlatform());
 var pathExecutorPlatform = new MacPathExecutorPlatform(
     layout, imageRegionOcrService,

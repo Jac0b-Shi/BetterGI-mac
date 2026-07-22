@@ -33,6 +33,27 @@ public sealed class MacSkillCdRuntimePlatform : ISkillCdRuntimePlatform
     }
 
     public SkillCdConfig Config { get; }
+
+    public void UpdateConfig(SkillCdConfig source)
+    {
+        Config.CustomCdList = (source.CustomCdList ?? [])
+            .Select(rule => new SkillCdRule
+            {
+                RoleName = rule.RoleName ?? string.Empty,
+                CdValueText = rule.CdValueText ?? string.Empty,
+            })
+            .ToList();
+        Config.TriggerOnSkillUse = source.TriggerOnSkillUse;
+        Config.HideWhenZero = source.HideWhenZero;
+        Config.PX = source.PX;
+        Config.PY = source.PY;
+        Config.Gap = source.Gap;
+        Config.Scale = source.Scale;
+        Config.TextNormalColor = source.TextNormalColor;
+        Config.BackgroundNormalColor = source.BackgroundNormalColor;
+        Config.TextReadyColor = source.TextReadyColor;
+        Config.BackgroundReadyColor = source.BackgroundReadyColor;
+    }
     public int TriggerInterval { get; }
     public ISystemInfo SystemInfo => _systemInfo();
     public ILogger Logger { get; }

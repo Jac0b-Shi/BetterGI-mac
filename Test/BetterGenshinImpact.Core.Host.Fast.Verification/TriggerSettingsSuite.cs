@@ -10,6 +10,7 @@ using BetterGenshinImpact.GameTask.AutoPick;
 using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Model;
+using BetterGenshinImpact.GameTask.SkillCd;
 using BetterGenshinImpact.Platform.Abstractions;
 using BetterGenshinImpact.Verification.Framework;
 using Newtonsoft.Json.Linq;
@@ -63,6 +64,18 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
                     "quicklySkipConversationsEnabled": true,
                     "clickChatOption": "优先选择第一个选项",
                     "skipBuiltInClickOptions": true
+                  },
+                  "skillCdConfig": {
+                    "enabled": false,
+                    "pX": 1520.0,
+                    "pY": 245.0,
+                    "gap": 91.2,
+                    "scale": 1.0,
+                    "textNormalColor": "#DA4A23FF",
+                    "backgroundNormalColor": "#FFFFFFFF",
+                    "textReadyColor": "#5DCC17FF",
+                    "backgroundReadyColor": "#FFFFFFFF",
+                    "futureField": "preserved"
                   }
                 }
                 """, cancellationToken);
@@ -83,9 +96,11 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
                 liveConfig, PaddleOcrModelConfig.V5Auto, "zh-Hans");
             var catalog = new TriggerSettingsCatalog(layout);
             AutoSkipConfig? updatedAutoSkip = null;
+            SkillCdConfig? updatedSkillCd = null;
             catalog.AttachAutoPickUpdated(adapter.UpdateAutoPickConfig);
             catalog.AttachAutoPickListsUpdated(() => GameTaskManager.RefreshTriggerConfig("AutoPick"));
             catalog.AttachAutoSkipUpdated(config => updatedAutoSkip = config);
+            catalog.AttachSkillCdUpdated(config => updatedSkillCd = config);
 
             var initial = JObject.FromObject(catalog.Get("AutoPick"));
             context.Require(initial.Value<string>("ocrEngine") == "Paddle" &&
@@ -162,6 +177,35 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
                             persisted["autoSkipConfig"]?["skipBuiltInClickOptions"]?.Value<bool>() == true &&
                             persisted["autoSkipConfig"]?["customPriorityOptions"]?.Value<string>() == "重要选项；确认",
                 "AutoSkip save did not preserve hidden fields, persist settings, and update the live config.");
+
+            _ = catalog.Save("SkillCd", JObject.FromObject(new
+            {
+                customCdList = new[]
+                {
+                    new { roleName = " 玛薇卡 ", cdValueText = " 15.0 " },
+                    new { roleName = " ", cdValueText = "9" },
+                },
+                triggerOnSkillUse = true,
+                hideWhenZero = true,
+                pX = 1500.5,
+                pY = 240.5,
+                gap = 90.5,
+                scale = 1.25,
+                textNormalColor = "#da4a23ff",
+                backgroundNormalColor = "#ffffff",
+                textReadyColor = "#5dcc17ff",
+                backgroundReadyColor = "#ffffffff",
+            }));
+
+            persisted = JObject.Parse(await File.ReadAllTextAsync(
+                Path.Combine(layout.UserPath, "config.json"), cancellationToken));
+            context.Require(catalog.IsAvailable("SkillCd") && updatedSkillCd is not null &&
+                            updatedSkillCd.CustomCdList.Count == 1 &&
+                            updatedSkillCd.CustomCdList[0].RoleName == "玛薇卡" &&
+                            updatedSkillCd.Scale == 1.25 &&
+                            updatedSkillCd.TextNormalColor == "#DA4A23FF" &&
+                            persisted["skillCdConfig"]?["futureField"]?.Value<string>() == "preserved",
+                "SkillCd save did not normalize rules, preserve unknown fields, or update the live config.");
         }
         finally
         {

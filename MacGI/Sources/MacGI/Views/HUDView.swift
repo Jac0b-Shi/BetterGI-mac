@@ -22,7 +22,8 @@ struct HUDView: View {
                     capturePixelSize: appState.selectedWindow.capturePixelSize,
                     opacity: appState.hudOpacity,
                     showMapPoints: appState.showOverlayMapPoints,
-                    showRecognition: appState.showOverlayRecognition)
+                    showRecognition: appState.showOverlayRecognition,
+                    skillCdSettings: appState.skillCdTriggerSettings)
 
                 if appState.showOverlayDirections {
                     directionMarkers(size: size)
@@ -181,11 +182,13 @@ private struct CoreOverlayHUDLayer: View {
     let opacity: Double
     let showMapPoints: Bool
     let showRecognition: Bool
+    let skillCdSettings: BetterGICoreSkillCdTriggerSettings?
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             if showMapPoints { mapMaskOverlay }
             if showRecognition { recognitionOverlay }
+            skillCdOverlay
         }
         .frame(width: size.width, height: size.height)
         .allowsHitTesting(false)
@@ -275,13 +278,42 @@ private struct CoreOverlayHUDLayer: View {
                     .shadow(color: .black, radius: 2)
                     .position(x: rect.minX + rect.width / 3, y: max(8, rect.minY - 8))
             }
-            ForEach(store.state.allTexts) { item in
+            ForEach(store.state.allTexts.filter { $0.name != "SkillCdText" }) { item in
                 let point = HUDOverlayGeometry.displayPoint(
                     item.position, capturePixelSize: capturePixelSize, in: size)
                 Text(item.text)
                     .font(.system(size: max(12, 20 * size.height / 1080), weight: .bold, design: .monospaced))
                     .foregroundStyle(Color.white.opacity(opacity))
                     .shadow(color: .black, radius: 3)
+                    .position(point)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var skillCdOverlay: some View {
+        if let settings = skillCdSettings {
+            ForEach(store.state.allTexts.filter { $0.name == "SkillCdText" }) { item in
+                let point = HUDOverlayGeometry.displayPoint(
+                    item.position, capturePixelSize: capturePixelSize, in: size)
+                let isReady = abs(Double(item.text) ?? 1) < 0.8
+                let textColor = Color.skillCd(hex: isReady
+                    ? settings.textReadyColor
+                    : settings.textNormalColor) ?? (isReady
+                        ? Color(red: 93 / 255, green: 204 / 255, blue: 23 / 255)
+                        : Color(red: 218 / 255, green: 74 / 255, blue: 35 / 255))
+                let backgroundColor = Color.skillCd(hex: isReady
+                    ? settings.backgroundReadyColor
+                    : settings.backgroundNormalColor) ?? .white
+                let displayScale = size.height / 1080 * settings.scale
+
+                Text(item.text)
+                    .font(.system(size: max(1, 26 * displayScale), weight: .medium))
+                    .foregroundStyle(textColor.opacity(opacity))
+                    .padding(.horizontal, max(1, 6 * displayScale))
+                    .padding(.vertical, max(1, 2 * displayScale))
+                    .background(backgroundColor.opacity(opacity))
+                    .clipShape(RoundedRectangle(cornerRadius: max(1, 5 * displayScale)))
                     .position(point)
             }
         }

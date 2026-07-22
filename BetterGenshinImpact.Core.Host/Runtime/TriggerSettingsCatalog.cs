@@ -7,6 +7,7 @@ using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.AutoSkip.Assets;
 using BetterGenshinImpact.GameTask.MapMask;
 using BetterGenshinImpact.GameTask.QuickTeleport;
+using BetterGenshinImpact.GameTask.SkillCd;
 using Newtonsoft.Json.Linq;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
@@ -20,6 +21,7 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
     private Action<AutoSkipConfig>? _autoSkipUpdated;
     private Action<QuickTeleportConfig>? _quickTeleportUpdated;
     private Action<MapMaskConfig>? _mapMaskUpdated;
+    private Action<SkillCdConfig>? _skillCdUpdated;
 
     public void AttachAutoEatUpdated(Action<AutoEatConfig> callback) =>
         _autoEatUpdated = callback ?? throw new ArgumentNullException(nameof(callback));
@@ -39,8 +41,11 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
     public void AttachMapMaskUpdated(Action<MapMaskConfig> callback) =>
         _mapMaskUpdated = callback ?? throw new ArgumentNullException(nameof(callback));
 
+    public void AttachSkillCdUpdated(Action<SkillCdConfig> callback) =>
+        _skillCdUpdated = callback ?? throw new ArgumentNullException(nameof(callback));
+
     public bool IsAvailable(string name) =>
-        name is "AutoPick" or "AutoSkip" or "AutoFish" or "AutoEat" or "QuickTeleport" or "MapMask";
+        name is "AutoPick" or "AutoSkip" or "AutoFish" or "AutoEat" or "QuickTeleport" or "MapMask" or "SkillCd";
 
     public object Get(string name)
     {
@@ -56,6 +61,7 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
                 "QuickTeleport" => Describe(
                     LoadConfig<QuickTeleportConfig>(root, "quickTeleportConfig")),
                 "MapMask" => Describe(LoadConfig<MapMaskConfig>(root, "mapMaskConfig")),
+                "SkillCd" => Describe(LoadConfig<SkillCdConfig>(root, "skillCdConfig")),
                 _ => throw Unavailable(name),
             };
         }
@@ -68,8 +74,53 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
         "AutoEat" => SaveAutoEat(settings),
         "QuickTeleport" => SaveQuickTeleport(settings),
         "MapMask" => SaveMapMask(settings),
+        "SkillCd" => SaveSkillCd(settings),
         _ => throw Unavailable(name),
     };
+
+    private object SaveSkillCd(JObject settings)
+    {
+        var triggerOnSkillUse = RequiredBoolean(settings, "triggerOnSkillUse");
+        var hideWhenZero = RequiredBoolean(settings, "hideWhenZero");
+        var pX = RequiredDoubleRange(settings, "pX", 0, 1920);
+        var pY = RequiredDoubleRange(settings, "pY", 0, 1080);
+        var gap = RequiredDoubleRange(settings, "gap", 0, 200);
+        var scale = RequiredDoubleRange(settings, "scale", 0, 10);
+        var textNormalColor = RequiredHexColor(settings, "textNormalColor");
+        var backgroundNormalColor = RequiredHexColor(settings, "backgroundNormalColor");
+        var textReadyColor = RequiredHexColor(settings, "textReadyColor");
+        var backgroundReadyColor = RequiredHexColor(settings, "backgroundReadyColor");
+        var customCdList = settings["customCdList"] is JArray rules
+            ? rules.OfType<JObject>()
+                .Select(rule => new SkillCdRule
+                {
+                    RoleName = RequiredString(rule, "roleName").Trim(),
+                    CdValueText = RequiredString(rule, "cdValueText").Trim(),
+                })
+                .Where(rule => !string.IsNullOrWhiteSpace(rule.RoleName))
+                .ToList()
+            : throw new ArgumentException("customCdList is required.");
+
+        lock (_lock)
+        {
+            var root = LoadRoot();
+            var config = LoadConfig<SkillCdConfig>(root, "skillCdConfig");
+            config.CustomCdList = customCdList;
+            config.TriggerOnSkillUse = triggerOnSkillUse;
+            config.HideWhenZero = hideWhenZero;
+            config.PX = pX;
+            config.PY = pY;
+            config.Gap = gap;
+            config.Scale = scale;
+            config.TextNormalColor = textNormalColor;
+            config.BackgroundNormalColor = backgroundNormalColor;
+            config.TextReadyColor = textReadyColor;
+            config.BackgroundReadyColor = backgroundReadyColor;
+            SaveConfig(root, "skillCdConfig", config);
+            _skillCdUpdated?.Invoke(config);
+            return Describe(config);
+        }
+    }
 
     private object SaveAutoSkip(JObject settings)
     {
@@ -342,6 +393,25 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
         miniMapMaskEnabled = config.MiniMapMaskEnabled
     };
 
+    private static object Describe(SkillCdConfig config) => new
+    {
+        customCdList = (config.CustomCdList ?? []).Select(rule => new
+        {
+            roleName = rule.RoleName ?? string.Empty,
+            cdValueText = rule.CdValueText ?? string.Empty,
+        }),
+        triggerOnSkillUse = config.TriggerOnSkillUse,
+        hideWhenZero = config.HideWhenZero,
+        pX = config.PX,
+        pY = config.PY,
+        gap = config.Gap,
+        scale = config.Scale,
+        textNormalColor = config.TextNormalColor,
+        backgroundNormalColor = config.BackgroundNormalColor,
+        textReadyColor = config.TextReadyColor,
+        backgroundReadyColor = config.BackgroundReadyColor,
+    };
+
     private static object DescribeMapMaskPicker(MapMaskConfig config) => new
     {
         mapPointApiProvider = config.MapPointApiProvider.ToString(),
@@ -367,6 +437,23 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
         return value >= minimum && value <= maximum
             ? value
             : throw new ArgumentOutOfRangeException(name);
+    }
+
+    private static double RequiredDoubleRange(JObject settings, string name, double minimum, double maximum)
+    {
+        var value = settings.Value<double?>(name) ?? throw new ArgumentException($"{name} is required.");
+        return double.IsFinite(value) && value >= minimum && value <= maximum
+            ? value
+            : throw new ArgumentOutOfRangeException(name);
+    }
+
+    private static string RequiredHexColor(JObject settings, string name)
+    {
+        var value = RequiredString(settings, name).Trim().ToUpperInvariant();
+        var digits = value.StartsWith('#') ? value[1..] : value;
+        if (digits.Length is not (6 or 8) || !digits.All(Uri.IsHexDigit))
+            throw new ArgumentException($"{name} must use #RRGGBB or #RRGGBBAA format.");
+        return $"#{digits}";
     }
 
     private static bool RequiredBoolean(JObject settings, string name) =>
@@ -403,7 +490,12 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
 
     private void SaveConfig<T>(JsonObject root, string propertyName, T config)
     {
-        root[propertyName] = JsonSerializer.SerializeToNode(config, ConfigJson.Options);
+        var serialized = JsonSerializer.SerializeToNode(config, ConfigJson.Options) as JsonObject
+            ?? throw new InvalidDataException($"{propertyName} did not serialize to an object.");
+        var destination = root[propertyName] as JsonObject ?? [];
+        foreach (var property in serialized)
+            destination[property.Key] = property.Value?.DeepClone();
+        root[propertyName] = destination;
         SaveRoot(root);
     }
 

@@ -36,6 +36,9 @@ the upstream dialogue, option-priority, process-audio VAD, submit, popup,
 daily-reward, expedition and hangout fields, atomically persists them, and
 mutates the same configuration instance held by the running trigger. The
 Windows-only background activation and PiP controls are intentionally absent.
+SkillCd uses the same Core-owned path for role fallback rules, trigger policy,
+position, spacing, scale and colors; Swift only renders the returned style and
+text commands, and does not couple the timer to recognition-debug visibility.
 
 Pathing host composition note: the production `pathingScript` receives
 `IScriptGroupExecutionServices` in its constructor and creates executors through
@@ -128,7 +131,7 @@ unchanged to `trigger.setEnabled`.
 that have been moved into ordinary suite classes. It builds Core and Host once,
 builds the small verifier without rebuilding dependencies, and runs only the
 requested suite. The `trigger-settings` suite validates the real Core-owned
-AutoPick and AutoSkip configuration, persistence and live-update paths. The `solo-settings` suite
+AutoPick, AutoSkip and SkillCd configuration, persistence and live-update paths. The `solo-settings` suite
 validates Core-owned independent-task round trips and typed dispatcher requests,
 including AutoGeniusInvokation, AutoLeyLineOutcrop and AutoStygianOnslaught,
 without starting ONNX,

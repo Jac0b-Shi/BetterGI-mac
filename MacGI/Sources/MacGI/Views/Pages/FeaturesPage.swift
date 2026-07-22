@@ -47,6 +47,7 @@ struct FeaturesPage: View {
         case "AutoEat": autoEatSettings
         case "QuickTeleport": quickTeleportSettings
         case "MapMask": mapMaskSettings
+        case "SkillCd": SkillCdTriggerSettingsView()
         default: EmptyView()
         }
     }

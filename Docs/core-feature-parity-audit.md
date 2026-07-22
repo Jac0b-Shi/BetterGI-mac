@@ -17,7 +17,7 @@ configuration.
 | AutoEat | complete | complete | Enable state, check interval and eat interval use the upstream config. |
 | QuickTeleport | complete | complete | Enable state, list click delay, panel wait delay and hotkey mode use the upstream config. |
 | MapMask | complete | complete | The realtime page owns only the upstream mini-map-mask switch. Provider, language and point selection belong to the big-map HUD picker. |
-| SkillCd | complete | missing | Expose custom role CD rules, trigger-on-skill, hide-at-zero, position, gap, scale and four colors through Core-owned settings. |
+| SkillCd | complete | complete | Custom role fallback rules, trigger-on-skill, hide-at-zero, position, gap, scale and four colors are Core-owned and hot-updated. The macOS HUD renders the same ready/normal color and scale semantics independently from the recognition-debug overlay switch. |
 
 The production initial-trigger registry contains exactly these eight entries.
 `trigger.list` is the only source used by Swift for availability, enabled state,
