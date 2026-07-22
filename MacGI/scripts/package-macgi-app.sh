@@ -10,7 +10,11 @@ output_root=${MACGI_APP_OUTPUT_ROOT:-${macgi_root}/.build/App}
 app=${output_root}/${app_name}
 contents=${app}/Contents
 executable_name=betterGI-mac
-bundle_identifier=${MACGI_BUNDLE_IDENTIFIER:-cn.jac0bshi.bettergi.mac}
+default_bundle_identifier=cn.jac0bshi.bettergi.mac
+if [[ ${MACGI_FORCE_AD_HOC_SIGNING:-0} == 1 && -z ${MACGI_BUNDLE_IDENTIFIER:-} ]]; then
+  default_bundle_identifier=${default_bundle_identifier}.adhoc
+fi
+bundle_identifier=${MACGI_BUNDLE_IDENTIFIER:-${default_bundle_identifier}}
 short_version=${MACGI_SHORT_VERSION:-0.1.0}
 bundle_version=${MACGI_BUNDLE_VERSION:-1}
 signing_identity=${MACGI_SIGNING_IDENTITY:-${EXPANDED_CODE_SIGN_IDENTITY:-}}
@@ -70,6 +74,10 @@ fi
 codesign ${sign_options[@]} ${contents}/MacOS/${executable_name}
 codesign ${sign_options[@]} ${app}
 codesign --verify --deep --strict --verbose=2 ${app}
+if [[ ${signing_identity} != "-" ]]; then
+  launch_services_register=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+  ${launch_services_register} -f ${app}
+fi
 
 smoke_root=$(mktemp -d ${TMPDIR:-/tmp}/bettergi-recognition-smoke.XXXXXX)
 trap 'rm -rf ${smoke_root}' EXIT
@@ -78,4 +86,5 @@ ${contents}/Resources/BetterGICore/BetterGenshinImpact.Core.Host \
   --recognition-smoke --runtime-root ${smoke_root}
 
 print "Signing identity: ${signing_identity}"
+print "Bundle identifier: ${bundle_identifier}"
 print "betterGI-mac app packaged at ${app}"
