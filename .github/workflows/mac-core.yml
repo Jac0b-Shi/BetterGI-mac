@@ -14,6 +14,8 @@ on:
       - "BetterGenshinImpact/GameTask/**"
       - "Test/BetterGenshinImpact.Core.Verification/**"
       - "Test/BetterGenshinImpact.Core.Host.Verification/**"
+      - "Test/BetterGenshinImpact.Core.Host.Fast.Verification/**"
+      - "Test/BetterGenshinImpact.Verification.Framework/**"
       - "Test/BetterGenshinImpact.RealUser.Verification/**"
       - "MacGI/**"
       - "scripts/verify-core-extraction.sh"
@@ -53,6 +55,11 @@ jobs:
           dotnet run
           --project Test/BetterGenshinImpact.Core.Host.Verification/BetterGenshinImpact.Core.Host.Verification.csproj
           -c Debug --no-build
+      - name: Verify fast Core Host contracts
+        run: >
+          dotnet run
+          --project Test/BetterGenshinImpact.Core.Host.Fast.Verification/BetterGenshinImpact.Core.Host.Fast.Verification.csproj
+          -c Debug --no-build -- --suite all
       - name: Package and sign macOS App
         env:
           MACGI_APP_OUTPUT_ROOT: ${{ runner.temp }}/bettergi-app

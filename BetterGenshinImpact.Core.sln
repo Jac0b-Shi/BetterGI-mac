@@ -16,6 +16,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{F8012B43-3
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGenshinImpact.Core.Host.Verification", "Test\BetterGenshinImpact.Core.Host.Verification\BetterGenshinImpact.Core.Host.Verification.csproj", "{E398A716-C0DF-4D67-95C0-81E932BD433F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGenshinImpact.Verification.Framework", "Test\BetterGenshinImpact.Verification.Framework\BetterGenshinImpact.Verification.Framework.csproj", "{7F1E38CC-2864-46E4-9927-26362BA81419}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGenshinImpact.Core.Host.Fast.Verification", "Test\BetterGenshinImpact.Core.Host.Fast.Verification\BetterGenshinImpact.Core.Host.Fast.Verification.csproj", "{FBF62B53-2792-42ED-B565-CA38077AEF73}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -46,9 +50,19 @@ Global
 		{E398A716-C0DF-4D67-95C0-81E932BD433F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E398A716-C0DF-4D67-95C0-81E932BD433F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E398A716-C0DF-4D67-95C0-81E932BD433F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7F1E38CC-2864-46E4-9927-26362BA81419}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7F1E38CC-2864-46E4-9927-26362BA81419}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7F1E38CC-2864-46E4-9927-26362BA81419}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7F1E38CC-2864-46E4-9927-26362BA81419}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FBF62B53-2792-42ED-B565-CA38077AEF73}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FBF62B53-2792-42ED-B565-CA38077AEF73}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FBF62B53-2792-42ED-B565-CA38077AEF73}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FBF62B53-2792-42ED-B565-CA38077AEF73}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{7A99AF98-591D-4D1C-A866-53EB8179A40A} = {F8012B43-387D-44AE-B174-532C7F0EEAA9}
 		{E398A716-C0DF-4D67-95C0-81E932BD433F} = {F8012B43-387D-44AE-B174-532C7F0EEAA9}
+		{7F1E38CC-2864-46E4-9927-26362BA81419} = {F8012B43-387D-44AE-B174-532C7F0EEAA9}
+		{FBF62B53-2792-42ED-B565-CA38077AEF73} = {F8012B43-387D-44AE-B174-532C7F0EEAA9}
 	EndGlobalSection
 EndGlobal
