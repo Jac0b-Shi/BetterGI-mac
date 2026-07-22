@@ -350,8 +350,10 @@ AutoFishingRuntimePlatform.Configure(autoFishingRuntimePlatform);
 GenshinRuntimePlatform.Configure(new MacGenshinRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, autoFishingRuntimePlatform,
     imageRegionOcrService, loggerFactory, "TemplateMatch"));
-AutoFightRuntimePlatform.Configure(new MacAutoFightRuntimePlatform(
-    layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory));
+var autoFightRuntimePlatform = new MacAutoFightRuntimePlatform(
+    layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
+AutoFightRuntimePlatform.Configure(autoFightRuntimePlatform);
+server.SoloTaskSettings.AttachAutoFightConfigUpdated(autoFightRuntimePlatform.UpdateConfig);
 var tpTaskPlatform = new MacTpTaskRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo);
 TpTaskRuntimePlatform.Configure(tpTaskPlatform);
@@ -2815,7 +2817,7 @@ try
                 .All(item => !item.Value<bool>("available")),
         "solo.list did not expose the truthful Core capability catalog");
     var settingsTaskNames = new[]
-        { "AutoCook", "AutoWood", "AutoMusicGame", "AutoBoss", "AutoDomain", "AutoArtifactSalvage" };
+        { "AutoCook", "AutoWood", "AutoMusicGame", "AutoBoss", "AutoFight", "AutoDomain", "AutoArtifactSalvage" };
     Require(soloItems.Where(item => settingsTaskNames.Contains(item.Value<string>("name")))
                 .All(item => item.Value<bool>("settingsAvailable")) &&
             soloItems.Where(item => !settingsTaskNames.Contains(item.Value<string>("name")))
@@ -3073,11 +3075,119 @@ try
         Require(invalidArtifactSettings.Error is not null,
             "solo.settings.save accepted invalid AutoArtifactSalvage settings");
     }
-    var unavailableFightSettings = await ExchangeAsync(
-        connection, "fight-settings-unavailable", "solo.settings.get", sessionToken,
-        JObject.FromObject(new { name = "AutoFight" }), cancellation.Token);
-    Require(unavailableFightSettings.Error?.Code == "CapabilityUnavailable",
-        "solo.settings.get returned placeholder settings for an uncomposed task");
+    persistedConfig = JObject.Parse(await File.ReadAllTextAsync(
+        Path.Combine(layout.UserPath, "config.json"), cancellation.Token));
+    persistedConfig["autoFightConfig"]!["teamNames"] = "钟离,那维莱特";
+    persistedConfig["autoFightConfig"]!["skipModel"] = true;
+    persistedConfig["autoFightConfig"]!["onlyPickEliteDropsMode"] =
+        "DisableAutoPickupForNonElite";
+    persistedConfig["autoFightConfig"]!["battleThresholdForLoot"] = 7;
+    persistedConfig["autoFightConfig"]!["kazuhaPartyName"] = "拾取队";
+    persistedConfig["autoFightConfig"]!["finishDetectConfig"]!["battleEndProgressBarColor"] =
+        "95,235,255";
+    await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "config.json"),
+        persistedConfig.ToString(), cancellation.Token);
+    var fightSettings = await ExchangeAsync(
+        connection, "fight-settings-save", "solo.settings.save", sessionToken,
+        JObject.FromObject(new
+        {
+            name = "AutoFight",
+            settings = new
+            {
+                strategyName = Path.Combine("nested", "boss"),
+                actionSchedulerByCd = "钟离,12;白术",
+                fightFinishDetectEnabled = false,
+                fastCheckEnabled = true,
+                fastCheckParams = "8;钟离",
+                rotateFindEnemyEnabled = true,
+                rotaryFactor = 13,
+                checkBeforeBurst = true,
+                isFirstCheck = true,
+                checkEndDelay = "0.8;钟离,1.2",
+                beforeDetectDelay = "0.6",
+                guardianAvatar = "3",
+                guardianCombatSkip = true,
+                burstEnabled = true,
+                guardianAvatarHold = true,
+                pickDropsAfterFightEnabled = true,
+                pickDropsAfterFightSeconds = 21,
+                kazuhaPickupEnabled = false,
+                qinDoublePickUp = true,
+                expBasedPickupEnabled = true,
+                timeout = 345,
+                swimmingEnabled = false
+            }
+        }), cancellation.Token);
+    persistedConfig = JObject.Parse(await File.ReadAllTextAsync(
+        Path.Combine(layout.UserPath, "config.json"), cancellation.Token));
+    var runtimeFightConfig = autoFightRuntimePlatform.AutoFightConfig;
+    var runtimeFightParam = new AutoFightParam(
+        Path.Combine(layout.UserPath, "AutoFight", "nested", "boss.txt"), runtimeFightConfig);
+    Require(fightSettings.Error is null && fightSettings.Result is JObject fightSettingsJson &&
+            fightSettingsJson.Value<string>("strategyName") == Path.Combine("nested", "boss") &&
+            fightSettingsJson.Value<string>("actionSchedulerByCd") == "钟离,12;白术" &&
+            !fightSettingsJson.Value<bool>("fightFinishDetectEnabled") &&
+            fightSettingsJson.Value<bool>("fastCheckEnabled") &&
+            fightSettingsJson.Value<int>("rotaryFactor") == 13 &&
+            fightSettingsJson.Value<string>("guardianAvatar") == "3" &&
+            fightSettingsJson.Value<int>("pickDropsAfterFightSeconds") == 21 &&
+            fightSettingsJson.Value<int>("timeout") == 345 &&
+            !fightSettingsJson.Value<bool>("swimmingEnabled") &&
+            persistedConfig.SelectToken("autoFightConfig.teamNames")?.Value<string>() ==
+                "钟离,那维莱特" &&
+            persistedConfig.SelectToken("autoFightConfig.skipModel")?.Value<bool>() == true &&
+            persistedConfig.SelectToken("autoFightConfig.onlyPickEliteDropsMode")?.Value<string>() ==
+                "DisableAutoPickupForNonElite" &&
+            persistedConfig.SelectToken("autoFightConfig.battleThresholdForLoot")?.Value<int>() == 7 &&
+            persistedConfig.SelectToken("autoFightConfig.kazuhaPartyName")?.Value<string>() == "拾取队" &&
+            persistedConfig.SelectToken("autoFightConfig.finishDetectConfig.battleEndProgressBarColor")?
+                .Value<string>() == "95,235,255" &&
+            runtimeFightConfig.Timeout == 345 &&
+            runtimeFightConfig.FinishDetectConfig.RotaryFactor == 13 &&
+            runtimeFightParam.Timeout == 345 &&
+            runtimeFightParam.ActionSchedulerByCd == "钟离,12;白术" &&
+            runtimeFightParam.GuardianAvatar == "3" &&
+            runtimeFightParam.PickDropsAfterFightSeconds == 21,
+        fightSettings.Error?.Message ??
+        "solo.settings.save did not preserve and publish upstream AutoFight settings");
+    foreach (var invalidFightSettings in new[]
+             {
+                 JObject.FromObject(new { strategyName = "missing", rotaryFactor = 13,
+                     pickDropsAfterFightSeconds = 0, timeout = 120, guardianAvatar = "" }),
+                 JObject.FromObject(new { strategyName = Path.Combine("nested", "boss"), rotaryFactor = 0,
+                     pickDropsAfterFightSeconds = 0, timeout = 120, guardianAvatar = "" }),
+                 JObject.FromObject(new { strategyName = Path.Combine("nested", "boss"), rotaryFactor = 13,
+                     pickDropsAfterFightSeconds = -1, timeout = 120, guardianAvatar = "" }),
+                 JObject.FromObject(new { strategyName = Path.Combine("nested", "boss"), rotaryFactor = 13,
+                     pickDropsAfterFightSeconds = 0, timeout = 0, guardianAvatar = "" }),
+                 JObject.FromObject(new { strategyName = Path.Combine("nested", "boss"), rotaryFactor = 13,
+                     pickDropsAfterFightSeconds = 0, timeout = 120, guardianAvatar = "5" })
+             })
+    {
+        invalidFightSettings["actionSchedulerByCd"] = "";
+        invalidFightSettings["fightFinishDetectEnabled"] = true;
+        invalidFightSettings["fastCheckEnabled"] = false;
+        invalidFightSettings["fastCheckParams"] = "";
+        invalidFightSettings["rotateFindEnemyEnabled"] = false;
+        invalidFightSettings["checkBeforeBurst"] = false;
+        invalidFightSettings["isFirstCheck"] = false;
+        invalidFightSettings["checkEndDelay"] = "0.4";
+        invalidFightSettings["beforeDetectDelay"] = "0.4";
+        invalidFightSettings["guardianCombatSkip"] = false;
+        invalidFightSettings["burstEnabled"] = false;
+        invalidFightSettings["guardianAvatarHold"] = false;
+        invalidFightSettings["pickDropsAfterFightEnabled"] = false;
+        invalidFightSettings["kazuhaPickupEnabled"] = false;
+        invalidFightSettings["qinDoublePickUp"] = false;
+        invalidFightSettings["expBasedPickupEnabled"] = false;
+        invalidFightSettings["swimmingEnabled"] = true;
+        var invalidFightResponse = await ExchangeAsync(
+            connection, $"fight-settings-invalid-{Guid.NewGuid():N}", "solo.settings.save",
+            sessionToken, JObject.FromObject(new { name = "AutoFight", settings = invalidFightSettings }),
+            cancellation.Token);
+        Require(invalidFightResponse.Error is not null,
+            "solo.settings.save accepted invalid AutoFight settings");
+    }
     var soloStart = await ExchangeAsync(connection, "solo-start", "solo.start", sessionToken,
         JObject.FromObject(new { name = "AutoFishing" }), cancellation.Token);
     var soloTaskId = (soloStart.Result as JObject)?.Value<string>("taskId");

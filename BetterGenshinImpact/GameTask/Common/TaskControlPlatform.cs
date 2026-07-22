@@ -41,6 +41,8 @@ public static class TaskControlPlatform
     public static ITaskControlPlatform Current => Volatile.Read(ref _current)
         ?? throw new InvalidOperationException("TaskControl platform has not been composed.");
 
+    public static ITaskControlPlatform? TryGetCurrent() => Volatile.Read(ref _current);
+
     public static void Configure(ITaskControlPlatform platform)
     {
         ArgumentNullException.ThrowIfNull(platform);

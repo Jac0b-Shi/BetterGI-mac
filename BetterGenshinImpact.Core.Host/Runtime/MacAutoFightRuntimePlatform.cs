@@ -16,6 +16,7 @@ public sealed class MacAutoFightRuntimePlatform : IAutoFightRuntimePlatform
     private readonly Func<ISystemInfo> _systemInfoProvider;
     private readonly MacImageRegionOcrService _recognition;
     private readonly ILoggerFactory _loggerFactory;
+    private AutoFightConfig _autoFightConfig;
 
     public MacAutoFightRuntimePlatform(RuntimeLayout layout, Func<ISystemInfo> systemInfoProvider,
         MacImageRegionOcrService recognition, ILoggerFactory loggerFactory)
@@ -23,16 +24,18 @@ public sealed class MacAutoFightRuntimePlatform : IAutoFightRuntimePlatform
         _systemInfoProvider = systemInfoProvider ?? throw new ArgumentNullException(nameof(systemInfoProvider));
         _recognition = recognition;
         _loggerFactory = loggerFactory;
-        (AutoFightConfig, CombatMacroPriority) = LoadConfig(layout);
+        (_autoFightConfig, CombatMacroPriority) = LoadConfig(layout);
     }
 
     public ISystemInfo SystemInfo => _systemInfoProvider();
     public IOcrService OcrService => _recognition;
     public double DpiScale => TaskControlPlatform.Current.DpiScale;
-    public AutoFightConfig AutoFightConfig { get; }
+    public AutoFightConfig AutoFightConfig => Volatile.Read(ref _autoFightConfig);
     public int CombatMacroPriority { get; }
     public ILogger<T> GetLogger<T>() => _loggerFactory.CreateLogger<T>();
     public BgiYoloPredictor CreateYoloPredictor(BgiOnnxModel model) => _recognition.CreateYoloPredictor(model);
+    public void UpdateConfig(AutoFightConfig config) =>
+        Volatile.Write(ref _autoFightConfig, config ?? throw new ArgumentNullException(nameof(config)));
 
     private static (AutoFightConfig Config, int CombatMacroPriority) LoadConfig(RuntimeLayout layout)
     {

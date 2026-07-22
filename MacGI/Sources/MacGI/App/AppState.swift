@@ -346,6 +346,7 @@ final class AppState: ObservableObject {
     @Published private(set) var autoBossSettings: BetterGICoreAutoBossSettings?
     @Published private(set) var autoDomainSettings: BetterGICoreAutoDomainSettings?
     @Published private(set) var autoArtifactSalvageSettings: BetterGICoreAutoArtifactSalvageSettings?
+    @Published private(set) var autoFightSettings: BetterGICoreAutoFightSettings?
     @Published var recentLogs: [LogEntry] = []
 
     var onHUDVisibilityChanged: ((Bool) -> Void)?
@@ -973,6 +974,7 @@ final class AppState: ObservableObject {
             autoBossSettings = try await supervisor.autoBossSettings()
             autoDomainSettings = try await supervisor.autoDomainSettings()
             autoArtifactSalvageSettings = try await supervisor.autoArtifactSalvageSettings()
+            autoFightSettings = try await supervisor.autoFightSettings()
         } catch {
             soloTasks = []
             autoCookSettings = nil
@@ -981,6 +983,7 @@ final class AppState: ObservableObject {
             autoBossSettings = nil
             autoDomainSettings = nil
             autoArtifactSalvageSettings = nil
+            autoFightSettings = nil
             addLog(.error, "BetterGI Core solo task catalog failed: \(error.localizedDescription)")
         }
     }
@@ -1121,6 +1124,54 @@ final class AppState: ObservableObject {
                 self?.addLog(.error,
                     "AutoArtifactSalvage settings save failed: \(error.localizedDescription)")
             }
+        }
+    }
+
+    func saveAutoFightSettings(
+        strategyName: String? = nil, actionSchedulerByCd: String? = nil,
+        fightFinishDetectEnabled: Bool? = nil, fastCheckEnabled: Bool? = nil,
+        fastCheckParams: String? = nil, rotateFindEnemyEnabled: Bool? = nil,
+        rotaryFactor: Int? = nil, checkBeforeBurst: Bool? = nil,
+        isFirstCheck: Bool? = nil, checkEndDelay: String? = nil,
+        beforeDetectDelay: String? = nil, guardianAvatar: String? = nil,
+        guardianCombatSkip: Bool? = nil, burstEnabled: Bool? = nil,
+        guardianAvatarHold: Bool? = nil, pickDropsAfterFightEnabled: Bool? = nil,
+        pickDropsAfterFightSeconds: Int? = nil, kazuhaPickupEnabled: Bool? = nil,
+        qinDoublePickUp: Bool? = nil, expBasedPickupEnabled: Bool? = nil,
+        timeout: Int? = nil, swimmingEnabled: Bool? = nil
+    ) {
+        guard let supervisor = betterGICoreSupervisor, let current = autoFightSettings else { return }
+        let next = BetterGICoreAutoFightSettings(
+            strategyName: strategyName ?? current.strategyName,
+            strategyOptions: current.strategyOptions,
+            actionSchedulerByCd: actionSchedulerByCd ?? current.actionSchedulerByCd,
+            fightFinishDetectEnabled:
+                fightFinishDetectEnabled ?? current.fightFinishDetectEnabled,
+            fastCheckEnabled: fastCheckEnabled ?? current.fastCheckEnabled,
+            fastCheckParams: fastCheckParams ?? current.fastCheckParams,
+            rotateFindEnemyEnabled: rotateFindEnemyEnabled ?? current.rotateFindEnemyEnabled,
+            rotaryFactor: rotaryFactor ?? current.rotaryFactor,
+            checkBeforeBurst: checkBeforeBurst ?? current.checkBeforeBurst,
+            isFirstCheck: isFirstCheck ?? current.isFirstCheck,
+            checkEndDelay: checkEndDelay ?? current.checkEndDelay,
+            beforeDetectDelay: beforeDetectDelay ?? current.beforeDetectDelay,
+            guardianAvatar: guardianAvatar ?? current.guardianAvatar,
+            guardianAvatarOptions: current.guardianAvatarOptions,
+            guardianCombatSkip: guardianCombatSkip ?? current.guardianCombatSkip,
+            burstEnabled: burstEnabled ?? current.burstEnabled,
+            guardianAvatarHold: guardianAvatarHold ?? current.guardianAvatarHold,
+            pickDropsAfterFightEnabled:
+                pickDropsAfterFightEnabled ?? current.pickDropsAfterFightEnabled,
+            pickDropsAfterFightSeconds:
+                pickDropsAfterFightSeconds ?? current.pickDropsAfterFightSeconds,
+            kazuhaPickupEnabled: kazuhaPickupEnabled ?? current.kazuhaPickupEnabled,
+            qinDoublePickUp: qinDoublePickUp ?? current.qinDoublePickUp,
+            expBasedPickupEnabled: expBasedPickupEnabled ?? current.expBasedPickupEnabled,
+            timeout: timeout ?? current.timeout,
+            swimmingEnabled: swimmingEnabled ?? current.swimmingEnabled)
+        Task { [weak self] in
+            do { self?.autoFightSettings = try await supervisor.saveAutoFightSettings(next) }
+            catch { self?.addLog(.error, "AutoFight settings save failed: \(error.localizedDescription)") }
         }
     }
 

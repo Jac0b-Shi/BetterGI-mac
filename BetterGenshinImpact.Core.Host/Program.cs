@@ -41,6 +41,14 @@ if (args is ["--dependency-smoke"])
     return;
 }
 
+if (args is ["--recognition-smoke", "--runtime-root", var recognitionRuntimeRoot])
+{
+    Global.StartUpPath = Path.GetFullPath(recognitionRuntimeRoot);
+    Console.WriteLine(JsonConvert.SerializeObject(
+        RecognitionResourceSmoke.Run(Global.StartUpPath)));
+    return;
+}
+
 static string RequiredArgument(string[] arguments, string name)
 {
     var index = Array.IndexOf(arguments, name);
@@ -128,8 +136,10 @@ TaskControlPlatform.Configure(new MacTaskControlPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token, captureRing,
     loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.Common.TaskControl"),
     foregroundInputCoordinator));
-AutoFightRuntimePlatform.Configure(new MacAutoFightRuntimePlatform(
-    layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory));
+var autoFightRuntimePlatform = new MacAutoFightRuntimePlatform(
+    layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
+AutoFightRuntimePlatform.Configure(autoFightRuntimePlatform);
+server.SoloTaskSettings.AttachAutoFightConfigUpdated(autoFightRuntimePlatform.UpdateConfig);
 var autoWoodRuntimePlatform = new MacAutoWoodRuntimePlatform();
 var autoMusicGameRuntimePlatform = new MacAutoMusicGameRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo.AssetScale);

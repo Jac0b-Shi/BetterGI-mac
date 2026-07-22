@@ -16,8 +16,12 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
 {
     private readonly object _lock = new();
+    private Action<AutoFightConfig>? _autoFightConfigUpdated;
     public int AutoWoodRoundNum { get; private set; }
     public int AutoWoodDailyMaxCount { get; private set; } = 2000;
+
+    public void AttachAutoFightConfigUpdated(Action<AutoFightConfig> callback) =>
+        _autoFightConfigUpdated = callback ?? throw new ArgumentNullException(nameof(callback));
 
     public object Get(string name)
     {
@@ -31,6 +35,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
                 "AutoMusicGame" => Describe(
                     LoadConfig<AutoMusicGameConfig>(root, "autoMusicGameConfig")),
                 "AutoBoss" => Describe(LoadConfig<AutoBossConfig>(root, "autoBossConfig")),
+                "AutoFight" => Describe(LoadConfig<AutoFightConfig>(root, "autoFightConfig")),
                 "AutoDomain" => Describe(
                     LoadConfig<AutoDomainConfig>(root, "autoDomainConfig"),
                     LoadConfig<AutoFightConfig>(root, "autoFightConfig"),
@@ -50,6 +55,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             "AutoWood" => SaveAutoWood(settings),
             "AutoMusicGame" => SaveAutoMusicGame(settings),
             "AutoBoss" => SaveAutoBoss(settings),
+            "AutoFight" => SaveAutoFight(settings),
             "AutoDomain" => SaveAutoDomain(settings),
             "AutoArtifactSalvage" => SaveAutoArtifactSalvage(settings),
             _ => throw Unavailable(name),
@@ -151,6 +157,57 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         }
     }
 
+    private object SaveAutoFight(JObject settings)
+    {
+        var strategyName = RequiredString(settings, "strategyName");
+        if (!StrategyOptions().Contains(strategyName, StringComparer.Ordinal))
+            throw new ArgumentException($"Unknown AutoFight strategy: {strategyName}");
+        var guardianAvatar = RequiredString(settings, "guardianAvatar");
+        if (guardianAvatar is not ("" or "1" or "2" or "3" or "4"))
+            throw new ArgumentException($"Unsupported guardianAvatar: {guardianAvatar}");
+        var rotaryFactor = RequiredInt(settings, "rotaryFactor");
+        if (rotaryFactor is < 1 or > 13)
+            throw new ArgumentOutOfRangeException("rotaryFactor", rotaryFactor,
+                "rotaryFactor must be between 1 and 13.");
+        var pickDropsSeconds = NonNegative(settings, "pickDropsAfterFightSeconds");
+        var timeout = RequiredInt(settings, "timeout");
+        if (timeout < 1)
+            throw new ArgumentOutOfRangeException("timeout", timeout, "timeout must be positive.");
+
+        lock (_lock)
+        {
+            var root = LoadRoot();
+            var config = LoadConfig<AutoFightConfig>(root, "autoFightConfig");
+            config.StrategyName = strategyName;
+            config.ActionSchedulerByCd = RequiredString(settings, "actionSchedulerByCd");
+            config.FightFinishDetectEnabled = RequiredBool(settings, "fightFinishDetectEnabled");
+            config.FinishDetectConfig.FastCheckEnabled = RequiredBool(settings, "fastCheckEnabled");
+            config.FinishDetectConfig.FastCheckParams = RequiredString(settings, "fastCheckParams");
+            config.FinishDetectConfig.RotateFindEnemyEnabled =
+                RequiredBool(settings, "rotateFindEnemyEnabled");
+            config.FinishDetectConfig.RotaryFactor = rotaryFactor;
+            config.FinishDetectConfig.CheckBeforeBurst = RequiredBool(settings, "checkBeforeBurst");
+            config.FinishDetectConfig.IsFirstCheck = RequiredBool(settings, "isFirstCheck");
+            config.FinishDetectConfig.CheckEndDelay = RequiredString(settings, "checkEndDelay");
+            config.FinishDetectConfig.BeforeDetectDelay = RequiredString(settings, "beforeDetectDelay");
+            config.GuardianAvatar = guardianAvatar;
+            config.GuardianCombatSkip = RequiredBool(settings, "guardianCombatSkip");
+            config.BurstEnabled = RequiredBool(settings, "burstEnabled");
+            config.GuardianAvatarHold = RequiredBool(settings, "guardianAvatarHold");
+            config.PickDropsAfterFightEnabled = RequiredBool(settings, "pickDropsAfterFightEnabled");
+            config.PickDropsAfterFightSeconds = pickDropsSeconds;
+            config.KazuhaPickupEnabled = RequiredBool(settings, "kazuhaPickupEnabled");
+            config.QinDoublePickUp = RequiredBool(settings, "qinDoublePickUp");
+            config.ExpBasedPickupEnabled = RequiredBool(settings, "expBasedPickupEnabled");
+            config.Timeout = timeout;
+            config.SwimmingEnabled = RequiredBool(settings, "swimmingEnabled");
+            root["autoFightConfig"] = JsonSerializer.SerializeToNode(config, ConfigJson.Options);
+            SaveRoot(root);
+            _autoFightConfigUpdated?.Invoke(config);
+            return Describe(config);
+        }
+    }
+
     private object SaveAutoDomain(JObject settings)
     {
         var strategyName = RequiredString(settings, "strategyName");
@@ -194,6 +251,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             root["autoArtifactSalvageConfig"] = JsonSerializer.SerializeToNode(
                 artifactConfig, ConfigJson.Options);
             SaveRoot(root);
+            _autoFightConfigUpdated?.Invoke(fightConfig);
             return Describe(config, fightConfig, artifactConfig);
         }
     }
@@ -271,6 +329,35 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         returnToStatueAfterEachRound = config.ReturnToStatueAfterEachRound,
         rewardRecognitionEnabled = config.RewardRecognitionEnabled,
         reviveRetryCount = config.ReviveRetryCount,
+    };
+
+    private object Describe(AutoFightConfig config) => new
+    {
+        name = "AutoFight",
+        strategyName = config.StrategyName,
+        strategyOptions = StrategyOptions(),
+        actionSchedulerByCd = config.ActionSchedulerByCd,
+        fightFinishDetectEnabled = config.FightFinishDetectEnabled,
+        fastCheckEnabled = config.FinishDetectConfig.FastCheckEnabled,
+        fastCheckParams = config.FinishDetectConfig.FastCheckParams,
+        rotateFindEnemyEnabled = config.FinishDetectConfig.RotateFindEnemyEnabled,
+        rotaryFactor = config.FinishDetectConfig.RotaryFactor,
+        checkBeforeBurst = config.FinishDetectConfig.CheckBeforeBurst,
+        isFirstCheck = config.FinishDetectConfig.IsFirstCheck,
+        checkEndDelay = config.FinishDetectConfig.CheckEndDelay,
+        beforeDetectDelay = config.FinishDetectConfig.BeforeDetectDelay,
+        guardianAvatar = config.GuardianAvatar,
+        guardianAvatarOptions = new[] { "", "1", "2", "3", "4" },
+        guardianCombatSkip = config.GuardianCombatSkip,
+        burstEnabled = config.BurstEnabled,
+        guardianAvatarHold = config.GuardianAvatarHold,
+        pickDropsAfterFightEnabled = config.PickDropsAfterFightEnabled,
+        pickDropsAfterFightSeconds = config.PickDropsAfterFightSeconds,
+        kazuhaPickupEnabled = config.KazuhaPickupEnabled,
+        qinDoublePickUp = config.QinDoublePickUp,
+        expBasedPickupEnabled = config.ExpBasedPickupEnabled,
+        timeout = config.Timeout,
+        swimmingEnabled = config.SwimmingEnabled,
     };
 
     private object Describe(

@@ -19,7 +19,7 @@ public sealed class SoloTaskCoordinator(
     {
         Descriptor("AutoGeniusInvokation", "自动七圣召唤", false),
         Descriptor("AutoWood", "自动伐木", true, true),
-        Descriptor("AutoFight", "自动战斗", true),
+        Descriptor("AutoFight", "自动战斗", true, true),
         Descriptor("AutoDomain", "自动秘境", true, true),
         Descriptor("AutoBoss", "自动首领讨伐", true, true),
         Descriptor("AutoStygianOnslaught", "自动幽境危战", false),

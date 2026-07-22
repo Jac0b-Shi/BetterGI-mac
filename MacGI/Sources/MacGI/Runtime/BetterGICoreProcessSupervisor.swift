@@ -92,6 +92,33 @@ struct BetterGICoreAutoArtifactSalvageSettings: Sendable, Equatable {
     let recognitionFailurePolicyOptions: [BetterGICoreNamedOption]
 }
 
+struct BetterGICoreAutoFightSettings: Sendable, Equatable {
+    let strategyName: String
+    let strategyOptions: [String]
+    let actionSchedulerByCd: String
+    let fightFinishDetectEnabled: Bool
+    let fastCheckEnabled: Bool
+    let fastCheckParams: String
+    let rotateFindEnemyEnabled: Bool
+    let rotaryFactor: Int
+    let checkBeforeBurst: Bool
+    let isFirstCheck: Bool
+    let checkEndDelay: String
+    let beforeDetectDelay: String
+    let guardianAvatar: String
+    let guardianAvatarOptions: [String]
+    let guardianCombatSkip: Bool
+    let burstEnabled: Bool
+    let guardianAvatarHold: Bool
+    let pickDropsAfterFightEnabled: Bool
+    let pickDropsAfterFightSeconds: Int
+    let kazuhaPickupEnabled: Bool
+    let qinDoublePickUp: Bool
+    let expBasedPickupEnabled: Bool
+    let timeout: Int
+    let swimmingEnabled: Bool
+}
+
 struct BetterGICoreSoloTaskStatus: Sendable, Equatable {
     let taskID: String?
     let name: String?
@@ -492,6 +519,43 @@ actor BetterGICoreProcessSupervisor {
         ))
     }
 
+    func autoFightSettings() throws -> BetterGICoreAutoFightSettings {
+        try decodeAutoFightSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "AutoFight"]
+        ))
+    }
+
+    func saveAutoFightSettings(_ settings: BetterGICoreAutoFightSettings) throws
+        -> BetterGICoreAutoFightSettings {
+        try decodeAutoFightSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "AutoFight", "settings": [
+                "strategyName": settings.strategyName,
+                "actionSchedulerByCd": settings.actionSchedulerByCd,
+                "fightFinishDetectEnabled": settings.fightFinishDetectEnabled,
+                "fastCheckEnabled": settings.fastCheckEnabled,
+                "fastCheckParams": settings.fastCheckParams,
+                "rotateFindEnemyEnabled": settings.rotateFindEnemyEnabled,
+                "rotaryFactor": settings.rotaryFactor,
+                "checkBeforeBurst": settings.checkBeforeBurst,
+                "isFirstCheck": settings.isFirstCheck,
+                "checkEndDelay": settings.checkEndDelay,
+                "beforeDetectDelay": settings.beforeDetectDelay,
+                "guardianAvatar": settings.guardianAvatar,
+                "guardianCombatSkip": settings.guardianCombatSkip,
+                "burstEnabled": settings.burstEnabled,
+                "guardianAvatarHold": settings.guardianAvatarHold,
+                "pickDropsAfterFightEnabled": settings.pickDropsAfterFightEnabled,
+                "pickDropsAfterFightSeconds": settings.pickDropsAfterFightSeconds,
+                "kazuhaPickupEnabled": settings.kazuhaPickupEnabled,
+                "qinDoublePickUp": settings.qinDoublePickUp,
+                "expBasedPickupEnabled": settings.expBasedPickupEnabled,
+                "timeout": settings.timeout,
+                "swimmingEnabled": settings.swimmingEnabled,
+            ]]
+        ))
+    }
+
     func saveAutoArtifactSalvageSettings(_ settings: BetterGICoreAutoArtifactSalvageSettings) throws
         -> BetterGICoreAutoArtifactSalvageSettings {
         try decodeAutoArtifactSalvageSettings(requestSoloSettings(
@@ -643,6 +707,51 @@ actor BetterGICoreProcessSupervisor {
                      maxNumToCheck: maxNumToCheck,
                      recognitionFailurePolicy: recognitionFailurePolicy,
                      recognitionFailurePolicyOptions: options)
+    }
+
+    private func decodeAutoFightSettings(_ value: Any) throws -> BetterGICoreAutoFightSettings {
+        guard let value = value as? [String: Any], value["name"] as? String == "AutoFight",
+              let strategyName = value["strategyName"] as? String,
+              let strategyOptions = value["strategyOptions"] as? [String],
+              let actionSchedulerByCd = value["actionSchedulerByCd"] as? String,
+              let fightFinishDetectEnabled = value["fightFinishDetectEnabled"] as? Bool,
+              let fastCheckEnabled = value["fastCheckEnabled"] as? Bool,
+              let fastCheckParams = value["fastCheckParams"] as? String,
+              let rotateFindEnemyEnabled = value["rotateFindEnemyEnabled"] as? Bool,
+              let rotaryFactor = value["rotaryFactor"] as? Int,
+              let checkBeforeBurst = value["checkBeforeBurst"] as? Bool,
+              let isFirstCheck = value["isFirstCheck"] as? Bool,
+              let checkEndDelay = value["checkEndDelay"] as? String,
+              let beforeDetectDelay = value["beforeDetectDelay"] as? String,
+              let guardianAvatar = value["guardianAvatar"] as? String,
+              let guardianAvatarOptions = value["guardianAvatarOptions"] as? [String],
+              let guardianCombatSkip = value["guardianCombatSkip"] as? Bool,
+              let burstEnabled = value["burstEnabled"] as? Bool,
+              let guardianAvatarHold = value["guardianAvatarHold"] as? Bool,
+              let pickDropsAfterFightEnabled = value["pickDropsAfterFightEnabled"] as? Bool,
+              let pickDropsAfterFightSeconds = value["pickDropsAfterFightSeconds"] as? Int,
+              let kazuhaPickupEnabled = value["kazuhaPickupEnabled"] as? Bool,
+              let qinDoublePickUp = value["qinDoublePickUp"] as? Bool,
+              let expBasedPickupEnabled = value["expBasedPickupEnabled"] as? Bool,
+              let timeout = value["timeout"] as? Int,
+              let swimmingEnabled = value["swimmingEnabled"] as? Bool else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoFight settings.")
+        }
+        return .init(strategyName: strategyName, strategyOptions: strategyOptions,
+                     actionSchedulerByCd: actionSchedulerByCd,
+                     fightFinishDetectEnabled: fightFinishDetectEnabled,
+                     fastCheckEnabled: fastCheckEnabled, fastCheckParams: fastCheckParams,
+                     rotateFindEnemyEnabled: rotateFindEnemyEnabled, rotaryFactor: rotaryFactor,
+                     checkBeforeBurst: checkBeforeBurst, isFirstCheck: isFirstCheck,
+                     checkEndDelay: checkEndDelay, beforeDetectDelay: beforeDetectDelay,
+                     guardianAvatar: guardianAvatar, guardianAvatarOptions: guardianAvatarOptions,
+                     guardianCombatSkip: guardianCombatSkip, burstEnabled: burstEnabled,
+                     guardianAvatarHold: guardianAvatarHold,
+                     pickDropsAfterFightEnabled: pickDropsAfterFightEnabled,
+                     pickDropsAfterFightSeconds: pickDropsAfterFightSeconds,
+                     kazuhaPickupEnabled: kazuhaPickupEnabled, qinDoublePickUp: qinDoublePickUp,
+                     expBasedPickupEnabled: expBasedPickupEnabled, timeout: timeout,
+                     swimmingEnabled: swimmingEnabled)
     }
 
     func startSoloTask(name: String) throws -> BetterGICoreSoloTaskStatus {

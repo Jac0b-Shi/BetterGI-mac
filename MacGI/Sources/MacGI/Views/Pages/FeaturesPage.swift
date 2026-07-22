@@ -59,6 +59,7 @@ struct SoloTasksPage: View {
         case "AutoBoss": autoBossSettings
         case "AutoDomain": autoDomainSettings
         case "AutoArtifactSalvage": autoArtifactSalvageSettings
+        case "AutoFight": autoFightSettings
         default:
             BGISettingLine(title: "设置", subtitle: "Core 未返回该任务的设置模型") {
                 BGIStatusBadge(text: "不可用", tint: BGIColors.muted)
@@ -361,6 +362,140 @@ struct SoloTasksPage: View {
         } else { settingsLoading }
     }
 
+    @ViewBuilder
+    private var autoFightSettings: some View {
+        if let settings = appState.autoFightSettings {
+            BGISettingLine(title: "选择战斗策略", subtitle: "用于战斗") {
+                Picker("", selection: Binding(
+                    get: { settings.strategyName },
+                    set: { appState.saveAutoFightSettings(strategyName: $0) })) {
+                    ForEach(settings.strategyOptions, id: \.self) { Text($0).tag($0) }
+                }.labelsHidden().frame(width: 220)
+            }
+            CoreTextSettingLine(
+                title: "根据技能 CD 优化出招人员",
+                subtitle: "填写角色名或角色名与 CD，多种使用分号分隔",
+                value: settings.actionSchedulerByCd,
+                onSave: { appState.saveAutoFightSettings(actionSchedulerByCd: $0) })
+
+            fightSectionTitle("自动检测战斗结束")
+            fightToggleLine("启用战斗结束检测", "检测到战斗结束时停止自动战斗",
+                value: Binding(get: { settings.fightFinishDetectEnabled },
+                    set: { appState.saveAutoFightSettings(fightFinishDetectEnabled: $0) }))
+            fightToggleLine("更快检查结束战斗", "按时间或指定角色完成一轮操作后检查",
+                value: Binding(get: { settings.fastCheckEnabled },
+                    set: { appState.saveAutoFightSettings(fastCheckEnabled: $0) }))
+            if settings.fastCheckEnabled {
+                CoreTextSettingLine(
+                    title: "更快检查结束战斗参数",
+                    subtitle: "例如：5;白术;钟离;",
+                    value: settings.fastCheckParams,
+                    onSave: { appState.saveAutoFightSettings(fastCheckParams: $0) })
+            }
+            fightToggleLine("旋转寻找敌人位置", "打开队伍界面检测前先判断是否需要靠近或旋转",
+                value: Binding(get: { settings.rotateFindEnemyEnabled },
+                    set: { appState.saveAutoFightSettings(rotateFindEnemyEnabled: $0) }))
+            if settings.rotateFindEnemyEnabled {
+                BGISettingLine(title: "旋转速度", subtitle: "上游范围 1-13，建议单次约 360°") {
+                    HStack(spacing: 10) {
+                        Slider(value: Binding(
+                            get: { Double(settings.rotaryFactor) },
+                            set: { appState.saveAutoFightSettings(rotaryFactor: Int($0.rounded())) }),
+                            in: 1...13, step: 1).frame(width: 150)
+                        Text("\(settings.rotaryFactor)").frame(width: 24)
+                    }
+                }
+                fightToggleLine("Q 前检测", "释放元素爆发前检查战斗是否结束",
+                    value: Binding(get: { settings.checkBeforeBurst },
+                        set: { appState.saveAutoFightSettings(checkBeforeBurst: $0) }))
+                fightToggleLine("尝试面敌", "开战寻敌时尝试面向敌人",
+                    value: Binding(get: { settings.isFirstCheck },
+                        set: { appState.saveAutoFightSettings(isFirstCheck: $0) }))
+            }
+            CoreTextSettingLine(
+                title: "检查战斗结束的延时",
+                subtitle: "可为默认秒数或角色与秒数组合",
+                value: settings.checkEndDelay,
+                onSave: { appState.saveAutoFightSettings(checkEndDelay: $0) })
+            CoreTextSettingLine(
+                title: "按键触发后检查延时",
+                subtitle: "按下切换队伍后检查屏幕色块前的延时",
+                value: settings.beforeDetectDelay,
+                onSave: { appState.saveAutoFightSettings(beforeDetectDelay: $0) })
+
+            fightSectionTitle("盾奶位角色优先释放技能")
+            BGISettingLine(title: "盾奶位角色在队伍中的位置", subtitle: "空选关闭实时盾奶技能检测") {
+                Picker("", selection: Binding(
+                    get: { settings.guardianAvatar },
+                    set: { appState.saveAutoFightSettings(guardianAvatar: $0) })) {
+                    ForEach(settings.guardianAvatarOptions, id: \.self) {
+                        Text($0.isEmpty ? "关闭" : $0).tag($0)
+                    }
+                }.labelsHidden().frame(width: 90)
+            }
+            if !settings.guardianAvatar.isEmpty {
+                fightToggleLine("禁用该角色的 E 战斗策略", "自动释放盾奶位 E 技能",
+                    value: Binding(get: { settings.guardianCombatSkip },
+                        set: { appState.saveAutoFightSettings(guardianCombatSkip: $0) }))
+                fightToggleLine("自动释放 Q 爆发", "盾奶位可用时自动释放元素爆发",
+                    value: Binding(get: { settings.burstEnabled },
+                        set: { appState.saveAutoFightSettings(burstEnabled: $0) }))
+                fightToggleLine("盾奶位 E 长按", "关闭为短按，开启为长按",
+                    value: Binding(get: { settings.guardianAvatarHold },
+                        set: { appState.saveAutoFightSettings(guardianAvatarHold: $0) }))
+            }
+
+            fightSectionTitle("战后拾取")
+            fightToggleLine("扫描掉落物光柱", "战斗结束后旋转视角寻找掉落物并靠近",
+                value: Binding(get: { settings.pickDropsAfterFightEnabled },
+                    set: { appState.saveAutoFightSettings(pickDropsAfterFightEnabled: $0) }))
+            if settings.pickDropsAfterFightEnabled {
+                BGISettingLine(title: "扫描掉落物光柱时长", subtitle: "单位为秒；0 表示不扫描") {
+                    Stepper(value: Binding(
+                        get: { settings.pickDropsAfterFightSeconds },
+                        set: { appState.saveAutoFightSettings(pickDropsAfterFightSeconds: $0) }),
+                        in: 0...300) {
+                        Text("\(settings.pickDropsAfterFightSeconds)").frame(minWidth: 38)
+                    }
+                }
+            }
+            fightToggleLine("聚集材料动作", "战斗结束后使用万叶或琴长 E 聚集材料",
+                value: Binding(get: { settings.kazuhaPickupEnabled },
+                    set: { appState.saveAutoFightSettings(kazuhaPickupEnabled: $0) }))
+            if settings.kazuhaPickupEnabled {
+                fightToggleLine("琴二次拾取", "首次拾取为空时再次执行拾取",
+                    value: Binding(get: { settings.qinDoublePickUp },
+                        set: { appState.saveAutoFightSettings(qinDoublePickUp: $0) }))
+                fightToggleLine("基于经验值判断拾取", "未检测到精英怪经验值时跳过拾取",
+                    value: Binding(get: { settings.expBasedPickupEnabled },
+                        set: { appState.saveAutoFightSettings(expBasedPickupEnabled: $0) }))
+            }
+            BGISettingLine(title: "自动战斗超时（秒）", subtitle: "到达指定时间后自动停止战斗") {
+                Stepper(value: Binding(
+                    get: { settings.timeout },
+                    set: { appState.saveAutoFightSettings(timeout: $0) }), in: 1...3600) {
+                    Text("\(settings.timeout)").frame(minWidth: 48)
+                }
+            }
+            fightToggleLine("游泳检测", "自动战斗中检测游泳，先回战斗节点，失败则去七天神像",
+                value: Binding(get: { settings.swimmingEnabled },
+                    set: { appState.saveAutoFightSettings(swimmingEnabled: $0) }))
+        } else { settingsLoading }
+    }
+
+    private func fightSectionTitle(_ title: String) -> some View {
+        Text(title).font(.headline).foregroundStyle(BGIColors.primaryText).padding(.top, 6)
+    }
+
+    private func fightToggleLine(
+        _ title: String, _ subtitle: String, value: Binding<Bool>
+    ) -> some View {
+        BGISettingLine(title: title, subtitle: subtitle) {
+            Toggle("", isOn: value)
+                .toggleStyle(.switch).labelsHidden()
+        }
+    }
+
     private func domainCountLine(_ title: String, value: Binding<Int>) -> some View {
         BGISettingLine(title: title, subtitle: "最小 0 次") {
             Stepper(value: value, in: 0...999) {
@@ -453,6 +588,33 @@ private struct AutoArtifactSalvageSettingsEditor: View {
                 }
             }
             .labelsHidden().frame(width: 100)
+        }
+    }
+}
+
+private struct CoreTextSettingLine: View {
+    let title: String
+    let subtitle: String
+    let onSave: (String) -> Void
+    @State private var draft: String
+    @FocusState private var focused: Bool
+
+    init(title: String, subtitle: String, value: String, onSave: @escaping (String) -> Void) {
+        self.title = title
+        self.subtitle = subtitle
+        self.onSave = onSave
+        _draft = State(initialValue: value)
+    }
+
+    var body: some View {
+        BGISettingLine(title: title, subtitle: subtitle) {
+            TextField("", text: $draft)
+                .frame(width: 260)
+                .focused($focused)
+                .onSubmit { onSave(draft) }
+                .onChange(of: focused) { wasFocused, isFocused in
+                    if wasFocused && !isFocused { onSave(draft) }
+                }
         }
     }
 }

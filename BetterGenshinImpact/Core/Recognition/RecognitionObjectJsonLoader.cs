@@ -1,5 +1,6 @@
 using BetterGenshinImpact.Helpers.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using NCalc;
 using Newtonsoft.Json;
 using OpenCvSharp;
@@ -28,7 +29,8 @@ public sealed class RecognitionObjectJsonLoadContext
 
 public static class RecognitionObjectJsonLoader
 {
-    private static ILogger Logger => TaskControlPlatform.Current.Logger;
+    private static ILogger Logger =>
+        TaskControlPlatform.TryGetCurrent()?.Logger ?? NullLogger.Instance;
 
     public static RecognitionObject LoadFromFile(string filePath, string objectName, RecognitionObjectJsonLoadContext context)
     {

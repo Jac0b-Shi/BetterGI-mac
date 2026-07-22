@@ -39,6 +39,8 @@ rm -rf ${app}
 mkdir -p ${contents}/MacOS ${contents}/Resources
 cp ${executable} ${contents}/MacOS/${executable_name}
 cp -R ${resource_bundle} ${contents}/Resources/${resource_bundle:t}
+${script_dir}/stage-game-task-assets.sh \
+  ${contents}/Resources/${resource_bundle:t}/GameTask
 
 plist=${contents}/Info.plist
 plutil -create xml1 ${plist}
@@ -65,6 +67,12 @@ fi
 codesign ${sign_options[@]} ${contents}/MacOS/${executable_name}
 codesign ${sign_options[@]} ${app}
 codesign --verify --deep --strict --verbose=2 ${app}
+
+smoke_root=$(mktemp -d ${TMPDIR:-/tmp}/bettergi-recognition-smoke.XXXXXX)
+trap 'rm -rf ${smoke_root}' EXIT
+cp -R ${contents}/Resources/${resource_bundle:t}/GameTask ${smoke_root}/GameTask
+${contents}/Resources/BetterGICore/BetterGenshinImpact.Core.Host \
+  --recognition-smoke --runtime-root ${smoke_root}
 
 print "Signing identity: ${signing_identity}"
 print "betterGI-mac app packaged at ${app}"

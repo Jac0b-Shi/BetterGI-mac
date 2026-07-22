@@ -86,7 +86,8 @@ public static class RecognitionAssets
             throw new FileNotFoundException($"未找到{taskName}的素材文件夹");
         }
 
-        var filePath = Path.Combine(assetsFolder, assetName);
+        var filePath = Path.Combine(
+            assetsFolder, assetName.Replace('\\', Path.DirectorySeparatorChar));
         if (!File.Exists(filePath))
         {
             throw new FileNotFoundException($"未找到{taskName}中的{assetName}文件");

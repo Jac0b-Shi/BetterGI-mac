@@ -4,21 +4,6 @@ import Testing
 
 @Suite("Runtime GameTask resources")
 struct BGIRuntimeResourceStoreTests {
-    @Test("Package bundle installs the canonical BetterGI GameTask tree")
-    func packageBundleInstallsCanonicalGameTaskTree() throws {
-        let fixture = try ResourceFixture()
-        defer { fixture.remove() }
-
-        try fixture.store.synchronizeBundledGameTaskResources()
-
-        #expect(FileManager.default.fileExists(atPath: fixture.store.rootURL
-            .appendingPathComponent("GameTask/Common/Element/Assets/1920x1080/paimon_menu.png").path))
-        #expect(FileManager.default.fileExists(atPath: fixture.store.rootURL
-            .appendingPathComponent("GameTask/AutoFight/Assets/combat_avatar.json").path))
-        #expect(!FileManager.default.fileExists(atPath: fixture.store.rootURL
-            .appendingPathComponent("GameTask/AutoFight/Config/combat_avatar.json").path))
-    }
-
     @Test("Bundled GameTask replaces the app-owned runtime tree")
     func bundledGameTaskReplacesRuntimeTree() throws {
         let fixture = try ResourceFixture()
