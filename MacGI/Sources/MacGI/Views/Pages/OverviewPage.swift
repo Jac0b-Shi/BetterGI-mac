@@ -129,7 +129,7 @@ struct OverviewPage: View {
                 Label("已授权", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
             } else {
-                Button("请求授权", action: request)
+                Button("打开设置", action: request)
                     .buttonStyle(.bordered)
             }
         }
