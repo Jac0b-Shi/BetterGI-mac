@@ -341,6 +341,7 @@ final class AppState: ObservableObject {
     @Published var inputActionLog: [String] = []
     @Published var features: [MacGIFeature] = []
     @Published var soloTasks: [BetterGICoreSoloTask] = []
+    @Published var soloTaskInputDrafts: [String: String] = [:]
     @Published private(set) var soloTaskStatus = BetterGICoreSoloTaskStatus(
         taskID: nil, name: nil, state: "idle", error: nil)
     @Published private(set) var autoGeniusInvokationSettings:
@@ -1492,7 +1493,7 @@ final class AppState: ObservableObject {
         }
     }
 
-    func toggleSoloTask(_ name: String) {
+    func toggleSoloTask(_ name: String, inputText: String? = nil) {
         guard let supervisor = betterGICoreSupervisor else { return }
         Task { [weak self] in
             guard let self else { return }
@@ -1502,7 +1503,8 @@ final class AppState: ObservableObject {
                    let taskID = self.soloTaskStatus.taskID {
                     try await supervisor.stopSoloTask(taskID: taskID)
                 } else {
-                    self.soloTaskStatus = try await supervisor.startSoloTask(name: name)
+                    self.soloTaskStatus = try await supervisor.startSoloTask(
+                        name: name, inputText: inputText)
                 }
                 await self.pollSoloTaskStatus(supervisor)
             } catch {

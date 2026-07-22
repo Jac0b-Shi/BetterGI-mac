@@ -18,6 +18,7 @@ using BetterGenshinImpact.GameTask.AutoPick;
 using BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
 using BetterGenshinImpact.GameTask.AutoStygianOnslaught;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation;
+using BetterGenshinImpact.GameTask.UseRedeemCode;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.Core.Recognition.OCR;
@@ -40,6 +41,7 @@ public sealed class MacDispatcherRuntimePlatform(
     IAutoWoodRuntimePlatform autoWoodRuntimePlatform,
     IAutoMusicGameRuntimePlatform autoMusicGameRuntimePlatform,
     IAutoAlbumRuntimePlatform autoAlbumRuntimePlatform,
+    IUseRedemptionCodeRuntimePlatform useRedemptionCodeRuntimePlatform,
     IAutoDomainRuntimePlatform autoDomainRuntimePlatform,
     IAutoBossRuntimePlatform autoBossRuntimePlatform,
     IAutoBossPathExecutorFactory autoBossPathExecutorFactory,
@@ -157,6 +159,13 @@ public sealed class MacDispatcherRuntimePlatform(
             await new AutoAlbumTask(
                     new AutoMusicGameParam(), autoMusicGameRuntimePlatform,
                     settings.BuildAutoMusicGameConfig(), autoAlbumRuntimePlatform)
+                .Start(cancellationToken);
+            return null;
+        }
+        if (request is DispatcherRedeemCodeTaskRequest redeemCode)
+        {
+            await new UseRedemptionCodeTask(
+                    [.. redeemCode.Codes], useRedemptionCodeRuntimePlatform)
                 .Start(cancellationToken);
             return null;
         }

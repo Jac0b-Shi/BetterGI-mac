@@ -30,7 +30,8 @@ public sealed class WindowsAutoAlbumRuntimePlatform : IAutoAlbumRuntimePlatform
                     .Error(message, exception ?? new System.Exception(message));
                 break;
             default:
-                throw new ArgumentOutOfRangeException(nameof(notification), notification, null);
+                throw new System.ArgumentOutOfRangeException(
+                    nameof(notification), notification, null);
         }
     }
 }

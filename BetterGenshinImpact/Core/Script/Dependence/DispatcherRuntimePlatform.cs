@@ -38,6 +38,8 @@ public sealed record DispatcherFishingTaskRequest(
 public sealed record DispatcherCookTaskRequest() : DispatcherSoloTaskRequest("AutoCook");
 public sealed record DispatcherMusicGameTaskRequest() : DispatcherSoloTaskRequest("AutoMusicGame");
 public sealed record DispatcherAlbumTaskRequest() : DispatcherSoloTaskRequest("AutoAlbum");
+public sealed record DispatcherRedeemCodeTaskRequest(IReadOnlyList<string> Codes) :
+    DispatcherSoloTaskRequest("AutoRedeemCode");
 public sealed record DispatcherArtifactSalvageTaskRequest() : DispatcherSoloTaskRequest("AutoArtifactSalvage");
 public sealed record DispatcherLeyLineTaskRequest(AutoLeyLineOutcropConfig Config) :
     DispatcherSoloTaskRequest("AutoLeyLineOutcrop");

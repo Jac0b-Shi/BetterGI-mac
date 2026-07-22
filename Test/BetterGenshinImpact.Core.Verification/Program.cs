@@ -3712,14 +3712,23 @@ sealed class VerificationAutoFightRuntimePlatform(
     BetterGenshinImpact.Core.Recognition.OCR.IOcrService ocrService,
     BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory onnxFactory) : IAutoFightRuntimePlatform
 {
+    private AutoFightConfig _autoFightConfig = autoFightConfig;
+
     public BetterGenshinImpact.GameTask.Model.ISystemInfo SystemInfo => systemInfo;
-    public AutoFightConfig AutoFightConfig => autoFightConfig;
+    public AutoFightConfig AutoFightConfig => Volatile.Read(ref _autoFightConfig);
     public BetterGenshinImpact.Core.Recognition.OCR.IOcrService OcrService { get; } = ocrService;
     public double DpiScale => 1;
     public int CombatMacroPriority => 0;
     public Microsoft.Extensions.Logging.ILogger<T> GetLogger<T>() => NullLogger<T>.Instance;
     public BetterGenshinImpact.Core.Recognition.ONNX.BgiYoloPredictor CreateYoloPredictor(
         BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel model) => onnxFactory.CreateYoloPredictor(model);
+    public IDisposable UseConfig(AutoFightConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        var original = Interlocked.Exchange(ref _autoFightConfig, config);
+        return new CallbackDisposable(() =>
+            Interlocked.Exchange(ref _autoFightConfig, original));
+    }
 }
 
 sealed class VerificationOcrService : BetterGenshinImpact.Core.Recognition.OCR.IOcrService

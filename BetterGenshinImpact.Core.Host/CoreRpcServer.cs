@@ -207,7 +207,9 @@ public sealed class CoreRpcServer(
                     request.Params?["settings"] as JObject
                     ?? throw new ArgumentException("settings is required.")),
                 "solo.list" => SoloTasks.List(),
-                "solo.start" => SoloTasks.Start(RequiredString(request.Params, "name")),
+                "solo.start" => SoloTasks.Start(
+                    RequiredString(request.Params, "name"),
+                    request.Params?["inputText"]?.Value<string>()),
                 "solo.stop" => SoloTasks.Stop(RequiredString(request.Params, "taskId")),
                 "solo.status" => SoloTasks.Status(),
                 "solo.settings.get" => _soloTaskSettings.Get(RequiredString(request.Params, "name")),

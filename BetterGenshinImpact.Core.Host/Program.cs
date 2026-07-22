@@ -27,6 +27,7 @@ using BetterGenshinImpact.GameTask.AutoEat;
 using BetterGenshinImpact.GameTask.GameLoading;
 using BetterGenshinImpact.GameTask.MapMask;
 using BetterGenshinImpact.GameTask.SkillCd;
+using BetterGenshinImpact.GameTask.UseRedeemCode;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.Service;
 using BetterGenshinImpact.Helpers;
@@ -149,6 +150,10 @@ var autoMusicGameRuntimePlatform = new MacAutoMusicGameRuntimePlatform(
 var autoAlbumRuntimePlatform = new MacAutoAlbumRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo,
     loggerFactory.CreateLogger<AutoAlbumTask>());
+var useRedemptionCodeRuntimePlatform = new MacUseRedemptionCodeRuntimePlatform(
+    () => gameTaskManagerPlatform.SystemInfo,
+    server.PlatformCallbacks, sessionToken, shutdown.Token,
+    loggerFactory.CreateLogger<UseRedemptionCodeTask>());
 var autoFishingRuntimePlatform = new MacAutoFishingRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
 AutoFishingRuntimePlatform.Configure(autoFishingRuntimePlatform);
@@ -252,6 +257,7 @@ var dispatcherRuntimePlatform = new MacDispatcherRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, autoPickConfigProvider,
     paddleAutoPickRecognizer, yapAutoPickRecognizer, autoWoodRuntimePlatform,
     autoMusicGameRuntimePlatform, autoAlbumRuntimePlatform,
+    useRedemptionCodeRuntimePlatform,
     autoDomainRuntimePlatform, autoBossRuntimePlatform,
     autoBossPathExecutorFactory, autoEatRuntimePlatform,
     autoLeyLineOutcropRuntimePlatform, autoStygianOnslaughtRuntimePlatform,

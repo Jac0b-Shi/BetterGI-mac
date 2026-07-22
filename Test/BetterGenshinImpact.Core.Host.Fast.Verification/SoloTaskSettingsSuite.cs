@@ -107,6 +107,21 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
             context.Require(platform.Request is DispatcherAlbumTaskRequest,
                 "SoloTaskCoordinator did not dispatch the upstream AutoAlbum task.");
 
+            platform.Reset();
+            descriptors = JArray.FromObject(coordinator.List());
+            descriptor = descriptors.Single(item =>
+                item.Value<string>("name") == "AutoRedeemCode");
+            context.Require(descriptor.Value<bool>("available") &&
+                            descriptor.Value<bool>("settingsAvailable") &&
+                            descriptor.Value<string>("inputKind") == "multilineText",
+                "AutoRedeemCode did not expose its Core-owned multiline input contract.");
+            _ = coordinator.Start("AutoRedeemCode", " CODE-A \n\nCODE-B\r\n");
+            for (var retry = 0; retry < 20 && platform.Request is null; retry++)
+                await Task.Delay(10, cancellationToken);
+            context.Require(platform.Request is DispatcherRedeemCodeTaskRequest redeem &&
+                            redeem.Codes.SequenceEqual(["CODE-A", "CODE-B"]),
+                "AutoRedeemCode input was not normalized into the typed dispatcher request.");
+
             var initial = JObject.FromObject(catalog.Get("AutoLeyLineOutcrop"));
             context.Require(initial.Value<string>("leyLineOutcropType") == "启示之花" &&
                             initial["countryOptions"]?.Values<string>().Contains("挪德卡莱") == true,

@@ -865,7 +865,8 @@ public partial class TaskSettingsPageViewModel : ViewModel
 
             SwitchAutoRedeemCodeEnabled = true;
             await new TaskRunner()
-                .RunSoloTaskAsync(new UseRedemptionCodeTask(codes));
+                .RunSoloTaskAsync(new UseRedemptionCodeTask(
+                    codes, new Core.Runtime.Windows.WindowsUseRedemptionCodeRuntimePlatform()));
             SwitchAutoRedeemCodeEnabled = false;
         }
     }

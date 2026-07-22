@@ -310,6 +310,23 @@ for descriptor in \
   rg -Fq "${descriptor}" BetterGenshinImpact.Core.Host/Runtime/SoloTaskCoordinator.cs \
     || fail "composed independent-task settings are missing from the truthful catalog: ${descriptor}"
 done
+rg -q '"AutoRedeemCode", "自动使用兑换码", true, true' \
+  BetterGenshinImpact.Core.Host/Runtime/SoloTaskCoordinator.cs \
+  || fail "AutoRedeemCode input task is missing from the truthful Core catalog"
+rg -qx 'UseRedeemCode' MacGI/Resources/game-task-assets.manifest \
+  || fail "composed UseRedeemCode assets are missing from the canonical package manifest"
+rg -q 'new UseRedemptionCodeTask' \
+  BetterGenshinImpact.Core.Host/Runtime/MacDispatcherRuntimePlatform.cs \
+  || fail "macOS dispatcher does not execute the upstream UseRedemptionCode task"
+for callback in clipboard.write clipboard.clear; do
+  rg -Fq "case \"${callback}\"" \
+    MacGI/Sources/MacGI/Runtime/BetterGICorePlatformAdapter.swift \
+    || fail "Swift platform adapter is missing authenticated ${callback} handling"
+done
+if rg -n 'System\.Windows|TaskContext|App\.GetLogger|UIDispatcherHelper|Vanara' \
+  BetterGenshinImpact/GameTask/UseRedeemCode/UseRedemptionCodeTask.cs; then
+  fail "shared UseRedemptionCode task still resolves Windows-only dependencies"
+fi
 rg -q 'new AutoGeniusInvokationTask' \
   BetterGenshinImpact.Core.Host/Runtime/MacDispatcherRuntimePlatform.cs \
   || fail "macOS dispatcher does not execute the upstream AutoGeniusInvokation task"

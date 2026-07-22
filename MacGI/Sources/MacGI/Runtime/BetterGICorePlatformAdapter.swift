@@ -118,6 +118,22 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                 "workingAreaWidth": Int(workingArea.width * scale), "workingAreaHeight": Int(workingArea.height * scale),
                 "isActive": isActive,
             ]
+        case "clipboard.write":
+            guard let text = parameters?["text"] as? String, !text.isEmpty else {
+                throw BetterGICorePlatformAdapterError.invalidParameters(
+                    "clipboard.write requires non-empty text."
+                )
+            }
+            NSPasteboard.general.clearContents()
+            guard NSPasteboard.general.setString(text, forType: .string) else {
+                throw BetterGICorePlatformAdapterError.invalidParameters(
+                    "Failed to write text to the pasteboard."
+                )
+            }
+            return ["acknowledged": true]
+        case "clipboard.clear":
+            NSPasteboard.general.clearContents()
+            return ["acknowledged": true]
         case "audio.start":
             guard let parameters,
                   let processID = (parameters["processId"] as? NSNumber)?.int32Value,

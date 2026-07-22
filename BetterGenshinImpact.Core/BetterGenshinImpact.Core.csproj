@@ -98,6 +98,9 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoMusicGame/AutoAlbumTask.cs" Link="GameTask/AutoMusicGame/AutoAlbumTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoMusicGame/AutoMusicGameRuntimePlatform.cs" Link="GameTask/AutoMusicGame/AutoMusicGameRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoMusicGame/AutoMusicGameTask.cs" Link="GameTask/AutoMusicGame/AutoMusicGameTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/UseRedeemCode/UseRedemptionCodeRuntimePlatform.cs" Link="GameTask/UseRedeemCode/UseRedemptionCodeRuntimePlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/UseRedeemCode/UseRedemptionCodeTask.cs" Link="GameTask/UseRedeemCode/UseRedemptionCodeTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/UseRedeemCode/Model/RedeemCode.cs" Link="GameTask/UseRedeemCode/Model/RedeemCode.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/Avatar.cs" Link="GameTask/AutoFight/Model/Avatar.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/AvatarActiveCheckContext.cs" Link="GameTask/AutoFight/Model/AvatarActiveCheckContext.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/AvatarMacro.cs" Link="GameTask/AutoFight/Model/AvatarMacro.cs" />

@@ -44,6 +44,9 @@ struct BetterGICoreSoloTask: Sendable, Equatable, Identifiable {
     let available: Bool
     let unavailableReason: String?
     let settingsAvailable: Bool
+    let inputKind: String?
+    let inputTitle: String?
+    let inputPlaceholder: String?
     var id: String { name }
 }
 
@@ -606,7 +609,10 @@ actor BetterGICoreProcessSupervisor {
             return BetterGICoreSoloTask(
                 name: name, displayName: displayName, available: available,
                 unavailableReason: item["unavailableReason"] as? String,
-                settingsAvailable: item["settingsAvailable"] as? Bool ?? false
+                settingsAvailable: item["settingsAvailable"] as? Bool ?? false,
+                inputKind: item["inputKind"] as? String,
+                inputTitle: item["inputTitle"] as? String,
+                inputPlaceholder: item["inputPlaceholder"] as? String
             )
         }
     }
@@ -1197,11 +1203,14 @@ actor BetterGICoreProcessSupervisor {
                      swimmingEnabled: swimmingEnabled)
     }
 
-    func startSoloTask(name: String) throws -> BetterGICoreSoloTaskStatus {
+    func startSoloTask(name: String, inputText: String? = nil) throws
+        -> BetterGICoreSoloTaskStatus {
         guard case .running = state, let client else {
             throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
         }
-        let result = try client.request(method: "solo.start", parameters: ["name": name])
+        var parameters: [String: Any] = ["name": name]
+        if let inputText { parameters["inputText"] = inputText }
+        let result = try client.request(method: "solo.start", parameters: parameters)
         return try Self.decodeSoloTaskStatus(result)
     }
 

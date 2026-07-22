@@ -65,7 +65,8 @@ public class RedeemCodeManager
         }
 
         Clipboard.Clear();
-        await new TaskRunner().RunSoloTaskAsync(new UseRedemptionCodeTask(codes));
+        await new TaskRunner().RunSoloTaskAsync(new UseRedemptionCodeTask(
+            codes, new Core.Runtime.Windows.WindowsUseRedemptionCodeRuntimePlatform()));
     }
 
     public static List<string> ExtractAllCodes(string clipboardText)

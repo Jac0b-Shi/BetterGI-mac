@@ -29,11 +29,14 @@ public sealed class SoloTaskCoordinator(
         Descriptor("AutoAlbum", "自动千音雅集（整个专辑）", true, true),
         Descriptor("AutoCook", "自动烹饪", true, true),
         Descriptor("AutoArtifactSalvage", "自动分解圣遗物", true, true),
+        Descriptor(
+            "AutoRedeemCode", "自动使用兑换码", true, true,
+            "multilineText", "输入兑换码", "每行一条兑换码"),
     };
 
-    public object Start(string name)
+    public object Start(string name, string? inputText = null)
     {
-        if (name is not ("AutoGeniusInvokation" or "AutoWood" or "AutoFishing" or "AutoFight" or "AutoCook" or "AutoMusicGame" or "AutoAlbum" or "AutoArtifactSalvage" or "AutoDomain" or "AutoBoss" or "AutoLeyLineOutcrop" or "AutoStygianOnslaught"))
+        if (name is not ("AutoGeniusInvokation" or "AutoWood" or "AutoFishing" or "AutoFight" or "AutoCook" or "AutoMusicGame" or "AutoAlbum" or "AutoArtifactSalvage" or "AutoDomain" or "AutoBoss" or "AutoLeyLineOutcrop" or "AutoStygianOnslaught" or "AutoRedeemCode"))
             throw new CapabilityUnavailableException(
                 $"solo task '{name}' is not composed in the macOS Core yet; no task was executed.");
 
@@ -49,7 +52,7 @@ public sealed class SoloTaskCoordinator(
             _state = "running";
             _error = null;
             var taskId = _activeTaskId;
-            _activeTask = RunAsync(taskId, name, _activeCancellation.Token);
+            _activeTask = RunAsync(taskId, name, inputText, _activeCancellation.Token);
             return new { taskId, name, state = _state };
         }
     }
@@ -76,7 +79,9 @@ public sealed class SoloTaskCoordinator(
         }
     }
 
-    private async Task RunAsync(string taskId, string name, CancellationToken cancellationToken)
+    private async Task RunAsync(
+        string taskId, string name, string? inputText,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -93,6 +98,8 @@ public sealed class SoloTaskCoordinator(
                 "AutoMusicGame" => new DispatcherMusicGameTaskRequest(),
                 "AutoAlbum" => new DispatcherAlbumTaskRequest(),
                 "AutoArtifactSalvage" => new DispatcherArtifactSalvageTaskRequest(),
+                "AutoRedeemCode" => new DispatcherRedeemCodeTaskRequest(
+                    ParseRedeemCodes(inputText)),
                 "AutoLeyLineOutcrop" => new DispatcherLeyLineTaskRequest(
                     settings.BuildAutoLeyLineOutcropConfig()),
                 "AutoStygianOnslaught" => BuildStygianRequest(),
@@ -121,6 +128,18 @@ public sealed class SoloTaskCoordinator(
         }
     }
 
+    private static string[] ParseRedeemCodes(string? inputText)
+    {
+        var codes = (inputText ?? string.Empty)
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(code => code.Trim())
+            .Where(code => code.Length > 0)
+            .ToArray();
+        if (codes.Length == 0)
+            throw new ArgumentException("AutoRedeemCode requires at least one redeem code.");
+        return codes;
+    }
+
     private DispatcherStygianTaskRequest BuildStygianRequest()
     {
         var config = settings.BuildAutoStygianOnslaughtConfig();
@@ -146,12 +165,17 @@ public sealed class SoloTaskCoordinator(
     }
 
     private static object Descriptor(
-        string name, string displayName, bool available, bool settingsAvailable = false) => new
+        string name, string displayName, bool available, bool settingsAvailable = false,
+        string? inputKind = null, string? inputTitle = null,
+        string? inputPlaceholder = null) => new
     {
         name,
         displayName,
         available,
         settingsAvailable,
+        inputKind,
+        inputTitle,
+        inputPlaceholder,
         unavailableReason = available ? null : "尚未完成共享 C# 任务的平台组合"
     };
 }

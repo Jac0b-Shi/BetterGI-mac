@@ -13,6 +13,7 @@ using BetterGenshinImpact.GameTask.AutoGeniusInvokation;
 using BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
 using BetterGenshinImpact.GameTask.AutoPathing.Handler;
 using BetterGenshinImpact.GameTask.AutoStygianOnslaught;
+using BetterGenshinImpact.GameTask.UseRedeemCode;
 using BetterGenshinImpact.GameTask.AutoWood;
 using BetterGenshinImpact.GameTask.AutoMusicGame;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
@@ -86,6 +87,12 @@ public sealed class WindowsDispatcherRuntimePlatform(
                         new AutoMusicGameParam(), autoMusicGameRuntimePlatform,
                         TaskContext.Instance().Config.AutoMusicGameConfig,
                         new WindowsAutoAlbumRuntimePlatform())
+                    .Start(cancellationToken);
+                return null;
+            case DispatcherRedeemCodeTaskRequest redeemCode:
+                await new UseRedemptionCodeTask(
+                        [.. redeemCode.Codes],
+                        new WindowsUseRedemptionCodeRuntimePlatform())
                     .Start(cancellationToken);
                 return null;
             case DispatcherDomainTaskRequest domain:

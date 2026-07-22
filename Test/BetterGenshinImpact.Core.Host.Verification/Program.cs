@@ -2853,18 +2853,27 @@ try
     var soloList = await ExchangeAsync(connection, "solo-list", "solo.list", sessionToken, null, cancellation.Token);
     var soloItems = soloList.Result as JArray ??
                     throw new InvalidOperationException("solo.list did not return an array");
+    var expectedSoloTaskNames = new HashSet<string>(
+    [
+        "AutoGeniusInvokation", "AutoWood", "AutoFight", "AutoDomain",
+        "AutoBoss", "AutoStygianOnslaught", "AutoFishing",
+        "AutoLeyLineOutcrop", "AutoMusicGame", "AutoAlbum", "AutoCook",
+        "AutoArtifactSalvage", "AutoRedeemCode",
+    ], StringComparer.Ordinal);
+    var actualSoloTaskNames = soloItems
+        .Select(item => item.Value<string>("name"))
+        .OfType<string>()
+        .ToHashSet(StringComparer.Ordinal);
+    var redeemCodeDescriptor = soloItems.Single(item =>
+        item.Value<string>("name") == "AutoRedeemCode");
     Require(soloList.Error is null &&
-            soloItems.Where(item => item.Value<string>("name") is "AutoFishing" or "AutoWood" or "AutoFight" or "AutoCook" or "AutoMusicGame" or "AutoArtifactSalvage" or "AutoDomain" or "AutoBoss")
-                .All(item => item.Value<bool>("available")) &&
-            soloItems.Where(item => item.Value<string>("name") is not ("AutoFishing" or "AutoWood" or "AutoFight" or "AutoCook" or "AutoMusicGame" or "AutoArtifactSalvage" or "AutoDomain" or "AutoBoss"))
-                .All(item => !item.Value<bool>("available")),
+            expectedSoloTaskNames.SetEquals(actualSoloTaskNames) &&
+            soloItems.All(item => item.Value<bool>("available")),
         "solo.list did not expose the truthful Core capability catalog");
-    var settingsTaskNames = new[]
-        { "AutoFishing", "AutoCook", "AutoWood", "AutoMusicGame", "AutoBoss", "AutoFight", "AutoDomain", "AutoArtifactSalvage" };
-    Require(soloItems.Where(item => settingsTaskNames.Contains(item.Value<string>("name")))
-                .All(item => item.Value<bool>("settingsAvailable")) &&
-            soloItems.Where(item => !settingsTaskNames.Contains(item.Value<string>("name")))
-                .All(item => !item.Value<bool>("settingsAvailable")),
+    Require(soloItems.All(item => item.Value<bool>("settingsAvailable")) &&
+            redeemCodeDescriptor.Value<string>("inputKind") == "multilineText" &&
+            !string.IsNullOrWhiteSpace(redeemCodeDescriptor.Value<string>("inputTitle")) &&
+            !string.IsNullOrWhiteSpace(redeemCodeDescriptor.Value<string>("inputPlaceholder")),
         "solo.list advertised settings without a composed Core settings boundary");
     var fishingConfigPath = Path.Combine(layout.UserPath, "config.json");
     var fishingConfigRoot = JObject.Parse(await File.ReadAllTextAsync(

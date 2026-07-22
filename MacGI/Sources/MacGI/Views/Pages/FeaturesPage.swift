@@ -177,7 +177,7 @@ struct SoloTasksPage: View {
                     ) {
                         taskAction(task)
                     } content: {
-                        settingsContent(for: task.name)
+                        settingsContent(for: task)
                     }
                 } else {
                     BGITaskCard(icon: icon(for: task.name), title: task.displayName,
@@ -190,8 +190,21 @@ struct SoloTasksPage: View {
     }
 
     @ViewBuilder
-    private func settingsContent(for name: String) -> some View {
-        switch name {
+    private func settingsContent(for task: BetterGICoreSoloTask) -> some View {
+        if task.inputKind == "multilineText" {
+            BGISettingLine(
+                title: task.inputTitle ?? "输入",
+                subtitle: task.inputPlaceholder ?? ""
+            ) {
+                TextEditor(text: Binding(
+                    get: { appState.soloTaskInputDrafts[task.name, default: ""] },
+                    set: { appState.soloTaskInputDrafts[task.name] = $0 }))
+                    .font(.body.monospaced())
+                    .frame(width: 360, height: 120)
+                    .overlay(Rectangle().stroke(BGIColors.border, lineWidth: 1))
+            }
+        }
+        switch task.name {
         case "AutoGeniusInvokation": autoGeniusInvokationSettings
         case "AutoFishing": autoFishingSettings
         case "AutoCook": autoCookSettings
@@ -203,6 +216,7 @@ struct SoloTasksPage: View {
         case "AutoDomain": autoDomainSettings
         case "AutoArtifactSalvage": autoArtifactSalvageSettings
         case "AutoFight": autoFightSettings
+        case "AutoRedeemCode": EmptyView()
         default:
             BGISettingLine(title: "设置", subtitle: "Core 未返回该任务的设置模型") {
                 BGIStatusBadge(text: "不可用", tint: BGIColors.muted)
@@ -291,7 +305,11 @@ struct SoloTasksPage: View {
     private func taskAction(_ task: BetterGICoreSoloTask) -> some View {
         if task.available {
             Button {
-                appState.toggleSoloTask(task.name)
+                appState.toggleSoloTask(
+                    task.name,
+                    inputText: task.inputKind == nil
+                        ? nil
+                        : appState.soloTaskInputDrafts[task.name, default: ""])
             } label: {
                 Image(systemName: isRunning(task.name) ? "stop.fill" : "play.fill")
             }
@@ -932,13 +950,22 @@ struct SoloTasksPage: View {
     }
 
     private func icon(for name: String) -> BGIIcon {
-        name == "AutoFishing" ? .fgi("\u{e3a8}") : .symbol("gearshape.2")
+        switch name {
+        case "AutoFishing": .fgi("\u{e3a8}")
+        case "AutoRedeemCode": .symbol("barcode.viewfinder")
+        default: .symbol("gearshape.2")
+        }
     }
 
     private func detail(for name: String) -> String {
-        name == "AutoFishing"
-            ? "在出现钓鱼交互提示的位置启动；识别、抛竿和收杆均由共享 C# 任务执行。"
-            : "BetterGI C# Core 独立任务。"
+        switch name {
+        case "AutoFishing":
+            "在出现钓鱼交互提示的位置启动；识别、抛竿和收杆均由共享 C# 任务执行。"
+        case "AutoRedeemCode":
+            "输入兑换码后，由 BetterGI C# Core 打开设置并逐条兑换。"
+        default:
+            "BetterGI C# Core 独立任务。"
+        }
     }
 }
 
