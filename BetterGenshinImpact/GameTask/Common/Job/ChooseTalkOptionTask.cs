@@ -15,12 +15,33 @@ using System.Text.RegularExpressions;
 using BetterGenshinImpact.Core.Config;
 using Microsoft.Extensions.Logging;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
+using BetterGenshinImpact.GameTask.Model;
 
 namespace BetterGenshinImpact.GameTask.Common.Job;
 
 public partial class ChooseTalkOptionTask
 {
-    private readonly ILogger<ChooseTalkOptionTask> _logger = AutoFight.AutoFightRuntimePlatform.Current.GetLogger<ChooseTalkOptionTask>();
+    private readonly ILogger<ChooseTalkOptionTask> _logger;
+    private readonly ISystemInfo _systemInfo;
+    private readonly IAutoSkipRuntimePlatform _autoSkipRuntimePlatform;
+
+    public ChooseTalkOptionTask() : this(
+        AutoFight.AutoFightRuntimePlatform.Current.GetLogger<ChooseTalkOptionTask>(),
+        AutoFight.AutoFightRuntimePlatform.Current.SystemInfo,
+        AutoSkipRuntimePlatform.Current)
+    {
+    }
+
+    public ChooseTalkOptionTask(
+        ILogger<ChooseTalkOptionTask> logger,
+        ISystemInfo systemInfo,
+        IAutoSkipRuntimePlatform autoSkipRuntimePlatform)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
+        _autoSkipRuntimePlatform = autoSkipRuntimePlatform
+            ?? throw new ArgumentNullException(nameof(autoSkipRuntimePlatform));
+    }
 
     private static RecognitionObject GetOptionIconRecognitionObject(ImageRegion region)
     {
@@ -56,7 +77,7 @@ public partial class ChooseTalkOptionTask
             var optionRegions = RecognizeOption(region, ct);
             if (optionRegions == null)
             {
-                AutoSkip.AutoSkipRuntimePlatform.Current.PressBackgroundKey(BetterGenshinImpact.Platform.Abstractions.BgiKey.Space);
+                _autoSkipRuntimePlatform.PressBackgroundKey(BetterGenshinImpact.Platform.Abstractions.BgiKey.Space);
                 await Delay(500, ct);
                 continue; // retry
             }
@@ -124,7 +145,7 @@ public partial class ChooseTalkOptionTask
                 }
                 else
                 {
-                    AutoSkip.AutoSkipRuntimePlatform.Current.PressBackgroundKey(BetterGenshinImpact.Platform.Abstractions.BgiKey.Space);
+                    _autoSkipRuntimePlatform.PressBackgroundKey(BetterGenshinImpact.Platform.Abstractions.BgiKey.Space);
                 }
             }
             else if (Bv.IsInMainUi(region))
@@ -150,7 +171,7 @@ public partial class ChooseTalkOptionTask
     /// <returns></returns>
     public List<Region>? RecognizeOption(ImageRegion region, CancellationToken ct)
     {
-        var assetScale = AutoFight.AutoFightRuntimePlatform.Current.SystemInfo.AssetScale;
+        var assetScale = _systemInfo.AssetScale;
 
         // 气泡识别
         var chatOptionResultList = region.FindMulti(GetOptionIconRecognitionObject(region));

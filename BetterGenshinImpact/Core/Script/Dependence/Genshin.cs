@@ -348,7 +348,8 @@ public class Genshin
     /// <returns></returns>
     public async Task ChooseTalkOption(string option, int skipTimes = 10, bool isOrange = false)
     {
-        await new ChooseTalkOptionTask().SingleSelectText(option, CancellationContext.Instance.Cts.Token, skipTimes, isOrange);
+        await Platform.ChooseTalkOption(
+            option, skipTimes, isOrange, CancellationContext.Instance.Cts.Token);
     }
 
     /// <summary>
@@ -453,7 +454,7 @@ public class Genshin
             throw new ArgumentException($"无效的小时值: {hour}，必须是 0-24 之间的整数字符", nameof(hour));
         if (minute < 0 || minute > 59)
             throw new ArgumentException($"无效的分钟值: {minute}，必须是 0-59 之间的整数字符", nameof(minute));
-        await new SetTimeTask().Start(hour, minute, CancellationContext.Instance.Cts.Token, skip);
+        await Platform.SetTime(hour, minute, skip, CancellationContext.Instance.Cts.Token);
     }
     
     /// <summary>
@@ -469,7 +470,7 @@ public class Genshin
             throw new ArgumentException($"无效的小时值: {hour}，必须是 0-24 之间的整数字符", nameof(hour));
         if (!int.TryParse(minute, out var m) || m < 0 || m > 59)
             throw new ArgumentException($"无效的分钟值: {minute}，必须是 0-59 之间的整数字符", nameof(minute));
-        await new SetTimeTask().Start(h, m, CancellationContext.Instance.Cts.Token, skip);
+        await Platform.SetTime(h, m, skip, CancellationContext.Instance.Cts.Token);
     }
 
     // /// <summary>

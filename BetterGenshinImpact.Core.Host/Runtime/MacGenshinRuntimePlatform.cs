@@ -3,6 +3,7 @@ using BetterGenshinImpact.Core.Script.Dependence;
 using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.Model;
+using BetterGenshinImpact.GameTask.AutoSkip;
 using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
@@ -12,6 +13,7 @@ public sealed class MacGenshinRuntimePlatform(
     IAutoFishingRuntimePlatform autoFishing,
     MacImageRegionOcrService ocrService,
     ILoggerFactory loggerFactory,
+    IAutoSkipRuntimePlatform autoSkipRuntimePlatform,
     string mapMatchingMethod) : IGenshinRuntimePlatform
 {
     public ISystemInfo SystemInfo => systemInfo();
@@ -26,6 +28,15 @@ public sealed class MacGenshinRuntimePlatform(
         new ClaimBattlePassRewardsTask().Start(cancellationToken);
     public Task GoToCraftingBench(string country, CancellationToken cancellationToken) =>
         new GoToCraftingBenchTask().GoToCraftingBench(country, cancellationToken);
+    public Task ChooseTalkOption(string option, int skipTimes, bool isOrange,
+        CancellationToken cancellationToken) =>
+        new ChooseTalkOptionTask(
+                loggerFactory.CreateLogger<ChooseTalkOptionTask>(),
+                SystemInfo,
+                autoSkipRuntimePlatform)
+            .SingleSelectText(option, cancellationToken, skipTimes, isOrange);
+    public Task SetTime(int hour, int minute, bool skip, CancellationToken cancellationToken) =>
+        new SetTimeTask().Start(hour, minute, cancellationToken, skip);
     public Task<bool> SwitchCharacter(string slot1, string slot2, string slot3, string slot4,
         CancellationToken cancellationToken) =>
         new SwitchCharacterStateMachineTask(

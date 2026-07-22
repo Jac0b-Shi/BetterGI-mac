@@ -150,9 +150,14 @@ server.SoloTaskSettings.AttachAutoFishingConfigUpdated(autoFishingRuntimePlatfor
 var autoDomainRuntimePlatform = new MacAutoDomainRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory,
     server.PlatformCallbacks, sessionToken, shutdown.Token);
+var autoSkipRuntimePlatform = new MacAutoSkipRuntimePlatform(
+    () => gameTaskManagerPlatform.SystemInfo, loggerFactory, imageRegionOcrService,
+    server.PlatformCallbacks, sessionToken, shutdown.Token, foregroundInputCoordinator,
+    autoPickConfigProvider);
+AutoSkipRuntimePlatform.Configure(autoSkipRuntimePlatform);
 GenshinRuntimePlatform.Configure(new MacGenshinRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, autoFishingRuntimePlatform,
-    imageRegionOcrService, loggerFactory, "TemplateMatch"));
+    imageRegionOcrService, loggerFactory, autoSkipRuntimePlatform, "TemplateMatch"));
 TaskParameterPlatform.Configure(new MacTaskParameterPlatform(
     autoFishingRuntimePlatform.GameCultureInfoName));
 GoToCraftingBenchRuntimePlatform.Configure(
@@ -168,10 +173,6 @@ BetterGenshinImpact.GameTask.Common.Reward.RewardResultRuntimePlatform.Configure
 BvSimpleOperationPlatform.Configure(bvSimpleOperationPlatform);
 TpTaskRuntimePlatform.Configure(new MacTpTaskRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo));
-AutoSkipRuntimePlatform.Configure(new MacAutoSkipRuntimePlatform(
-    () => gameTaskManagerPlatform.SystemInfo, loggerFactory, imageRegionOcrService,
-    server.PlatformCallbacks, sessionToken, shutdown.Token, foregroundInputCoordinator,
-    autoPickConfigProvider));
 AutoEatRuntimePlatform.Configure(new MacAutoEatRuntimePlatform(layout, loggerFactory));
 GameLoadingRuntimePlatform.Configure(new MacGameLoadingRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory,

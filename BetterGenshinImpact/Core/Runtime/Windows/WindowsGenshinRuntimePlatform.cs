@@ -9,6 +9,7 @@ using BetterGenshinImpact.ViewModel.Pages;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.ONNX;
 using Microsoft.Extensions.DependencyInjection;
+using BetterGenshinImpact.GameTask.AutoSkip;
 
 namespace BetterGenshinImpact.Core.Script.Dependence;
 
@@ -31,6 +32,15 @@ public sealed class WindowsGenshinRuntimePlatform : IGenshinRuntimePlatform
         new ClaimBattlePassRewardsTask().Start(cancellationToken);
     public Task GoToCraftingBench(string country, CancellationToken cancellationToken) =>
         new GoToCraftingBenchTask().Start(country, cancellationToken);
+    public Task ChooseTalkOption(string option, int skipTimes, bool isOrange,
+        CancellationToken cancellationToken) =>
+        new ChooseTalkOptionTask(
+                App.GetLogger<ChooseTalkOptionTask>(),
+                SystemInfo,
+                AutoSkipRuntimePlatform.Current)
+            .SingleSelectText(option, cancellationToken, skipTimes, isOrange);
+    public Task SetTime(int hour, int minute, bool skip, CancellationToken cancellationToken) =>
+        new SetTimeTask().Start(hour, minute, cancellationToken, skip);
     public Task<bool> SwitchCharacter(string slot1, string slot2, string slot3, string slot4,
         CancellationToken cancellationToken) =>
         new SwitchCharacterStateMachineTask(

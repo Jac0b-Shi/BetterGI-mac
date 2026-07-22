@@ -347,9 +347,16 @@ var autoFishingRuntimePlatform = new MacAutoFishingRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
 AutoFishingRuntimePlatform.Configure(autoFishingRuntimePlatform);
 server.SoloTaskSettings.AttachAutoFishingConfigUpdated(autoFishingRuntimePlatform.UpdateConfig);
+var autoSkipRuntimePlatform = new MacAutoSkipRuntimePlatform(
+    () => gameTaskManagerPlatform.SystemInfo, loggerFactory, imageRegionOcrService,
+    server.PlatformCallbacks, sessionToken, cancellation.Token, foregroundInputCoordinator,
+    new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
+        new BetterGenshinImpact.GameTask.AutoPick.AutoPickConfig(),
+        BetterGenshinImpact.Core.Recognition.PaddleOcrModelConfig.V5Auto, "zh-Hans"));
+AutoSkipRuntimePlatform.Configure(autoSkipRuntimePlatform);
 GenshinRuntimePlatform.Configure(new MacGenshinRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, autoFishingRuntimePlatform,
-    imageRegionOcrService, loggerFactory, "TemplateMatch"));
+    imageRegionOcrService, loggerFactory, autoSkipRuntimePlatform, "TemplateMatch"));
 var autoFightRuntimePlatform = new MacAutoFightRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
 AutoFightRuntimePlatform.Configure(autoFightRuntimePlatform);
@@ -380,12 +387,6 @@ Require(craftingBenchPlatform.SelectedConfigName == "selected-crafting" &&
 var quickTeleportPlatform = new MacQuickTeleportRuntimePlatform(
     layout, server.PlatformCallbacks, sessionToken, cancellation.Token);
 QuickTeleportRuntimePlatform.Configure(quickTeleportPlatform);
-AutoSkipRuntimePlatform.Configure(new MacAutoSkipRuntimePlatform(
-    () => gameTaskManagerPlatform.SystemInfo, loggerFactory, imageRegionOcrService,
-    server.PlatformCallbacks, sessionToken, cancellation.Token, foregroundInputCoordinator,
-    new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
-        new BetterGenshinImpact.GameTask.AutoPick.AutoPickConfig(),
-        BetterGenshinImpact.Core.Recognition.PaddleOcrModelConfig.V5Auto, "zh-Hans")));
 AutoEatRuntimePlatform.Configure(new MacAutoEatRuntimePlatform(layout, loggerFactory));
 var triggerGameLoadingPlatform = new MacGameLoadingRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory,
