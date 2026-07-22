@@ -76,6 +76,7 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
 
             var initial = JObject.FromObject(catalog.Get("AutoPick"));
             context.Require(initial.Value<string>("ocrEngine") == "Paddle" &&
+                            initial.Value<bool>("fastModeEnabled") &&
                             initial.Value<string>("exactBlackList") == "精致的宝箱\n" &&
                             initial.Value<string>("fuzzyBlackList") == "凯瑟琳\n" &&
                             initial.Value<string>("whiteList") == "调查\n",
@@ -84,6 +85,7 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
             _ = catalog.Save("AutoPick", JObject.FromObject(new
             {
                 ocrEngine = "Yap",
+                fastModeEnabled = false,
                 blackListEnabled = false,
                 exactBlackList = "史莱姆凝液\n",
                 fuzzyBlackList = "对话\n",
@@ -95,9 +97,10 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
             var persisted = JObject.Parse(await File.ReadAllTextAsync(
                 Path.Combine(layout.UserPath, "config.json"), cancellationToken));
             context.Require(liveConfig.OcrEngine == "Yap" && liveConfig.PickKey == "G" &&
+                            !liveConfig.FastModeEnabled &&
                             persisted["autoPickConfig"]?["itemIconLeftOffset"]?.Value<int>() == 61 &&
-                            persisted["autoPickConfig"]?["fastModeEnabled"]?.Value<bool>() == true,
-                "AutoPick save did not preserve hidden config or update the live adapter.");
+                            persisted["autoPickConfig"]?["fastModeEnabled"]?.Value<bool>() == false,
+                "AutoPick save did not persist fast mode or update the live adapter.");
             context.Require(trigger.InitCount == 1 && platform.ReloadAssetsCount == 1,
                 "AutoPick save did not refresh the shared trigger and recognition assets exactly once.");
             context.Require(await File.ReadAllTextAsync(

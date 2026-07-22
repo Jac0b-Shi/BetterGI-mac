@@ -54,6 +54,15 @@ struct FeaturesPage: View {
     private var autoPickSettings: some View {
         if let settings = appState.autoPickTriggerSettings {
             BGISettingLine(
+                title: "极速拾取模式",
+                subtitle: "打开后不再识别具体拾取内容，黑名单与白名单不会生效"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.fastModeEnabled },
+                    set: { appState.saveAutoPickTriggerConfiguration(fastModeEnabled: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(
                 title: "选择自动拾取文字识别引擎",
                 subtitle: "Paddle可识别所有文字,速度慢,消耗少;Yap可识别部分文字,快且准,消耗大"
             ) {

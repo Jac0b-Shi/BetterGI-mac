@@ -1231,6 +1231,7 @@ final class AppState: ObservableObject {
 
     func saveAutoPickTriggerConfiguration(
         ocrEngine: String? = nil,
+        fastModeEnabled: Bool? = nil,
         blackListEnabled: Bool? = nil,
         whiteListEnabled: Bool? = nil,
         pickKey: String? = nil
@@ -1239,6 +1240,7 @@ final class AppState: ObservableObject {
         saveAutoPickTriggerSettings(.init(
             ocrEngine: ocrEngine ?? current.ocrEngine,
             ocrEngineOptions: current.ocrEngineOptions,
+            fastModeEnabled: fastModeEnabled ?? current.fastModeEnabled,
             blackListEnabled: blackListEnabled ?? current.blackListEnabled,
             exactBlackList: current.exactBlackList,
             fuzzyBlackList: current.fuzzyBlackList,
@@ -1254,6 +1256,7 @@ final class AppState: ObservableObject {
         let fuzzyDraft = autoPickFuzzyBlackListDraft
         saveAutoPickTriggerSettings(.init(
             ocrEngine: current.ocrEngine, ocrEngineOptions: current.ocrEngineOptions,
+            fastModeEnabled: current.fastModeEnabled,
             blackListEnabled: current.blackListEnabled,
             exactBlackList: exactDraft, fuzzyBlackList: fuzzyDraft,
             whiteListEnabled: current.whiteListEnabled, whiteList: current.whiteList,
@@ -1268,6 +1271,7 @@ final class AppState: ObservableObject {
         let whiteDraft = autoPickWhiteListDraft
         saveAutoPickTriggerSettings(.init(
             ocrEngine: current.ocrEngine, ocrEngineOptions: current.ocrEngineOptions,
+            fastModeEnabled: current.fastModeEnabled,
             blackListEnabled: current.blackListEnabled,
             exactBlackList: current.exactBlackList, fuzzyBlackList: current.fuzzyBlackList,
             whiteListEnabled: current.whiteListEnabled, whiteList: whiteDraft,

@@ -20,6 +20,7 @@ struct BetterGICoreAutoEatTriggerSettings: Sendable, Equatable {
 struct BetterGICoreAutoPickTriggerSettings: Sendable, Equatable {
     let ocrEngine: String
     let ocrEngineOptions: [String]
+    let fastModeEnabled: Bool
     let blackListEnabled: Bool
     let exactBlackList: String
     let fuzzyBlackList: String
@@ -609,6 +610,7 @@ actor BetterGICoreProcessSupervisor {
         try decodeAutoPickTriggerSettings(requestTriggerSettings(
             method: "trigger.settings.save", name: "AutoPick", settings: [
                 "ocrEngine": settings.ocrEngine,
+                "fastModeEnabled": settings.fastModeEnabled,
                 "blackListEnabled": settings.blackListEnabled,
                 "exactBlackList": settings.exactBlackList,
                 "fuzzyBlackList": settings.fuzzyBlackList,
@@ -737,6 +739,7 @@ actor BetterGICoreProcessSupervisor {
         -> BetterGICoreAutoPickTriggerSettings {
         guard let ocrEngine = value["ocrEngine"] as? String,
               let ocrEngineOptions = value["ocrEngineOptions"] as? [String],
+              let fastModeEnabled = value["fastModeEnabled"] as? Bool,
               let blackListEnabled = value["blackListEnabled"] as? Bool,
               let exactBlackList = value["exactBlackList"] as? String,
               let fuzzyBlackList = value["fuzzyBlackList"] as? String,
@@ -748,6 +751,7 @@ actor BetterGICoreProcessSupervisor {
         }
         return .init(
             ocrEngine: ocrEngine, ocrEngineOptions: ocrEngineOptions,
+            fastModeEnabled: fastModeEnabled,
             blackListEnabled: blackListEnabled, exactBlackList: exactBlackList,
             fuzzyBlackList: fuzzyBlackList, whiteListEnabled: whiteListEnabled,
             whiteList: whiteList, pickKey: pickKey, pickKeyOptions: pickKeyOptions)

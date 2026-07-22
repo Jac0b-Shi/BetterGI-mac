@@ -74,6 +74,7 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
             throw new ArgumentException("pickKey must be one uppercase Latin letter.");
         var blackListEnabled = RequiredBoolean(settings, "blackListEnabled");
         var whiteListEnabled = RequiredBoolean(settings, "whiteListEnabled");
+        var fastModeEnabled = RequiredBoolean(settings, "fastModeEnabled");
         var exactBlackList = RequiredString(settings, "exactBlackList");
         var fuzzyBlackList = RequiredString(settings, "fuzzyBlackList");
         var whiteList = RequiredString(settings, "whiteList");
@@ -86,6 +87,7 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
             config.PickKey = pickKey;
             config.BlackListEnabled = blackListEnabled;
             config.WhiteListEnabled = whiteListEnabled;
+            config.FastModeEnabled = fastModeEnabled;
             SaveConfig(root, "autoPickConfig", config);
             WriteUserText("pick_black_lists.txt", exactBlackList);
             WriteUserText("pick_fuzzy_black_lists.txt", fuzzyBlackList);
@@ -231,6 +233,7 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
             ocrEngine = config.OcrEngine,
             ocrEngineOptions = new[] { nameof(PickOcrEngineEnum.Paddle), nameof(PickOcrEngineEnum.Yap) },
             blackListEnabled = config.BlackListEnabled,
+            fastModeEnabled = config.FastModeEnabled,
             exactBlackList = ReadUserText("pick_black_lists.txt"),
             fuzzyBlackList = ReadUserText("pick_fuzzy_black_lists.txt"),
             whiteListEnabled = config.WhiteListEnabled,
