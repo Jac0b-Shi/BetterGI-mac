@@ -536,7 +536,7 @@ final class AppState: ObservableObject {
         refreshPermissionStatus()
         screenCapturePermissionRequestMessage = screenCapturePermissionGranted
             ? nil
-            : "请在已打开的“屏幕与系统音频录制”设置中授权 BetterGI。"
+            : "已向 macOS 请求授权；若系统未显示弹窗，请检查当前 App 的 TCC 记录。"
     }
 
     func requestAccessibilityPermission() {
@@ -552,10 +552,8 @@ final class AppState: ObservableObject {
         switch result {
         case .alreadyGranted:
             addLog(.info, "macOS \(name) permission is already granted.")
-        case .settingsOpened:
-            addLog(.info, "Opened macOS \(name) privacy settings; reopen BetterGI after granting access if required.")
-        case .settingsUnavailable:
-            addLog(.error, "Unable to open macOS \(name) privacy settings.")
+        case .requestSubmitted:
+            addLog(.info, "Submitted macOS \(name) permission request; reopen BetterGI after granting access if required.")
         }
     }
 

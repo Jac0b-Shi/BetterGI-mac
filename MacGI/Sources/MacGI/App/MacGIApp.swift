@@ -12,32 +12,25 @@ final class MacGIApplicationDelegate: NSObject, NSApplicationDelegate {
 enum MacGIPermissionRequester {
     enum RequestResult {
         case alreadyGranted
-        case settingsOpened
-        case settingsUnavailable
+        case requestSubmitted
     }
-
-    private static let screenCaptureSettingsURL = URL(
-        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
-    )!
-    private static let accessibilitySettingsURL = URL(
-        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-    )!
 
     static var screenCaptureGranted: Bool { CGPreflightScreenCaptureAccess() }
     static var accessibilityGranted: Bool { AXIsProcessTrusted() }
 
     static func requestScreenCapture() -> RequestResult {
         guard !screenCaptureGranted else { return .alreadyGranted }
-        return NSWorkspace.shared.open(screenCaptureSettingsURL)
-            ? .settingsOpened
-            : .settingsUnavailable
+        _ = CGRequestScreenCaptureAccess()
+        return .requestSubmitted
     }
 
     static func requestAccessibility() -> RequestResult {
         guard !accessibilityGranted else { return .alreadyGranted }
-        return NSWorkspace.shared.open(accessibilitySettingsURL)
-            ? .settingsOpened
-            : .settingsUnavailable
+        let options = [
+            "AXTrustedCheckOptionPrompt": true
+        ] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
+        return .requestSubmitted
     }
 }
 
