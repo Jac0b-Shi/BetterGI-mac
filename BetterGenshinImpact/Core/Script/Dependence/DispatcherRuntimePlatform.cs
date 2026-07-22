@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using BetterGenshinImpact.GameTask.AutoFishing;
 
 namespace BetterGenshinImpact.Core.Script.Dependence;
 
@@ -30,7 +31,8 @@ public sealed record DispatcherWoodTaskRequest(int RoundNum, int DailyMaxCount) 
 public sealed record DispatcherFightTaskRequest(object? Config) : DispatcherSoloTaskRequest("AutoFight");
 public sealed record DispatcherDomainTaskRequest(string StrategyPath) : DispatcherSoloTaskRequest("AutoDomain");
 public sealed record DispatcherBossTaskRequest(string StrategyPath) : DispatcherSoloTaskRequest("AutoBoss");
-public sealed record DispatcherFishingTaskRequest(object? Config) : DispatcherSoloTaskRequest("AutoFishing");
+public sealed record DispatcherFishingTaskRequest(
+    object? Config, AutoFishingTaskParam? Param = null) : DispatcherSoloTaskRequest("AutoFishing");
 public sealed record DispatcherCookTaskRequest() : DispatcherSoloTaskRequest("AutoCook");
 public sealed record DispatcherMusicGameTaskRequest() : DispatcherSoloTaskRequest("AutoMusicGame");
 public sealed record DispatcherArtifactSalvageTaskRequest() : DispatcherSoloTaskRequest("AutoArtifactSalvage");

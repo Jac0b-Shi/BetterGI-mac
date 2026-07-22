@@ -84,7 +84,8 @@ public sealed class WindowsDispatcherRuntimePlatform(
             case DispatcherBossTaskRequest boss:
                 return await new AutoBossTask(new AutoBossParam(boss.StrategyPath)).Start(cancellationToken);
             case DispatcherFishingTaskRequest fishing:
-                await new AutoFishingTask(AutoFishingTaskParam.BuildFromSoloTaskConfig(fishing.Config))
+                await new AutoFishingTask(
+                        fishing.Param ?? AutoFishingTaskParam.BuildFromSoloTaskConfig(fishing.Config))
                     .Start(cancellationToken);
                 return null;
             case DispatcherCookTaskRequest:

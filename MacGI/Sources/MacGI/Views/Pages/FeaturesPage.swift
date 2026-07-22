@@ -53,6 +53,7 @@ struct SoloTasksPage: View {
     @ViewBuilder
     private func settingsContent(for name: String) -> some View {
         switch name {
+        case "AutoFishing": autoFishingSettings
         case "AutoCook": autoCookSettings
         case "AutoWood": autoWoodSettings
         case "AutoMusicGame": autoMusicGameSettings
@@ -65,6 +66,57 @@ struct SoloTasksPage: View {
                 BGIStatusBadge(text: "不可用", tint: BGIColors.muted)
             }
         }
+    }
+
+    @ViewBuilder
+    private var autoFishingSettings: some View {
+        if let settings = appState.autoFishingSettings {
+            BGISettingLine(
+                title: "上钩等待超时时间",
+                subtitle: "超过这个时间将自动提竿，并重新识别鱼饵进行抛竿"
+            ) {
+                Stepper(value: Binding(
+                    get: { settings.autoThrowRodTimeOut },
+                    set: { appState.saveAutoFishingSettings(autoThrowRodTimeOut: $0) }),
+                    in: 5...60) {
+                    Text("\(settings.autoThrowRodTimeOut) 秒").frame(minWidth: 60)
+                }
+            }
+            BGISettingLine(title: "整个任务超时时间", subtitle: "超过这个时间将强制结束任务；0 表示不限制") {
+                Stepper(value: Binding(
+                    get: { settings.wholeProcessTimeoutSeconds },
+                    set: { appState.saveAutoFishingSettings(wholeProcessTimeoutSeconds: $0) }),
+                    in: 0...1800) {
+                    Text("\(settings.wholeProcessTimeoutSeconds) 秒").frame(minWidth: 72)
+                }
+            }
+            BGISettingLine(title: "昼夜策略", subtitle: "选择全天、白天、夜晚，或不调整游戏时间") {
+                Picker("", selection: Binding(
+                    get: { settings.fishingTimePolicy },
+                    set: { appState.saveAutoFishingSettings(fishingTimePolicy: $0) })) {
+                    ForEach(settings.fishingTimePolicyOptions) { option in
+                        Text(option.displayName).tag(option.value)
+                    }
+                }
+                .labelsHidden().frame(width: 110)
+            }
+            BGISettingLine(
+                title: "关键帧保存截图（开发者）",
+                subtitle: "在流程关键时刻保存截图，会产生大量文件，非调试时请关闭"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.saveScreenshotOnKeyTick },
+                    set: { appState.saveAutoFishingSettings(saveScreenshotOnKeyTick: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(
+                title: "Torch 库文件",
+                subtitle: "上游字段仅接受 Windows torch DLL；macOS 当前使用 ONNX/CPU 回退"
+            ) {
+                Text(settings.torchDllSupported ? settings.torchDllFullPath : "macOS 不支持")
+                    .foregroundStyle(.secondary)
+            }
+        } else { settingsLoading }
     }
 
     @ViewBuilder

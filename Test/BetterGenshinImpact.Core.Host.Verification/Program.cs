@@ -68,9 +68,8 @@ var root = Path.Combine("/tmp", "bgi-" + Guid.NewGuid().ToString("N"));
 var layout = new RuntimeLayout(root);
 OverlayDrawPlatform.Configure(new VerificationOverlayDrawPlatform());
 layout.EnsureCreated();
-CopyDirectory(
-    Path.Combine(Directory.GetCurrentDirectory(), "MacGI", "Sources", "MacGI", "Resources", "GameTask"),
-    Path.Combine(layout.RootPath, "GameTask"));
+StageCanonicalGameTaskAssets(
+    Directory.GetCurrentDirectory(), Path.Combine(layout.RootPath, "GameTask"));
 var captureRingPath = Path.Combine(layout.RunPath, "capture-ring.bin");
 const int captureHeaderSize = 128;
 const int captureSlotCapacity = 16;
@@ -347,6 +346,7 @@ BetterGenshinImpact.Core.Recognition.OCR.ImageRegionOcrPlatform.Configure(imageR
 var autoFishingRuntimePlatform = new MacAutoFishingRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
 AutoFishingRuntimePlatform.Configure(autoFishingRuntimePlatform);
+server.SoloTaskSettings.AttachAutoFishingConfigUpdated(autoFishingRuntimePlatform.UpdateConfig);
 GenshinRuntimePlatform.Configure(new MacGenshinRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, autoFishingRuntimePlatform,
     imageRegionOcrService, loggerFactory, "TemplateMatch"));
@@ -2817,12 +2817,85 @@ try
                 .All(item => !item.Value<bool>("available")),
         "solo.list did not expose the truthful Core capability catalog");
     var settingsTaskNames = new[]
-        { "AutoCook", "AutoWood", "AutoMusicGame", "AutoBoss", "AutoFight", "AutoDomain", "AutoArtifactSalvage" };
+        { "AutoFishing", "AutoCook", "AutoWood", "AutoMusicGame", "AutoBoss", "AutoFight", "AutoDomain", "AutoArtifactSalvage" };
     Require(soloItems.Where(item => settingsTaskNames.Contains(item.Value<string>("name")))
                 .All(item => item.Value<bool>("settingsAvailable")) &&
             soloItems.Where(item => !settingsTaskNames.Contains(item.Value<string>("name")))
                 .All(item => !item.Value<bool>("settingsAvailable")),
         "solo.list advertised settings without a composed Core settings boundary");
+    var fishingConfigPath = Path.Combine(layout.UserPath, "config.json");
+    var fishingConfigRoot = JObject.Parse(await File.ReadAllTextAsync(
+        fishingConfigPath, cancellation.Token));
+    fishingConfigRoot["autoFishingConfig"] = JObject.FromObject(new
+    {
+        enabled = true,
+        autoThrowRodEnabled = true,
+        autoThrowRodTimeOut = 15,
+        wholeProcessTimeoutSeconds = 300,
+        fishingTimePolicy = 0,
+        torchDllFullPath = @"C:\verification\torch_cpu.dll",
+    });
+    await File.WriteAllTextAsync(
+        fishingConfigPath, fishingConfigRoot.ToString(), cancellation.Token);
+    var fishingSettings = await ExchangeAsync(
+        connection, "fishing-settings-get", "solo.settings.get", sessionToken,
+        JObject.FromObject(new { name = "AutoFishing" }), cancellation.Token);
+    Require(fishingSettings.Error is null && fishingSettings.Result is JObject fishingSettingsJson &&
+            fishingSettingsJson.Value<int>("autoThrowRodTimeOut") == 15 &&
+            fishingSettingsJson.Value<int>("wholeProcessTimeoutSeconds") == 300 &&
+            fishingSettingsJson.Value<string>("fishingTimePolicy") == "All" &&
+            fishingSettingsJson.Value<bool>("torchDllSupported") == false,
+        fishingSettings.Error?.Message ??
+        "solo.settings.get did not expose the upstream AutoFishing settings");
+    var savedFishingSettings = await ExchangeAsync(
+        connection, "fishing-settings-save", "solo.settings.save", sessionToken,
+        JObject.FromObject(new
+        {
+            name = "AutoFishing",
+            settings = new
+            {
+                autoThrowRodTimeOut = 42,
+                wholeProcessTimeoutSeconds = 900,
+                fishingTimePolicy = "Nighttime",
+                saveScreenshotOnKeyTick = true,
+            }
+        }), cancellation.Token);
+    var persistedFishingConfig = JObject.Parse(await File.ReadAllTextAsync(
+        fishingConfigPath, cancellation.Token));
+    Require(savedFishingSettings.Error is null &&
+            savedFishingSettings.Result is JObject savedFishingSettingsJson &&
+            savedFishingSettingsJson.Value<int>("autoThrowRodTimeOut") == 42 &&
+            savedFishingSettingsJson.Value<int>("wholeProcessTimeoutSeconds") == 900 &&
+            savedFishingSettingsJson.Value<string>("fishingTimePolicy") == "Nighttime" &&
+            savedFishingSettingsJson.Value<bool>("saveScreenshotOnKeyTick") &&
+            persistedFishingConfig.SelectToken("autoFishingConfig.enabled")?.Value<bool>() == true &&
+            persistedFishingConfig.SelectToken("autoFishingConfig.autoThrowRodEnabled")?.Value<bool>() == true &&
+            persistedFishingConfig.SelectToken("autoFishingConfig.autoThrowRodTimeOut")?.Value<int>() == 42 &&
+            persistedFishingConfig.SelectToken("autoFishingConfig.torchDllFullPath")?.Value<string>() ==
+                @"C:\verification\torch_cpu.dll" &&
+            autoFishingRuntimePlatform.Config.AutoThrowRodTimeOut == 42 &&
+            autoFishingRuntimePlatform.Config.WholeProcessTimeoutSeconds == 900 &&
+            autoFishingRuntimePlatform.Config.FishingTimePolicy == FishingTimePolicy.Nighttime,
+        savedFishingSettings.Error?.Message ??
+        "solo.settings.save did not preserve and publish AutoFishing settings");
+    foreach (var invalidFishingSettings in new[]
+             {
+                 new { autoThrowRodTimeOut = 4, wholeProcessTimeoutSeconds = 900,
+                     fishingTimePolicy = "All", saveScreenshotOnKeyTick = false },
+                 new { autoThrowRodTimeOut = 15, wholeProcessTimeoutSeconds = 1801,
+                     fishingTimePolicy = "All", saveScreenshotOnKeyTick = false },
+                 new { autoThrowRodTimeOut = 15, wholeProcessTimeoutSeconds = 900,
+                     fishingTimePolicy = "Invalid", saveScreenshotOnKeyTick = false },
+             })
+    {
+        var invalidFishingResponse = await ExchangeAsync(
+            connection, $"fishing-settings-invalid-{Guid.NewGuid():N}",
+            "solo.settings.save", sessionToken,
+            JObject.FromObject(new { name = "AutoFishing", settings = invalidFishingSettings }),
+            cancellation.Token);
+        Require(invalidFishingResponse.Error is not null,
+            "solo.settings.save accepted AutoFishing settings rejected by the upstream UI");
+    }
     var cookSettings = await ExchangeAsync(
         connection, "cook-settings-get", "solo.settings.get", sessionToken,
         JObject.FromObject(new { name = "AutoCook" }), cancellation.Token);
@@ -3192,7 +3265,14 @@ try
         JObject.FromObject(new { name = "AutoFishing" }), cancellation.Token);
     var soloTaskId = (soloStart.Result as JObject)?.Value<string>("taskId");
     Require(soloStart.Error is null && !string.IsNullOrEmpty(soloTaskId) &&
-            dispatcherRuntime.FishingStartCount == 1,
+            dispatcherRuntime.FishingStartCount == 1 &&
+            dispatcherRuntime.LastFishingParam is
+            {
+                ThrowRodTimeOutTimeoutSeconds: 42,
+                WholeProcessTimeoutSeconds: 900,
+                FishingTimePolicy: FishingTimePolicy.Nighttime,
+                SaveScreenshotOnKeyTick: true,
+            },
         "solo.start did not execute the shared AutoFishing dispatcher request");
     var soloStop = await ExchangeAsync(connection, "solo-stop", "solo.stop", sessionToken,
         JObject.FromObject(new { taskId = soloTaskId }), cancellation.Token);
@@ -3361,6 +3441,25 @@ static object RecordAcknowledgement(ref int count)
 {
     count++;
     return new { acknowledged = true };
+}
+
+static void StageCanonicalGameTaskAssets(string repositoryRoot, string destination)
+{
+    var gameTaskRoot = Path.Combine(repositoryRoot, "BetterGenshinImpact", "GameTask");
+    var manifestPath = Path.Combine(
+        repositoryRoot, "MacGI", "Resources", "game-task-assets.manifest");
+    foreach (var line in File.ReadLines(manifestPath))
+    {
+        var taskPath = line.Trim();
+        if (taskPath.Length == 0 || taskPath.StartsWith('#')) continue;
+        var taskRoot = Path.Combine(gameTaskRoot, taskPath);
+        var assetDirectories = Directory.EnumerateDirectories(
+            taskRoot, "Assets", SearchOption.AllDirectories).ToArray();
+        if (assetDirectories.Length == 0)
+            throw new DirectoryNotFoundException($"Manifest task has no Assets: {taskPath}");
+        foreach (var assets in assetDirectories)
+            CopyDirectory(assets, Path.Combine(destination, Path.GetRelativePath(gameTaskRoot, assets)));
+    }
 }
 
 static object RecordReleaseAll(JObject? parameters, ref int count)
@@ -3689,6 +3788,7 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
     public int ClearCount { get; private set; }
     public List<string> AddedNames { get; } = [];
     public int FishingStartCount { get; private set; }
+    public AutoFishingTaskParam? LastFishingParam { get; private set; }
     public bool FishingCancelled { get; private set; }
     public int CookStartCount { get; private set; }
     public bool CookCancelled { get; private set; }
@@ -3728,7 +3828,11 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
     {
         if (request is not (DispatcherFishingTaskRequest or DispatcherWoodTaskRequest or DispatcherFightTaskRequest or DispatcherCookTaskRequest or DispatcherMusicGameTaskRequest or DispatcherArtifactSalvageTaskRequest or DispatcherDomainTaskRequest or DispatcherBossTaskRequest))
             throw new CapabilityUnavailableException(request.Name);
-        if (request is DispatcherFishingTaskRequest) FishingStartCount++;
+        if (request is DispatcherFishingTaskRequest fishing)
+        {
+            FishingStartCount++;
+            LastFishingParam = fishing.Param;
+        }
         else if (request is DispatcherWoodTaskRequest wood)
         {
             WoodStartCount++;

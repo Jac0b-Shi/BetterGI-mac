@@ -146,6 +146,7 @@ var autoMusicGameRuntimePlatform = new MacAutoMusicGameRuntimePlatform(
 var autoFishingRuntimePlatform = new MacAutoFishingRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
 AutoFishingRuntimePlatform.Configure(autoFishingRuntimePlatform);
+server.SoloTaskSettings.AttachAutoFishingConfigUpdated(autoFishingRuntimePlatform.UpdateConfig);
 var autoDomainRuntimePlatform = new MacAutoDomainRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory,
     server.PlatformCallbacks, sessionToken, shutdown.Token);

@@ -22,6 +22,8 @@ public sealed class MacAutoFishingRuntimePlatform : IAutoFishingRuntimePlatform
     private readonly MacImageRegionOcrService _recognition;
     private readonly ILoggerFactory _loggerFactory;
     private readonly bool _screenshotUidCoverEnabled;
+    private readonly object _configLock = new();
+    private AutoFishingConfig _config;
 
     public MacAutoFishingRuntimePlatform(
         RuntimeLayout layout,
@@ -33,11 +35,11 @@ public sealed class MacAutoFishingRuntimePlatform : IAutoFishingRuntimePlatform
         _systemInfoProvider = systemInfoProvider ?? throw new ArgumentNullException(nameof(systemInfoProvider));
         _recognition = recognition;
         _loggerFactory = loggerFactory;
-        (Config, GameCultureInfoName, _screenshotUidCoverEnabled) = LoadConfig();
+        (_config, GameCultureInfoName, _screenshotUidCoverEnabled) = LoadConfig();
     }
 
     public ISystemInfo SystemInfo => _systemInfoProvider();
-    public AutoFishingConfig Config { get; }
+    public AutoFishingConfig Config => Volatile.Read(ref _config);
     public string GameCultureInfoName { get; }
     public IOcrService OcrService => _recognition;
     public ILogger<T> GetLogger<T>() => _loggerFactory.CreateLogger<T>();
@@ -53,9 +55,16 @@ public sealed class MacAutoFishingRuntimePlatform : IAutoFishingRuntimePlatform
     public ImageRegion? CaptureFrame() => TaskControlPlatform.Current.CaptureToRectArea(forceNew: true);
     public void DisableRealtimeFishing()
     {
-        Config.Enabled = false;
-        PersistConfig();
+        lock (_configLock)
+        {
+            var config = CloneConfig(Config);
+            config.Enabled = false;
+            PersistConfig(config);
+            Volatile.Write(ref _config, config);
+        }
     }
+    public void UpdateConfig(AutoFishingConfig config) =>
+        Volatile.Write(ref _config, CloneConfig(config));
     public Task SetTimeAsync(int hour, int minute, CancellationToken cancellationToken) =>
         new SetTimeTask().Start(hour, minute, cancellationToken);
     public void SaveBehaviourScreenshot(ImageRegion imageRegion, string fileName)
@@ -91,7 +100,7 @@ public sealed class MacAutoFishingRuntimePlatform : IAutoFishingRuntimePlatform
         return (config, culture, uidCover);
     }
 
-    private void PersistConfig()
+    private void PersistConfig(AutoFishingConfig config)
     {
         var path = Path.Combine(_layout.UserPath, "config.json");
         var root = File.Exists(path)
@@ -102,10 +111,15 @@ public sealed class MacAutoFishingRuntimePlatform : IAutoFishingRuntimePlatform
               }) as JsonObject
                 ?? throw new InvalidDataException("User/config.json root must be an object.")
             : new JsonObject();
-        root["autoFishingConfig"] = JsonSerializer.SerializeToNode(Config, ConfigJson.Options);
+        root["autoFishingConfig"] = JsonSerializer.SerializeToNode(config, ConfigJson.Options);
         Directory.CreateDirectory(_layout.UserPath);
         var temporaryPath = path + ".tmp";
         File.WriteAllText(temporaryPath, root.ToJsonString(ConfigJson.Options));
         File.Move(temporaryPath, path, overwrite: true);
     }
+
+    private static AutoFishingConfig CloneConfig(AutoFishingConfig config) =>
+        JsonSerializer.Deserialize<AutoFishingConfig>(
+            JsonSerializer.Serialize(config, ConfigJson.Options), ConfigJson.Options)
+        ?? throw new InvalidDataException("Failed to clone AutoFishingConfig.");
 }

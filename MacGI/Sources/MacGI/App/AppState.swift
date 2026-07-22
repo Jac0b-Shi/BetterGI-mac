@@ -343,6 +343,7 @@ final class AppState: ObservableObject {
     @Published private(set) var soloTaskStatus = BetterGICoreSoloTaskStatus(
         taskID: nil, name: nil, state: "idle", error: nil)
     @Published private(set) var autoCookSettings: BetterGICoreAutoCookSettings?
+    @Published private(set) var autoFishingSettings: BetterGICoreAutoFishingSettings?
     @Published private(set) var autoWoodSettings: BetterGICoreAutoWoodSettings?
     @Published private(set) var autoMusicGameSettings: BetterGICoreAutoMusicGameSettings?
     @Published private(set) var autoBossSettings: BetterGICoreAutoBossSettings?
@@ -1013,6 +1014,7 @@ final class AppState: ObservableObject {
             soloTasks = try await supervisor.listSoloTasks()
             soloTaskStatus = try await supervisor.soloTaskStatus()
             autoCookSettings = try await supervisor.autoCookSettings()
+            autoFishingSettings = try await supervisor.autoFishingSettings()
             autoWoodSettings = try await supervisor.autoWoodSettings()
             autoMusicGameSettings = try await supervisor.autoMusicGameSettings()
             autoBossSettings = try await supervisor.autoBossSettings()
@@ -1022,6 +1024,7 @@ final class AppState: ObservableObject {
         } catch {
             soloTasks = []
             autoCookSettings = nil
+            autoFishingSettings = nil
             autoWoodSettings = nil
             autoMusicGameSettings = nil
             autoBossSettings = nil
@@ -1045,6 +1048,34 @@ final class AppState: ObservableObject {
                 self.autoCookSettings = try await supervisor.saveAutoCookSettings(next)
             } catch {
                 self.addLog(.error, "AutoCook settings save failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func saveAutoFishingSettings(
+        autoThrowRodTimeOut: Int? = nil,
+        wholeProcessTimeoutSeconds: Int? = nil,
+        fishingTimePolicy: String? = nil,
+        saveScreenshotOnKeyTick: Bool? = nil
+    ) {
+        guard let supervisor = betterGICoreSupervisor,
+              let current = autoFishingSettings else { return }
+        let next = BetterGICoreAutoFishingSettings(
+            autoThrowRodTimeOut: autoThrowRodTimeOut ?? current.autoThrowRodTimeOut,
+            wholeProcessTimeoutSeconds:
+                wholeProcessTimeoutSeconds ?? current.wholeProcessTimeoutSeconds,
+            fishingTimePolicy: fishingTimePolicy ?? current.fishingTimePolicy,
+            fishingTimePolicyOptions: current.fishingTimePolicyOptions,
+            saveScreenshotOnKeyTick:
+                saveScreenshotOnKeyTick ?? current.saveScreenshotOnKeyTick,
+            torchDllFullPath: current.torchDllFullPath,
+            torchDllSupported: current.torchDllSupported)
+        Task { [weak self] in
+            do {
+                self?.autoFishingSettings = try await supervisor.saveAutoFishingSettings(next)
+            } catch {
+                self?.addLog(.error,
+                    "AutoFishing settings save failed: \(error.localizedDescription)")
             }
         }
     }

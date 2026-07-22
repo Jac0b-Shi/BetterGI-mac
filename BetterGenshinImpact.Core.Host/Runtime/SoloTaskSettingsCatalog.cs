@@ -5,6 +5,7 @@ using BetterGenshinImpact.GameTask.AutoBoss;
 using BetterGenshinImpact.GameTask.AutoCook;
 using BetterGenshinImpact.GameTask.AutoDomain;
 using BetterGenshinImpact.GameTask.AutoFight;
+using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
 using BetterGenshinImpact.GameTask.AutoMusicGame;
 using BetterGenshinImpact.GameTask.AutoWood;
@@ -17,11 +18,26 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
 {
     private readonly object _lock = new();
     private Action<AutoFightConfig>? _autoFightConfigUpdated;
+    private Action<AutoFishingConfig>? _autoFishingConfigUpdated;
+    public bool AutoFishingSaveScreenshotOnKeyTick { get; private set; }
     public int AutoWoodRoundNum { get; private set; }
     public int AutoWoodDailyMaxCount { get; private set; } = 2000;
 
     public void AttachAutoFightConfigUpdated(Action<AutoFightConfig> callback) =>
         _autoFightConfigUpdated = callback ?? throw new ArgumentNullException(nameof(callback));
+
+    public void AttachAutoFishingConfigUpdated(Action<AutoFishingConfig> callback) =>
+        _autoFishingConfigUpdated = callback ?? throw new ArgumentNullException(nameof(callback));
+
+    public AutoFishingTaskParam BuildAutoFishingTaskParam()
+    {
+        lock (_lock)
+        {
+            var config = LoadConfig<AutoFishingConfig>(LoadRoot(), "autoFishingConfig");
+            return AutoFishingTaskParam.BuildFromConfig(
+                config, AutoFishingSaveScreenshotOnKeyTick);
+        }
+    }
 
     public object Get(string name)
     {
@@ -31,6 +47,8 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             return name switch
             {
                 "AutoCook" => Describe(LoadConfig<AutoCookConfig>(root, "autoCookConfig")),
+                "AutoFishing" => Describe(
+                    LoadConfig<AutoFishingConfig>(root, "autoFishingConfig")),
                 "AutoWood" => Describe(LoadConfig<AutoWoodConfig>(root, "autoWoodConfig")),
                 "AutoMusicGame" => Describe(
                     LoadConfig<AutoMusicGameConfig>(root, "autoMusicGameConfig")),
@@ -52,6 +70,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         return name switch
         {
             "AutoCook" => SaveAutoCook(settings),
+            "AutoFishing" => SaveAutoFishing(settings),
             "AutoWood" => SaveAutoWood(settings),
             "AutoMusicGame" => SaveAutoMusicGame(settings),
             "AutoBoss" => SaveAutoBoss(settings),
@@ -83,6 +102,38 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             };
             root["autoCookConfig"] = JsonSerializer.SerializeToNode(config, ConfigJson.Options);
             SaveRoot(root);
+            return Describe(config);
+        }
+    }
+
+    private object SaveAutoFishing(JObject settings)
+    {
+        var autoThrowRodTimeOut = RequiredInt(settings, "autoThrowRodTimeOut");
+        if (autoThrowRodTimeOut is < 5 or > 60)
+            throw new ArgumentOutOfRangeException(nameof(autoThrowRodTimeOut),
+                autoThrowRodTimeOut, "autoThrowRodTimeOut must be between 5 and 60.");
+        var wholeProcessTimeoutSeconds = RequiredInt(settings, "wholeProcessTimeoutSeconds");
+        if (wholeProcessTimeoutSeconds is < 0 or > 1800)
+            throw new ArgumentOutOfRangeException(nameof(wholeProcessTimeoutSeconds),
+                wholeProcessTimeoutSeconds,
+                "wholeProcessTimeoutSeconds must be between 0 and 1800.");
+        var policyName = RequiredString(settings, "fishingTimePolicy");
+        if (!Enum.TryParse<FishingTimePolicy>(policyName, out var fishingTimePolicy) ||
+            !Enum.IsDefined(fishingTimePolicy))
+            throw new ArgumentException($"Unsupported fishingTimePolicy: {policyName}");
+        var saveScreenshotOnKeyTick = RequiredBool(settings, "saveScreenshotOnKeyTick");
+
+        lock (_lock)
+        {
+            var root = LoadRoot();
+            var config = LoadConfig<AutoFishingConfig>(root, "autoFishingConfig");
+            config.AutoThrowRodTimeOut = autoThrowRodTimeOut;
+            config.WholeProcessTimeoutSeconds = wholeProcessTimeoutSeconds;
+            config.FishingTimePolicy = fishingTimePolicy;
+            AutoFishingSaveScreenshotOnKeyTick = saveScreenshotOnKeyTick;
+            root["autoFishingConfig"] = JsonSerializer.SerializeToNode(config, ConfigJson.Options);
+            SaveRoot(root);
+            _autoFishingConfigUpdated?.Invoke(config);
             return Describe(config);
         }
     }
@@ -292,6 +343,24 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         name = "AutoCook",
         checkIntervalMs = config.CheckIntervalMs,
         stopTaskWhenRecoverButtonDetected = config.StopTaskWhenRecoverButtonDetected,
+    };
+
+    private object Describe(AutoFishingConfig config) => new
+    {
+        name = "AutoFishing",
+        autoThrowRodTimeOut = config.AutoThrowRodTimeOut,
+        wholeProcessTimeoutSeconds = config.WholeProcessTimeoutSeconds,
+        fishingTimePolicy = config.FishingTimePolicy.ToString(),
+        fishingTimePolicyOptions = new[]
+        {
+            new { value = FishingTimePolicy.All.ToString(), displayName = "全天" },
+            new { value = FishingTimePolicy.Daytime.ToString(), displayName = "白天" },
+            new { value = FishingTimePolicy.Nighttime.ToString(), displayName = "夜晚" },
+            new { value = FishingTimePolicy.DontChange.ToString(), displayName = "不调" },
+        },
+        saveScreenshotOnKeyTick = AutoFishingSaveScreenshotOnKeyTick,
+        torchDllFullPath = config.TorchDllFullPath,
+        torchDllSupported = false,
     };
 
     private object Describe(AutoWoodConfig config) => new

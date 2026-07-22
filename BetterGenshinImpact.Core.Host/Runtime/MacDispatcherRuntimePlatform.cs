@@ -84,7 +84,8 @@ public sealed class MacDispatcherRuntimePlatform(
     {
         if (request is DispatcherFishingTaskRequest fishing)
         {
-            await new AutoFishingTask(AutoFishingTaskParam.BuildFromSoloTaskConfig(fishing.Config))
+            await new AutoFishingTask(
+                    fishing.Param ?? AutoFishingTaskParam.BuildFromSoloTaskConfig(fishing.Config))
                 .Start(cancellationToken);
             return null;
         }

@@ -23,7 +23,7 @@ public sealed class SoloTaskCoordinator(
         Descriptor("AutoDomain", "自动秘境", true, true),
         Descriptor("AutoBoss", "自动首领讨伐", true, true),
         Descriptor("AutoStygianOnslaught", "自动幽境危战", false),
-        Descriptor("AutoFishing", "全自动钓鱼（单个鱼塘）", true),
+        Descriptor("AutoFishing", "全自动钓鱼（单个鱼塘）", true, true),
         Descriptor("AutoLeyLineOutcrop", "自动地脉花", false),
         Descriptor("AutoMusicGame", "自动千音雅集", true, true),
         Descriptor("AutoCook", "自动烹饪", true, true),
@@ -81,7 +81,8 @@ public sealed class SoloTaskCoordinator(
         {
             var request = name switch
             {
-                "AutoFishing" => (DispatcherSoloTaskRequest)new DispatcherFishingTaskRequest(null),
+                "AutoFishing" => (DispatcherSoloTaskRequest)new DispatcherFishingTaskRequest(
+                    null, settings.BuildAutoFishingTaskParam()),
                 "AutoWood" => new DispatcherWoodTaskRequest(
                     settings.AutoWoodRoundNum, settings.AutoWoodDailyMaxCount),
                 "AutoFight" => new DispatcherFightTaskRequest(null),
