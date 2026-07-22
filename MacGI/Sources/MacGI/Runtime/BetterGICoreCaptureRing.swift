@@ -52,8 +52,6 @@ final class BetterGICoreCaptureRing {
                     CGImageAlphaInfo.premultipliedFirst.rawValue
               )
         else { throw BetterGICoreRPCError.protocolViolation("Unable to create BGRA capture-ring context.") }
-        context.translateBy(x: 0, y: CGFloat(height))
-        context.scaleBy(x: 1, y: -1)
         context.draw(frame.cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
 
         let previousFrameID = hasValidHeader ? Self.readUInt64(bytes, offset: 56) : 0

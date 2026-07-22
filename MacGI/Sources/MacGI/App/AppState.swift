@@ -80,7 +80,7 @@ enum RuntimeLifecycle: String, CaseIterable, Identifiable {
     var isTransitioning: Bool { self == .starting || self == .stopping }
 }
 
-enum LogLevel: String, CaseIterable, Identifiable {
+enum LogLevel: String, CaseIterable, Identifiable, Sendable {
     case trace
     case debug
     case info
@@ -195,9 +195,10 @@ struct MacGIFeature: Identifiable, Equatable {
     var icon: BGIIcon
     var isEnabled: Bool
     var settingsAvailable: Bool
+    var autoHangoutEventEnabled: Bool?
 }
 
-struct LogEntry: Identifiable, Equatable {
+struct LogEntry: Identifiable, Equatable, Sendable {
     let id = UUID()
     let timestamp: Date
     let level: LogLevel
@@ -234,14 +235,6 @@ struct OverlayDisplayMetric: Identifiable {
     var value: String
 }
 
-struct OverlayMapPoint: Identifiable {
-    let id: String
-    var xRatio: CGFloat
-    var yRatio: CGFloat
-    var label: String
-    var tint: Color
-}
-
 @MainActor
 final class AppState: ObservableObject {
     @Published var selectedPage: NavigationPage = .launch
@@ -254,9 +247,19 @@ final class AppState: ObservableObject {
     @Published private(set) var accessibilityPermissionGranted = false
     @Published private(set) var screenCapturePermissionRequestMessage: String?
     @Published private(set) var runtimeLifecycleMessage = "运行时尚未启动。"
-    @Published var runtimeLifecycle: RuntimeLifecycle = .stopped
+    @Published var runtimeLifecycle: RuntimeLifecycle = .stopped {
+        didSet { recomputeHUDPresentation() }
+    }
     @Published var isHUDVisible = false {
-        didSet { onHUDVisibilityChanged?(isHUDVisible) }
+        didSet { recomputeHUDPresentation() }
+    }
+    @Published private(set) var isGameWindowFrontmost = false
+    @Published private(set) var isHUDPresented = false
+    @Published var hideHUDWhenGameUnfocused = true {
+        didSet {
+            userDefaults.set(hideHUDWhenGameUnfocused, forKey: Self.hideHUDWhenGameUnfocusedKey)
+            recomputeHUDPresentation()
+        }
     }
     @Published var hudOpacity = 0.82
     @Published var hudMaxLogLines = 5
@@ -268,14 +271,18 @@ final class AppState: ObservableObject {
     @Published var showOverlayDirections = true
     @Published var showOverlayMapPoints = true
     @Published var overlayUidCoverEnabled = true
-    @Published var overlayLayoutEditEnabled = false
+    @Published var overlayLayoutEditEnabled = false {
+        didSet { recomputeHUDPresentation() }
+    }
+    let coreOverlayStore = CoreOverlayStore()
     @Published var launchAtLogin = false
     @Published var showHUDOnStart = true
     @Published var keepWindowOnTop = false
     @Published var debugPageEnabled = true
     @Published var debugConfidence = 0.86
     @Published var dispatcherIntervalMs = 50
-    @Published var allowRuntimeRealInput = false
+    @Published private(set) var allowRuntimeRealInput: Bool
+    let dryRunLaunchEnabled: Bool
     @Published var schedulerGroups: [BetterGIScriptGroupSummary] = []
     @Published var scriptProjects: [BetterGIScriptProjectSummary] = []
     @Published var schedulerCatalogIssues: [CoreCatalogIssue] = []
@@ -288,7 +295,9 @@ final class AppState: ObservableObject {
     // MARK: Window & capture (typed — not strings)
 
     /// Currently selected game window.
-    @Published var selectedWindow: WindowInfo = .unavailable()
+    @Published var selectedWindow: WindowInfo = .unavailable() {
+        didSet { updateGameWindowFocus(frontmostPID: frontmostApplicationPID) }
+    }
 
     /// Available game windows from the tracker.
     @Published var availableWindows: [WindowInfo] = []
@@ -304,12 +313,14 @@ final class AppState: ObservableObject {
 
 
     /// Input safety gate (dry-run, emergency stop, rate limiting).
-    let safetyGate = InputSafetyGate()
+    let safetyGate: InputSafetyGate
 
     private let frameProvider = ScreenCaptureKitFrameProvider()
     private let inputDispatcher: any InputDispatching
     private let isTargetWindowFrontmost: (WindowInfo) -> Bool
     private let runtimeResourceStore: BGIRuntimeResourceStore
+    private let runtimeLogWriter: RuntimeLogFileWriter
+    private let userDefaults: UserDefaults
     let latestFrameStore = LatestFrameStore()
     private var runtimeFrameIndex: UInt64 = 0
     private var schedulerExecutionTask: Task<Void, Never>?
@@ -320,6 +331,8 @@ final class AppState: ObservableObject {
     private var runtimeGeometryPixelSize: CGSize?
     private var pendingRuntimeGeometryPixelSize: CGSize?
     private var runtimeGeometryRefreshTask: Task<Void, Never>?
+    private var mapMaskSelectionSaveTask: Task<Void, Never>?
+    private var confirmedMapMaskSelectedLabelIDs: Set<String> = []
     private var captureTimestamps: [Date] = []
     @Published private(set) var measuredCaptureFPS = 0
 
@@ -364,21 +377,47 @@ final class AppState: ObservableObject {
     @Published var autoPickWhiteListDraft = ""
     @Published private(set) var quickTeleportTriggerSettings: BetterGICoreQuickTeleportTriggerSettings?
     @Published private(set) var mapMaskTriggerSettings: BetterGICoreMapMaskTriggerSettings?
+    @Published private(set) var mapMaskPickerSettings: BetterGICoreMapMaskPickerSettings?
+    @Published private(set) var mapMaskLabelCategories: [BetterGICoreMapMaskLabel] = []
+    @Published private(set) var mapMaskSelectedLabelIDs: Set<String> = []
+    @Published private(set) var mapMaskCatalogLoading = false
+    @Published private(set) var mapMaskCatalogLoaded = false
+    @Published private(set) var isMapMaskPickerOpen = false
     @Published var recentLogs: [LogEntry] = []
 
-    var onHUDVisibilityChanged: ((Bool) -> Void)?
+    var onHUDPresentationChanged: ((Bool) -> Void)?
+    private var frontmostApplicationPID: pid_t?
 
     init(
         resourceStore: BGIRuntimeResourceStore = .defaultStore(),
         inputDispatcher: any InputDispatching = CGEventInputDispatcher(),
         isTargetWindowFrontmost: @escaping (WindowInfo) -> Bool = ForegroundWindowGuard.isTargetFrontmost,
-        launchArguments: [String] = ProcessInfo.processInfo.arguments
+        launchArguments: [String] = ProcessInfo.processInfo.arguments,
+        userDefaults: UserDefaults = .standard
     ) {
+        self.userDefaults = userDefaults
+        dryRunLaunchEnabled = launchArguments.contains("--dry-run")
+        safetyGate = InputSafetyGate(
+            dryRun: dryRunLaunchEnabled,
+            realInputEnabled: !dryRunLaunchEnabled)
+        allowRuntimeRealInput = !dryRunLaunchEnabled
         runtimeResourceStore = resourceStore
+        runtimeLogWriter = RuntimeLogFileWriter(directory: resourceStore.logURL)
         self.inputDispatcher = inputDispatcher
         self.isTargetWindowFrontmost = isTargetWindowFrontmost
+        let storedFocusHiding = userDefaults.object(forKey: Self.hideHUDWhenGameUnfocusedKey)
+            as? Bool ?? true
+        hideHUDWhenGameUnfocused = launchArguments.contains("--disable-hud-focus-hiding")
+            ? false
+            : storedFocusHiding
         autoStartRuntimePending = launchArguments.contains("--start-runtime")
         addLog(.info, "betterGI-mac Swift UI initialized")
+        if dryRunLaunchEnabled {
+            addLog(.info, "Dry-Run enabled by --dry-run; real input is disabled")
+        }
+        if !hideHUDWhenGameUnfocused {
+            addLog(.info, "HUD focus hiding is disabled for this launch")
+        }
         addLog(.info, "Waiting for BetterGI C# Core Host")
         refreshPermissionStatus()
         refreshWindows()
@@ -487,6 +526,39 @@ final class AppState: ObservableObject {
                     throw BetterGICoreRPCError.socket("Finder could not open the project directory.")
                 }
             } catch { self?.addLog(.error, "Open project directory failed: \(error.localizedDescription)") }
+        }
+    }
+
+    func exportMergedSchedulerPathing() {
+        guard let supervisor = betterGICoreSupervisor, let group = selectedSchedulerGroup else { return }
+        Task { [weak self] in
+            do {
+                let result = try await supervisor.exportMergedPathing(groupName: group.name)
+                guard result.count > 0 else {
+                    self?.addLog(.info, "当前配置组没有可导出的地图追踪任务。")
+                    return
+                }
+                guard NSWorkspace.shared.open(URL(fileURLWithPath: result.path)) else {
+                    throw BetterGICoreRPCError.socket("Finder could not open the export directory.")
+                }
+                self?.addLog(.info, "已导出 \(result.count) 个地图追踪任务。")
+            } catch {
+                self?.addLog(.error, "Export merged pathing failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func applyCoreOverlayCommand(_ parameters: [String: Any]) throws {
+        let previousBigMapState = coreOverlayStore.state.isInBigMapUI
+        try coreOverlayStore.apply(parameters: parameters)
+        if parameters["operation"] as? String == "setMapPointData" {
+            NSLog("BetterGI MapMask received point data: %d", coreOverlayStore.state.mapPoints.count)
+        }
+        if previousBigMapState != coreOverlayStore.state.isInBigMapUI {
+            NSLog("BetterGI MapMask big-map state: %@", coreOverlayStore.state.isInBigMapUI.description)
+        }
+        if !coreOverlayStore.state.isInBigMapUI {
+            isMapMaskPickerOpen = false
         }
     }
 
@@ -629,6 +701,38 @@ final class AppState: ObservableObject {
         accessibilityPermissionGranted = MacGIPermissionRequester.accessibilityGranted
     }
 
+    func updateGameWindowFocus(frontmostPID: pid_t?) {
+        frontmostApplicationPID = frontmostPID
+        let gameIsFrontmost = isWindowValid
+            && !selectedWindow.isSynthetic
+            && frontmostPID == selectedWindow.ownerPID
+        if isGameWindowFrontmost != gameIsFrontmost {
+            isGameWindowFrontmost = gameIsFrontmost
+        }
+        recomputeHUDPresentation()
+    }
+
+    func refreshGameWindowFocus() {
+        updateGameWindowFocus(
+            frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier)
+    }
+
+    private func recomputeHUDPresentation() {
+        let shouldPresent = HUDPresentationPolicy.shouldPresent(
+            hudRequested: isHUDVisible,
+            runtimeLifecycle: runtimeLifecycle,
+            windowValid: isWindowValid && !selectedWindow.isSynthetic,
+            hideWhenUnfocused: hideHUDWhenGameUnfocused,
+            gameFrontmost: isGameWindowFrontmost,
+            layoutEditing: overlayLayoutEditEnabled,
+            macGIFrontmost: frontmostApplicationPID == ProcessInfo.processInfo.processIdentifier)
+        guard shouldPresent != isHUDPresented else { return }
+        isHUDPresented = shouldPresent
+        onHUDPresentationChanged?(shouldPresent)
+    }
+
+    private static let hideHUDWhenGameUnfocusedKey = "hud.hideWhenGameUnfocused"
+
     func requestScreenCapturePermission() {
         let result = MacGIPermissionRequester.requestScreenCapture()
         logPermissionRequestResult(result, name: "Screen Recording")
@@ -764,18 +868,23 @@ final class AppState: ObservableObject {
             RuntimeMetric(title: "Capture", value: "\(captureFPS) FPS", status: captureStatus),
             RuntimeMetric(title: "Input", value: inputStatus.label, status: inputStatus),
             RuntimeMetric(title: "Core", value: coreStatus.label, status: coreStatus),
-            RuntimeMetric(title: "HUD", value: isHUDVisible ? "Visible" : "Hidden", status: isHUDVisible ? .ok : .missing)
+            RuntimeMetric(title: "HUD", value: isHUDPresented ? "Visible" : "Hidden", status: isHUDPresented ? .ok : .missing)
         ]
     }
 
     var overlayStatusItems: [OverlayStatusItem] {
-        features.map { feature in
-            OverlayStatusItem(
-                id: feature.id,
-                glyph: Self.triggerPresentation[feature.id]?.glyph ?? "\u{f0e7}",
-                name: feature.name,
-                isEnabled: feature.isEnabled
-            )
+        let definitions = [
+            ("AutoPick", "拾取", "\u{f256}"),
+            ("AutoSkip", "剧情", "\u{f075}"),
+            ("AutoHangout", "邀约", "\u{e5c8}"),
+            ("AutoFish", "钓鱼", "\u{f578}"),
+            ("QuickTeleport", "传送", "\u{f3c5}")
+        ]
+        return definitions.map { id, name, glyph in
+            let enabled = id == "AutoHangout"
+                ? (features.first(where: { $0.id == "AutoSkip" })?.autoHangoutEventEnabled ?? false)
+                : (features.first(where: { $0.id == id })?.isEnabled ?? false)
+            return OverlayStatusItem(id: id, glyph: glyph, name: name, isEnabled: enabled)
         }
     }
 
@@ -785,10 +894,6 @@ final class AppState: ObservableObject {
             OverlayDisplayMetric(id: "core-status", name: "Core", value: coreStatus.label),
             OverlayDisplayMetric(id: "scheduler-status", name: "调度器", value: schedulerExecutionStatus)
         ]
-    }
-
-    var overlayMapPoints: [OverlayMapPoint] {
-        []
     }
 
     var filteredLogs: [LogEntry] {
@@ -809,7 +914,9 @@ final class AppState: ObservableObject {
           "captureStatus": "\(captureStatus.label)",
           "inputStatus": "\(inputStatus.label)",
           "coreStatus": "\(coreStatus.label)",
-          "hudVisible": \(isHUDVisible),
+          "hudRequested": \(isHUDVisible),
+          "hudPresented": \(isHUDPresented),
+          "gameWindowFrontmost": \(isGameWindowFrontmost),
           "overlay": {
             "logBox": \(showOverlayLogBox),
             "status": \(showOverlayStatus),
@@ -853,7 +960,7 @@ final class AppState: ObservableObject {
 
     func toggleHUD() {
         isHUDVisible.toggle()
-        addLog(.info, "HUD \(isHUDVisible ? "shown" : "hidden")")
+        addLog(.info, "HUD display \(isHUDVisible ? "enabled" : "disabled")")
     }
 
     func addTestLog() {
@@ -861,10 +968,12 @@ final class AppState: ObservableObject {
     }
 
     func addLog(_ level: LogLevel, _ message: String) {
-        recentLogs.insert(LogEntry(timestamp: Date(), level: level, message: message), at: 0)
+        let entry = LogEntry(timestamp: Date(), level: level, message: message)
+        recentLogs.insert(entry, at: 0)
         if recentLogs.count > 160 {
             recentLogs.removeLast(recentLogs.count - 160)
         }
+        runtimeLogWriter.append(entry)
     }
 
     func clearLogs() {
@@ -1021,10 +1130,8 @@ final class AppState: ObservableObject {
         guard selectedSchedulerGroup != nil else { return "尚未选择配置组" }
         guard isWindowValid, !selectedWindow.isSynthetic else { return "尚未选择真实游戏窗口" }
         guard !safetyGate.emergencyStop else { return "紧急停止已启用" }
-        if safetyGate.dryRun { return "已就绪：Dry-Run，不发送真实输入" }
-        guard safetyGate.realInputEnabled else { return "真实输入尚未启用" }
-        guard allowRuntimeRealInput else { return "Core Runtime Input 尚未授权" }
-        return "已就绪：Core 可发送真实输入"
+        if dryRunLaunchEnabled { return "Dry-Run：不会发送真实输入" }
+        return "已就绪"
     }
 
     func cancelSchedulerGroups() {
@@ -1096,7 +1203,8 @@ final class AppState: ObservableObject {
                     statusText: "C# Core · P\(state.priority)\(state.exclusive ? " · Exclusive" : "")",
                     icon: presentation?.icon ?? .symbol("bolt"),
                     isEnabled: state.enabled,
-                    settingsAvailable: state.settingsAvailable
+                    settingsAvailable: state.settingsAvailable,
+                    autoHangoutEventEnabled: state.autoHangoutEventEnabled
                 )
             }
             let autoPickSettings = try await supervisor.autoPickTriggerSettings()
@@ -1113,6 +1221,10 @@ final class AppState: ObservableObject {
             autoEatTriggerSettings = nil
             quickTeleportTriggerSettings = nil
             mapMaskTriggerSettings = nil
+            mapMaskPickerSettings = nil
+            mapMaskLabelCategories = []
+            mapMaskSelectedLabelIDs = []
+            mapMaskCatalogLoaded = false
             addLog(.error, "BetterGI Core trigger catalog failed: \(error.localizedDescription)")
         }
     }
@@ -1207,15 +1319,116 @@ final class AppState: ObservableObject {
         }
     }
 
-    func saveMapMaskTriggerSettings(miniMapMaskEnabled: Bool) {
-        guard let supervisor = betterGICoreSupervisor else { return }
+    func saveMapMaskTriggerSettings(
+        miniMapMaskEnabled: Bool
+    ) {
+        guard let supervisor = betterGICoreSupervisor, mapMaskTriggerSettings != nil else { return }
+        let next = BetterGICoreMapMaskTriggerSettings(
+            miniMapMaskEnabled: miniMapMaskEnabled)
         Task { [weak self] in
             do {
-                self?.mapMaskTriggerSettings = try await supervisor.saveMapMaskTriggerSettings(
-                    .init(miniMapMaskEnabled: miniMapMaskEnabled))
+                self?.mapMaskTriggerSettings = try await supervisor.saveMapMaskTriggerSettings(next)
             } catch {
                 self?.addLog(.error, "Core failed to save MapMask settings: \(error.localizedDescription)")
             }
+        }
+    }
+
+    func toggleMapMaskPicker() {
+        guard coreOverlayStore.state.isInBigMapUI else {
+            isMapMaskPickerOpen = false
+            return
+        }
+        isMapMaskPickerOpen.toggle()
+        if isMapMaskPickerOpen {
+            Task { [weak self] in await self?.ensureMapMaskCatalogLoaded() }
+        }
+    }
+
+    func closeMapMaskPicker() {
+        isMapMaskPickerOpen = false
+    }
+
+    func saveMapMaskPickerSettings(
+        mapPointApiProvider: String? = nil,
+        hoYoLabLanguage: String? = nil
+    ) {
+        guard let supervisor = betterGICoreSupervisor, let current = mapMaskPickerSettings else { return }
+        let next = BetterGICoreMapMaskPickerSettings(
+            mapPointApiProvider: mapPointApiProvider ?? current.mapPointApiProvider,
+            mapPointApiProviderOptions: current.mapPointApiProviderOptions,
+            hoYoLabLanguage: hoYoLabLanguage ?? current.hoYoLabLanguage,
+            hoYoLabLanguageOptions: current.hoYoLabLanguageOptions)
+        Task { [weak self] in
+            do {
+                self?.mapMaskPickerSettings = try await supervisor.saveMapMaskPickerSettings(next)
+                self?.mapMaskCatalogLoaded = false
+                await self?.loadMapMaskCatalogFromCore()
+            } catch {
+                self?.addLog(.error, "Core failed to save MapMask picker settings: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func setMapMaskLabel(_ id: String, selected: Bool) {
+        guard let supervisor = betterGICoreSupervisor else { return }
+        if selected {
+            mapMaskSelectedLabelIDs.insert(id)
+        } else {
+            mapMaskSelectedLabelIDs.remove(id)
+        }
+        guard mapMaskSelectionSaveTask == nil else { return }
+        mapMaskSelectionSaveTask = Task { [weak self] in
+            await self?.flushMapMaskSelection(to: supervisor)
+        }
+    }
+
+    private func flushMapMaskSelection(to supervisor: BetterGICoreProcessSupervisor) async {
+        while !Task.isCancelled {
+            let requested = mapMaskSelectedLabelIDs
+            do {
+                let saved = try await supervisor.saveMapMaskPointSelection(requested)
+                confirmedMapMaskSelectedLabelIDs = saved
+                if mapMaskSelectedLabelIDs == requested {
+                    mapMaskSelectedLabelIDs = saved
+                    mapMaskSelectionSaveTask = nil
+                    return
+                }
+            } catch {
+                addLog(.error, "Core failed to save MapMask selection: \(error.localizedDescription)")
+                if mapMaskSelectedLabelIDs == requested {
+                    mapMaskSelectedLabelIDs = confirmedMapMaskSelectedLabelIDs
+                    mapMaskSelectionSaveTask = nil
+                    return
+                }
+            }
+        }
+        mapMaskSelectionSaveTask = nil
+    }
+
+    func ensureMapMaskCatalogLoaded() async {
+        guard !mapMaskCatalogLoaded, !mapMaskCatalogLoading else { return }
+        await loadMapMaskCatalogFromCore()
+    }
+
+    private func loadMapMaskCatalogFromCore() async {
+        guard let supervisor = betterGICoreSupervisor else { return }
+        mapMaskCatalogLoading = true
+        defer { mapMaskCatalogLoading = false }
+        do {
+            if mapMaskPickerSettings == nil {
+                mapMaskPickerSettings = try await supervisor.mapMaskPickerSettings()
+            }
+            mapMaskLabelCategories = try await supervisor.mapMaskPointCatalog()
+            mapMaskSelectedLabelIDs = try await supervisor.mapMaskPointSelection()
+            confirmedMapMaskSelectedLabelIDs = mapMaskSelectedLabelIDs
+            mapMaskCatalogLoaded = true
+        } catch {
+            mapMaskLabelCategories = []
+            mapMaskSelectedLabelIDs = []
+            confirmedMapMaskSelectedLabelIDs = []
+            mapMaskCatalogLoaded = false
+            addLog(.error, "Core failed to load MapMask catalog: \(error.localizedDescription)")
         }
     }
 

@@ -11,7 +11,7 @@ public static class MD5Helper
     /// <param name="input">输入字符串</param>
     /// <param name="encoding">字符编码，默认为UTF-8</param>
     /// <returns>32位小写MD5哈希值</returns>
-    public static string ComputeMD5(string input, Encoding encoding = null)
+    public static string ComputeMD5(string input, Encoding? encoding = null)
     {
         if (string.IsNullOrEmpty(input))
             return string.Empty;

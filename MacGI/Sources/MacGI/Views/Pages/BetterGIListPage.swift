@@ -73,7 +73,7 @@ extension BetterGIListPage {
     static let mapTrackingItems = [
         BetterGIListItem(icon: .symbol("map"), title: "地图追踪", subtitle: "按路径文件执行自动寻路和采集"),
         BetterGIListItem(icon: .fgi("\u{e411}"), title: "路径配置", subtitle: "管理路径组、队伍、循环与触发条件"),
-        BetterGIListItem(icon: .fgi("\u{f279}"), title: "地图遮罩点位", subtitle: "Core draw-command sink 已接入；Swift 遮罩渲染尚不可用")
+        BetterGIListItem(icon: .fgi("\u{f279}"), title: "地图遮罩点位", subtitle: "在实时触发页面选择数据源和点位")
     ]
 
     static let recordReplayItems = [

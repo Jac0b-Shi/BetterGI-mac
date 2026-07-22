@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.GameTask.MapMask;
 
 namespace BetterGenshinImpact.Core.Host;
 
@@ -29,6 +30,7 @@ public sealed class CoreRpcServer(
     private MacScriptHostServices? _scriptHostServices;
     private MacScriptServicePlatform? _scriptServicePlatform;
     private MacPathExecutorPlatform? _pathExecutorPlatform;
+    private MacMapMaskRuntimePlatform? _mapMaskRuntimePlatform;
     private Func<RuntimeArtifactStatus>? _runtimeArtifactInitializer;
     private RuntimeArtifactStatus? _runtimeArtifactStatus;
     private Action? _platformAssetInitializer;
@@ -92,6 +94,13 @@ public sealed class CoreRpcServer(
         ArgumentNullException.ThrowIfNull(platform);
         if (Interlocked.CompareExchange(ref _pathExecutorPlatform, platform, null) is not null)
             throw new InvalidOperationException("PathExecutor platform has already been attached.");
+    }
+
+    public void AttachMapMaskRuntimePlatform(MacMapMaskRuntimePlatform platform)
+    {
+        ArgumentNullException.ThrowIfNull(platform);
+        if (Interlocked.CompareExchange(ref _mapMaskRuntimePlatform, platform, null) is not null)
+            throw new InvalidOperationException("MapMask runtime platform has already been attached.");
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
@@ -178,6 +187,23 @@ public sealed class CoreRpcServer(
                 return RpcResponse.Success(
                     request.Id, await RefreshRuntimeGeometryAsync(_shutdown.Token));
             }
+            if (request.Method == "mapMask.catalog")
+            {
+                return RpcResponse.Success(request.Id,
+                    await MapMaskRuntimePlatform.GetPointCatalogAsync(_shutdown.Token));
+            }
+            if (request.Method == "mapMask.selection.save")
+            {
+                var selectedTokens = request.Params?["selectedIds"] as JArray
+                    ?? throw new ArgumentException("selectedIds is required.");
+                var selectedIds = selectedTokens.Select(token => token.Value<string>())
+                    .ToArray();
+                if (selectedIds.Any(string.IsNullOrWhiteSpace))
+                    throw new ArgumentException("selectedIds cannot contain empty values.");
+                return RpcResponse.Success(request.Id,
+                    await MapMaskRuntimePlatform.SavePointSelectionAsync(
+                        selectedIds.Select(id => id!).ToArray(), _shutdown.Token));
+            }
             object? result = request.Method switch
             {
                 "core.handshake" => Handshake(),
@@ -214,6 +240,7 @@ public sealed class CoreRpcServer(
                 "catalog.clearScriptGroup" => _catalog.Clear(RequiredString(request.Params, "name")),
                 "catalog.reverseScriptGroup" => _catalog.Reverse(RequiredString(request.Params, "name")),
                 "catalog.updateScriptGroupPathingFolders" => _catalog.UpdatePathingFolders(RequiredString(request.Params, "name")),
+                "catalog.exportMergedPathing" => _catalog.ExportMergedPathing(RequiredString(request.Params, "name")),
                 "catalog.setScriptGroupNextProject" => _catalog.SetNextProject(
                     RequiredString(request.Params, "name"), RequiredInt(request.Params, "projectIndex")),
                 "catalog.getScriptGroupProjectLocation" => _catalog.GetProjectLocation(
@@ -235,6 +262,11 @@ public sealed class CoreRpcServer(
                     RequiredString(request.Params, "name"),
                     request.Params?["settings"] as JObject
                     ?? throw new ArgumentException("settings is required.")),
+                "mapMask.settings.get" => _triggerSettings.GetMapMaskPickerSettings(),
+                "mapMask.settings.save" => _triggerSettings.SaveMapMaskPickerSettings(
+                    request.Params?["settings"] as JObject
+                    ?? throw new ArgumentException("settings is required.")),
+                "mapMask.selection.get" => MapMaskRuntimePlatform.GetPointSelection(),
                 "solo.list" => SoloTasks.List(),
                 "solo.start" => SoloTasks.Start(
                     RequiredString(request.Params, "name"),
@@ -265,6 +297,10 @@ public sealed class CoreRpcServer(
             return RpcResponse.Failure(request.Id, ex.GetType().Name, ex.Message);
         }
     }
+
+    private MacMapMaskRuntimePlatform MapMaskRuntimePlatform =>
+        _mapMaskRuntimePlatform ?? throw new CapabilityUnavailableException(
+            "MapMask runtime platform is unavailable until Core composition completes.");
 
     private bool TokenIsValid(string token)
     {
@@ -318,6 +354,8 @@ public sealed class CoreRpcServer(
                 throw;
             }
         }
+        if (_platformCallbacks.IsAttached)
+            _mapMaskRuntimePlatform?.Initialize();
         if (parameters?.Value<double?>("serverTimeZoneOffsetHours") is { } offsetHours)
             _scriptHostServices?.SetServerTimeZoneOffset(TimeSpan.FromHours(offsetHours));
         if (parameters?.Value<bool?>("jsNotificationEnabled") is { } notificationsEnabled)
@@ -382,7 +420,13 @@ public sealed class CoreRpcServer(
         }
     }
 
-    private object RuntimeStatus() => new { running = RequiredTriggerDispatcher().IsRunning };
+    private object RuntimeStatus() => new
+    {
+        running = RequiredTriggerDispatcher().IsRunning,
+        mapMask = _mapMaskRuntimePlatform?.GetStatus(),
+        mapMaskTrigger = GameTaskManager.TriggerDictionary?.GetValueOrDefault("MapMask")
+            is MapMaskTrigger trigger ? trigger.GetRuntimeStatus() : null
+    };
 
     private async Task<object> RefreshRuntimeGeometryAsync(CancellationToken cancellationToken)
     {
@@ -426,6 +470,7 @@ public sealed class CoreRpcServer(
         var triggers = GameTaskManager.TriggerDictionary
             ?? throw new CapabilityUnavailableException(
                 "The shared trigger registry is unavailable until core.initialize completes with the platform attached.");
+        var autoHangoutEventEnabled = _triggerSettings.GetAutoHangoutEventEnabled();
         return triggers
             .OrderByDescending(pair => pair.Value.Priority)
             .Select(pair => new
@@ -435,7 +480,10 @@ public sealed class CoreRpcServer(
                 enabled = pair.Value.IsEnabled,
                 priority = pair.Value.Priority,
                 exclusive = pair.Value.IsExclusive,
-                settingsAvailable = _triggerSettings.IsAvailable(pair.Key)
+                settingsAvailable = _triggerSettings.IsAvailable(pair.Key),
+                autoHangoutEventEnabled = pair.Key == "AutoSkip"
+                    ? autoHangoutEventEnabled
+                    : (bool?)null
             })
             .ToArray();
     }

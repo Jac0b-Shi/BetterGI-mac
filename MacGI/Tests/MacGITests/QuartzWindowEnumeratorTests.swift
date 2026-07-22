@@ -109,6 +109,20 @@ struct QuartzWindowEnumeratorTests {
         #expect(frame == CGRect(x: 633, y: 197, width: 1280, height: 720))
     }
 
+    @Test("Map picker captures only its control area")
+    @MainActor
+    func mapPickerUsesBoundedInteractiveFrames() {
+        let gameFrame = CGRect(x: 100, y: 80, width: 1920, height: 1080)
+        let collapsed = MapMaskPickerPanelController.panelFrame(in: gameFrame, expanded: false)
+        let expanded = MapMaskPickerPanelController.panelFrame(in: gameFrame, expanded: true)
+
+        #expect(collapsed == CGRect(x: 208, y: 102, width: 70, height: 70))
+        #expect(expanded.minX == collapsed.minX)
+        #expect(expanded.minY == collapsed.minY)
+        #expect(expanded.width < gameFrame.width / 2)
+        #expect(expanded.height < gameFrame.height)
+    }
+
     private func makeWindow(
         id: CGWindowID,
         ownerName: String,

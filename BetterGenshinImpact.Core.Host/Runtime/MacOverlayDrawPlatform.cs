@@ -6,7 +6,7 @@ using OpenCvSharp;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
-/// <summary>Forwards observable overlay state to Swift; macOS may choose not to render it.</summary>
+/// <summary>Forwards observable overlay state to the Swift HUD renderer.</summary>
 public sealed class MacOverlayDrawPlatform(
     PlatformCallbackChannel callbacks, string sessionToken, CancellationToken cancellationToken)
     : IOverlayDrawPlatform

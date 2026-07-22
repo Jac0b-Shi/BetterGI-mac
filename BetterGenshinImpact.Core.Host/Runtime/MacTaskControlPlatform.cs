@@ -61,7 +61,7 @@ public sealed class MacTaskControlPlatform(
     public ImageRegion CaptureToRectArea(bool forceNew)
     {
         var response = Invoke("capture.request", JObject.FromObject(new { forceNew }));
-        return captureRing.Read(response);
+        return captureRing.Read(response).DeriveTo1080P();
     }
 
     private void Dispatch(object value) =>

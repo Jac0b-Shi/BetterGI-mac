@@ -16,17 +16,16 @@ struct HUDView: View {
                         .padding(1)
                 }
 
-                if appState.showOverlayMapPoints {
-                    routeOverlay(size: size)
-                    miniMapOverlay(size: size)
-                }
+                CoreOverlayHUDLayer(
+                    store: appState.coreOverlayStore,
+                    size: size,
+                    capturePixelSize: appState.selectedWindow.capturePixelSize,
+                    opacity: appState.hudOpacity,
+                    showMapPoints: appState.showOverlayMapPoints,
+                    showRecognition: appState.showOverlayRecognition)
 
                 if appState.showOverlayDirections {
                     directionMarkers(size: size)
-                }
-
-                if appState.showOverlayRecognition {
-                    recognitionOverlay(size: size)
                 }
 
                 if appState.showOverlayMetrics {
@@ -61,13 +60,14 @@ struct HUDView: View {
     }
 
     private var statusOverlay: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             ForEach(appState.overlayStatusItems) { item in
                 HStack(spacing: 3) {
                     Text(item.glyph)
                         .font(.custom("FgiRegular", size: 12))
                     Text(item.name)
                         .font(.system(size: 12, weight: .semibold))
+                        .fixedSize()
                 }
                 .foregroundStyle(item.isEnabled ? Color(red: 0.58, green: 1.0, blue: 0.58).opacity(appState.hudOpacity) : Color.lightGray.opacity(appState.hudOpacity))
             }
@@ -80,13 +80,16 @@ struct HUDView: View {
     private var logOverlay: some View {
         VStack(alignment: .leading, spacing: 3) {
             ForEach(Array(appState.recentLogs.prefix(appState.hudMaxLogLines))) { entry in
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .top, spacing: 6) {
                     Text("[\(entry.timeText) \(entry.level.label)]")
                         .foregroundStyle(entry.level.tint)
+                        .fixedSize()
                     Text(entry.message)
                         .foregroundStyle(Color.lightGray.opacity(appState.hudOpacity))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                        .lineLimit(nil)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .layoutPriority(1)
                 }
                 .font(.system(size: 12, weight: .regular, design: .monospaced))
             }
@@ -161,56 +164,6 @@ struct HUDView: View {
         .allowsHitTesting(false)
     }
 
-    private func routeOverlay(size: CGSize) -> some View {
-        Canvas { context, canvasSize in
-            let points = appState.overlayMapPoints.map {
-                CGPoint(x: canvasSize.width * $0.xRatio, y: canvasSize.height * $0.yRatio)
-            }
-
-            guard points.count > 1 else { return }
-
-            var path = Path()
-            path.move(to: points[0])
-            for point in points.dropFirst() {
-                path.addLine(to: point)
-            }
-            context.stroke(path, with: .color(BGIColors.accent.opacity(0.55)), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
-        }
-        .frame(width: size.width, height: size.height)
-        .allowsHitTesting(false)
-    }
-
-    private func miniMapOverlay(size: CGSize) -> some View {
-        ZStack {
-            ForEach(appState.overlayMapPoints) { point in
-                mapPoint(point, size: size)
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    private func mapPoint(_ point: OverlayMapPoint, size: CGSize) -> some View {
-        VStack(spacing: 3) {
-            Circle()
-                .fill(point.tint.opacity(0.9))
-                .frame(width: 10, height: 10)
-                .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: 1))
-            Text(point.label)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.88))
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(Color.black.opacity(0.42))
-                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-        }
-        .shadow(color: .black.opacity(0.75), radius: 6)
-        .position(x: size.width * point.xRatio, y: size.height * point.yRatio)
-    }
-
-    private func recognitionOverlay(size: CGSize) -> some View {
-        EmptyView()
-    }
-
     private func uidCover(size: CGSize) -> some View {
         let rect = HUDOverlayGeometry.uidCoverRect(in: size)
         return Rectangle()
@@ -221,10 +174,147 @@ struct HUDView: View {
     }
 }
 
+private struct CoreOverlayHUDLayer: View {
+    @ObservedObject var store: CoreOverlayStore
+    let size: CGSize
+    let capturePixelSize: CGSize
+    let opacity: Double
+    let showMapPoints: Bool
+    let showRecognition: Bool
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if showMapPoints { mapMaskOverlay }
+            if showRecognition { recognitionOverlay }
+        }
+        .frame(width: size.width, height: size.height)
+        .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private var mapMaskOverlay: some View {
+        if store.state.isInBigMapUI {
+            mapPointCanvas(
+                points: store.state.mapPoints,
+                viewport: store.state.bigMapViewport,
+                diameter: max(20, 32 * size.height / 1080))
+            .frame(width: size.width, height: size.height)
+        } else {
+            let frame = HUDOverlayGeometry.miniMapFrame(in: size)
+            mapPointCanvas(
+                points: store.state.mapPoints,
+                viewport: store.state.miniMapViewport,
+                diameter: max(8, min(16, frame.width / 12)))
+            .frame(width: frame.width, height: frame.height)
+            .clipShape(Circle())
+            .position(x: frame.midX, y: frame.midY)
+        }
+    }
+
+    private func mapPointCanvas(
+        points: [CoreOverlayMapPoint], viewport: CGRect?, diameter: CGFloat
+    ) -> some View {
+        let iconURLs = Array(Set(points.compactMap(\.iconURL)))
+            .sorted { $0.absoluteString < $1.absoluteString }
+        return Canvas(rendersAsynchronously: true) { context, canvasSize in
+            guard let viewport, viewport.width > 0, viewport.height > 0 else { return }
+            let expandedViewport = viewport.insetBy(dx: -32, dy: -32)
+            for point in points where expandedViewport.contains(point.imagePosition) {
+                let center = CGPoint(
+                    x: (point.imagePosition.x - viewport.minX) * canvasSize.width / viewport.width,
+                    y: (point.imagePosition.y - viewport.minY) * canvasSize.height / viewport.height)
+                let rect = CGRect(
+                    x: center.x - diameter / 2, y: center.y - diameter / 2,
+                    width: diameter, height: diameter)
+                var marker = context
+                marker.opacity = point.isHidden ? 0.35 : opacity
+                marker.fill(
+                    Path(ellipseIn: rect),
+                    with: .color(Color(red: 0.20, green: 0.22, blue: 0.28)))
+                marker.stroke(
+                    Path(ellipseIn: rect),
+                    with: .color(Color(red: 0.83, green: 0.74, blue: 0.56)),
+                    lineWidth: max(1, diameter / 16))
+                if let iconURL = point.iconURL,
+                   let image = marker.resolveSymbol(id: iconURL.absoluteString) {
+                    marker.draw(image, in: rect.insetBy(dx: diameter * 0.12, dy: diameter * 0.12))
+                }
+            }
+        } symbols: {
+            ForEach(iconURLs, id: \.absoluteString) { url in
+                AsyncImage(url: url) { image in image.resizable().scaledToFit() } placeholder: {
+                    Color.clear
+                }
+                .frame(width: diameter, height: diameter)
+                .clipShape(Circle())
+                .tag(url.absoluteString)
+            }
+        }
+    }
+
+    private var recognitionOverlay: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(store.state.allRectangles) { item in
+                let rect = HUDOverlayGeometry.displayRect(
+                    item.rect, capturePixelSize: capturePixelSize, in: size)
+                Rectangle()
+                    .stroke(Color.lime.opacity(opacity), lineWidth: 2)
+                    .frame(width: rect.width, height: rect.height)
+                    .position(x: rect.midX, y: rect.midY)
+            }
+            ForEach(store.state.allLabels) { item in
+                let rect = HUDOverlayGeometry.displayRect(
+                    item.rect, capturePixelSize: capturePixelSize, in: size)
+                Rectangle()
+                    .stroke((item.recognized ? Color.lime : Color.red).opacity(opacity), lineWidth: 2)
+                    .frame(width: rect.width, height: rect.height)
+                    .position(x: rect.midX, y: rect.midY)
+                Text(item.text)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(item.recognized ? Color.lime : Color.red)
+                    .shadow(color: .black, radius: 2)
+                    .position(x: rect.minX + rect.width / 3, y: max(8, rect.minY - 8))
+            }
+            ForEach(store.state.allTexts) { item in
+                let point = HUDOverlayGeometry.displayPoint(
+                    item.position, capturePixelSize: capturePixelSize, in: size)
+                Text(item.text)
+                    .font(.system(size: max(12, 20 * size.height / 1080), weight: .bold, design: .monospaced))
+                    .foregroundStyle(Color.white.opacity(opacity))
+                    .shadow(color: .black, radius: 3)
+                    .position(point)
+            }
+        }
+    }
+}
+
 enum HUDOverlayGeometry {
+    static func displayRect(_ pixelRect: CGRect, capturePixelSize: CGSize, in displaySize: CGSize) -> CGRect {
+        guard capturePixelSize.width > 0, capturePixelSize.height > 0 else { return .zero }
+        return CGRect(
+            x: pixelRect.minX * displaySize.width / capturePixelSize.width,
+            y: pixelRect.minY * displaySize.height / capturePixelSize.height,
+            width: pixelRect.width * displaySize.width / capturePixelSize.width,
+            height: pixelRect.height * displaySize.height / capturePixelSize.height)
+    }
+
+    static func displayPoint(_ pixelPoint: CGPoint, capturePixelSize: CGSize, in displaySize: CGSize) -> CGPoint {
+        CGPoint(
+            x: pixelPoint.x * displaySize.width / max(1, capturePixelSize.width),
+            y: pixelPoint.y * displaySize.height / max(1, capturePixelSize.height))
+    }
+
     static func directionFrame(in size: CGSize) -> CGRect {
         let scale = size.width / 1920
         return CGRect(x: 43 * scale, y: 0, width: 250 * scale, height: 250 * scale)
+    }
+
+    static func miniMapFrame(in size: CGSize) -> CGRect {
+        CGRect(
+            x: 62 * size.width / 1920,
+            y: 19 * size.height / 1080,
+            width: 212 * size.height / 1080,
+            height: 212 * size.height / 1080)
     }
 
     static func uidCoverRect(in size: CGSize) -> CGRect {
@@ -240,4 +330,5 @@ enum HUDOverlayGeometry {
 
 private extension Color {
     static let lightGray = Color(red: 0.83, green: 0.83, blue: 0.83)
+    static let lime = Color(red: 0.2, green: 1.0, blue: 0.2)
 }

@@ -42,15 +42,15 @@ final class InputSafetyGate: ObservableObject {
 
     /// When `true`, all input actions are logged but NOT dispatched.
     /// Priority: checked BEFORE `realInputEnabled`.
-    @Published var dryRun = true
+    @Published var dryRun: Bool
 
     /// When `true`, the automation loop and ALL input is halted immediately.
     /// Must be manually reset by the user (NOT auto-cleared by start).
     @Published var emergencyStop = false
 
-    /// Armed signal: must be `true` for real input to leave the gate.
-    /// Even when `dryRun == false`, this must be ON before CGEvent dispatch.
-    @Published var realInputEnabled = false
+    /// Internal dispatch state. Normal launches enable it; explicit `--dry-run`
+    /// launches disable it before any Core callback can dispatch a CGEvent.
+    @Published var realInputEnabled: Bool
 
     /// Minimum interval between two consecutive real input actions (seconds).
     @Published var rateLimit: TimeInterval = 0.05
@@ -68,6 +68,11 @@ final class InputSafetyGate: ObservableObject {
 
     /// Count of `dryRun` results since last reset.
     private(set) var dryRunCount: Int = 0
+
+    init(dryRun: Bool = false, realInputEnabled: Bool = true) {
+        self.dryRun = dryRun
+        self.realInputEnabled = realInputEnabled
+    }
 
     /// Total actions processed (sum of all three).
     var totalActionCount: Int {

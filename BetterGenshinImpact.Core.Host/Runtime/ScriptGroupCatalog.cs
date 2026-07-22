@@ -2,6 +2,7 @@ using BetterGenshinImpact.Core.Host.Protocol;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script.Group;
 using BetterGenshinImpact.Core.Script.Project;
+using BetterGenshinImpact.Core.Script.Utils;
 using BetterGenshinImpact.Model;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -229,6 +230,34 @@ public sealed class ScriptGroupCatalog(RuntimeLayout layout)
         group.Projects.Clear();
         foreach (var project in result) group.AddProject(project);
     });
+
+    public object ExportMergedPathing(string name)
+    {
+        var group = ReadGroup(Resolve(name));
+        var exportRoot = Path.Combine(
+            layout.LogPath,
+            "exportMergerJson",
+            DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),
+            "AutoPathing");
+        var count = 0;
+        var pathingRoot = Path.Combine(layout.UserPath, "AutoPathing");
+
+        foreach (var project in group.Projects.Where(project => project.Type == "Pathing"))
+        {
+            var relativePath = Path.Combine(project.FolderName, project.Name);
+            var sourcePath = ResolveUnder(pathingRoot, relativePath);
+            if (!File.Exists(sourcePath))
+                throw new FileNotFoundException(
+                    $"Pathing project does not exist: {project.FolderName}/{project.Name}", sourcePath);
+
+            var destinationPath = ResolveUnder(exportRoot, relativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+            File.WriteAllText(destinationPath, JsonMerger.getMergePathingJson(sourcePath), Encoding.UTF8);
+            count++;
+        }
+
+        return new { path = exportRoot, count };
+    }
 
     public ScriptGroupSummary SetNextProject(string name, int projectIndex)
     {

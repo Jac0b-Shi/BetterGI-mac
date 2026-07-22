@@ -443,16 +443,6 @@ struct MapTrackingPage: View {
                 )
             }
 
-            BGIOriginalCard(icon: .fgi("\u{f279}"), title: "地图遮罩点位", subtitle: "Core draw-command sink 已接收状态；Swift 遮罩渲染尚不可用。") {
-                BGIUnavailableToggle(isOn: true)
-            } content: {
-                BGISettingLine(title: "显示小地图方位", subtitle: "在小地图周围显示东南西北文字。") {
-                    BGIUnavailableToggle(isOn: true)
-                }
-                BGISettingLine(title: "显示图像识别结果", subtitle: "实时显示各种图像识别的结果。") {
-                    BGIUnavailableToggle(isOn: false)
-                }
-            }
         }
     }
 }

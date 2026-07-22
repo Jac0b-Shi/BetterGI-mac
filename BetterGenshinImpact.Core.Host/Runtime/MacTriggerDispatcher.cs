@@ -107,9 +107,9 @@ public sealed class MacTriggerDispatcher(
     {
         foreach (var trigger in triggers)
         {
-            if (_previousCategory == content.CurrentGameUiCategory &&
-                (DateTime.Now - _categoryChangedAt).TotalSeconds > 30 &&
-                trigger.SupportedGameUiCategory != content.CurrentGameUiCategory)
+            if (!ShouldRunTrigger(
+                    trigger, content.CurrentGameUiCategory, _previousCategory,
+                    _categoryChangedAt, DateTime.Now))
                 continue;
 
             try
@@ -122,4 +122,14 @@ public sealed class MacTriggerDispatcher(
             }
         }
     }
+
+    internal static bool ShouldRunTrigger(
+        ITaskTrigger trigger,
+        GameUiCategory currentCategory,
+        GameUiCategory previousCategory,
+        DateTime categoryChangedAt,
+        DateTime now) =>
+        previousCategory != currentCategory ||
+        (now - categoryChangedAt).TotalSeconds <= 30 ||
+        trigger.SupportsGameUiCategory(currentCategory);
 }

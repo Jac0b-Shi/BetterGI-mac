@@ -5,6 +5,26 @@ import Testing
 @Suite("BetterGI Core input acknowledgement")
 struct BetterGICoreInputAcknowledgementTests {
     @MainActor
+    @Test("Normal launch uses real input and dry-run is explicit")
+    func launchInputPolicy() {
+        let normal = AppState(
+            resourceStore: temporaryStore("normal-input"),
+            isTargetWindowFrontmost: { _ in true },
+            launchArguments: ["betterGI-mac"])
+        #expect(!normal.safetyGate.dryRun)
+        #expect(normal.safetyGate.realInputEnabled)
+        #expect(normal.allowRuntimeRealInput)
+
+        let dryRun = AppState(
+            resourceStore: temporaryStore("dry-run"),
+            isTargetWindowFrontmost: { _ in true },
+            launchArguments: ["betterGI-mac", "--dry-run"])
+        #expect(dryRun.safetyGate.dryRun)
+        #expect(!dryRun.safetyGate.realInputEnabled)
+        #expect(!dryRun.allowRuntimeRealInput)
+    }
+
+    @MainActor
     @Test("Core input callback rejects a platform dispatch failure")
     func coreInputRejectsDispatchFailure() async throws {
         let appState = AppState(
@@ -27,10 +47,6 @@ struct BetterGICoreInputAcknowledgementTests {
         )
         appState.appStatus = .running
         appState.runtimeLifecycle = .running
-        appState.safetyGate.dryRun = false
-        appState.safetyGate.realInputEnabled = true
-        appState.allowRuntimeRealInput = true
-
         let adapter = BetterGICorePlatformAdapter(appState: appState)
         let error = await Task.detached {
             do {
@@ -83,6 +99,12 @@ struct BetterGICoreInputAcknowledgementTests {
         #expect(result.reason == "Automation runtime is not running")
     }
 
+}
+
+private func temporaryStore(_ name: String) -> BGIRuntimeResourceStore {
+    BGIRuntimeResourceStore(
+        rootURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent("bettergi-\(name)-\(UUID().uuidString)", isDirectory: true))
 }
 
 private struct RejectingInputDispatcher: InputDispatching {

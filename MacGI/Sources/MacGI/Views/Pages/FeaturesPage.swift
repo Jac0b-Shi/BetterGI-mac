@@ -153,7 +153,7 @@ struct FeaturesPage: View {
     @ViewBuilder
     private var mapMaskSettings: some View {
         if let settings = appState.mapMaskTriggerSettings {
-            BGISettingLine(title: "启用小地图遮罩", subtitle: "在小地图上显示点位") {
+            BGISettingLine(title: "启用小地图遮罩", subtitle: "在小地图上显示已选择的点位") {
                 Toggle("", isOn: Binding(
                     get: { settings.miniMapMaskEnabled },
                     set: { appState.saveMapMaskTriggerSettings(miniMapMaskEnabled: $0) }))

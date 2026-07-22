@@ -27,4 +27,28 @@ struct HUDOverlayGeometryTests {
                 height: 29.333333333333332
             ))
     }
+
+    @Test("Core pixel geometry maps to the HUD point grid")
+    func coreGeometryScaling() {
+        let source = CGRect(x: 1280, y: 720, width: 256, height: 144)
+        #expect(HUDOverlayGeometry.displayRect(
+            source, capturePixelSize: CGSize(width: 2560, height: 1440),
+            in: CGSize(width: 1280, height: 720)) == CGRect(x: 640, y: 360, width: 128, height: 72))
+        #expect(HUDOverlayGeometry.displayRect(
+            CGRect(x: 960, y: 540, width: 192, height: 108),
+            capturePixelSize: CGSize(width: 1920, height: 1080),
+            in: CGSize(width: 1920, height: 1080)) == CGRect(x: 960, y: 540, width: 192, height: 108))
+    }
+
+    @Test("Mini-map overlay follows the upstream capture grid")
+    func miniMapGrid() {
+        #expect(HUDOverlayGeometry.miniMapFrame(in: CGSize(width: 1920, height: 1080)) ==
+            CGRect(x: 62, y: 19, width: 212, height: 212))
+        #expect(HUDOverlayGeometry.miniMapFrame(in: CGSize(width: 2560, height: 1440)) ==
+            CGRect(
+                x: 82.66666666666667,
+                y: 25.333333333333332,
+                width: 282.6666666666667,
+                height: 282.6666666666667))
+    }
 }

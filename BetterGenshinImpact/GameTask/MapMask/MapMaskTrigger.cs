@@ -29,6 +29,9 @@ public class MapMaskTrigger : ITaskTrigger
 
     public GameUiCategory SupportedGameUiCategory => GameUiCategory.Unknown;
 
+    public bool SupportsGameUiCategory(GameUiCategory category) =>
+        category is GameUiCategory.Unknown or GameUiCategory.BigMap;
+
     private MapMaskConfig Config => _platform.Config;
 
     private readonly TemplateMatchStabilityDetector _detector = new();
@@ -71,6 +74,33 @@ public class MapMaskTrigger : ITaskTrigger
     private int _bigMapWorkerRunning;
     private ComputeWorkItem? _pendingMiniMapCompute;
     private int _miniMapWorkerRunning;
+    private long _captureCount;
+    private long _bigMapMatchAttempts;
+    private long _bigMapMatchSuccesses;
+    private long _bigMapMatchFailures;
+    private long _bigMapMatchRejected;
+    private long _uiApplyCount;
+    private long _uiApplyFailures;
+    private int _lastCaptureInBigMap;
+    private string? _lastBigMapMatchError;
+    private string? _lastBigMapRawRect;
+    private string? _lastUiApplyError;
+
+    public object GetRuntimeStatus() => new
+    {
+        captures = Interlocked.Read(ref _captureCount),
+        lastCaptureInBigMap = Volatile.Read(ref _lastCaptureInBigMap) == 1,
+        bigMapMatchAttempts = Interlocked.Read(ref _bigMapMatchAttempts),
+        bigMapMatchSuccesses = Interlocked.Read(ref _bigMapMatchSuccesses),
+        bigMapMatchFailures = Interlocked.Read(ref _bigMapMatchFailures),
+        bigMapMatchRejected = Interlocked.Read(ref _bigMapMatchRejected),
+        lastBigMapMatchError = Volatile.Read(ref _lastBigMapMatchError),
+        lastBigMapRawRect = Volatile.Read(ref _lastBigMapRawRect),
+        uiApplyScheduled = Volatile.Read(ref _uiApplyScheduled) == 1,
+        uiApplyCount = Interlocked.Read(ref _uiApplyCount),
+        uiApplyFailures = Interlocked.Read(ref _uiApplyFailures),
+        lastUiApplyError = Volatile.Read(ref _lastUiApplyError)
+    };
 
     /// <summary>
     /// 初始化触发器状态，并在关闭时同步隐藏遮罩UI
@@ -110,6 +140,8 @@ public class MapMaskTrigger : ITaskTrigger
         {
             var region = content.CaptureRectArea;
             var inBigMapUi = content.CurrentGameUiCategory == GameUiCategory.BigMap || Bv.IsInBigMapUi(region);
+            Interlocked.Increment(ref _captureCount);
+            Volatile.Write(ref _lastCaptureInBigMap, inBigMapUi ? 1 : 0);
             var mapMatchingMethod = _platform.MapMatchingMethod;
             PendingUiUpdate? update = null;
 
@@ -302,23 +334,44 @@ public class MapMaskTrigger : ITaskTrigger
             prevRect = _prevRect;
         }
 
-        var sceneMap = (SceneBaseMap)MapManager.GetMap(MapTypes.Teyvat, workItem.MapMatchingMethod);
-        var rect256 = BigMapTeyvat256Layer.GetInstance(sceneMap).GetBigMapRect(workItem.Mat, prevRect);
-        if (rect256 != default)
+        Interlocked.Increment(ref _bigMapMatchAttempts);
+        OpenCvSharp.Rect rect256;
+        try
         {
-            if (rect256 is { Width: < 50, Height: < 40 } || rect256 is { Width: > 3000, Height: > 1800 })
-            {
-                lock (_prevRectLock)
-                {
-                    _prevRect = default;
-                }
-                return;
-            }
+            var sceneMap = (SceneBaseMap)MapManager.GetMap(MapTypes.Teyvat, workItem.MapMatchingMethod);
+            rect256 = BigMapTeyvat256Layer.GetInstance(sceneMap).GetBigMapRect(workItem.Mat, prevRect);
+            Volatile.Write(ref _lastBigMapMatchError, null);
+        }
+        catch (Exception exception)
+        {
+            Interlocked.Increment(ref _bigMapMatchFailures);
+            Volatile.Write(ref _lastBigMapMatchError, exception.ToString());
+            throw;
+        }
+        if (rect256 == default)
+        {
+            Interlocked.Increment(ref _bigMapMatchFailures);
+            return;
+        }
 
+        Volatile.Write(ref _lastBigMapRawRect,
+            $"{rect256.X},{rect256.Y},{rect256.Width},{rect256.Height}");
+
+        if (rect256 is { Width: < 50, Height: < 40 } || rect256 is { Width: > 3000, Height: > 1800 })
+        {
+            Interlocked.Increment(ref _bigMapMatchRejected);
             lock (_prevRectLock)
             {
-                _prevRect = rect256;
+                _prevRect = default;
             }
+            return;
+        }
+
+        Interlocked.Increment(ref _bigMapMatchSuccesses);
+
+        lock (_prevRectLock)
+        {
+            _prevRect = rect256;
         }
 
         const int s = TeyvatMap.BigMap256ScaleTo2048;
@@ -365,7 +418,22 @@ public class MapMaskTrigger : ITaskTrigger
     /// <param name="update">待应用的UI更新</param>
     private void QueueUiUpdate(PendingUiUpdate update)
     {
-        Interlocked.Exchange(ref _pendingUiUpdate, update);
+        while (true)
+        {
+            var current = Volatile.Read(ref _pendingUiUpdate);
+            var merged = new PendingUiUpdate
+            {
+                IsInBigMapUi = update.IsInBigMapUi ?? current?.IsInBigMapUi,
+                BigMapViewport = update.BigMapViewport ?? current?.BigMapViewport,
+                MiniMapViewport = update.MiniMapViewport ?? current?.MiniMapViewport
+            };
+            if (ReferenceEquals(
+                    Interlocked.CompareExchange(ref _pendingUiUpdate, merged, current),
+                    current))
+            {
+                break;
+            }
+        }
         TryScheduleUiApply();
     }
 
@@ -385,18 +453,31 @@ public class MapMaskTrigger : ITaskTrigger
     /// </summary>
     private void ApplyPendingUiUpdate()
     {
-        var update = Interlocked.Exchange(ref _pendingUiUpdate, null);
-        if (update != null)
+        try
         {
-            _platform.Publish(Config.Enabled
-                ? new(update.IsInBigMapUi, update.BigMapViewport, update.MiniMapViewport)
-                : new(false, new(0, 0, 0, 0), new(0, 0, 0, 0)));
+            var update = Interlocked.Exchange(ref _pendingUiUpdate, null);
+            if (update != null)
+            {
+                _platform.Publish(Config.Enabled
+                    ? new(update.IsInBigMapUi, update.BigMapViewport, update.MiniMapViewport)
+                    : new(false, new(0, 0, 0, 0), new(0, 0, 0, 0)));
+                Interlocked.Increment(ref _uiApplyCount);
+                Volatile.Write(ref _lastUiApplyError, null);
+            }
         }
-
-        Interlocked.Exchange(ref _uiApplyScheduled, 0);
-        if (Volatile.Read(ref _pendingUiUpdate) != null)
+        catch (Exception exception)
         {
-            TryScheduleUiApply();
+            Interlocked.Increment(ref _uiApplyFailures);
+            Volatile.Write(ref _lastUiApplyError, exception.ToString());
+            Logger.LogError(exception, "地图遮罩 UI 更新失败");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _uiApplyScheduled, 0);
+            if (Volatile.Read(ref _pendingUiUpdate) != null)
+            {
+                TryScheduleUiApply();
+            }
         }
     }
 }

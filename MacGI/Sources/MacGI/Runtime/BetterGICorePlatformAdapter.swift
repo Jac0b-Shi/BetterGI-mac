@@ -368,15 +368,14 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             }
             return ["acknowledged": true]
         case "overlay.command":
-            guard let parameters,
-                  let name = parameters["name"] as? String,
-                  let operation = parameters["operation"] as? String
-            else {
-                throw BetterGICorePlatformAdapterError.invalidParameters(
-                    "overlay.command requires name and operation."
-                )
+            guard let parameters else {
+                throw BetterGICorePlatformAdapterError.invalidParameters("overlay.command requires parameters.")
             }
-            appState.addLog(.debug, "Core overlay \(operation): \(name)")
+            do {
+                try appState.applyCoreOverlayCommand(parameters)
+            } catch {
+                throw BetterGICorePlatformAdapterError.invalidParameters(error.localizedDescription)
+            }
             return ["acknowledged": true]
         default:
             throw BetterGICorePlatformAdapterError.unsupportedMethod(method)

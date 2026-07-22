@@ -166,9 +166,9 @@ rg -q 'AttachRuntimeArtifactInitializer' BetterGenshinImpact.Core.Host/Program.c
   || fail "published Core Host does not provision locked runtime artifacts"
 rg -q 'EnsureInstalledAsync' BetterGenshinImpact.Core.Host/Runtime/RuntimeArtifactProvisioner.cs \
   || fail "Core runtime artifact provisioner is not source-lock backed"
-rg -Fq '| Live game execution | partial / blocked on explicit input authorization |' Docs/core-extraction-map.md \
+rg -Fq '| Live game execution | partial |' Docs/core-extraction-map.md \
   && rg -q 'overall first-step status remains \*\*partial\*\* until the four game-dependent projects complete' Docs/core-extraction-map.md \
-  || fail "completion map must retain the explicit-input live-game Gate"
+  || fail "completion map must retain the real-game execution Gate"
 
 if rg -n 'BGIJSScriptRuntime|BGIScriptGroupScheduler' MacGI/Sources/MacGI MacGI/Package.swift; then
   fail "Swift owns BetterGI script execution or scheduling again"
@@ -215,6 +215,29 @@ rg -q 'Core input callback rejects a platform dispatch failure' \
   || fail "Swift tests do not prove failed CGEvent dispatch is rejected back to Core"
 rg -q 'return \.blocked\(reason: reason\)' MacGI/Sources/MacGI/App/AppState.swift \
   || fail "Swift input dispatch failures can still be acknowledged to Core"
+if rg -n -U 'case "overlay\.command":.*?addLog\([^\n]*Core overlay.*?return \["acknowledged": true\]' \
+  MacGI/Sources/MacGI/Runtime/BetterGICorePlatformAdapter.swift; then
+  fail "Swift still acknowledges overlay commands without applying them"
+fi
+rg -q 'applyCoreOverlayCommand' MacGI/Sources/MacGI/Runtime/BetterGICorePlatformAdapter.swift \
+  && rg -q 'store\.state\.allRectangles' MacGI/Sources/MacGI/Views/HUDView.swift \
+  || fail "Core overlay commands are not rendered by the Swift HUD"
+rg -q 'operation = "setMapPointData"' BetterGenshinImpact.Core.Host/Runtime/MacMapMaskRuntimePlatform.cs \
+  && rg -q 'operation = "setMapViewport"' BetterGenshinImpact.Core.Host/Runtime/MacMapMaskRuntimePlatform.cs \
+  && rg -q 'store\.state\.mapPoints' MacGI/Sources/MacGI/Views/HUDView.swift \
+  && rg -q 'case "setMapPointData"' MacGI/Sources/MacGI/Model/CoreOverlayState.swift \
+  && rg -q 'case "setMapViewport"' MacGI/Sources/MacGI/Model/CoreOverlayState.swift \
+  || fail "MapMask point data and viewport updates are not independently connected to the Swift HUD"
+if rg -n '@Published[^\n]*coreOverlay' MacGI/Sources/MacGI/App/AppState.swift; then
+  fail "high-frequency Core overlay state must not invalidate the entire AppState UI tree"
+fi
+if rg -n -U 'operation = "setMapViewport".*?points\s*=' \
+  BetterGenshinImpact.Core.Host/Runtime/MacMapMaskRuntimePlatform.cs; then
+  fail "MapMask viewport updates must not resend the point collection"
+fi
+if rg -n -U 'recognitionOverlay\([^)]*\).*?EmptyView\(\)' MacGI/Sources/MacGI/Views/HUDView.swift; then
+  fail "Recognition overlay regressed to an empty production view"
+fi
 rg -q 'Failed event clears the active task and exposes the Core error' \
   MacGI/Tests/MacGITests/BetterGICoreSchedulerEventTests.swift \
   || fail "Swift tests do not prove scheduler failed state reaches AppState"
@@ -450,10 +473,14 @@ rg -q '_executionServices\.CreatePathExecutor' \
 if rg -n 'Toggle\("", isOn: \.constant\(project\.status' MacGI/Sources/MacGI/Views/Pages --glob '*.swift'; then
   fail "Scheduler project controls regressed to a read-only fake toggle"
 fi
-rg -q 'Toggle\("Dry-Run"' MacGI/Sources/MacGI/Views/Pages --glob '*.swift' \
-  && rg -q 'Toggle\("真实输入"' MacGI/Sources/MacGI/Views/Pages --glob '*.swift' \
-  && rg -q 'Toggle\("Core Runtime Input"' MacGI/Sources/MacGI/Views/Pages --glob '*.swift' \
-  || fail "Scheduler real-input authorization controls are not reachable in production UI"
+if rg -n 'Toggle\("(Dry-Run|真实输入|Core Runtime Input)"' MacGI/Sources/MacGI/Views/Pages --glob '*.swift'; then
+  fail "Development input authorization controls are exposed in production UI"
+fi
+rg -q -- '--dry-run' MacGI/Sources/MacGI/App/AppState.swift \
+  || fail "Dry-Run is not controlled by an explicit launch argument"
+if rg -n -- '--allow-real-input' MacGI/Sources/MacGI Docs/core-extraction-map.md; then
+  fail "Real input incorrectly requires a command-line opt-in"
+fi
 rg -q '@Published var isHUDVisible = false' MacGI/Sources/MacGI/App/AppState.swift \
   && rg -q 'if self\.showHUDOnStart' MacGI/Sources/MacGI/App/AppState.swift \
   || fail "HUD visibility is not bound to successful runtime start/stop"
@@ -469,6 +496,18 @@ fi
 rg -q 'one failing macOS trigger stopped later triggers from processing the same frame' \
   Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
   || fail "macOS trigger dispatcher does not verify per-trigger exception isolation"
+rg -q 'trigger\.SupportsGameUiCategory\(content\.CurrentGameUiCategory\)' \
+  BetterGenshinImpact/GameTask/TaskTriggerDispatcher.cs \
+  || fail "Windows trigger dispatcher does not honor shared multi-category trigger semantics"
+rg -q 'trigger\.SupportsGameUiCategory\(currentCategory\)' \
+  BetterGenshinImpact.Core.Host/Runtime/MacTriggerDispatcher.cs \
+  || fail "macOS trigger dispatcher does not honor shared multi-category trigger semantics"
+rg -q 'MapMask did not preserve its upstream main-UI behavior while adding stable big-map updates' \
+  Test/BetterGenshinImpact.Core.Host.Fast.Verification/TriggerSettingsSuite.cs \
+  || fail "MapMask stable big-map category behavior is not verified"
+rg -q 'category is GameUiCategory\.Unknown or GameUiCategory\.BigMap' \
+  BetterGenshinImpact/GameTask/MapMask/MapMaskTrigger.cs \
+  || fail "MapMask does not declare both upstream main and big-map UI categories"
 rg -q 'macOS trigger dispatcher did not restart after a prior loop failure' \
   Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
   || fail "macOS trigger dispatcher does not verify restart after loop failure"

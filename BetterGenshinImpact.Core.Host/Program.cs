@@ -193,6 +193,7 @@ GameLoadingRuntimePlatform.Configure(new MacGameLoadingRuntimePlatform(
 var mapMaskRuntimePlatform = new MacMapMaskRuntimePlatform(
     layout, loggerFactory, server.PlatformCallbacks, sessionToken, shutdown.Token);
 MapMaskRuntimePlatform.Configure(mapMaskRuntimePlatform);
+server.AttachMapMaskRuntimePlatform(mapMaskRuntimePlatform);
 server.TriggerSettings.AttachMapMaskUpdated(mapMaskRuntimePlatform.UpdateConfig);
 SkillCdRuntimePlatform.Configure(new MacSkillCdRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory,

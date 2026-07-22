@@ -9,6 +9,7 @@ struct BetterGICoreTriggerState: Sendable, Equatable {
     let priority: Int
     let exclusive: Bool
     let settingsAvailable: Bool
+    let autoHangoutEventEnabled: Bool?
 }
 
 struct BetterGICoreAutoEatTriggerSettings: Sendable, Equatable {
@@ -36,6 +37,22 @@ struct BetterGICoreQuickTeleportTriggerSettings: Sendable, Equatable {
 
 struct BetterGICoreMapMaskTriggerSettings: Sendable, Equatable {
     let miniMapMaskEnabled: Bool
+}
+
+struct BetterGICoreMapMaskPickerSettings: Sendable, Equatable {
+    let mapPointApiProvider: String
+    let mapPointApiProviderOptions: [String]
+    let hoYoLabLanguage: String
+    let hoYoLabLanguageOptions: [String]
+}
+
+struct BetterGICoreMapMaskLabel: Sendable, Equatable, Identifiable {
+    let id: String
+    let parentID: String
+    let name: String
+    let iconURL: String
+    let pointCount: Int
+    let children: [BetterGICoreMapMaskLabel]
 }
 
 struct BetterGICoreSoloTask: Sendable, Equatable, Identifiable {
@@ -490,6 +507,15 @@ actor BetterGICoreProcessSupervisor {
         return path
     }
 
+    func exportMergedPathing(groupName: String) throws -> (path: String, count: Int) {
+        guard let result = try runningClient().request(
+            method: "catalog.exportMergedPathing", parameters: ["name": groupName]) as? [String: Any],
+              let path = result["path"] as? String,
+              let count = result["count"] as? Int
+        else { throw BetterGICoreRPCError.protocolViolation("Invalid merged pathing export result.") }
+        return (path, count)
+    }
+
     func startRuntime() throws {
         guard case .running = state, let client else {
             throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
@@ -558,7 +584,8 @@ actor BetterGICoreProcessSupervisor {
             return BetterGICoreTriggerState(
                 name: name, displayName: displayName, enabled: enabled,
                 priority: priority, exclusive: exclusive,
-                settingsAvailable: settingsAvailable
+                settingsAvailable: settingsAvailable,
+                autoHangoutEventEnabled: item["autoHangoutEventEnabled"] as? Bool
             )
         }
     }
@@ -632,6 +659,54 @@ actor BetterGICoreProcessSupervisor {
             ]))
     }
 
+    func mapMaskPickerSettings() throws -> BetterGICoreMapMaskPickerSettings {
+        guard case .running = state, let client,
+              let value = try client.request(method: "mapMask.settings.get") as? [String: Any] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask picker settings result.")
+        }
+        return try decodeMapMaskPickerSettings(value)
+    }
+
+    func saveMapMaskPickerSettings(_ settings: BetterGICoreMapMaskPickerSettings) throws
+        -> BetterGICoreMapMaskPickerSettings {
+        guard case .running = state, let client,
+              let value = try client.request(method: "mapMask.settings.save", parameters: ["settings": [
+                "mapPointApiProvider": settings.mapPointApiProvider,
+                "hoYoLabLanguage": settings.hoYoLabLanguage,
+              ]]) as? [String: Any] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask picker settings result.")
+        }
+        return try decodeMapMaskPickerSettings(value)
+    }
+
+    func mapMaskPointCatalog() throws -> [BetterGICoreMapMaskLabel] {
+        guard case .running = state, let client,
+              let values = try client.request(method: "mapMask.catalog") as? [[String: Any]] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask catalog result.")
+        }
+        return try values.map(decodeMapMaskLabel)
+    }
+
+    func mapMaskPointSelection() throws -> Set<String> {
+        guard case .running = state, let client,
+              let value = try client.request(method: "mapMask.selection.get") as? [String: Any],
+              let selectedIDs = value["selectedIds"] as? [String] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask selection result.")
+        }
+        return Set(selectedIDs)
+    }
+
+    func saveMapMaskPointSelection(_ selectedIDs: Set<String>) throws -> Set<String> {
+        guard case .running = state, let client,
+              let value = try client.request(
+                method: "mapMask.selection.save",
+                parameters: ["selectedIds": selectedIDs.sorted()]) as? [String: Any],
+              let savedIDs = value["selectedIds"] as? [String] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask selection result.")
+        }
+        return Set(savedIDs)
+    }
+
     private func requestTriggerSettings(
         method: String, name: String, settings: [String: Any]? = nil
     ) throws -> [String: Any] {
@@ -684,6 +759,35 @@ actor BetterGICoreProcessSupervisor {
             throw BetterGICoreRPCError.protocolViolation("Invalid MapMask trigger settings.")
         }
         return .init(miniMapMaskEnabled: enabled)
+    }
+
+    private func decodeMapMaskPickerSettings(_ value: [String: Any]) throws
+        -> BetterGICoreMapMaskPickerSettings {
+        guard let provider = value["mapPointApiProvider"] as? String,
+              let providerOptions = value["mapPointApiProviderOptions"] as? [String],
+              let language = value["hoYoLabLanguage"] as? String,
+              let languageOptions = value["hoYoLabLanguageOptions"] as? [String] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask picker settings.")
+        }
+        return .init(
+            mapPointApiProvider: provider,
+            mapPointApiProviderOptions: providerOptions,
+            hoYoLabLanguage: language,
+            hoYoLabLanguageOptions: languageOptions)
+    }
+
+    private func decodeMapMaskLabel(_ value: [String: Any]) throws -> BetterGICoreMapMaskLabel {
+        guard let id = value["id"] as? String,
+              let parentID = value["parentId"] as? String,
+              let name = value["name"] as? String,
+              let iconURL = value["iconUrl"] as? String,
+              let pointCount = value["pointCount"] as? Int,
+              let childValues = value["children"] as? [[String: Any]] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask label result.")
+        }
+        return .init(
+            id: id, parentID: parentID, name: name, iconURL: iconURL,
+            pointCount: pointCount, children: try childValues.map(decodeMapMaskLabel))
     }
 
     func setTriggerEnabled(name: String, enabled: Bool) throws {

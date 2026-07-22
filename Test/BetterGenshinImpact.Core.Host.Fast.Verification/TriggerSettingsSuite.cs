@@ -6,6 +6,7 @@ using BetterGenshinImpact.Core.Host.Runtime;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.AutoPick;
+using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.Platform.Abstractions;
 using BetterGenshinImpact.Verification.Framework;
@@ -19,6 +20,21 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
 
     public async Task RunAsync(VerificationContext context, CancellationToken cancellationToken)
     {
+        var mapMaskCategoryTrigger = new MapMaskCategoryTrigger();
+        var now = DateTime.UtcNow;
+        var stableCategorySince = now - TimeSpan.FromSeconds(31);
+        context.Require(
+            MacTriggerDispatcher.ShouldRunTrigger(
+                mapMaskCategoryTrigger, GameUiCategory.BigMap, GameUiCategory.BigMap,
+                stableCategorySince, now) &&
+            MacTriggerDispatcher.ShouldRunTrigger(
+                mapMaskCategoryTrigger, GameUiCategory.Unknown, GameUiCategory.Unknown,
+                stableCategorySince, now) &&
+            !MacTriggerDispatcher.ShouldRunTrigger(
+                mapMaskCategoryTrigger, GameUiCategory.Talk, GameUiCategory.Talk,
+                stableCategorySince, now),
+            "MapMask did not preserve its upstream main-UI behavior while adding stable big-map updates.");
+
         var root = Path.Combine(Path.GetTempPath(), $"bettergi-fast-{Guid.NewGuid():N}");
         try
         {
@@ -106,6 +122,19 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
         public bool IsExclusive => false;
         public int InitCount { get; private set; }
         public void Init() => InitCount++;
+        public void OnCapture(CaptureContent content) { }
+    }
+
+    private sealed class MapMaskCategoryTrigger : ITaskTrigger
+    {
+        public string Name => "地图遮罩";
+        public bool IsEnabled { get; set; }
+        public int Priority => 1;
+        public bool IsExclusive => false;
+        public GameUiCategory SupportedGameUiCategory => GameUiCategory.Unknown;
+        public bool SupportsGameUiCategory(GameUiCategory category) =>
+            category is GameUiCategory.Unknown or GameUiCategory.BigMap;
+        public void Init() { }
         public void OnCapture(CaptureContent content) { }
     }
 

@@ -95,6 +95,14 @@ using (var captured = new SharedCaptureRingReader(layout).Read(JObject.FromObjec
     Require(captured.Width == 2 && captured.Height == 1 && captured.At<OpenCvSharp.Vec4b>(0, 1)[2] == 6,
         "shared capture ring did not preserve BGRA pixels and dimensions");
 }
+using (var source = new OpenCvSharp.Mat(1440, 2560, OpenCvSharp.MatType.CV_8UC4))
+using (var capture = new BetterGenshinImpact.GameTask.Model.Area.GameCaptureRegion(source, 0, 0))
+using (var derived = capture.DeriveTo1080P())
+{
+    Require(derived.Width == 1920 && derived.Height == 1080 &&
+            derived.ConvertPositionToGameCaptureRegion(960, 540) == (1280, 720),
+        "1440p capture did not preserve upstream 1080p recognition and coordinate mapping semantics");
+}
 var groupPath = Path.Combine(layout.ScriptGroupPath, "狗粮+锄地.json");
 await File.WriteAllTextAsync(groupPath, """
     {
@@ -398,6 +406,7 @@ GameLoadingRuntimePlatform.Configure(triggerGameLoadingPlatform);
 var mapMaskPlatform = new MacMapMaskRuntimePlatform(
     layout, loggerFactory, server.PlatformCallbacks, sessionToken, cancellation.Token);
 MapMaskRuntimePlatform.Configure(mapMaskPlatform);
+server.AttachMapMaskRuntimePlatform(mapMaskPlatform);
 server.TriggerSettings.AttachMapMaskUpdated(mapMaskPlatform.UpdateConfig);
 SkillCdRuntimePlatform.Configure(new MacSkillCdRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, loggerFactory,
@@ -513,6 +522,7 @@ try
     using var initializationMetricsCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
     var initializationMetricsCount = 0;
     var initializationOverlayCount = 0;
+    var initializationOverlayOperations = new System.Collections.Concurrent.ConcurrentBag<string>();
     var initializationMetricsResponder = Task.Run(async () =>
     {
         try
@@ -524,7 +534,7 @@ try
                 object result = callback.Method switch
                 {
                     "window.metrics" => MetricsResult(),
-                    "overlay.command" => OverlayResult(),
+                    "overlay.command" => OverlayResult(callback),
                     _ => throw new InvalidOperationException(
                         $"Trigger initialization sent unexpected callback {callback.Method}.")
                 };
@@ -547,9 +557,13 @@ try
                 };
             }
 
-            object OverlayResult()
+            object OverlayResult(RpcRequest request)
             {
                 initializationOverlayCount++;
+                if (request.Params?["operation"]?.Value<string>() is { } operation)
+                {
+                    initializationOverlayOperations.Add(operation);
+                }
                 return new { acknowledged = true };
             }
         }
@@ -560,7 +574,8 @@ try
         JObject.FromObject(new { runtimeRoot = layout.RootPath }), cancellation.Token);
     Require(initializedWithPlatform.Error is null &&
             JObject.FromObject(initializedWithPlatform.Result!).Value<bool>("platformAssetsInitialized") &&
-            initializationMetricsCount > 0 && initializationOverlayCount > 0,
+            initializationMetricsCount > 0 && initializationOverlayCount > 0 &&
+            initializationOverlayOperations.Contains("setMapPointData"),
         initializedWithPlatform.Error?.Message ?? "core.initialize did not initialize production trigger assets");
     var initialRuntimeStatus = await ExchangeAsync(
         connection, "runtime-status-stopped", "runtime.status", sessionToken, null, cancellation.Token);
@@ -703,6 +718,24 @@ try
     Require(productionTriggerList.Error is null && productionTriggerNames.SetEquals(new[]
         { "GameLoading", "AutoPick", "QuickTeleport", "AutoSkip", "AutoFish", "AutoEat", "MapMask", "SkillCd" }),
         productionTriggerList.Error?.Message ?? "core.initialize did not register the exact production trigger set");
+    var mapMaskTriggerSettings = await ExchangeAsync(
+        connection, "map-mask-trigger-settings", "trigger.settings.get", sessionToken,
+        JObject.FromObject(new { name = "MapMask" }), cancellation.Token);
+    var mapMaskTriggerSettingsJson = JObject.FromObject(mapMaskTriggerSettings.Result!);
+    Require(mapMaskTriggerSettings.Error is null &&
+            mapMaskTriggerSettingsJson.Properties().Select(property => property.Name)
+                .SequenceEqual(new[] { "miniMapMaskEnabled" }),
+        mapMaskTriggerSettings.Error?.Message ??
+        "MapMask trigger settings exposed map picker configuration outside the game HUD.");
+    var mapMaskPickerSettings = await ExchangeAsync(
+        connection, "map-mask-picker-settings", "mapMask.settings.get", sessionToken,
+        null, cancellation.Token);
+    var mapMaskPickerSettingsJson = JObject.FromObject(mapMaskPickerSettings.Result!);
+    Require(mapMaskPickerSettings.Error is null &&
+            mapMaskPickerSettingsJson["mapPointApiProvider"]?.Value<string>() is { Length: > 0 } &&
+            mapMaskPickerSettingsJson["mapPointApiProviderOptions"] is JArray,
+        mapMaskPickerSettings.Error?.Message ??
+        "MapMask game-HUD settings were not exposed through the dedicated RPC boundary.");
     var autoEatTriggerSettings = await ExchangeAsync(
         connection, "auto-eat-trigger-settings", "trigger.settings.get", sessionToken,
         JObject.FromObject(new { name = "AutoEat" }), cancellation.Token);
@@ -754,7 +787,6 @@ try
     }
     Require(successfulTriggerFrames == 1,
         "one failing macOS trigger stopped later triggers from processing the same frame");
-
     using var restartDispatcherCancellation = new CancellationTokenSource();
     var dispatcherRuns = 0;
     var restartableDispatcher = new MacTriggerDispatcher(

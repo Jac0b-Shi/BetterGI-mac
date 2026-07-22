@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoEat;
 using BetterGenshinImpact.GameTask.AutoPick;
+using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.MapMask;
 using BetterGenshinImpact.GameTask.QuickTeleport;
 using Newtonsoft.Json.Linq;
@@ -120,6 +121,15 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
         }
     }
 
+    public bool GetAutoHangoutEventEnabled()
+    {
+        lock (_lock)
+        {
+            return LoadConfig<AutoSkipConfig>(LoadRoot(), "autoSkipConfig")
+                .AutoHangoutEventEnabled;
+        }
+    }
+
     private object SaveAutoEat(JObject settings)
     {
         var checkInterval = RequiredNonNegative(settings, "checkInterval");
@@ -170,6 +180,40 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
         }
     }
 
+    public object GetMapMaskPickerSettings()
+    {
+        lock (_lock)
+        {
+            return DescribeMapMaskPicker(LoadConfig<MapMaskConfig>(LoadRoot(), "mapMaskConfig"));
+        }
+    }
+
+    public object SaveMapMaskPickerSettings(JObject settings)
+    {
+        var providerText = RequiredOption(settings, "mapPointApiProvider",
+            nameof(MapPointApiProvider.MihoyoMap),
+            nameof(MapPointApiProvider.KongyingTavern),
+            nameof(MapPointApiProvider.HoYoLab));
+        var language = settings.Value<string>("hoYoLabLanguage")?.Trim().ToLowerInvariant()
+            ?? throw new ArgumentException("hoYoLabLanguage is required.");
+        if (language is not (MapMaskConfig.HoYoLabLanguageEnUs or
+            MapMaskConfig.HoYoLabLanguagePtPt or MapMaskConfig.HoYoLabLanguageEsEs))
+        {
+            throw new ArgumentException("Unsupported HoYoLab language.");
+        }
+
+        lock (_lock)
+        {
+            var root = LoadRoot();
+            var config = LoadConfig<MapMaskConfig>(root, "mapMaskConfig");
+            config.MapPointApiProvider = Enum.Parse<MapPointApiProvider>(providerText);
+            config.HoYoLabLanguage = language;
+            SaveConfig(root, "mapMaskConfig", config);
+            _mapMaskUpdated?.Invoke(config);
+            return DescribeMapMaskPicker(config);
+        }
+    }
+
     private static object Describe(AutoEatConfig config) => new
     {
         checkInterval = config.CheckInterval,
@@ -205,7 +249,20 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
 
     private static object Describe(MapMaskConfig config) => new
     {
-        miniMapMaskEnabled = config.MiniMapMaskEnabled,
+        miniMapMaskEnabled = config.MiniMapMaskEnabled
+    };
+
+    private static object DescribeMapMaskPicker(MapMaskConfig config) => new
+    {
+        mapPointApiProvider = config.MapPointApiProvider.ToString(),
+        mapPointApiProviderOptions = Enum.GetNames<MapPointApiProvider>(),
+        hoYoLabLanguage = config.HoYoLabLanguage,
+        hoYoLabLanguageOptions = new[]
+        {
+            MapMaskConfig.HoYoLabLanguageEnUs,
+            MapMaskConfig.HoYoLabLanguagePtPt,
+            MapMaskConfig.HoYoLabLanguageEsEs
+        }
     };
 
     private static int RequiredNonNegative(JObject settings, string name)

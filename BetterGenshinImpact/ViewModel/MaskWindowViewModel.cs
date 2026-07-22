@@ -993,28 +993,12 @@ namespace BetterGenshinImpact.ViewModel
 
         private static string GetMapPointKey(MaskMapPoint point)
         {
-            var mapMaskConfig = TaskContext.Instance().Config.MapMaskConfig;
-            var provider = mapMaskConfig.MapPointApiProvider.ToString();
-            if (mapMaskConfig.MapPointApiProvider != MapPointApiProvider.HoYoLab)
-            {
-                return $"{provider}:{point.Id}";
-            }
-
-            var language = HoYoLabMapApiService.NormalizeLanguage(mapMaskConfig.HoYoLabLanguage);
-            return $"{provider}:{language}:{point.Id}";
+            return MapMaskStateStorage.GetPointKey(TaskContext.Instance().Config.MapMaskConfig, point.Id);
         }
 
         private static string GetMapMaskDataSourceKey()
         {
-            var mapMaskConfig = TaskContext.Instance().Config.MapMaskConfig;
-            var provider = mapMaskConfig.MapPointApiProvider.ToString();
-            if (mapMaskConfig.MapPointApiProvider != MapPointApiProvider.HoYoLab)
-            {
-                return provider;
-            }
-
-            var language = HoYoLabMapApiService.NormalizeLanguage(mapMaskConfig.HoYoLabLanguage);
-            return $"{provider}_{language}";
+            return MapMaskStateStorage.GetDataSourceKey(TaskContext.Instance().Config.MapMaskConfig);
         }
 
         private void LoadHiddenMapPointKeysFromStorage()

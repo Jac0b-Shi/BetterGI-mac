@@ -19,6 +19,7 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.4" />
     <PackageReference Include="Microsoft.Extensions.Localization" Version="9.0.4" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.21.0" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.21.0" />
@@ -36,6 +37,7 @@
     <PackageReference Include="TorchSharp" Version="0.105.0" />
     <PackageReference Include="NCalc" Version="6.2.0" />
     <PackageReference Include="HungarianAlgorithm" Version="2.3.5" />
+    <PackageReference Include="LazyCache" Version="2.4.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -148,6 +150,8 @@
     <Compile Include="../BetterGenshinImpact/GameTask/MapMask/MapPointApiProvider.cs" Link="GameTask/MapMask/MapPointApiProvider.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/MapMask/MapMaskRuntimePlatform.cs" Link="GameTask/MapMask/MapMaskRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/MapMask/MapMaskTrigger.cs" Link="GameTask/MapMask/MapMaskTrigger.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/MapMask/MapMaskStateStorage.cs" Link="GameTask/MapMask/MapMaskStateStorage.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/MapMask/MapMaskPointDataService.cs" Link="GameTask/MapMask/MapMaskPointDataService.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/SkillCd/SkillCdConfig.cs" Link="GameTask/SkillCd/SkillCdConfig.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/SkillCd/SkillCdRuntimePlatform.cs" Link="GameTask/SkillCd/SkillCdRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/SkillCd/SkillCdTrigger.cs" Link="GameTask/SkillCd/SkillCdTrigger.cs" />
@@ -169,6 +173,27 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Element/Assets/ElementRecognition.cs" Link="GameTask/Common/Element/Assets/ElementRecognition.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Element/Assets/MapLazyAssets.cs" Link="GameTask/Common/Element/Assets/MapLazyAssets.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoTrackPath/Model/*.cs" Link="GameTask/AutoTrackPath/Model/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../BetterGenshinImpact/Helpers/Http/HttpClientFactory.cs" Link="Helpers/Http/HttpClientFactory.cs" />
+    <Compile Include="../BetterGenshinImpact/Helpers/Security/MD5Helper.cs" Link="Helpers/Security/MD5Helper.cs" />
+    <Compile Include="../BetterGenshinImpact/Model/MaskMap/GameWebMapCoordinateConverter.cs" Link="Model/MaskMap/GameWebMapCoordinateConverter.cs" />
+    <Compile Include="../BetterGenshinImpact/Model/MaskMap/MaskMapPoint.cs" Link="Model/MaskMap/MaskMapPoint.cs" />
+    <Compile Include="../BetterGenshinImpact/Model/MaskMap/MaskMapPointLabel.cs" Link="Model/MaskMap/MaskMapPointLabel.cs" />
+    <Compile Include="../BetterGenshinImpact/Model/MaskMap/MaskMapPointQueryModels.cs" Link="Model/MaskMap/MaskMapPointQueryModels.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Interface/IHoYoLabMapApiService.cs" Link="Service/Interface/IHoYoLabMapApiService.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Interface/IKongyingTavernApiService.cs" Link="Service/Interface/IKongyingTavernApiService.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Interface/IMaskMapPointService.cs" Link="Service/Interface/IMaskMapPointService.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Interface/IMihoyoMapApiService.cs" Link="Service/Interface/IMihoyoMapApiService.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Model/MihoyoMap/**/*.cs" Link="Service/Model/MihoyoMap/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../BetterGenshinImpact/Service/Model/Oauth/OauthTokenResponse.cs" Link="Service/Model/Oauth/OauthTokenResponse.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Tavern/Model/*.cs" Link="Service/Tavern/Model/%(Filename)%(Extension)" />
+    <Compile Include="../BetterGenshinImpact/Service/MemoryFileCache.cs" Link="Service/MemoryFileCache.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/MihoyoMapApiService.cs" Link="Service/MihoyoMapApiService.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/HoYoLabMapApiService.cs" Link="Service/HoYoLabMapApiService.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/MaskMapPointService.cs" Link="Service/MaskMapPointService.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Tavern/KongyingTavernApiService.cs" Link="Service/Tavern/KongyingTavernApiService.cs" />
   </ItemGroup>
 
   <!-- GameTask/AutoPick (ZERO business logic modification) -->

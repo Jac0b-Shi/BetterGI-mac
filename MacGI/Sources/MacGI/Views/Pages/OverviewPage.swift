@@ -89,6 +89,10 @@ struct OverviewPage: View {
                         appState.refreshWindows()
                     }
                 }
+                BGISettingLine(title: "原神失焦时隐藏 HUD", subtitle: "切换到其他应用时隐藏叠加层，返回原神后自动恢复。") {
+                    Toggle("", isOn: $appState.hideHUDWhenGameUnfocused)
+                        .labelsHidden()
+                }
             }
 
             BGISettingGroup(icon: "link", title: "同时启动原神", subtitle: "启动截图器时，如果原神未启动，则自动启动原神。") {

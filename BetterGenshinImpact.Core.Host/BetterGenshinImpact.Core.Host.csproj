@@ -20,5 +20,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="BetterGenshinImpact.Core.Host.Verification" />
+    <InternalsVisibleTo Include="BetterGenshinImpact.Core.Host.Fast.Verification" />
   </ItemGroup>
 </Project>

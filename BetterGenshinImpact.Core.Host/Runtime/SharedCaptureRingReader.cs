@@ -17,7 +17,7 @@ public sealed class SharedCaptureRingReader(
     private const long HeaderSize = 128;
     private static readonly byte[] Magic = Encoding.ASCII.GetBytes("BGIRING1");
 
-    public ImageRegion Read(JToken response)
+    public GameCaptureRegion Read(JToken response)
     {
         var path = RequiredString(response, "ringPath");
         var expectedPath = Path.Combine(layout.RunPath, "capture-ring.bin");

@@ -40,9 +40,8 @@ struct SchedulerWorkspaceView: View {
                             onSelect: { appState.selectedSchedulerGroupName = $0 })
         } content: {
             VStack(alignment: .leading, spacing: 14) {
-                inputAuthorization
-                projectList(selectedGroup)
                 operationPanel
+                projectList(selectedGroup)
             }
         }
         .sheet(item: $sheet) { item in
@@ -56,21 +55,6 @@ struct SchedulerWorkspaceView: View {
         .confirmationDialog("是否清空当前配置组的所有任务？", isPresented: $confirmingClear) {
             Button("清空", role: .destructive) {
                 appState.performSchedulerCatalogMutation(.clear)
-            }
-        }
-    }
-
-    private var inputAuthorization: some View {
-        BGISectionCard("输入授权（运行前必需）", subtitle: "三项均满足后，C# Core 才能向当前游戏窗口发送真实输入。", symbolName: "keyboard.badge.ellipsis") {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 20) {
-                    Toggle("Dry-Run", isOn: Binding(get: { appState.safetyGate.dryRun }, set: { appState.safetyGate.dryRun = $0 }))
-                    Toggle("真实输入", isOn: Binding(get: { appState.safetyGate.realInputEnabled }, set: { appState.safetyGate.realInputEnabled = $0 }))
-                    Toggle("Core Runtime Input", isOn: $appState.allowRuntimeRealInput)
-                    Spacer()
-                }.toggleStyle(.switch)
-                Text(appState.schedulerRunReadiness).font(BGIFonts.console)
-                    .foregroundStyle(appState.canRunScheduler ? BGIColors.secondaryText : BGIColors.warning)
             }
         }
     }
@@ -117,8 +101,10 @@ struct SchedulerWorkspaceView: View {
             appState.performSchedulerCatalogMutation(.setNext(projectIndex: project.index))
         }
         Button("修改通用配置") { sheet = .common(project.index) }
-        Button("修改 JS 脚本自定义配置") { sheet = .custom(project.index) }
-            .disabled(!project.hasCustomSettings)
+        if project.type == "Javascript" {
+            Button("修改 JS 脚本自定义配置") { sheet = .custom(project.index) }
+                .disabled(!project.hasCustomSettings)
+        }
         Button("打开所在目录") { appState.openSchedulerProjectLocation(projectIndex: project.index) }
             .disabled(project.type == "Shell")
         Divider()
@@ -140,24 +126,28 @@ struct SchedulerWorkspaceView: View {
     }
 
     private var operationPanel: some View {
-        BGISectionCard("操作面板", subtitle: "与上游调度器相同的添加、配置组设置和批量操作入口。", symbolName: "square.grid.3x3") {
-            HStack(spacing: 12) {
-                Menu("添加") { addMenuItems() }
-                Button("设置") { sheet = .groupSettings }
-                Button("连续执行") { appState.runSchedulerGroups() }.disabled(!appState.canRunScheduler)
-                Button("继续执行") { appState.runSchedulerGroups() }.disabled(!appState.canRunScheduler)
+        BGISectionCard("任务操作", subtitle: appState.schedulerRunReadiness, symbolName: "square.grid.3x3") {
+            HStack(spacing: 10) {
+                Menu("添加", systemImage: "plus") { addMenuItems() }
                 Menu("更多功能") {
                     Button("清空", role: .destructive) { confirmingClear = true }
-                    Text("日志分析（尚未组合）")
-                    Button("打开脚本仓库") { appState.selectedPage = .jsScript }
+                    Button("日志分析") {
+                        appState.addLog(.info, "日志分析尚未接入。")
+                    }.disabled(true)
+                    Button("打开脚本仓库") {
+                        appState.addLog(.info, "脚本仓库尚未接入。")
+                    }.disabled(true)
                     Button("根据文件夹更新") {
                         appState.performSchedulerCatalogMutation(.updatePathingFolders)
                     }
                     Button("任务倒序排列") {
                         appState.performSchedulerCatalogMutation(.reverse)
                     }
-                    Text("导出根据控制文件修改任务（尚未组合）")
+                    Button("导出根据控制文件修改任务") {
+                        appState.exportMergedSchedulerPathing()
+                    }
                 }
+                Button("设置", systemImage: "gearshape") { sheet = .groupSettings }
                 Spacer()
             }
         }

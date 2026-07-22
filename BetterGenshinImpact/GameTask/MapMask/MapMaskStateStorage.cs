@@ -1,5 +1,6 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Service;
+using BetterGenshinImpact.Model.MaskMap;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -77,6 +78,22 @@ public static class MapMaskStateStorage
     /// </summary>
     private static readonly Dictionary<string, MapMaskDataSourceState> StateByDataSource = new(StringComparer.Ordinal);
 
+    public static string GetDataSourceKey(MapMaskConfig config)
+    {
+        var provider = config.MapPointApiProvider.ToString();
+        return config.MapPointApiProvider == MapPointApiProvider.HoYoLab
+            ? $"{provider}_{HoYoLabMapApiService.NormalizeLanguage(config.HoYoLabLanguage)}"
+            : provider;
+    }
+
+    public static string GetPointKey(MapMaskConfig config, string pointId)
+    {
+        var provider = config.MapPointApiProvider.ToString();
+        return config.MapPointApiProvider == MapPointApiProvider.HoYoLab
+            ? $"{provider}:{HoYoLabMapApiService.NormalizeLanguage(config.HoYoLabLanguage)}:{pointId}"
+            : $"{provider}:{pointId}";
+    }
+
     /// <summary>
     /// 读取指定数据源的地图遮罩状态。
     /// </summary>
@@ -138,7 +155,7 @@ public static class MapMaskStateStorage
 
             var json = File.ReadAllText(filePath);
             // 统一使用项目配置的 JSON 选项，兼容现有序列化命名策略。
-            return Normalize(JsonSerializer.Deserialize<MapMaskDataSourceState>(json, ConfigService.JsonOptions));
+            return Normalize(JsonSerializer.Deserialize<MapMaskDataSourceState>(json, ConfigJson.Options));
         }
         catch (Exception e)
         {
@@ -209,7 +226,7 @@ public static class MapMaskStateStorage
                 Directory.CreateDirectory(directoryPath);
             }
 
-            File.WriteAllText(filePath, JsonSerializer.Serialize(state, ConfigService.JsonOptions));
+            File.WriteAllText(filePath, JsonSerializer.Serialize(state, ConfigJson.Options));
         }
         catch (Exception e)
         {

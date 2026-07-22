@@ -536,7 +536,7 @@ namespace BetterGenshinImpact.GameTask
                         foreach (var trigger in needRunTriggers)
                         {
                             if ((PrevGameUiCategory != content.CurrentGameUiCategory || (DateTime.Now - PrevGameUiChangeTime).TotalSeconds <= 30) // UI变化了后的30s内则所有触发器执行一遍
-                                || trigger.SupportedGameUiCategory == content.CurrentGameUiCategory)
+                                || trigger.SupportsGameUiCategory(content.CurrentGameUiCategory))
                             {
                                 // 触发器耗时只累计触发器执行本体，便于和截图耗时、总处理耗时拆开观察。
                                 var triggerStart = Stopwatch.GetTimestamp();

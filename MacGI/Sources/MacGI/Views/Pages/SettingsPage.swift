@@ -66,7 +66,7 @@ struct SettingsPage: View {
                     Toggle("", isOn: $appState.showOverlayDirections)
                         .labelsHidden()
                 }
-                BGISettingLine(title: "显示地图点位与路径", subtitle: "Core draw-command sink 已接收点位与路径；Swift 遮罩渲染尚不可用。") {
+                BGISettingLine(title: "显示地图点位与路径", subtitle: "显示 Core 识别并投影到大地图和小地图的已选点位。") {
                     Toggle("", isOn: $appState.showOverlayMapPoints)
                         .labelsHidden()
                 }

@@ -20,7 +20,7 @@ struct BetterGICoreCaptureRingTests {
         #expect(first["slot"] as? Int == 1)
         #expect(second["slot"] as? Int == 0)
         #expect(second["width"] as? Int == 2)
-        #expect(second["height"] as? Int == 1)
+        #expect(second["height"] as? Int == 2)
         #expect(second["stride"] as? Int == 8)
         #expect(second["pixelFormat"] as? String == "BGRA8")
 
@@ -35,16 +35,21 @@ struct BetterGICoreCaptureRingTests {
         #expect(readUInt64(header, at: 80) % 2 == 0)
 
         try handle.seek(toOffset: UInt64(BetterGICoreCaptureRing.headerSize))
-        let pixels = try #require(try handle.read(upToCount: 8))
-        #expect(pixels.count == 8)
-        #expect(pixels.contains(where: { $0 != 0 }))
+        let pixels = try #require(try handle.read(upToCount: 16))
+        #expect(Array(pixels) == [
+            0, 0, 255, 255, 0, 255, 0, 255,
+            255, 0, 0, 255, 255, 255, 255, 255,
+        ])
     }
 
     private func makeFrame() throws -> CaptureImageFrame {
-        let pixelBytes: [UInt8] = [0, 0, 255, 255, 0, 255, 0, 255]
+        let pixelBytes: [UInt8] = [
+            0, 0, 255, 255, 0, 255, 0, 255,
+            255, 0, 0, 255, 255, 255, 255, 255,
+        ]
         let provider = try #require(CGDataProvider(data: Data(pixelBytes) as CFData))
         let image = try #require(CGImage(
-            width: 2, height: 1, bitsPerComponent: 8, bitsPerPixel: 32,
+            width: 2, height: 2, bitsPerComponent: 8, bitsPerPixel: 32,
             bytesPerRow: 8, space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGBitmapInfo(rawValue: CGBitmapInfo.byteOrder32Little.rawValue |
                 CGImageAlphaInfo.premultipliedFirst.rawValue),
@@ -52,11 +57,11 @@ struct BetterGICoreCaptureRingTests {
         ))
         let window = WindowInfo(
             id: 42, ownerPID: 10, ownerName: "wine", title: "原神",
-            frame: CGRect(x: 100, y: 200, width: 2, height: 1), layer: 0,
+            frame: CGRect(x: 100, y: 200, width: 2, height: 2), layer: 0,
             isOnScreen: true, scaleFactor: 1
         )
         let metadata = CapturedFrame(
-            frameIndex: 1, timestamp: Date(timeIntervalSince1970: 1), width: 2, height: 1,
+            frameIndex: 1, timestamp: Date(timeIntervalSince1970: 1), width: 2, height: 2,
             scaleFactor: 1, pixelFormat: 0x42475241, bytesPerRow: 8, sourceWindow: window
         )
         return CaptureImageFrame(metadata: metadata, cgImage: image, backendName: "Test")
