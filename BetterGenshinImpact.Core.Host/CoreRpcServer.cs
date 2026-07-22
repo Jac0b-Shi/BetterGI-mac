@@ -193,6 +193,35 @@ public sealed class CoreRpcServer(
                         ?? throw new ArgumentException("projectIndex is required."),
                     request.Params?.Value<bool?>("enabled")
                         ?? throw new ArgumentException("enabled is required.")),
+                "catalog.getScriptGroupProjectCommonSettings" => _catalog.GetProjectCommonSettings(
+                    RequiredString(request.Params, "name"), RequiredInt(request.Params, "projectIndex")),
+                "catalog.saveScriptGroupProjectCommonSettings" => _catalog.SaveProjectCommonSettings(
+                    RequiredString(request.Params, "name"), RequiredInt(request.Params, "projectIndex"),
+                    RequiredString(request.Params, "status"), request.Params?.Value<bool?>("allowJsNotification"),
+                    request.Params?.Value<bool?>("allowJsHttp") ?? false),
+                "catalog.getScriptGroupProjectCustomSettings" => _catalog.GetProjectCustomSettings(
+                    RequiredString(request.Params, "name"), RequiredInt(request.Params, "projectIndex")),
+                "catalog.saveScriptGroupProjectCustomSettings" => _catalog.SaveProjectCustomSettings(
+                    RequiredString(request.Params, "name"), RequiredInt(request.Params, "projectIndex"),
+                    request.Params?["values"] as JObject ?? throw new ArgumentException("values is required.")),
+                "catalog.listScriptGroupAddCandidates" => _catalog.ListAddCandidates(RequiredString(request.Params, "type")),
+                "catalog.addScriptGroupProjects" => _catalog.AddProjects(
+                    RequiredString(request.Params, "name"), RequiredString(request.Params, "type"),
+                    request.Params?["candidateIds"] as JArray ?? [], request.Params?.Value<string>("shellCommand")),
+                "catalog.removeScriptGroupProject" => _catalog.RemoveProject(
+                    RequiredString(request.Params, "name"), RequiredInt(request.Params, "projectIndex"),
+                    request.Params?.Value<bool?>("sameFolder") ?? false),
+                "catalog.clearScriptGroup" => _catalog.Clear(RequiredString(request.Params, "name")),
+                "catalog.reverseScriptGroup" => _catalog.Reverse(RequiredString(request.Params, "name")),
+                "catalog.updateScriptGroupPathingFolders" => _catalog.UpdatePathingFolders(RequiredString(request.Params, "name")),
+                "catalog.setScriptGroupNextProject" => _catalog.SetNextProject(
+                    RequiredString(request.Params, "name"), RequiredInt(request.Params, "projectIndex")),
+                "catalog.getScriptGroupProjectLocation" => _catalog.GetProjectLocation(
+                    RequiredString(request.Params, "name"), RequiredInt(request.Params, "projectIndex")),
+                "catalog.getScriptGroupConfig" => _catalog.GetGroupConfig(RequiredString(request.Params, "name")),
+                "catalog.saveScriptGroupConfig" => _catalog.SaveGroupConfig(
+                    RequiredString(request.Params, "name"),
+                    request.Params?["config"] as JObject ?? throw new ArgumentException("config is required.")),
                 "catalog.listScriptProjects" => _scriptProjectCatalog.List(),
                 "catalog.getScriptProject" => _scriptProjectCatalog.Get(RequiredString(request.Params, "folderName")),
                 "trigger.list" => ListTriggers(),
@@ -258,6 +287,7 @@ public sealed class CoreRpcServer(
             {
                 "catalog.script-groups",
                 "catalog.script-projects",
+                "catalog.script-group-editing",
                 "runtime-layout",
                 "runtime-artifacts.source-lock",
                 "opencv",
@@ -426,6 +456,9 @@ public sealed class CoreRpcServer(
         parameters?.Value<string>(name) is { Length: > 0 } value
             ? value
             : throw new ArgumentException($"{name} is required.");
+
+    private static int RequiredInt(JObject? parameters, string name) =>
+        parameters?.Value<int?>(name) ?? throw new ArgumentException($"{name} is required.");
 }
 
 public sealed class CapabilityUnavailableException(string message) : Exception(message);

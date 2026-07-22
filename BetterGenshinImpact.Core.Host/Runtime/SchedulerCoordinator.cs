@@ -23,6 +23,7 @@ public sealed class SchedulerCoordinator(
         ScriptGroup group;
         var path = ResolveGroup(groupName);
         group = ScriptGroup.FromJson(File.ReadAllText(path));
+        ApplyNextProject(group);
         if (group.Projects.Count == 0)
             throw new InvalidDataException($"Script group '{groupName}' contains no projects.");
 
@@ -110,5 +111,26 @@ public sealed class SchedulerCoordinator(
         if (!File.Exists(path))
             throw new FileNotFoundException($"Script group does not exist: {groupName}", path);
         return path;
+    }
+
+    private void ApplyNextProject(ScriptGroup group)
+    {
+        if (!File.Exists(layout.SchedulerStatePath)) return;
+        try
+        {
+            var state = JObject.Parse(File.ReadAllText(layout.SchedulerStatePath));
+            if (state.Value<string>("groupName") != group.Name) return;
+            var startIndex = group.Projects.ToList().FindIndex(project =>
+                project.Index == state.Value<int?>("index") &&
+                project.FolderName == state.Value<string>("folderName") &&
+                project.Name == state.Value<string>("projectName"));
+            if (startIndex < 0) return;
+            for (var index = 0; index < startIndex; index++) group.Projects[index].SkipFlag = true;
+            File.Delete(layout.SchedulerStatePath);
+        }
+        catch (Exception exception) when (exception is IOException or Newtonsoft.Json.JsonException)
+        {
+            throw new InvalidDataException("The saved scheduler start position is invalid.", exception);
+        }
     }
 }

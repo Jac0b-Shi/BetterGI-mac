@@ -1,6 +1,6 @@
 import SwiftUI
 
-private struct BGICommand: Identifiable {
+struct BGICommand: Identifiable {
     let id = UUID()
     let title: String
     let symbol: String
@@ -8,7 +8,7 @@ private struct BGICommand: Identifiable {
     var action: () -> Void = {}
 }
 
-private struct BGIWorkflowShell<Sidebar: View, Content: View>: View {
+struct BGIWorkflowShell<Sidebar: View, Content: View>: View {
     let title: String
     let subtitle: String
     let commands: [BGICommand]
@@ -50,7 +50,7 @@ private struct BGIWorkflowShell<Sidebar: View, Content: View>: View {
     }
 }
 
-private struct BGIGroupSidebar: View {
+struct BGIGroupSidebar: View {
     let title: String
     let groups: [String]
     var selected: String
@@ -372,254 +372,8 @@ struct OneDragonPage: View {
 }
 
 struct SchedulerPage: View {
-    @EnvironmentObject private var appState: AppState
-
     var body: some View {
-        let selectedGroup = appState.selectedSchedulerGroup
-        BGIWorkflowShell(
-            title: "调度器",
-            subtitle: "原 BetterGI 的配置组、连续执行、任务表格和通用配置入口。\(appState.schedulerExecutionStatus) · \(appState.schedulerCatalogStatus)",
-            commands: [
-                BGICommand(
-                    title: "运行",
-                    symbol: "play.fill",
-                    isEnabled: appState.canRunScheduler,
-                    action: { appState.runSchedulerGroups() }),
-                BGICommand(title: "刷新", symbol: "arrow.clockwise", action: { appState.reloadSchedulerGroupsFromCore() }),
-                BGICommand(title: "停止", symbol: "stop.fill", action: { appState.cancelSchedulerGroups() })
-            ]
-        ) {
-            BGIGroupSidebar(
-                title: "配置组",
-                groups: appState.schedulerGroups.map(\.name),
-                selected: selectedGroup?.name ?? "",
-                onSelect: { appState.selectedSchedulerGroupName = $0 }
-            )
-        } content: {
-            VStack(alignment: .leading, spacing: 14) {
-                BGISectionCard("输入授权（运行前必需）", subtitle: "三项均满足后，C# Core 才能向当前游戏窗口发送真实输入。", symbolName: "keyboard.badge.ellipsis") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 20) {
-                            Toggle("Dry-Run", isOn: Binding(
-                                get: { appState.safetyGate.dryRun },
-                                set: { appState.safetyGate.dryRun = $0 }
-                            ))
-                            Toggle("真实输入", isOn: Binding(
-                                get: { appState.safetyGate.realInputEnabled },
-                                set: { appState.safetyGate.realInputEnabled = $0 }
-                            ))
-                            Toggle("Core Runtime Input", isOn: $appState.allowRuntimeRealInput)
-                            Spacer()
-                        }
-                        .toggleStyle(.switch)
-                        Text(appState.schedulerRunReadiness)
-                            .font(BGIFonts.console)
-                            .foregroundStyle(appState.canRunScheduler ? BGIColors.secondaryText : BGIColors.warning)
-                    }
-                }
-
-                BGISectionCard("配置组 - \(selectedGroup?.name ?? "未选择")", subtitle: "数据由 BetterGI C# Core 提供；在下方列表中右键可添加配置，拖拽可调整执行顺序。", symbolName: "cpu") {
-                    VStack(spacing: 0) {
-                        ForEach(selectedGroup?.projects ?? []) { project in
-                            HStack {
-                                Text("\(project.index)")
-                                    .frame(width: 30, alignment: .leading)
-                                Text(project.name)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Text(project.type == "Javascript" ? "JS脚本" : project.type)
-                                    .frame(width: 80, alignment: .center)
-                                Toggle("", isOn: Binding(
-                                    get: { project.status == "Enabled" },
-                                    set: { appState.setSchedulerProjectEnabled(
-                                        projectIndex: project.index, enabled: $0
-                                    ) }
-                                ))
-                                .frame(width: 60)
-                                .disabled(appState.currentSchedulerProjectID != nil)
-                            }
-                            .padding(.vertical, 4)
-                            Divider()
-                        }
-                    }
-                }
-
-                BGISectionCard("操作面板", subtitle: "连续执行、日志分析、更多功能。", symbolName: "square.grid.3x3") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 12) {
-                            Button("连续执行") { appState.runSchedulerGroups() }
-                                .disabled(!appState.canRunScheduler)
-                            Button("继续执行") { appState.runSchedulerGroups() }
-                                .disabled(!appState.canRunScheduler)
-                            Menu("更多功能") {
-                                Button("从 Core 更新") { appState.reloadSchedulerGroupsFromCore() }
-                            }
-                            Spacer()
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Config Group Settings Sheet
-
-struct ScriptGroupConfigSheet: View {
-    let appState: AppState
-    @Environment(\.dismiss) private var dismiss
-    @State private var autoPick = true
-    @State private var autoEat = false
-    @State private var autoSkip = true
-    @State private var autoFight = true
-    @State private var partyName = ""
-    @State private var guardianIndex = "4"
-    @State private var guardianSkillInterval = "16.2"
-    @State private var guardianLongPress = false
-    @State private var mainAvatarIndex = "4"
-    @State private var onlyTeleportRecover = false
-    @State private var gadgetInterval = "0"
-    @State private var skipDuring = ""
-    @State private var hideOnRepeat = false
-    @State private var autoRun = true
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("配置组设置").font(.title2).bold()
-                Spacer()
-                Button("完成") { dismiss() }
-            }
-            .padding()
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Section {
-                        Toggle("地图追踪行走配置（不启用则使用地图追踪内的条件配置）", isOn: .constant(true))
-                    } header: { Text("地图追踪配置").font(.headline) }
-
-                    Group {
-                        Toggle("是否开启自动拾取", isOn: $autoPick)
-                        Toggle("是否开启自动吃药", isOn: $autoEat)
-                        Toggle("是否开启自动剧情跳过", isOn: $autoSkip)
-                        Toggle("是否开启自动战斗", isOn: $autoFight)
-                        Toggle("是否开启自动奔跑", isOn: $autoRun)
-                    }
-
-                    Group {
-                        HStack {
-                            Text("切换到队伍的名称（为空则不切换）")
-                            Spacer()
-                            TextField("队伍名称", text: $partyName).frame(width: 200)
-                        }
-                        Toggle("切换队伍前强制前往安全的神像区域", isOn: Binding(get: { true }, set: { _ in }))
-                    }
-
-                    Group {
-                        HStack {
-                            Text("【生存位】在队伍内的编号")
-                            Spacer()
-                            Picker("", selection: $guardianIndex) {
-                                ForEach(["1","2","3","4"], id: \.self) { Text($0) }
-                            }.frame(width: 80)
-                        }
-                        HStack {
-                            Text("【生存位】释放元素战技的间隔（秒）")
-                            Spacer()
-                            TextField("16.2", text: $guardianSkillInterval).frame(width: 80)
-                        }
-                        Toggle("【生存位】元素战技是否长按", isOn: $guardianLongPress)
-                            .toggleStyle(.switch)
-                    }
-
-                    Group {
-                        HStack {
-                            Text("【行走位】主要行走的角色在队伍内的编号")
-                            Spacer()
-                            Picker("", selection: $mainAvatarIndex) {
-                                ForEach(["1","2","3","4"], id: \.self) { Text($0) }
-                            }.frame(width: 80)
-                        }
-                    }
-
-                    Group {
-                        HStack {
-                            Text("使用小道具的间隔时间（毫秒）填0为不使用")
-                            Spacer()
-                            TextField("0", text: $gadgetInterval).frame(width: 80)
-                        }
-                        Toggle("只在传送点时恢复", isOn: $onlyTeleportRecover)
-                        HStack {
-                            Text("不在某时执行（范围：0-23）")
-                            Spacer()
-                            TextField("", text: $skipDuring).frame(width: 60)
-                        }
-                        Toggle("不在连续任务中显示", isOn: $hideOnRepeat)
-                    }
-                }
-                .padding()
-            }
-        }
-        .frame(width: 700, height: 600)
-    }
-}
-
-// MARK: - Project Editor Sheet
-
-struct ScriptGroupProjectEditorSheet: View {
-    let appState: AppState
-    let projectIndex: Int
-    @Environment(\.dismiss) private var dismiss
-    @State private var status = "Enabled"
-    @State private var allowJSNotification = "Ask"
-    @State private var allowJSHTTP = "Deny"
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("脚本项目设置").font(.title2).bold()
-                Spacer()
-                Button("完成") { dismiss() }
-            }
-            .padding()
-            Divider()
-
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text("状态")
-                    Spacer()
-                    Picker("", selection: $status) {
-                        Text("启用").tag("Enabled")
-                        Text("禁用").tag("Disabled")
-                    }.frame(width: 120)
-                }
-
-                Divider()
-
-                Group {
-                    Text("JS 通知权限").font(.headline)
-                    Picker("", selection: $allowJSNotification) {
-                        Text("询问").tag("Ask")
-                        Text("允许").tag("Allow")
-                        Text("拒绝").tag("Deny")
-                    }.frame(width: 120)
-                    Text("允许脚本发送系统通知").font(.caption).foregroundColor(.secondary)
-                }
-
-                Group {
-                    Text("JS HTTP权限").font(.headline)
-                    Text("允许脚本发送HTTP请求，可能会带来安全风险，请谨慎开启。").font(.caption).foregroundColor(.orange)
-                    Picker("", selection: $allowJSHTTP) {
-                        Text("拒绝").tag("Deny")
-                        Text("允许").tag("Allow")
-                    }.frame(width: 120)
-                    Text("注意：脚本更新http_allowed_urls后，需手动重新启用权限。").font(.caption).foregroundColor(.orange)
-                }
-            }
-            .padding()
-            Spacer()
-        }
-        .frame(width: 400, height: 350)
+        SchedulerWorkspaceView()
     }
 }
 

@@ -385,6 +385,111 @@ actor BetterGICoreProcessSupervisor {
         }
     }
 
+    private func runningClient() throws -> BetterGICoreRPCClient {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        return client
+    }
+
+    func projectCommonSettings(groupName: String, projectIndex: Int) throws -> BetterGIProjectCommonSettings {
+        try runningClient().projectCommonSettings(groupName: groupName, projectIndex: projectIndex)
+    }
+
+    func projectCustomSettings(groupName: String, projectIndex: Int) throws -> BetterGIProjectCustomSettings {
+        try runningClient().projectCustomSettings(groupName: groupName, projectIndex: projectIndex)
+    }
+
+    func listAddCandidates(type: String) throws -> [BetterGIAddCandidate] {
+        try runningClient().listAddCandidates(type: type)
+    }
+
+    @discardableResult
+    func catalogMutation(_ method: String, groupName: String, parameters: [String: Any] = [:]) throws -> [String: Any] {
+        var payload = parameters
+        payload["name"] = groupName
+        guard let result = try runningClient().request(method: method, parameters: payload) as? [String: Any]
+        else { throw BetterGICoreRPCError.protocolViolation("Invalid \(method) result.") }
+        return result
+    }
+
+    func saveProjectCommonSettings(groupName: String, settings: BetterGIProjectCommonSettings) throws {
+        try catalogMutation("catalog.saveScriptGroupProjectCommonSettings", groupName: groupName, parameters: [
+            "projectIndex": settings.projectIndex, "status": settings.status,
+            "allowJsNotification": settings.allowJsNotification, "allowJsHttp": settings.allowJsHTTP
+        ])
+    }
+
+    func saveProjectCustomSettings(groupName: String, settings: BetterGIProjectCustomSettings) throws {
+        try catalogMutation("catalog.saveScriptGroupProjectCustomSettings", groupName: groupName, parameters: [
+            "projectIndex": settings.projectIndex, "values": settings.values.mapValues(\.any)
+        ])
+    }
+
+    func groupConfig(groupName: String) throws -> BetterGIGroupConfigSettings {
+        guard let result = try runningClient().request(
+            method: "catalog.getScriptGroupConfig", parameters: ["name": groupName]) as? [String: Any]
+        else { throw BetterGICoreRPCError.protocolViolation("Invalid group config.") }
+        let pathing = result["pathingConfig"] as? [String: Any] ?? [:]
+        let shell = result["shellConfig"] as? [String: Any] ?? [:]
+        return BetterGIGroupConfigSettings(
+            enabled: pathing["enabled"] as? Bool ?? true, autoPick: pathing["autoPickEnabled"] as? Bool ?? true,
+            autoEat: pathing["autoEatEnabled"] as? Bool ?? false, autoSkip: pathing["autoSkipEnabled"] as? Bool ?? true,
+            autoFight: pathing["autoFightEnabled"] as? Bool ?? true, autoRun: pathing["autoRunEnabled"] as? Bool ?? true,
+            partyName: pathing["partyName"] as? String ?? "", visitStatue: pathing["isVisitStatueBeforeSwitchParty"] as? Bool ?? false,
+            mainAvatar: pathing["mainAvatarIndex"] as? String ?? "", guardianAvatar: pathing["guardianAvatarIndex"] as? String ?? "",
+            guardianInterval: pathing["guardianElementalSkillSecondInterval"] as? String ?? "",
+            guardianLongPress: pathing["guardianElementalSkillLongPress"] as? Bool ?? false,
+            gadgetInterval: pathing["useGadgetIntervalMs"] as? Int ?? 0, skipDuring: pathing["skipDuring"] as? String ?? "",
+            hideOnRepeat: pathing["hideOnRepeat"] as? Bool ?? false,
+            enableShellConfig: result["enableShellConfig"] as? Bool ?? false, shellDisable: shell["disable"] as? Bool ?? false,
+            shellTimeout: shell["timeout"] as? Int ?? 60, shellNoWindow: shell["noWindow"] as? Bool ?? true,
+            shellOutput: shell["output"] as? Bool ?? true)
+    }
+
+    func saveGroupConfig(groupName: String, settings: BetterGIGroupConfigSettings) throws {
+        try catalogMutation("catalog.saveScriptGroupConfig", groupName: groupName, parameters: ["config": [
+            "pathingConfig": [
+                "enabled": settings.enabled, "autoPickEnabled": settings.autoPick, "autoEatEnabled": settings.autoEat,
+                "autoSkipEnabled": settings.autoSkip, "autoFightEnabled": settings.autoFight, "autoRunEnabled": settings.autoRun,
+                "partyName": settings.partyName, "isVisitStatueBeforeSwitchParty": settings.visitStatue,
+                "mainAvatarIndex": settings.mainAvatar, "guardianAvatarIndex": settings.guardianAvatar,
+                "guardianElementalSkillSecondInterval": settings.guardianInterval,
+                "guardianElementalSkillLongPress": settings.guardianLongPress,
+                "useGadgetIntervalMs": settings.gadgetInterval, "skipDuring": settings.skipDuring,
+                "hideOnRepeat": settings.hideOnRepeat
+            ],
+            "enableShellConfig": settings.enableShellConfig,
+            "shellConfig": ["disable": settings.shellDisable, "timeout": settings.shellTimeout,
+                            "noWindow": settings.shellNoWindow, "output": settings.shellOutput]
+        ]])
+    }
+
+    func mutateSchedulerCatalog(groupName: String, mutation: BetterGISchedulerCatalogMutation) throws {
+        switch mutation {
+        case .add(let type, let ids, let command):
+            try catalogMutation("catalog.addScriptGroupProjects", groupName: groupName, parameters: [
+                "type": type, "candidateIds": ids, "shellCommand": command ?? NSNull()])
+        case .remove(let index, let sameFolder):
+            try catalogMutation("catalog.removeScriptGroupProject", groupName: groupName,
+                                parameters: ["projectIndex": index, "sameFolder": sameFolder])
+        case .clear: try catalogMutation("catalog.clearScriptGroup", groupName: groupName)
+        case .reverse: try catalogMutation("catalog.reverseScriptGroup", groupName: groupName)
+        case .updatePathingFolders: try catalogMutation("catalog.updateScriptGroupPathingFolders", groupName: groupName)
+        case .setNext(let index):
+            try catalogMutation("catalog.setScriptGroupNextProject", groupName: groupName, parameters: ["projectIndex": index])
+        }
+    }
+
+    func projectLocation(groupName: String, projectIndex: Int) throws -> String {
+        guard let result = try runningClient().request(
+            method: "catalog.getScriptGroupProjectLocation",
+            parameters: ["name": groupName, "projectIndex": projectIndex]) as? [String: Any],
+              let path = result["path"] as? String
+        else { throw BetterGICoreRPCError.protocolViolation("Invalid project location.") }
+        return path
+    }
+
     func startRuntime() throws {
         guard case .running = state, let client else {
             throw BetterGICoreRPCError.socket("BetterGI Core is not running.")

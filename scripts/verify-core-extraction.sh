@@ -438,7 +438,7 @@ rg -q 'guard runtimeLifecycle == \.running' MacGI/Sources/MacGI/App/AppState.swi
   && rg -q 'runtimeLifecycle == \.running' MacGI/Sources/MacGI/App/AppState.swift \
   || fail "The scheduler can start while the Core trigger runtime is stopped"
 rg -q 'catalog\.setScriptGroupProjectEnabled' BetterGenshinImpact.Core.Host/CoreRpcServer.cs \
-  && rg -q 'setSchedulerProjectEnabled' MacGI/Sources/MacGI/Views/Pages/WorkflowPages.swift \
+  && rg -q 'setSchedulerProjectEnabled' MacGI/Sources/MacGI/Views/Pages --glob '*.swift' \
   || fail "Script-group project status is not edited through the Core catalog"
 if rg -n 'PathExecutorPlatform\.Current|PathExecutorAutoSkipPlatform\.Current|ScriptGroupExecutionServices\.Current' \
   BetterGenshinImpact/Core/Script/Dependence/AutoPathingScript.cs; then
@@ -447,12 +447,12 @@ fi
 rg -q '_executionServices\.CreatePathExecutor' \
   BetterGenshinImpact/Core/Script/Dependence/AutoPathingScript.cs \
   || fail "The production pathingScript host is not constructor-injected"
-if rg -n 'Toggle\("", isOn: \.constant\(project\.status' MacGI/Sources/MacGI/Views/Pages/WorkflowPages.swift; then
+if rg -n 'Toggle\("", isOn: \.constant\(project\.status' MacGI/Sources/MacGI/Views/Pages --glob '*.swift'; then
   fail "Scheduler project controls regressed to a read-only fake toggle"
 fi
-rg -q 'Toggle\("Dry-Run"' MacGI/Sources/MacGI/Views/Pages/WorkflowPages.swift \
-  && rg -q 'Toggle\("真实输入"' MacGI/Sources/MacGI/Views/Pages/WorkflowPages.swift \
-  && rg -q 'Toggle\("Core Runtime Input"' MacGI/Sources/MacGI/Views/Pages/WorkflowPages.swift \
+rg -q 'Toggle\("Dry-Run"' MacGI/Sources/MacGI/Views/Pages --glob '*.swift' \
+  && rg -q 'Toggle\("真实输入"' MacGI/Sources/MacGI/Views/Pages --glob '*.swift' \
+  && rg -q 'Toggle\("Core Runtime Input"' MacGI/Sources/MacGI/Views/Pages --glob '*.swift' \
   || fail "Scheduler real-input authorization controls are not reachable in production UI"
 rg -q '@Published var isHUDVisible = false' MacGI/Sources/MacGI/App/AppState.swift \
   && rg -q 'if self\.showHUDOnStart' MacGI/Sources/MacGI/App/AppState.swift \

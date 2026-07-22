@@ -31,8 +31,80 @@ struct BetterGIScriptGroupProjectSummary: Equatable, Sendable, Identifiable {
     let status: String
     let schedule: String
     let runNum: Int
+    let folderName: String
+    let hasCustomSettings: Bool
+    let nextFlag: Bool
 
     var id: String { "\(index)|\(type)|\(name)" }
+}
+
+enum BetterGIJSONValue: Equatable, Sendable {
+    case string(String)
+    case bool(Bool)
+    case strings([String])
+
+    init(any: Any) throws {
+        if let value = any as? String { self = .string(value) }
+        else if let value = any as? Bool { self = .bool(value) }
+        else if let value = any as? [String] { self = .strings(value) }
+        else { throw BetterGICoreRPCError.protocolViolation("Unsupported settings value.") }
+    }
+
+    var any: Any {
+        switch self {
+        case .string(let value): value
+        case .bool(let value): value
+        case .strings(let value): value
+        }
+    }
+}
+
+struct BetterGISettingItem: Equatable, Sendable, Identifiable {
+    let name: String
+    let type: String
+    let label: String
+    let options: [String]
+    let cascadeOptions: [String: [String]]
+    let defaultValue: BetterGIJSONValue?
+    var id: String { "\(type)|\(name)|\(label)" }
+}
+
+struct BetterGIProjectCustomSettings: Equatable, Sendable {
+    let projectIndex: Int
+    let schema: [BetterGISettingItem]
+    var values: [String: BetterGIJSONValue]
+}
+
+struct BetterGIProjectCommonSettings: Equatable, Sendable {
+    let projectIndex: Int
+    var status: String
+    let isJavascript: Bool
+    var allowJsNotification: Bool
+    var allowJsHTTP: Bool
+    let httpAllowedURLs: [String]
+}
+
+struct BetterGIAddCandidate: Equatable, Sendable, Identifiable {
+    let id: String
+    let name: String
+    let folderName: String
+    let type: String
+}
+
+enum BetterGISchedulerCatalogMutation: Sendable {
+    case add(type: String, candidateIDs: [String], shellCommand: String?)
+    case remove(projectIndex: Int, sameFolder: Bool)
+    case clear
+    case reverse
+    case updatePathingFolders
+    case setNext(projectIndex: Int)
+}
+
+struct BetterGIGroupConfigSettings: Equatable, Sendable {
+    var enabled: Bool; var autoPick: Bool; var autoEat: Bool; var autoSkip: Bool; var autoFight: Bool; var autoRun: Bool
+    var partyName: String; var visitStatue: Bool; var mainAvatar: String; var guardianAvatar: String; var guardianInterval: String
+    var guardianLongPress: Bool; var gadgetInterval: Int; var skipDuring: String; var hideOnRepeat: Bool
+    var enableShellConfig: Bool; var shellDisable: Bool; var shellTimeout: Int; var shellNoWindow: Bool; var shellOutput: Bool
 }
 
 struct BetterGIScriptGroupSummary: Equatable, Sendable, Identifiable {
@@ -177,7 +249,10 @@ final class BetterGICoreRPCClient: @unchecked Sendable {
                       let type = project["type"] as? String,
                       let status = project["status"] as? String,
                       let schedule = project["schedule"] as? String,
-                      let runNum = project["runNum"] as? Int
+                      let runNum = project["runNum"] as? Int,
+                      let folderName = project["folderName"] as? String,
+                      let hasCustomSettings = project["hasCustomSettings"] as? Bool,
+                      let nextFlag = project["nextFlag"] as? Bool
                 else { throw BetterGICoreRPCError.protocolViolation("Invalid script-group project summary.") }
                 return BetterGIScriptGroupProjectSummary(
                     index: projectIndex,
@@ -185,10 +260,61 @@ final class BetterGICoreRPCClient: @unchecked Sendable {
                     type: type,
                     status: status,
                     schedule: schedule,
-                    runNum: runNum
+                    runNum: runNum,
+                    folderName: folderName,
+                    hasCustomSettings: hasCustomSettings,
+                    nextFlag: nextFlag
                 )
             }
             return BetterGIScriptGroupSummary(name: name, path: path, index: index, projects: projects)
+        }
+    }
+
+    func projectCommonSettings(groupName: String, projectIndex: Int) throws -> BetterGIProjectCommonSettings {
+        guard let item = try request(method: "catalog.getScriptGroupProjectCommonSettings", parameters: [
+            "name": groupName, "projectIndex": projectIndex
+        ]) as? [String: Any],
+              let index = item["index"] as? Int,
+              let status = item["status"] as? String,
+              let isJavascript = item["isJavascript"] as? Bool,
+              let allowHTTP = item["allowJsHttp"] as? Bool,
+              let urls = item["httpAllowedUrls"] as? [String]
+        else { throw BetterGICoreRPCError.protocolViolation("Invalid project common settings.") }
+        return BetterGIProjectCommonSettings(
+            projectIndex: index, status: status, isJavascript: isJavascript,
+            allowJsNotification: item["allowJsNotification"] as? Bool ?? true,
+            allowJsHTTP: allowHTTP, httpAllowedURLs: urls)
+    }
+
+    func projectCustomSettings(groupName: String, projectIndex: Int) throws -> BetterGIProjectCustomSettings {
+        guard let item = try request(method: "catalog.getScriptGroupProjectCustomSettings", parameters: [
+            "name": groupName, "projectIndex": projectIndex
+        ]) as? [String: Any], let index = item["index"] as? Int,
+              let schemaItems = item["schema"] as? [[String: Any]],
+              let rawValues = item["values"] as? [String: Any]
+        else { throw BetterGICoreRPCError.protocolViolation("Invalid project custom settings.") }
+        let schema = try schemaItems.map { raw -> BetterGISettingItem in
+            guard let name = raw["name"] as? String, let type = raw["type"] as? String,
+                  let label = raw["label"] as? String
+            else { throw BetterGICoreRPCError.protocolViolation("Invalid custom setting schema.") }
+            let defaultValue = try raw["default"].map(BetterGIJSONValue.init(any:))
+            return BetterGISettingItem(name: name, type: type, label: label,
+                options: raw["options"] as? [String] ?? [],
+                cascadeOptions: raw["cascadeOptions"] as? [String: [String]] ?? [:],
+                defaultValue: defaultValue)
+        }
+        let values = try rawValues.mapValues(BetterGIJSONValue.init(any:))
+        return BetterGIProjectCustomSettings(projectIndex: index, schema: schema, values: values)
+    }
+
+    func listAddCandidates(type: String) throws -> [BetterGIAddCandidate] {
+        guard let items = try request(method: "catalog.listScriptGroupAddCandidates", parameters: ["type": type]) as? [[String: Any]]
+        else { throw BetterGICoreRPCError.protocolViolation("Invalid add-candidate catalog.") }
+        return try items.map { item in
+            guard let id = item["id"] as? String, let name = item["name"] as? String,
+                  let folder = item["folderName"] as? String, let type = item["type"] as? String
+            else { throw BetterGICoreRPCError.protocolViolation("Invalid add candidate.") }
+            return BetterGIAddCandidate(id: id, name: name, folderName: folder, type: type)
         }
     }
 

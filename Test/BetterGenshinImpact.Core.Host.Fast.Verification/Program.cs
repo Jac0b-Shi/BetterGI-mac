@@ -5,4 +5,5 @@ return await VerificationRunner.RunAsync(args,
 [
     new TriggerSettingsSuite(),
     new SoloTaskSettingsSuite(),
+    new ScriptGroupEditingSuite(),
 ]);

@@ -22,6 +22,7 @@ public sealed class RuntimeLayout
     public string RunPath => Path.Combine(RootPath, "Run");
     public string LogPath => Path.Combine(RootPath, "log");
     public string DownloadCachePath => Path.Combine(RootPath, "Cache", "Downloads");
+    public string SchedulerStatePath => Path.Combine(RunPath, "scheduler-state.json");
 
     public void EnsureCreated()
     {

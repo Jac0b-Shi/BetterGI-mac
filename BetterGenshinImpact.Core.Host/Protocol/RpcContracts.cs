@@ -41,7 +41,29 @@ public sealed record ScriptGroupProjectSummary(
     [property: JsonProperty("type")] string Type,
     [property: JsonProperty("status")] string Status,
     [property: JsonProperty("schedule")] string Schedule,
-    [property: JsonProperty("runNum")] int RunNum);
+    [property: JsonProperty("runNum")] int RunNum,
+    [property: JsonProperty("folderName")] string FolderName,
+    [property: JsonProperty("hasCustomSettings")] bool HasCustomSettings,
+    [property: JsonProperty("nextFlag")] bool NextFlag);
+
+public sealed record ScriptGroupProjectCommonSettings(
+    [property: JsonProperty("index")] int Index,
+    [property: JsonProperty("status")] string Status,
+    [property: JsonProperty("isJavascript")] bool IsJavascript,
+    [property: JsonProperty("allowJsNotification")] bool? AllowJsNotification,
+    [property: JsonProperty("allowJsHttp")] bool AllowJsHttp,
+    [property: JsonProperty("httpAllowedUrls")] IReadOnlyList<string> HttpAllowedUrls);
+
+public sealed record ScriptGroupProjectCustomSettings(
+    [property: JsonProperty("index")] int Index,
+    [property: JsonProperty("schema")] object Schema,
+    [property: JsonProperty("values")] JObject Values);
+
+public sealed record ScriptGroupAddCandidate(
+    [property: JsonProperty("id")] string Id,
+    [property: JsonProperty("name")] string Name,
+    [property: JsonProperty("folderName")] string FolderName,
+    [property: JsonProperty("type")] string Type);
 
 public sealed record ScriptProjectDocument(
     [property: JsonProperty("folderName")] string FolderName,

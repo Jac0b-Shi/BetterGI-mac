@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -417,6 +418,91 @@ final class AppState: ObservableObject {
                 self?.addLog(.error, "Core project update failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    func loadProjectCommonSettings(_ projectIndex: Int) async throws -> BetterGIProjectCommonSettings {
+        guard let supervisor = betterGICoreSupervisor, let group = selectedSchedulerGroup else {
+            throw BetterGICoreRPCError.socket("Core or selected script group is unavailable.")
+        }
+        return try await supervisor.projectCommonSettings(groupName: group.name, projectIndex: projectIndex)
+    }
+
+    func saveProjectCommonSettings(_ settings: BetterGIProjectCommonSettings) async throws {
+        guard let supervisor = betterGICoreSupervisor, let group = selectedSchedulerGroup else {
+            throw BetterGICoreRPCError.socket("Core or selected script group is unavailable.")
+        }
+        try await supervisor.saveProjectCommonSettings(groupName: group.name, settings: settings)
+        await loadSchedulerGroupsFromCore()
+    }
+
+    func loadProjectCustomSettings(_ projectIndex: Int) async throws -> BetterGIProjectCustomSettings {
+        guard let supervisor = betterGICoreSupervisor, let group = selectedSchedulerGroup else {
+            throw BetterGICoreRPCError.socket("Core or selected script group is unavailable.")
+        }
+        return try await supervisor.projectCustomSettings(groupName: group.name, projectIndex: projectIndex)
+    }
+
+    func saveProjectCustomSettings(_ settings: BetterGIProjectCustomSettings) async throws {
+        guard let supervisor = betterGICoreSupervisor, let group = selectedSchedulerGroup else {
+            throw BetterGICoreRPCError.socket("Core or selected script group is unavailable.")
+        }
+        try await supervisor.saveProjectCustomSettings(groupName: group.name, settings: settings)
+        await loadSchedulerGroupsFromCore()
+    }
+
+    func loadSchedulerAddCandidates(type: String) async throws -> [BetterGIAddCandidate] {
+        guard let supervisor = betterGICoreSupervisor else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is unavailable.")
+        }
+        return try await supervisor.listAddCandidates(type: type)
+    }
+
+    func addSchedulerProjects(type: String, candidateIDs: [String] = [], shellCommand: String? = nil) {
+        performSchedulerCatalogMutation(.add(type: type, candidateIDs: candidateIDs, shellCommand: shellCommand))
+    }
+
+    func performSchedulerCatalogMutation(_ mutation: BetterGISchedulerCatalogMutation) {
+        guard currentSchedulerProjectID == nil else {
+            addLog(.error, "Cannot edit scheduler group while it is running.")
+            return
+        }
+        guard let supervisor = betterGICoreSupervisor, let group = selectedSchedulerGroup else {
+            addLog(.error, "Cannot edit scheduler group: Core or selected group is unavailable.")
+            return
+        }
+        Task { [weak self] in
+            do {
+                try await supervisor.mutateSchedulerCatalog(groupName: group.name, mutation: mutation)
+                await self?.loadSchedulerGroupsFromCore()
+            } catch { self?.addLog(.error, "Scheduler edit failed: \(error.localizedDescription)") }
+        }
+    }
+
+    func openSchedulerProjectLocation(projectIndex: Int) {
+        guard let supervisor = betterGICoreSupervisor, let group = selectedSchedulerGroup else { return }
+        Task { [weak self] in
+            do {
+                let path = try await supervisor.projectLocation(groupName: group.name, projectIndex: projectIndex)
+                guard NSWorkspace.shared.open(URL(fileURLWithPath: path)) else {
+                    throw BetterGICoreRPCError.socket("Finder could not open the project directory.")
+                }
+            } catch { self?.addLog(.error, "Open project directory failed: \(error.localizedDescription)") }
+        }
+    }
+
+    func loadSelectedGroupConfig() async throws -> BetterGIGroupConfigSettings {
+        guard let supervisor = betterGICoreSupervisor, let group = selectedSchedulerGroup else {
+            throw BetterGICoreRPCError.socket("Core or selected script group is unavailable.")
+        }
+        return try await supervisor.groupConfig(groupName: group.name)
+    }
+
+    func saveSelectedGroupConfig(_ settings: BetterGIGroupConfigSettings) async throws {
+        guard let supervisor = betterGICoreSupervisor, let group = selectedSchedulerGroup else {
+            throw BetterGICoreRPCError.socket("Core or selected script group is unavailable.")
+        }
+        try await supervisor.saveGroupConfig(groupName: group.name, settings: settings)
+        await loadSchedulerGroupsFromCore()
     }
 
     private func startBetterGICore() async {
