@@ -38,6 +38,7 @@ using BetterGenshinImpact.GameTask.GameLoading;
 using BetterGenshinImpact.GameTask.MapMask;
 using BetterGenshinImpact.GameTask.SkillCd;
 using BetterGenshinImpact.Service;
+using BetterGenshinImpact.Service.Notification;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.GameTask.Shell;
 using Microsoft.Extensions.Logging;
@@ -267,7 +268,21 @@ server.AttachRuntimeArtifactInitializer(() =>
     return new RuntimeArtifactStatus(0, 34, "verification-source-lock.json");
 });
 var scriptHostServices = new MacScriptHostServices(loggerFactory);
-scriptHostServices.SetJsNotificationEnabled(true);
+using var notificationSettings = new NotificationSettingsCatalog(
+    layout, server.PlatformCallbacks, sessionToken, cancellation.Token,
+    loggerFactory.CreateLogger<NotificationSettingsCatalog>());
+notificationSettings.AttachScriptHostServices(scriptHostServices);
+server.AttachNotificationSettings(notificationSettings);
+NotificationRuntimePlatform.Configure(notificationSettings);
+_ = notificationSettings.Save(JObject.FromObject(new
+{
+    jsNotificationEnabled = true,
+    macOSNotificationEnabled = true,
+    notificationEventSubscribe = "js.custom",
+    webhookEnabled = false,
+    webhookEndpoint = "",
+    webhookSendTo = "",
+}));
 scriptHostServices.SetServerTimeZoneOffset(TimeSpan.FromHours(8));
 ServerTimeHelper.Initialize(new ServerTimeProvider(
     TimeProvider.System, () => scriptHostServices.ServerTimeZoneOffset));
@@ -883,7 +898,8 @@ try
             else
             {
                 Require(callback.Method == "notification.emit", "Core sent an unexpected notification callback method");
-                Require(callback.Params?.Value<string>("kind") == "success" &&
+                Require(callback.Params?.Value<string>("eventCode") == "js.custom" &&
+                        callback.Params?.Value<string>("result") == "Success" &&
                         callback.Params?.Value<string>("message") == "verification notification",
                     "Core platform callback lost notification semantics");
             }

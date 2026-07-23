@@ -30,6 +30,7 @@ using BetterGenshinImpact.GameTask.SkillCd;
 using BetterGenshinImpact.GameTask.UseRedeemCode;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.Service;
+using BetterGenshinImpact.Service.Notification;
 using BetterGenshinImpact.Helpers;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -95,10 +96,12 @@ using var loggerFactory = LoggerFactory.Create(builder => builder.AddSimpleConso
     options.TimestampFormat = "HH:mm:ss.fff ";
 }));
 var scriptHostServices = new MacScriptHostServices(loggerFactory);
-var notificationSettings = new NotificationSettingsCatalog(
-    layout, server.PlatformCallbacks, sessionToken, shutdown.Token);
+using var notificationSettings = new NotificationSettingsCatalog(
+    layout, server.PlatformCallbacks, sessionToken, shutdown.Token,
+    loggerFactory.CreateLogger<NotificationSettingsCatalog>());
 notificationSettings.AttachScriptHostServices(scriptHostServices);
 server.AttachNotificationSettings(notificationSettings);
+NotificationRuntimePlatform.Configure(notificationSettings);
 ScriptHostServices.Configure(scriptHostServices);
 ServerTimeHelper.Initialize(new ServerTimeProvider(TimeProvider.System, () => scriptHostServices.ServerTimeZoneOffset));
 server.AttachScriptHostServices(scriptHostServices);

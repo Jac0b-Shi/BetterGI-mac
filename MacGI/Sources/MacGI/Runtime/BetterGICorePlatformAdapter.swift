@@ -345,12 +345,13 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             )
         case "notification.emit":
             guard let parameters,
-                  let kind = parameters["kind"] as? String,
+                  let eventCode = parameters["eventCode"] as? String,
+                  let result = parameters["result"] as? String,
                   let message = parameters["message"] as? String,
                   !message.isEmpty
             else {
                 throw BetterGICorePlatformAdapterError.invalidParameters(
-                    "notification.emit requires kind and non-empty message."
+                    "notification.emit requires eventCode, result and non-empty message."
                 )
             }
             guard appState.notificationSettings?.macOSNotificationEnabled == true else {
@@ -358,7 +359,9 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                 return ["acknowledged": true]
             }
             let content = UNMutableNotificationContent()
-            content.title = kind == "error" ? "BetterGI 脚本错误" : "BetterGI 脚本通知"
+            content.title =
+                result == "Fail" ? "BetterGI 任务错误" : "BetterGI 通知"
+            content.subtitle = eventCode
             content.body = message
             let request = UNNotificationRequest(
                 identifier: "bettergi-core-\(UUID().uuidString)",
@@ -377,7 +380,9 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             if let deliveryError = delivery.error {
                 throw BetterGICorePlatformAdapterError.notificationRejected(deliveryError.localizedDescription)
             }
-            appState.addLog(kind == "error" ? .error : .info, "Core notification: \(message)")
+            appState.addLog(
+                result == "Fail" ? .error : .info,
+                "Core notification [\(eventCode)]: \(message)")
             return ["acknowledged": true]
         case "scheduler.event":
             guard let parameters,

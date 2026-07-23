@@ -237,7 +237,10 @@ public sealed class CoreRpcServer(
             if (request.Method == "keyMouse.stop")
                 return RpcResponse.Success(request.Id, await KeyMouseScripts.StopAsync());
             if (request.Method == "notification.test")
-                return RpcResponse.Success(request.Id, NotificationSettings.Test());
+                return RpcResponse.Success(
+                    request.Id,
+                    await NotificationSettings.TestAsync(
+                        RequiredString(request.Params, "channel")));
             if (request.Method == "hotKey.invoke")
             {
                 return RpcResponse.Success(

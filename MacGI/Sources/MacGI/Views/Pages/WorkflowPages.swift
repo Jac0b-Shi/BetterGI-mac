@@ -830,16 +830,74 @@ struct NotificationPage: View {
             ) {
                 EmptyView()
             } content: {
-                BGISettingLine(
-                    title: "允许 JS 脚本发送通知",
-                    subtitle: "启用后，调度器中获准发送通知的脚本可以调用通知接口。"
-                ) {
-                    Toggle("", isOn: Binding(
-                        get: { appState.notificationSettings?.jsNotificationEnabled ?? false },
-                        set: { appState.saveNotificationSettings(jsNotificationEnabled: $0) }
-                    ))
-                    .labelsHidden()
-                    .disabled(appState.notificationSettings == nil)
+                VStack(spacing: 0) {
+                    BGISettingLine(
+                        title: "允许 JS 脚本发送通知",
+                        subtitle: "启用后，调度器中获准发送通知的脚本可以调用通知接口。"
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: {
+                                appState.notificationSettings?
+                                    .jsNotificationEnabled ?? false
+                            },
+                            set: {
+                                appState.saveNotificationSettings(
+                                    jsNotificationEnabled: $0)
+                            }
+                        ))
+                        .labelsHidden()
+                        .disabled(appState.notificationSettings == nil)
+                    }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("需要通知的事件")
+                                    .font(BGIFonts.body)
+                                Text(eventSelectionSummary)
+                                    .font(BGIFonts.caption)
+                                    .foregroundStyle(BGIColors.secondaryText)
+                            }
+                            Spacer()
+                            Button("全选") {
+                                appState.setAllNotificationEvents(selected: true)
+                            }
+                            .buttonStyle(.bordered)
+                            Button("取消选择") {
+                                appState.setAllNotificationEvents(selected: false)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+
+                        LazyVGrid(
+                            columns: [
+                                GridItem(
+                                    .adaptive(minimum: 180),
+                                    alignment: .leading)
+                            ],
+                            alignment: .leading,
+                            spacing: 8
+                        ) {
+                            ForEach(
+                                appState.notificationSettings?.events ?? []
+                            ) { event in
+                                Toggle(
+                                    event.displayName,
+                                    isOn: Binding(
+                                        get: { event.selected },
+                                        set: {
+                                            appState.setNotificationEvent(
+                                                event.code,
+                                                selected: $0)
+                                        }))
+                                    .toggleStyle(.checkbox)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                 }
             }
 
@@ -867,7 +925,7 @@ struct NotificationPage: View {
                                 .lineLimit(2)
                         }
                         Button {
-                            appState.sendTestNotification()
+                            appState.sendTestNotification(channel: "native")
                         } label: {
                             Label("发送", systemImage: "paperplane")
                         }
@@ -877,6 +935,91 @@ struct NotificationPage: View {
                     }
                 }
             }
+
+            BGIOriginalCard(
+                icon: .symbol("link"),
+                title: "Webhook",
+                subtitle: "向兼容 BetterGI 通知载荷的 HTTP 端点发送事件"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: {
+                        appState.notificationSettings?.webhookEnabled ?? false
+                    },
+                    set: {
+                        appState.saveNotificationSettings(webhookEnabled: $0)
+                    }
+                ))
+                .labelsHidden()
+                .disabled(appState.notificationSettings == nil)
+            } content: {
+                VStack(spacing: 0) {
+                    BGISettingLine(
+                        title: "Webhook 地址",
+                        subtitle: "接收 BetterGI JSON 通知载荷的 HTTP 或 HTTPS 地址。"
+                    ) {
+                        TextField(
+                            "https://example.com/webhook",
+                            text: Binding(
+                                get: {
+                                    appState.notificationSettings?
+                                        .webhookEndpoint ?? ""
+                                },
+                                set: {
+                                    appState.saveNotificationSettings(
+                                        webhookEndpoint: $0)
+                                }))
+                            .textFieldStyle(.roundedBorder)
+                            .frame(minWidth: 260)
+                    }
+
+                    Divider()
+
+                    BGISettingLine(
+                        title: "发送目标",
+                        subtitle: "写入上游 Webhook 载荷的 send_to 字段。"
+                    ) {
+                        TextField(
+                            "可选",
+                            text: Binding(
+                                get: {
+                                    appState.notificationSettings?
+                                        .webhookSendTo ?? ""
+                                },
+                                set: {
+                                    appState.saveNotificationSettings(
+                                        webhookSendTo: $0)
+                                }))
+                            .textFieldStyle(.roundedBorder)
+                            .frame(minWidth: 180)
+                    }
+
+                    Divider()
+
+                    BGISettingLine(
+                        title: "测试 Webhook",
+                        subtitle: "使用当前已保存配置发送上游测试载荷。"
+                    ) {
+                        Button {
+                            appState.sendTestNotification(channel: "webhook")
+                        } label: {
+                            Label("发送", systemImage: "paperplane")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(
+                            appState.notificationSettings?.webhookEnabled != true)
+                    }
+                }
+            }
         }
+    }
+
+    private var eventSelectionSummary: String {
+        guard let events = appState.notificationSettings?.events else {
+            return "BetterGI Core 启动后加载事件列表"
+        }
+        let selectedCount = events.filter(\.selected).count
+        return selectedCount == 0
+            ? "未选择时按全部通知处理"
+            : "已选择 \(selectedCount) / \(events.count) 个事件"
     }
 }

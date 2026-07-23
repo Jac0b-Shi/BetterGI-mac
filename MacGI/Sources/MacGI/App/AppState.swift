@@ -352,6 +352,7 @@ final class AppState: ObservableObject {
     private var keyMouseRecordingStartTask: Task<Void, Never>?
     private var keyMousePlaybackPollTask: Task<Void, Never>?
     private var notificationSettingsSaveRevision = 0
+    private var notificationSettingsSaveTask: Task<Void, Never>?
     private var macroSettingsSaveRevision = 0
     private var hotKeySettingsSaveRevision = 0
     private var hotKeyMonitorErrorLogged = false
@@ -884,37 +885,104 @@ final class AppState: ObservableObject {
 
     func saveNotificationSettings(
         jsNotificationEnabled: Bool? = nil,
-        macOSNotificationEnabled: Bool? = nil
+        macOSNotificationEnabled: Bool? = nil,
+        selectedEventCodes: Set<String>? = nil,
+        webhookEnabled: Bool? = nil,
+        webhookEndpoint: String? = nil,
+        webhookSendTo: String? = nil
     ) {
-        guard let supervisor = betterGICoreSupervisor,
+        guard betterGICoreSupervisor != nil,
               let current = notificationSettings
         else {
             addLog(.error, "通知设置保存失败：BetterGI Core 尚未就绪。")
             return
         }
-        Task { [weak self] in
-            guard let self else { return }
-            let nativeEnabled = macOSNotificationEnabled ?? current.macOSNotificationEnabled
-            if nativeEnabled && !current.macOSNotificationEnabled {
+        if macOSNotificationEnabled == true &&
+            !current.macOSNotificationEnabled {
+            Task { [weak self] in
+                guard let self else { return }
                 do {
                     let granted = try await UNUserNotificationCenter.current()
                         .requestAuthorization(options: [.alert, .sound])
                     guard granted else {
-                        throw BetterGICoreRPCError.protocolViolation("macOS 通知权限未授权。")
+                        throw BetterGICoreRPCError.protocolViolation(
+                            "macOS 通知权限未授权。")
                     }
+                    self.applyNotificationSettingsUpdate(
+                        jsNotificationEnabled: jsNotificationEnabled,
+                        macOSNotificationEnabled: macOSNotificationEnabled,
+                        selectedEventCodes: selectedEventCodes,
+                        webhookEnabled: webhookEnabled,
+                        webhookEndpoint: webhookEndpoint,
+                        webhookSendTo: webhookSendTo)
                 } catch {
                     self.notificationTestStatus = error.localizedDescription
-                    self.addLog(.error, "macOS 通知授权失败：\(error.localizedDescription)")
-                    return
+                    self.addLog(
+                        .error,
+                        "macOS 通知授权失败：\(error.localizedDescription)")
                 }
             }
-            let next = BetterGINotificationSettings(
-                jsNotificationEnabled:
-                    jsNotificationEnabled ?? current.jsNotificationEnabled,
-                macOSNotificationEnabled: nativeEnabled)
-            self.notificationSettingsSaveRevision += 1
-            let revision = self.notificationSettingsSaveRevision
-            self.notificationSettings = next
+            return
+        }
+        applyNotificationSettingsUpdate(
+            jsNotificationEnabled: jsNotificationEnabled,
+            macOSNotificationEnabled: macOSNotificationEnabled,
+            selectedEventCodes: selectedEventCodes,
+            webhookEnabled: webhookEnabled,
+            webhookEndpoint: webhookEndpoint,
+            webhookSendTo: webhookSendTo)
+    }
+
+    private func applyNotificationSettingsUpdate(
+        jsNotificationEnabled: Bool?,
+        macOSNotificationEnabled: Bool?,
+        selectedEventCodes: Set<String>?,
+        webhookEnabled: Bool?,
+        webhookEndpoint: String?,
+        webhookSendTo: String?
+    ) {
+        guard let supervisor = betterGICoreSupervisor,
+              let current = notificationSettings
+        else {
+            return
+        }
+        let eventSubscribe = selectedEventCodes.map { selectedCodes in
+            current.events
+                .filter { selectedCodes.contains($0.code) }
+                .map(\.code)
+                .joined(separator: ",")
+        } ?? current.notificationEventSubscribe
+        let next = BetterGINotificationSettings(
+            jsNotificationEnabled:
+                jsNotificationEnabled ?? current.jsNotificationEnabled,
+            macOSNotificationEnabled:
+                macOSNotificationEnabled ?? current.macOSNotificationEnabled,
+            notificationEventSubscribe: eventSubscribe,
+            events: current.events.map { event in
+                BetterGINotificationEvent(
+                    code: event.code,
+                    displayName: event.displayName,
+                    selected:
+                        selectedEventCodes?.contains(event.code)
+                        ?? event.selected)
+            },
+            webhookEnabled:
+                webhookEnabled ?? current.webhookEnabled,
+            webhookEndpoint:
+                webhookEndpoint ?? current.webhookEndpoint,
+            webhookSendTo:
+                webhookSendTo ?? current.webhookSendTo)
+        notificationSettingsSaveRevision += 1
+        let revision = notificationSettingsSaveRevision
+        notificationSettings = next
+        notificationSettingsSaveTask?.cancel()
+        notificationSettingsSaveTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(250))
+            } catch {
+                return
+            }
+            guard let self else { return }
             do {
                 let saved = try await supervisor.saveNotificationSettings(next)
                 if revision == self.notificationSettingsSaveRevision {
@@ -925,18 +993,40 @@ final class AppState: ObservableObject {
                 if revision == self.notificationSettingsSaveRevision {
                     await self.loadNotificationSettingsFromCore()
                 }
-                self.addLog(.error, "通知设置保存失败：\(error.localizedDescription)")
+                self.addLog(
+                    .error,
+                    "通知设置保存失败：\(error.localizedDescription)")
             }
         }
     }
 
-    func sendTestNotification() {
+    func setNotificationEvent(_ code: String, selected: Bool) {
+        guard let settings = notificationSettings else { return }
+        var selectedCodes = Set(
+            settings.events.filter(\.selected).map(\.code))
+        if selected {
+            selectedCodes.insert(code)
+        } else {
+            selectedCodes.remove(code)
+        }
+        saveNotificationSettings(selectedEventCodes: selectedCodes)
+    }
+
+    func setAllNotificationEvents(selected: Bool) {
+        guard let settings = notificationSettings else { return }
+        saveNotificationSettings(
+            selectedEventCodes:
+                selected ? Set(settings.events.map(\.code)) : [])
+    }
+
+    func sendTestNotification(channel: String) {
         guard let supervisor = betterGICoreSupervisor else { return }
         notificationTestStatus = "正在发送"
         Task { [weak self] in
             do {
-                try await supervisor.testNotification()
-                self?.notificationTestStatus = "发送成功"
+                try await supervisor.testNotification(channel: channel)
+                self?.notificationTestStatus =
+                    channel == "webhook" ? "Webhook 发送成功" : "系统通知发送成功"
             } catch {
                 self?.notificationTestStatus = error.localizedDescription
                 self?.addLog(.error, "测试通知失败：\(error.localizedDescription)")

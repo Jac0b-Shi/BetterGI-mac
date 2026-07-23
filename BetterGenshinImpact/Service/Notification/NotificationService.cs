@@ -39,6 +39,7 @@ public class NotificationService : IHostedService, IDisposable
         _notifierManager = notifierManager ?? throw new ArgumentNullException(nameof(notifierManager));
         _notifyHttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         _webSocketCts = new CancellationTokenSource();
+        NotificationRuntimePlatform.Configure(new ServiceRuntimePlatform(this));
 
         lock (InstanceLock)
         {
@@ -489,5 +490,12 @@ public class NotificationService : IHostedService, IDisposable
                 TaskControl.Logger.LogError(ex, "后台发送通知时发生错误");
             }
         });
+    }
+
+    private sealed class ServiceRuntimePlatform(NotificationService service)
+        : INotificationRuntimePlatform
+    {
+        public void Send(BaseNotificationData notificationData) =>
+            service.NotifyAllNotifiers(notificationData);
     }
 }

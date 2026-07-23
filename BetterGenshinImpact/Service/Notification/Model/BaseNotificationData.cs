@@ -49,7 +49,7 @@ public class BaseNotificationData
     {
         try
         {
-            NotificationService.Instance().NotifyAllNotifiers(this);
+            NotificationRuntimePlatform.Send(this);
         }
         catch (Exception e)
         {

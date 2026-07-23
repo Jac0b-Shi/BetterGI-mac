@@ -29,6 +29,19 @@ struct BetterGIKeyMousePlaybackStatus: Sendable, Equatable {
 struct BetterGINotificationSettings: Sendable, Equatable {
     let jsNotificationEnabled: Bool
     let macOSNotificationEnabled: Bool
+    let notificationEventSubscribe: String
+    let events: [BetterGINotificationEvent]
+    let webhookEnabled: Bool
+    let webhookEndpoint: String
+    let webhookSendTo: String
+}
+
+struct BetterGINotificationEvent: Sendable, Equatable, Identifiable {
+    let code: String
+    let displayName: String
+    let selected: Bool
+
+    var id: String { code }
 }
 
 struct BetterGIHotKeyBinding: Sendable, Equatable, Identifiable {
@@ -603,13 +616,19 @@ actor BetterGICoreProcessSupervisor {
                 "settings": [
                     "jsNotificationEnabled": settings.jsNotificationEnabled,
                     "macOSNotificationEnabled": settings.macOSNotificationEnabled,
+                    "notificationEventSubscribe":
+                        settings.notificationEventSubscribe,
+                    "webhookEnabled": settings.webhookEnabled,
+                    "webhookEndpoint": settings.webhookEndpoint,
+                    "webhookSendTo": settings.webhookSendTo,
                 ],
             ]))
     }
 
-    func testNotification() throws {
+    func testNotification(channel: String) throws {
         guard let result = try runningClient().request(
-            method: "notification.test") as? [String: Any],
+            method: "notification.test",
+            parameters: ["channel": channel]) as? [String: Any],
               result["sent"] as? Bool == true
         else {
             throw BetterGICoreRPCError.protocolViolation("Invalid notification.test result.")
@@ -699,13 +718,37 @@ actor BetterGICoreProcessSupervisor {
     {
         guard let result = value as? [String: Any],
               let jsEnabled = result["jsNotificationEnabled"] as? Bool,
-              let nativeEnabled = result["macOSNotificationEnabled"] as? Bool
+              let nativeEnabled = result["macOSNotificationEnabled"] as? Bool,
+              let eventSubscribe =
+                result["notificationEventSubscribe"] as? String,
+              let eventValues = result["events"] as? [[String: Any]],
+              let webhookEnabled = result["webhookEnabled"] as? Bool,
+              let webhookEndpoint = result["webhookEndpoint"] as? String,
+              let webhookSendTo = result["webhookSendTo"] as? String
         else {
             throw BetterGICoreRPCError.protocolViolation("Invalid notification settings.")
         }
+        let events = try eventValues.map { value in
+            guard let code = value["code"] as? String,
+                  let displayName = value["displayName"] as? String,
+                  let selected = value["selected"] as? Bool
+            else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid notification event descriptor.")
+            }
+            return BetterGINotificationEvent(
+                code: code,
+                displayName: displayName,
+                selected: selected)
+        }
         return BetterGINotificationSettings(
             jsNotificationEnabled: jsEnabled,
-            macOSNotificationEnabled: nativeEnabled)
+            macOSNotificationEnabled: nativeEnabled,
+            notificationEventSubscribe: eventSubscribe,
+            events: events,
+            webhookEnabled: webhookEnabled,
+            webhookEndpoint: webhookEndpoint,
+            webhookSendTo: webhookSendTo)
     }
 
     private func parseHotKeyBindings(_ value: Any) throws

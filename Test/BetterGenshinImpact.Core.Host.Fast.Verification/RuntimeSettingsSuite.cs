@@ -5,11 +5,14 @@ using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.Core.Recorder;
 using BetterGenshinImpact.Core.Recorder.Model;
 using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.Service.Notification;
 using BetterGenshinImpact.Verification.Framework;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Runtime.Versioning;
+using System.Text;
 
 namespace BetterGenshinImpact.Core.Host.Fast.Verification;
 
@@ -43,7 +46,11 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                   },
                   "notificationConfig": {
                     "jsNotificationEnabled": false,
-                    "windowsUwpNotificationEnabled": false
+                    "windowsUwpNotificationEnabled": false,
+                    "notificationEventSubscribe": "js.custom",
+                    "webhookEnabled": false,
+                    "webhookEndpoint": "",
+                    "webhookSendTo": ""
                   },
                   "hotKeyConfig": {
                     "bgiEnabledHotkey": "F11",
@@ -83,13 +90,70 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             using var loggerFactory = LoggerFactory.Create(_ => { });
             var scriptHostServices = new MacScriptHostServices(loggerFactory);
             var notificationCatalog = new NotificationSettingsCatalog(
-                layout, new PlatformCallbackChannel(), "verification", cancellationToken);
+                layout, new PlatformCallbackChannel(), "verification", cancellationToken,
+                loggerFactory.CreateLogger<NotificationSettingsCatalog>());
             notificationCatalog.AttachScriptHostServices(scriptHostServices);
             _ = notificationCatalog.Save(JObject.FromObject(new
             {
                 jsNotificationEnabled = true,
                 macOSNotificationEnabled = true,
+                notificationEventSubscribe = "js.error,js.custom,JS.ERROR",
+                webhookEnabled = false,
+                webhookEndpoint = "",
+                webhookSendTo = "verification",
             }));
+            var notificationSettings = JObject.FromObject(notificationCatalog.Get());
+            var notificationEvents = (JArray)notificationSettings["events"]!;
+            context.Require(
+                notificationSettings.Value<string>("notificationEventSubscribe") ==
+                    "js.error,js.custom" &&
+                notificationEvents.Any(item =>
+                    item.Value<string>("code") == "js.error" &&
+                    item.Value<bool>("selected")) &&
+                notificationEvents.Any(item =>
+                    item.Value<string>("code") == "domain.reward" &&
+                    !item.Value<bool>("selected")) &&
+                NotificationEventSubscriptionHelper.ShouldSendNotification(
+                    "js.error,js.custom", "JS.CUSTOM") &&
+                !NotificationEventSubscriptionHelper.ShouldSendNotification(
+                    "js.error,js.custom", "domain.end"),
+                "Notification settings did not preserve the upstream event subscription contract.");
+            context.Require(
+                Throws<ArgumentException>(() => notificationCatalog.Save(
+                    JObject.FromObject(new
+                    {
+                        jsNotificationEnabled = true,
+                        macOSNotificationEnabled = true,
+                        notificationEventSubscribe = "unknown.event",
+                        webhookEnabled = false,
+                        webhookEndpoint = "",
+                        webhookSendTo = "",
+                    }))),
+                "Notification settings accepted an unknown event code.");
+            using var webhookListener = new TcpListener(IPAddress.Loopback, 0);
+            webhookListener.Start();
+            var webhookEndpoint =
+                $"http://127.0.0.1:{((IPEndPoint)webhookListener.LocalEndpoint).Port}/notify";
+            var webhookRequestTask = ReadHttpRequestBodyAsync(
+                webhookListener, cancellationToken);
+            _ = notificationCatalog.Save(JObject.FromObject(new
+            {
+                jsNotificationEnabled = true,
+                macOSNotificationEnabled = true,
+                notificationEventSubscribe = "js.error,js.custom",
+                webhookEnabled = true,
+                webhookEndpoint,
+                webhookSendTo = "verification",
+            }));
+            _ = await notificationCatalog.TestAsync("webhook");
+            var webhookPayload = JObject.Parse(await webhookRequestTask);
+            context.Require(
+                webhookPayload.Value<string>("send_to") == "verification" &&
+                webhookPayload.Value<string>("event") == "notify.test" &&
+                webhookPayload.Value<int>("result") == 0 &&
+                webhookPayload.Value<string>("message") ==
+                    "这是一条 BetterGI 测试通知。",
+                $"The extracted upstream Webhook notifier sent an unexpected test payload: {webhookPayload}");
 
             var hotKeyUpdates = new List<(string Id, string HotKey)>();
             var hotKeyCatalog = new HotKeySettingsCatalog(layout);
@@ -165,6 +229,12 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 persisted["macroConfig"]?.Value<int>("spaceFireInterval") == 120 &&
                 persisted["notificationConfig"]?.Value<bool>("jsNotificationEnabled") == true &&
                 persisted["notificationConfig"]?.Value<bool>("windowsUwpNotificationEnabled") == true &&
+                persisted["notificationConfig"]?.Value<string>("notificationEventSubscribe") ==
+                    "js.error,js.custom" &&
+                persisted["notificationConfig"]?.Value<string>("webhookSendTo") ==
+                    "verification" &&
+                persisted["notificationConfig"]?.Value<bool>("webhookEnabled") ==
+                    true &&
                 persisted["hotKeyConfig"]?.Value<string>("autoPickEnabledHotkey") == "F6" &&
                 persisted["hotKeyConfig"]?.Value<string>("autoSkipEnabledHotkey") == "F7" &&
                 persisted["hotKeyConfig"]?.Value<string>("quickTeleportTickHotkey") == "" &&
@@ -264,7 +334,11 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             context.Require(
                 notificationGet.Error is null &&
                 notificationResult.Value<bool>("jsNotificationEnabled") &&
-                notificationResult.Value<bool>("macOSNotificationEnabled"),
+                notificationResult.Value<bool>("macOSNotificationEnabled") &&
+                notificationResult.Value<string>("notificationEventSubscribe") ==
+                    "js.error,js.custom" &&
+                notificationResult.Value<bool>("webhookEnabled") &&
+                ((JArray)notificationResult["events"]!).Count > 10,
                 notificationGet.Error?.Message ?? "notification.settings.get returned an invalid result.");
 
             var hotKeyList = await ExchangeAsync(
@@ -394,5 +468,46 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
         {
             return true;
         }
+    }
+
+    private static async Task<string> ReadHttpRequestBodyAsync(
+        TcpListener listener,
+        CancellationToken cancellationToken)
+    {
+        using var client = await listener.AcceptTcpClientAsync(cancellationToken);
+        await using var stream = client.GetStream();
+        using var reader = new StreamReader(
+            stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: false,
+            leaveOpen: true);
+        var contentLength = 0;
+        while (await reader.ReadLineAsync(cancellationToken) is { } line &&
+               line.Length > 0)
+        {
+            const string contentLengthHeader = "Content-Length:";
+            if (line.StartsWith(
+                    contentLengthHeader,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                contentLength = int.Parse(
+                    line[contentLengthHeader.Length..].Trim());
+            }
+        }
+        var buffer = new char[contentLength];
+        var read = 0;
+        while (read < buffer.Length)
+        {
+            var count = await reader.ReadAsync(
+                buffer.AsMemory(read, buffer.Length - read),
+                cancellationToken);
+            if (count == 0)
+                throw new EndOfStreamException(
+                    "Webhook request ended before its declared body length.");
+            read += count;
+        }
+        var response = Encoding.ASCII.GetBytes(
+            "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        await stream.WriteAsync(response, cancellationToken);
+        await stream.FlushAsync(cancellationToken);
+        return new string(buffer);
     }
 }
