@@ -149,10 +149,10 @@
 
 | 差异项 | 上游 | macOS 当前 | 影响 |
 |--------|------|-----------|------|
-| JS 引擎 | ClearScript.V8 (V8) | JavaScriptCore | ⚠️ JSC 对某些 ES2020+ 语法兼容性可能有差；require/import 语义不同 |
-| 模块系统 | ClearScript CommonJS | 自定义 PackageDocumentLoader + 重写 import | ⚠️ 某些复杂脚本可能无法直接运行 |
-| WebView | WebView2 | 计划用 WKWebView，尚未绑定 | 🔴 仓库浏览界面未实现 |
-| HTML 遮罩 | WPF WebView2 overlay | 未实现 | 🔴 部分脚本依赖 HTML mask 交互 |
+| JS 引擎 | ClearScript.V8 (V8) | C# Core Host 使用 ClearScript V8 `osx-arm64` | ✅ 同一上游引擎 |
+| 模块系统 | ClearScript CommonJS | C# Core Host 使用上游 PackageDocumentLoader | ✅ 由 Core 解析 |
+| WebView | WebView2 | Swift 平台层使用 WKWebView | 🟡 平台实现不同 |
+| HTML 遮罩 | WPF WebView2 overlay | Core `htmlMask` 合同 + Swift WKWebView 窗口/消息桥 | 🟡 待更多真实脚本验证 |
 
 ### 7.2 脚本 API 兼容性
 

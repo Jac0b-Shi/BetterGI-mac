@@ -33,5 +33,22 @@ public sealed class RuntimeCancellationSuite : IVerificationSuite
         catch (OperationCanceledException)
         {
         }
+
+        var cleanupCount = 0;
+        using var dispatcherCancellation = new CancellationTokenSource();
+        var dispatcher = new MacTriggerDispatcher(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MacTriggerDispatcher>.Instance,
+            dispatcherCancellation.Token,
+            token => Task.Delay(Timeout.InfiniteTimeSpan, token),
+            _ =>
+            {
+                Interlocked.Increment(ref cleanupCount);
+                return Task.CompletedTask;
+            });
+        dispatcher.Start();
+        await dispatcher.StopAsync(cancellationToken);
+        context.Require(
+            cleanupCount == 1 && !dispatcher.IsRunning,
+            "Runtime stop did not close the platform-owned HTML masks.");
     }
 }

@@ -56,6 +56,17 @@ RPC methods expose Core-owned DTOs and commands. Platform callbacks are limited
 to capture, window metrics/focus, semantic input, notifications, file/folder
 presentation and overlay presentation.
 
+Captured BGRA frames cross the Swift/Core boundary through a process-scoped,
+double-buffered POSIX shared-memory object. The authenticated callback carries
+only committed frame metadata and the shared-memory name; production capture
+never writes a frame ring under `Application Support`. The legacy
+`Run/capture-ring.bin` path is accepted only by explicit verifier fixtures.
+
+The upstream ClearScript `htmlMask` host remains C#-owned. Core preserves the
+upstream window and request/response contract, while Swift implements the
+platform WebView surface with `WKWebView`. Runtime stop closes every platform
+HTML mask.
+
 The upstream `--startGroups <name...>` command-line flow is parsed by Swift only
 to obtain ordered names. Core receives one `scheduler.runGroups` request and
 owns the continuous-group flag, two-second interval, one task lifecycle and

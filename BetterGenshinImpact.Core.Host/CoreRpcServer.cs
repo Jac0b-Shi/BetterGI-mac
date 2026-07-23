@@ -513,7 +513,7 @@ public sealed class CoreRpcServer(
                 await _soloTasks.StopActiveAsync(cancellationToken);
             if (_keyMouseScripts is not null)
                 await _keyMouseScripts.StopAsync();
-            await RequiredTriggerDispatcher().StopAsync();
+            await RequiredTriggerDispatcher().StopAsync(cancellationToken);
             return RuntimeStatus();
         }
         finally
@@ -541,7 +541,7 @@ public sealed class CoreRpcServer(
             var dispatcher = RequiredTriggerDispatcher();
             var restart = dispatcher.IsRunning;
             if (restart)
-                await dispatcher.StopAsync();
+                await dispatcher.StopAsync(cancellationToken);
 
             var enabledStates = GameTaskManager.TriggerDictionary?
                 .ToDictionary(pair => pair.Key, pair => pair.Value.IsEnabled, StringComparer.Ordinal)

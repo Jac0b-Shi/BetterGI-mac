@@ -8,6 +8,7 @@ enum BetterGICorePlatformAdapterError: LocalizedError {
     case unsupportedMethod(String)
     case inputRejected(String)
     case notificationRejected(String)
+    case htmlMaskRejected(String)
 
     var errorDescription: String? {
         switch self {
@@ -15,6 +16,7 @@ enum BetterGICorePlatformAdapterError: LocalizedError {
         case .unsupportedMethod(let method): "Unsupported Core platform callback: \(method)"
         case .inputRejected(let reason): "InputSafetyGate rejected Core input: \(reason)"
         case .notificationRejected(let reason): "macOS rejected Core notification: \(reason)"
+        case .htmlMaskRejected(let reason): "macOS rejected Core HTML mask: \(reason)"
         }
     }
 }
@@ -44,15 +46,20 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
     private weak var appState: AppState?
     private var audioCapture: BGIAudioSampleProvider?
     private let captureRing: BetterGICoreCaptureRing
+    private let htmlMaskController: MacHTMLMaskController
 
     @MainActor
     init(appState: AppState) {
         self.appState = appState
         captureRing = BetterGICoreCaptureRing(runURL: appState.betterGICoreRunURL)
+        htmlMaskController = MacHTMLMaskController(appState: appState)
     }
 
     func handle(method: String, parameters: [String: Any]?) throws -> Any {
         if method == "capture.request" { return try handleCaptureRequest() }
+        if method.hasPrefix("htmlMask.") {
+            return try handleHTMLMaskRequest(method: method, parameters: parameters)
+        }
         let transfer = CallbackTransfer(method: method, parameters: parameters)
         DispatchQueue.main.sync { [weak self] in
             MainActor.assumeIsolated {
@@ -72,6 +79,35 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
         }
         guard let result = transfer.result else {
             throw BetterGICorePlatformAdapterError.invalidParameters("Platform callback produced no result.")
+        }
+        return try result.get()
+    }
+
+    private func handleHTMLMaskRequest(
+        method: String,
+        parameters: [String: Any]?
+    ) throws -> Any {
+        let semaphore = DispatchSemaphore(value: 0)
+        let transfer = CallbackTransfer(method: method, parameters: parameters)
+        Task { @MainActor [weak self] in
+            do {
+                guard let self else {
+                    throw BetterGICorePlatformAdapterError.htmlMaskRejected(
+                        "HTML mask controller is unavailable.")
+                }
+                transfer.result = .success(
+                    try await self.htmlMaskController.handle(
+                        method: transfer.method,
+                        parameters: transfer.parameters))
+            } catch {
+                transfer.result = .failure(error)
+            }
+            semaphore.signal()
+        }
+        semaphore.wait()
+        guard let result = transfer.result else {
+            throw BetterGICorePlatformAdapterError.htmlMaskRejected(
+                "HTML mask callback produced no result.")
         }
         return try result.get()
     }

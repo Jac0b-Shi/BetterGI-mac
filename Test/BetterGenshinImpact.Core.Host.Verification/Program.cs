@@ -1118,12 +1118,20 @@ try
     DispatcherRuntimePlatform.Configure(dispatcherRuntime);
     server.AttachSoloTaskCoordinator(new SoloTaskCoordinator(
         dispatcherRuntime, server.SoloTaskSettings, cancellation.Token));
-    ScriptProjectHost.Configure(new MacScriptProjectHostInitializer(scriptGroupExecutionServices));
+    ScriptProjectHost.Configure(new MacScriptProjectHostInitializer(
+        scriptGroupExecutionServices,
+        server.PlatformCallbacks,
+        sessionToken,
+        cancellation.Token));
     using (var hostSurfaceEngine = new V8ScriptEngine(
                V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding |
                V8ScriptEngineFlags.EnableTaskPromiseConversion))
     {
-        new MacScriptProjectHostInitializer(scriptGroupExecutionServices).Initialize(
+        new MacScriptProjectHostInitializer(
+            scriptGroupExecutionServices,
+            server.PlatformCallbacks,
+            sessionToken,
+            cancellation.Token).Initialize(
             hostSurfaceEngine, Path.Combine(layout.UserPath, "JsScript"), [], null);
         var missingHostNames = Convert.ToString(hostSurfaceEngine.Evaluate("""
             ["keyMouseScript", "pathingScript", "genshin", "dispatcher", "RecognitionObject", "BvPage", "BvLocator", "BvImage", "DesktopRegion", "GameCaptureRegion", "ImageRegion", "Region",
@@ -1710,7 +1718,11 @@ try
                V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding |
                V8ScriptEngineFlags.EnableTaskPromiseConversion))
     {
-        new MacScriptProjectHostInitializer(scriptGroupExecutionServices).Initialize(
+        new MacScriptProjectHostInitializer(
+            scriptGroupExecutionServices,
+            server.PlatformCallbacks,
+            sessionToken,
+            cancellation.Token).Initialize(
             bvEngine, Path.Combine(layout.UserPath, "JsScript"), [], null);
         var bvFound = bvEngine.Evaluate("""
             const page = new BvPage();
@@ -1743,7 +1755,11 @@ try
     }, cancellation.Token);
     using (var metricsEngine = new V8ScriptEngine(V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding))
     {
-        new MacScriptProjectHostInitializer(scriptGroupExecutionServices).Initialize(
+        new MacScriptProjectHostInitializer(
+            scriptGroupExecutionServices,
+            server.PlatformCallbacks,
+            sessionToken,
+            cancellation.Token).Initialize(
             metricsEngine, Path.Combine(layout.UserPath, "JsScript"), [], null);
         var metricsJson = Convert.ToString(metricsEngine.Evaluate("""
             JSON.stringify({ width: genshin.width, height: genshin.height, dpi: genshin.screenDpiScale });
@@ -1791,7 +1807,11 @@ try
                V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding |
                V8ScriptEngineFlags.EnableTaskPromiseConversion))
     {
-        new MacScriptProjectHostInitializer(scriptGroupExecutionServices).Initialize(
+        new MacScriptProjectHostInitializer(
+            scriptGroupExecutionServices,
+            server.PlatformCallbacks,
+            sessionToken,
+            cancellation.Token).Initialize(
             mapEngine, Path.Combine(layout.UserPath, "JsScript"), [], null);
         var positionJson = Convert.ToString(mapEngine.Evaluate("""
             const position = genshin.getPositionFromMapWithMatchingMethod("Teyvat", "TemplateMatch", 0);

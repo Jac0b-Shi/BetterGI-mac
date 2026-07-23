@@ -13,6 +13,7 @@ using Microsoft.ClearScript.JavaScript;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.RegularExpressions;
+using BetterGenshinImpact.Core.Host.Transport;
 
 var root = args.Length == 1
     ? Path.GetFullPath(args[0])
@@ -53,7 +54,13 @@ var recordingRuntime = new RecordingGlobalMethodRuntime();
 GlobalMethod.Configure(recordingRuntime);
 ScriptHostServices.Configure(new VerificationScriptHostServices());
 var scriptGroupExecutionServices = new VerificationScriptGroupExecutionServices();
-ScriptProjectHost.Configure(new MacScriptProjectHostInitializer(scriptGroupExecutionServices));
+ScriptProjectHost.Configure(new MacScriptProjectHostInitializer(
+    scriptGroupExecutionServices,
+    workDir => new MacHtmlMask(
+        workDir,
+        (method, parameters) => method == "htmlMask.show"
+            ? JObject.FromObject(new { windowId = "verification-window" })
+            : JObject.FromObject(new { acknowledged = true }))));
 VerifyProductionHostSurface(javascriptProjects, scriptGroupExecutionServices);
 VerifyPathingActionSurface(javascriptProjects);
 
@@ -132,7 +139,7 @@ static void VerifyProductionHostSurface(
     string[] hostObjectNames =
     [
         "genshin", "dispatcher", "pathingScript", "keyMouseScript", "file", "log",
-        "notification", "http", "strategyFile", "host"
+        "notification", "http", "strategyFile", "host", "htmlMask"
     ];
     var hostPattern = new Regex(
         $@"\b(?<host>{string.Join("|", hostObjectNames.Select(Regex.Escape))})\s*\.\s*(?<member>[A-Za-z_$][A-Za-z0-9_$]*)",
@@ -161,7 +168,12 @@ static void VerifyProductionHostSurface(
     using var engine = new V8ScriptEngine(
         V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding |
         V8ScriptEngineFlags.EnableTaskPromiseConversion);
-    new MacScriptProjectHostInitializer(scriptGroupExecutionServices).Initialize(
+    new MacScriptProjectHostInitializer(
+        scriptGroupExecutionServices,
+        workDir => new MacHtmlMask(
+            workDir,
+            (method, parameters) => JObject.FromObject(new { acknowledged = true })))
+        .Initialize(
         engine, firstProjectPath, [".", "./packages"], firstProject.JsScriptSettingsObject);
 
     var hostTypes = new Dictionary<string, Type>(StringComparer.Ordinal)
@@ -175,7 +187,8 @@ static void VerifyProductionHostSurface(
         ["notification"] = typeof(Notification),
         ["http"] = typeof(Http),
         ["strategyFile"] = typeof(StrategyFile),
-        ["host"] = typeof(CustomHostFunctions)
+        ["host"] = typeof(CustomHostFunctions),
+        ["htmlMask"] = typeof(MacHtmlMask)
     };
     var missingRoots = hostObjectNames
         .Where(name => !Convert.ToBoolean(engine.Evaluate(
@@ -221,6 +234,16 @@ static void VerifyProductionHostSurface(
             "Real User dispatcher surface is not fully behavior-verified: " +
             string.Join(", ", referencedDispatcherMembers.Order(StringComparer.OrdinalIgnoreCase)));
 
+    var referencedHtmlMaskMembers = memberReferences
+        .Where(reference => reference.Host == "htmlMask")
+        .Select(reference => reference.Member)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    string[] verifiedHtmlMaskMembers = ["request", "send", "show"];
+    if (!referencedHtmlMaskMembers.SetEquals(verifiedHtmlMaskMembers))
+        throw new InvalidDataException(
+            "Real User htmlMask surface is not fully behavior-verified: " +
+            string.Join(", ", referencedHtmlMaskMembers.Order(StringComparer.OrdinalIgnoreCase)));
+
     string[] requiredGlobals =
     [
         "sleep", "getVersion", "keyDown", "keyUp", "keyPress", "setGameMetrics", "getGameMetrics",
@@ -251,6 +274,7 @@ static void VerifyProductionHostSurface(
     Console.WriteLine(
         $"PASS production host surface: members={memberReferences.Count}, globals={requiredGlobals.Length}, " +
         $"genshin={referencedGenshinMembers.Count}, dispatcher={referencedDispatcherMembers.Count}, " +
+        $"htmlMask={referencedHtmlMaskMembers.Count}, " +
         $"realtimeTriggers={string.Join(",", timerNames.Order())}");
 }
 

@@ -33,6 +33,7 @@ using BetterGenshinImpact.Service;
 using BetterGenshinImpact.Helpers;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 if (!OperatingSystem.IsMacOS())
     throw new PlatformNotSupportedException("BetterGI Core Host currently supports macOS only.");
@@ -130,8 +131,21 @@ var semanticInputBackend = new MacSemanticInputBackend(
     foregroundInputCoordinator, shutdown.Token);
 var paddleAutoPickRecognizer = imageRegionOcrService.CreatePaddleAutoPickTextRecognizer();
 var yapAutoPickRecognizer = imageRegionOcrService.CreateYapAutoPickTextRecognizer(layout);
+var platformCallbacks = server.PlatformCallbacks;
 var triggerDispatcher = new MacTriggerDispatcher(
-    loggerFactory.CreateLogger<MacTriggerDispatcher>(), shutdown.Token);
+    loggerFactory.CreateLogger<MacTriggerDispatcher>(),
+    shutdown.Token,
+    stopCleanup: async cancellationToken =>
+    {
+        var result = await platformCallbacks.InvokeAsync(
+            "htmlMask.closeAll", null, sessionToken, cancellationToken);
+        if (result is not JObject response ||
+            response.Value<bool?>("acknowledged") != true)
+        {
+            throw new InvalidDataException(
+                "macOS did not acknowledge HTML mask cleanup.");
+        }
+    });
 server.AttachTriggerDispatcher(triggerDispatcher);
 server.AttachPlatformAssetInitializer(() =>
 {
@@ -287,7 +301,11 @@ GameTaskManagerPlatform.Configure(gameTaskManagerPlatform);
 OverlayDrawPlatform.Configure(new MacOverlayDrawPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token));
 GlobalMethod.Configure(globalMethodRuntime);
-ScriptProjectHost.Configure(new MacScriptProjectHostInitializer(scriptGroupExecutionServices));
+ScriptProjectHost.Configure(new MacScriptProjectHostInitializer(
+    scriptGroupExecutionServices,
+    server.PlatformCallbacks,
+    sessionToken,
+    shutdown.Token));
 await server.RunAsync(shutdown.Token);
 shutdown.Cancel();
 if (parentLifetimeTask is not null)

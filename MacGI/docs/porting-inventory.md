@@ -268,9 +268,9 @@ GameTask/MapMask/Assets/     — 地图 tile
 
 | 组件 | 原实现 | macOS 方案 |
 |---|---|---|
-| JS 引擎 | Microsoft.ClearScript.V8 (win-x64) | 当前用 JavaScriptCore 建第一层 runtime，后续可替换 `osx-arm64` / `osx-x64` native V8/QuickJS |
-| WebView2 | Microsoft.Web.WebView2 | 换 WKWebView |
-| HTML 遮罩 | WPF WebView2 overlay | 需要重写（非关键路径） |
+| JS 引擎 | Microsoft.ClearScript.V8 (win-x64) | C# Core Host 使用 ClearScript V8 `osx-arm64` |
+| WebView2 | Microsoft.Web.WebView2 | Swift 平台层使用 WKWebView |
+| HTML 遮罩 | WPF WebView2 overlay | Core 保留上游 `htmlMask` 合同，Swift 负责 WKWebView 窗口与消息桥 |
 
 ### 5.2 Script API Surface
 
@@ -331,7 +331,7 @@ JS 脚本可调用的能力（`genshin.*` 全局对象）:
 - ✅ 真实 `wine — 原神` 大地图 dry-run 验证通过：2026-07-03 `RealGenshinBigMapVerificationTests.openBigMapSkipsMapHotkeyWhenRealWindowAlreadyInBigMapUI` 在当前大地图窗口下调用 `openBigMap()`，input handler 记录到 `actions: []`，证明不会发送 `M` 或其它输入
 - ✅ JS `genshin.*` 命令已新增 AppState 层 record-then-replay：`BGIJSScriptRunner` 继续记录 typed `BGIJSScriptGenshinCommand`，`BGIJSScriptGenshinCommandReplayer` 会把 `genshin.Tp(x, y, mapName, true)` 串到 `BGIBigMapInteractionService`，统一经过 `InputSafetyGate`；`SetBigMapZoomLevel(level)` 已按上游 `TpTask.AdjustMapZoomLevel(double,double)` 接入同一大地图服务，先识别当前 1.0...6.0 zoomLevel，再按 `ZoomButtonX=47`、`ZoomStartY=468`、`ZoomEndY=612` 拖动缩放条；`MoveMapTo` / `MoveIndependentMapTo` 在注入 provider 后可执行同款拖图循环；`ReturnMainUi` / `returnMainUi()` 已接入第一层 `BGIReturnMainUIService`，按上游 `ReturnMainUiTask` 先识别主界面，未回到主界面时最多 8 次按 Esc 并等待 900ms，最后补 Enter/Esc 兜底；`ChooseTalkOption(text, skipTimes, isOrange)` 已接入第一层 `BGIChooseTalkOptionService`，按上游 `ChooseTalkOptionTask.SingleSelectText` 先用 `AutoSkip.DisabledUiButtonRo` 复刻 `Bv.WaitAndSkipForTalkUi` 对话 UI 等待，再查找 `AutoSkip.OptionIconRo`、推导右侧 OCR 选项区域、没出现选项时按 Space 跳过、命中文本后点击 OCR 行，并用同款 HSV 阈值过滤橙色选项；`SetTime(hour, minute, skip)` 已接入第一层 `BGISetTimeService`，按上游 `SetTimeTask` 回主界面、Esc 打开派蒙菜单、点击 1080p `(50,700)` 时间入口、用同款钟盘中心/半径/角度公式执行三次小半径点击和一次拖动、点击 `(1500,1000)` 确认，并在非 skip 路径等待 `Common/Element/page_close_white.png` 后回主界面；`Relogin()` 已接入第一层 `BGIExitAndReloginService`，按上游 `ExitAndReloginJob` 用 `AutoWood.MenuBagRo` 反复 Esc 等菜单、点击左下退出、用 `AutoWood.ConfirmRo` 点击确认并等待消失、等待 `AutoWood.EnterGameRo` 出现后点击 1080p `(955,666)` 直到消失，最后等待 Paimon 主界面；`AutoFishing(policy)` 已接入第一层 `BGIAutoFishingService`，按 F 键进入钓鱼模式并通过退出按钮模板检测进退，完整 YOLO 鱼群检测、ONNX 饵料分类和张力条实时追踪仍待移植。`tp.json` 最近点/神像数据已可加载，但非 `force` 的 `Tp`、`TpToStatueOfTheSeven` 仍保持 pending，因为上游 `TpTask.TpOnce` 还依赖 `GetBigMapRect`、`GetPositionFromBigMap`、地区切换和视口内点击换算，避免只按全图比例估算点击而伪装已完成
 - ✅ 本机真实 `bettergi-scripts-list` 存在时会执行 catalog smoke test，验证 repo.json 和 JS manifest 扫描可用
-- ⚠️ JS runtime 仍需补上游 ClearScript async/immediate 语义，把 AutoFishing 等 typed `genshin.*` command 继续接到真实任务实现，把 `SwitchParty` 继续补完整 OCR 队名匹配和逐页滚动查找，把 `ChooseTalkOption` 继续补齐完整 AutoSkip 对话态分支与语音等待，把 `SetTime` 继续用真实游戏窗口校准点击入口和动画跳过成功率，把 `Relogin` 继续补齐上游 `Login3rdParty` / B 服第三方登录分支和真实登录页长等待验证，把 `BGIPathingNavigationBackend` 补完上游 `TpTask.GetBigMapRect`、`MoveMapTo` 前置国家/区域切换、最近传送点查找、`ClickTpPoint` HDR 阈值、完整移动异常处理和 action handler，把 host API 继续接到 OpenCV Mat/ImageRegion、多分辨率素材目录、完整 Promise/取消语义和 HTML mask；`ColorMatch` / `Detect` 等非 `ImageRegion` 兼容路径需等具体上游调用点再接。HDR 阈值切换当前按 macOS/YAAGL 真实表现有意暂停：YAAGL HDR 采集会明显过曝，游戏内容几乎不可读，先保持非 HDR 主链路
+- ⚠️ JS runtime 仍需把 AutoFishing 等 typed `genshin.*` command 继续接到真实任务实现，把 `SwitchParty` 继续补完整 OCR 队名匹配和逐页滚动查找，把 `ChooseTalkOption` 继续补齐完整 AutoSkip 对话态分支与语音等待，把 `SetTime` 继续用真实游戏窗口校准点击入口和动画跳过成功率，把 `Relogin` 继续补齐上游 `Login3rdParty` / B 服第三方登录分支和真实登录页长等待验证，把 `BGIPathingNavigationBackend` 补完上游 `TpTask.GetBigMapRect`、`MoveMapTo` 前置国家/区域切换、最近传送点查找、`ClickTpPoint` HDR 阈值、完整移动异常处理和 action handler；`ColorMatch` / `Detect` 等非 `ImageRegion` 兼容路径需等具体上游调用点再接。HDR 阈值切换当前按 macOS/YAAGL 真实表现有意暂停：YAAGL HDR 采集会明显过曝，游戏内容几乎不可读，先保持非 HDR 主链路
 
 ---
 

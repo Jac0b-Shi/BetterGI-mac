@@ -46,12 +46,24 @@ rg -q 'Core/Script/Dependence/Dispatcher.cs' BetterGenshinImpact.Core/BetterGens
 rg -q 'AddHostObject\("dispatcher", new Dispatcher' \
   BetterGenshinImpact.Core.Host/Runtime/MacScriptProjectHostInitializer.cs \
   || fail "ClearScript dispatcher host is not registered"
+rg -q 'AddHostObject\("htmlMask", _htmlMaskFactory' \
+  BetterGenshinImpact.Core.Host/Runtime/MacScriptProjectHostInitializer.cs \
+  || fail "ClearScript htmlMask host is not registered"
+rg -q '"htmlMask.closeAll"' BetterGenshinImpact.Core.Host/Program.cs \
+  && rg -q 'case "htmlMask.closeAll"' MacGI/Sources/MacGI/Runtime/MacHTMLMaskController.swift \
+  || fail "runtime stop does not close platform-owned HTML masks"
+rg -q '\["htmlMask"\]\s*=\s*typeof\(MacHtmlMask\)' \
+  Test/BetterGenshinImpact.RealUser.Verification/Program.cs \
+  || fail "real User verification does not audit the production htmlMask surface"
+rg -q 'string\[\] verifiedHtmlMaskMembers = \["request", "send", "show"\]' \
+  Test/BetterGenshinImpact.RealUser.Verification/Program.cs \
+  || fail "real User verification does not lock the current htmlMask member surface"
 real_user_verifier=Test/BetterGenshinImpact.RealUser.Verification/Program.cs
 rg -q 'Test/BetterGenshinImpact.RealUser.Verification/\*\*' .github/workflows/mac-core.yml \
   || fail "macOS Core workflow does not run when the real User verifier changes"
 rg -q 'VerifyProductionHostSurface\(javascriptProjects, scriptGroupExecutionServices\)' "$real_user_verifier" \
   || fail "real User verification does not audit the production ClearScript host surface"
-rg -q 'new MacScriptProjectHostInitializer\(scriptGroupExecutionServices\)\.Initialize' "$real_user_verifier" \
+rg -Uq 'new MacScriptProjectHostInitializer\([\s\S]{0,500}\)\s*\.Initialize\(' "$real_user_verifier" \
   || fail "real User host audit does not use the production macOS initializer"
 rg -q 'Real User projects reference missing production host members' "$real_user_verifier" \
   || fail "real User host audit does not reject missing host members"

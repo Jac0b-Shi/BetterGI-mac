@@ -12,7 +12,8 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 public sealed class MacTriggerDispatcher(
     ILogger<MacTriggerDispatcher> logger,
     CancellationToken shutdown,
-    Func<CancellationToken, Task>? runLoop = null)
+    Func<CancellationToken, Task>? runLoop = null,
+    Func<CancellationToken, Task>? stopCleanup = null)
 {
     private const int IntervalMilliseconds = 50;
     private const int CaptureFailureBackoffMilliseconds = 500;
@@ -46,18 +47,20 @@ public sealed class MacTriggerDispatcher(
         }
     }
 
-    public async Task StopAsync()
+    public async Task StopAsync(CancellationToken cancellationToken = default)
     {
         Task? loop;
         lock (_startLock)
         {
             loop = _loop;
-            if (loop is null || loop.IsCompleted)
-                return;
-            _runCancellation?.Cancel();
+            if (loop is { IsCompleted: false })
+                _runCancellation?.Cancel();
         }
 
-        await loop;
+        if (loop is not null)
+            await loop;
+        if (stopCleanup is not null)
+            await stopCleanup(cancellationToken);
     }
 
     private async Task RunConfiguredLoopAsync(CancellationToken cancellationToken)

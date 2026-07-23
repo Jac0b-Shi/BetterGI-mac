@@ -11,6 +11,7 @@ using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.Model.Area;
 using Microsoft.ClearScript;
 using OpenCvSharp;
+using BetterGenshinImpact.Core.Host.Transport;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
@@ -18,20 +19,45 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 /// Registers the upstream host objects whose real shared implementations are composed on macOS.
 /// Unsupported upstream objects are added only when their complete source slice is linked.
 /// </summary>
-public sealed class MacScriptProjectHostInitializer(
-    IScriptGroupExecutionServices executionServices) : IScriptProjectHostInitializer
+public sealed class MacScriptProjectHostInitializer : IScriptProjectHostInitializer
 {
+    private readonly IScriptGroupExecutionServices _executionServices;
+    private readonly Func<string, object> _htmlMaskFactory;
+
+    public MacScriptProjectHostInitializer(
+        IScriptGroupExecutionServices executionServices,
+        PlatformCallbackChannel callbacks,
+        string sessionToken,
+        CancellationToken cancellationToken)
+        : this(
+            executionServices,
+            workDir => new MacHtmlMask(
+                workDir, callbacks, sessionToken, cancellationToken))
+    {
+    }
+
+    internal MacScriptProjectHostInitializer(
+        IScriptGroupExecutionServices executionServices,
+        Func<string, object> htmlMaskFactory)
+    {
+        _executionServices = executionServices;
+        _htmlMaskFactory = htmlMaskFactory;
+    }
+
     public void Initialize(IScriptEngine engine, string workDir, string[] searchPaths, object? config)
     {
         ArgumentNullException.ThrowIfNull(engine);
         engine.AddHostObject("log", new Log());
         engine.AddHostObject("keyMouseScript", new KeyMouseScript(workDir));
-        engine.AddHostObject("pathingScript", new AutoPathingScript(workDir, config, executionServices));
+        engine.AddHostObject(
+            "pathingScript",
+            new AutoPathingScript(workDir, config, _executionServices));
         engine.AddHostObject("genshin", new Genshin());
         engine.AddHostObject("dispatcher", new Dispatcher(config ?? new object()));
         engine.AddHostObject("file", new LimitedFile(workDir));
         engine.AddHostObject("http", new Http());
         engine.AddHostObject("notification", new Notification());
+        engine.AddHostObject("htmlMask", _htmlMaskFactory(workDir));
         engine.AddHostType("ServerTime", typeof(ServerTime));
         engine.AddHostType("CancellationTokenSource", typeof(CancellationTokenSource));
         engine.AddHostType("CancellationToken", typeof(CancellationToken));

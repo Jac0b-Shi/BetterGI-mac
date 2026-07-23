@@ -10,5 +10,6 @@ return await VerificationRunner.RunAsync(args,
     new ScriptRepositorySuite(),
     new RuntimeCancellationSuite(),
     new RuntimeSettingsSuite(),
+    new HtmlMaskContractSuite(),
     new CaptureRingContractSuite(),
 ]);
