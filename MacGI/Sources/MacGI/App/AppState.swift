@@ -1939,9 +1939,7 @@ final class AppState: ObservableObject {
             fishingTimePolicy: fishingTimePolicy ?? current.fishingTimePolicy,
             fishingTimePolicyOptions: current.fishingTimePolicyOptions,
             saveScreenshotOnKeyTick:
-                saveScreenshotOnKeyTick ?? current.saveScreenshotOnKeyTick,
-            torchDllFullPath: current.torchDllFullPath,
-            torchDllSupported: current.torchDllSupported)
+                saveScreenshotOnKeyTick ?? current.saveScreenshotOnKeyTick)
         Task { [weak self] in
             do {
                 self?.autoFishingSettings = try await supervisor.saveAutoFishingSettings(next)

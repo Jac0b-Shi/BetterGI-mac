@@ -302,13 +302,6 @@ struct SoloTasksPage: View {
                     set: { appState.saveAutoFishingSettings(saveScreenshotOnKeyTick: $0) }))
                     .toggleStyle(.switch).labelsHidden()
             }
-            BGISettingLine(
-                title: "Torch 库文件",
-                subtitle: "上游字段仅接受 Windows torch DLL；macOS 当前使用 ONNX/CPU 回退"
-            ) {
-                Text(settings.torchDllSupported ? settings.torchDllFullPath : "macOS 不支持")
-                    .foregroundStyle(.secondary)
-            }
         } else { settingsLoading }
     }
 

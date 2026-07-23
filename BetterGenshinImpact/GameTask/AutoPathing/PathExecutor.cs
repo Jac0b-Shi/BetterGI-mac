@@ -923,8 +923,10 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
 
                 if (consecutiveRotationCountBeyondAngle > 10)
                 {
-                    // 直接站定好转向
+                    // 松W键，站定好转向，转完重新按下W继续走
+                    TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                     await WaitUntilRotatedTo(targetOrientation, 2);
+                    TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
                 }
             }
 

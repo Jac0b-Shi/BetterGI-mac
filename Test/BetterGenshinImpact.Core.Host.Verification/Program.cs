@@ -2934,7 +2934,6 @@ try
         autoThrowRodTimeOut = 15,
         wholeProcessTimeoutSeconds = 300,
         fishingTimePolicy = 0,
-        torchDllFullPath = @"C:\verification\torch_cpu.dll",
     });
     await File.WriteAllTextAsync(
         fishingConfigPath, fishingConfigRoot.ToString(), cancellation.Token);
@@ -2944,8 +2943,7 @@ try
     Require(fishingSettings.Error is null && fishingSettings.Result is JObject fishingSettingsJson &&
             fishingSettingsJson.Value<int>("autoThrowRodTimeOut") == 15 &&
             fishingSettingsJson.Value<int>("wholeProcessTimeoutSeconds") == 300 &&
-            fishingSettingsJson.Value<string>("fishingTimePolicy") == "All" &&
-            fishingSettingsJson.Value<bool>("torchDllSupported") == false,
+            fishingSettingsJson.Value<string>("fishingTimePolicy") == "All",
         fishingSettings.Error?.Message ??
         "solo.settings.get did not expose the upstream AutoFishing settings");
     var savedFishingSettings = await ExchangeAsync(
@@ -2972,8 +2970,6 @@ try
             persistedFishingConfig.SelectToken("autoFishingConfig.enabled")?.Value<bool>() == true &&
             persistedFishingConfig.SelectToken("autoFishingConfig.autoThrowRodEnabled")?.Value<bool>() == true &&
             persistedFishingConfig.SelectToken("autoFishingConfig.autoThrowRodTimeOut")?.Value<int>() == 42 &&
-            persistedFishingConfig.SelectToken("autoFishingConfig.torchDllFullPath")?.Value<string>() ==
-                @"C:\verification\torch_cpu.dll" &&
             autoFishingRuntimePlatform.Config.AutoThrowRodTimeOut == 42 &&
             autoFishingRuntimePlatform.Config.WholeProcessTimeoutSeconds == 900 &&
             autoFishingRuntimePlatform.Config.FishingTimePolicy == FishingTimePolicy.Nighttime,

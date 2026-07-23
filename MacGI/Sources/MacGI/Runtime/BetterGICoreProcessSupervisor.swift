@@ -126,8 +126,6 @@ struct BetterGICoreAutoFishingSettings: Sendable, Equatable {
     let fishingTimePolicy: String
     let fishingTimePolicyOptions: [BetterGICoreNamedOption]
     let saveScreenshotOnKeyTick: Bool
-    let torchDllFullPath: String
-    let torchDllSupported: Bool
 }
 
 struct BetterGICoreAutoWoodSettings: Sendable, Equatable {
@@ -1520,9 +1518,7 @@ actor BetterGICoreProcessSupervisor {
               let wholeProcessTimeoutSeconds = value["wholeProcessTimeoutSeconds"] as? Int,
               let fishingTimePolicy = value["fishingTimePolicy"] as? String,
               let rawOptions = value["fishingTimePolicyOptions"] as? [[String: Any]],
-              let saveScreenshotOnKeyTick = value["saveScreenshotOnKeyTick"] as? Bool,
-              let torchDllFullPath = value["torchDllFullPath"] as? String,
-              let torchDllSupported = value["torchDllSupported"] as? Bool else {
+              let saveScreenshotOnKeyTick = value["saveScreenshotOnKeyTick"] as? Bool else {
             throw BetterGICoreRPCError.protocolViolation("Invalid AutoFishing settings.")
         }
         let options = try rawOptions.map { option -> BetterGICoreNamedOption in
@@ -1537,9 +1533,7 @@ actor BetterGICoreProcessSupervisor {
                      wholeProcessTimeoutSeconds: wholeProcessTimeoutSeconds,
                      fishingTimePolicy: fishingTimePolicy,
                      fishingTimePolicyOptions: options,
-                     saveScreenshotOnKeyTick: saveScreenshotOnKeyTick,
-                     torchDllFullPath: torchDllFullPath,
-                     torchDllSupported: torchDllSupported)
+                     saveScreenshotOnKeyTick: saveScreenshotOnKeyTick)
     }
 
     private func decodeAutoWoodSettings(_ value: Any) throws -> BetterGICoreAutoWoodSettings {

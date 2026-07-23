@@ -576,8 +576,6 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             new { value = FishingTimePolicy.DontChange.ToString(), displayName = "不调" },
         },
         saveScreenshotOnKeyTick = AutoFishingSaveScreenshotOnKeyTick,
-        torchDllFullPath = config.TorchDllFullPath,
-        torchDllSupported = false,
     };
 
     private object Describe(AutoWoodConfig config) => new

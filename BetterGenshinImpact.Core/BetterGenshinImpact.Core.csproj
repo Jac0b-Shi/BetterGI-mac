@@ -34,7 +34,6 @@
     <PackageReference Include="Semver" Version="3.0.0" />
     <PackageReference Include="YoloSharp" Version="6.0.3" />
     <PackageReference Include="BehaviourTree" Version="1.0.73" />
-    <PackageReference Include="TorchSharp" Version="0.105.0" />
     <PackageReference Include="NCalc" Version="6.2.0" />
     <PackageReference Include="HungarianAlgorithm" Version="2.3.5" />
     <PackageReference Include="LazyCache" Version="2.4.0" />
