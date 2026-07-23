@@ -70,7 +70,7 @@ jobs:
         env:
           MACGI_APP_OUTPUT_ROOT: ${{ runner.temp }}/bettergi-app
           MACGI_APP_NAME: MacGI.app
-          MACGI_FORCE_AD_HOC_SIGNING: "1"
+          MACGI_ALLOW_ADHOC_SIGNING: "1"
         run: MacGI/scripts/package-macgi-app.sh
       - name: Verify bundled Core Helper
         run: >

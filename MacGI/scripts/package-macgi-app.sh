@@ -11,21 +11,25 @@ app=${output_root}/${app_name}
 contents=${app}/Contents
 executable_name=betterGI-mac
 default_bundle_identifier=cn.jac0bshi.bettergi.mac
-if [[ ${MACGI_FORCE_AD_HOC_SIGNING:-0} == 1 && -z ${MACGI_BUNDLE_IDENTIFIER:-} ]]; then
+if [[ ${MACGI_ALLOW_ADHOC_SIGNING:-0} == 1 && -z ${MACGI_BUNDLE_IDENTIFIER:-} ]]; then
   default_bundle_identifier=${default_bundle_identifier}.adhoc
 fi
 bundle_identifier=${MACGI_BUNDLE_IDENTIFIER:-${default_bundle_identifier}}
 short_version=${MACGI_SHORT_VERSION:-0.1.0}
 bundle_version=${MACGI_BUNDLE_VERSION:-1}
 signing_identity=${MACGI_SIGNING_IDENTITY:-${EXPANDED_CODE_SIGN_IDENTITY:-}}
-if [[ ${MACGI_FORCE_AD_HOC_SIGNING:-0} == 1 ]]; then
+if [[ ${MACGI_ALLOW_ADHOC_SIGNING:-0} == 1 ]]; then
   signing_identity=-
 elif [[ -z ${signing_identity} || ${signing_identity} == "-" ]]; then
   signing_identity=$(security find-identity -v -p codesigning 2>/dev/null \
     | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' \
     | head -n 1)
 fi
-signing_identity=${signing_identity:--}
+if [[ -z ${signing_identity} || ${signing_identity} == "-" ]]; then
+  print -u2 "Apple Development signing identity is required for local TCC-stable builds."
+  print -u2 "Set MACGI_ALLOW_ADHOC_SIGNING=1 only for CI packaging smoke tests."
+  exit 4
+fi
 
 swift build --package-path ${macgi_root} -c ${swift_configuration} --product ${executable_name}
 bin_dir=$(swift build --package-path ${macgi_root} -c ${swift_configuration} --show-bin-path)
@@ -61,6 +65,7 @@ plutil -create xml1 ${plist}
 /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 14.0" ${plist}
 /usr/libexec/PlistBuddy -c "Add :NSHighResolutionCapable bool true" ${plist}
 /usr/libexec/PlistBuddy -c "Add :NSPrincipalClass string NSApplication" ${plist}
+/usr/libexec/PlistBuddy -c "Add :NSScreenCaptureUsageDescription string BetterGI 需要读取原神窗口画面，以执行图像识别和自动化任务。" ${plist}
 
 TARGET_BUILD_DIR=${output_root} \
 WRAPPER_NAME=${app_name} \

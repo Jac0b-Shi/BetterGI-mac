@@ -441,7 +441,11 @@ rg -q 'setActivationPolicy\(\.regular\)' MacGI/Sources/MacGI/App/MacGIApp.swift 
   || fail "macOS frontend does not register as a regular Dock application"
 rg -q 'CFBundlePackageType string APPL' MacGI/scripts/package-macgi-app.sh \
   && rg -q 'CFBundleIdentifier string \$\{bundle_identifier\}' MacGI/scripts/package-macgi-app.sh \
+  && rg -q 'NSScreenCaptureUsageDescription' MacGI/scripts/package-macgi-app.sh \
   || fail "macOS App packaging does not create a standard APPL bundle identity"
+rg -q 'MACGI_ALLOW_ADHOC_SIGNING' MacGI/scripts/package-macgi-app.sh \
+  && ! rg -q 'signing_identity=\${signing_identity:--}' MacGI/scripts/package-macgi-app.sh \
+  || fail "macOS local packaging can silently fall back to an unstable ad-hoc TCC identity"
 rg -q 'Contents/Resources/BetterGICore' MacGI/scripts/package-bettergi-core.sh \
   && rg -q 'Resources/BetterGICore/BetterGenshinImpact.Core.Host' \
     MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \

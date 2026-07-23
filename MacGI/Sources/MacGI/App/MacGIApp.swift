@@ -15,14 +15,7 @@ enum MacGIPermissionRequester {
         case requestSubmitted
     }
 
-    static var screenCaptureGranted: Bool { CGPreflightScreenCaptureAccess() }
     static var accessibilityGranted: Bool { AXIsProcessTrusted() }
-
-    static func requestScreenCapture() -> RequestResult {
-        guard !screenCaptureGranted else { return .alreadyGranted }
-        _ = CGRequestScreenCaptureAccess()
-        return .requestSubmitted
-    }
 
     static func requestAccessibility() -> RequestResult {
         guard !accessibilityGranted else { return .alreadyGranted }

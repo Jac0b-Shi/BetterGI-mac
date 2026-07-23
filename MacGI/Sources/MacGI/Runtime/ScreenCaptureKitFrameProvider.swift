@@ -4,6 +4,7 @@ import Foundation
 @preconcurrency import ScreenCaptureKit
 
 enum ScreenCaptureKitFrameError: LocalizedError {
+    case permissionRequired
     case syntheticWindow
     case windowNotFound(CGWindowID)
     case emptyImage(CGWindowID)
@@ -11,6 +12,8 @@ enum ScreenCaptureKitFrameError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .permissionRequired:
+            "Screen Recording permission is required; grant it and reopen BetterGI"
         case .syntheticWindow:
             "ScreenCaptureKit cannot capture a synthetic window sentinel"
         case let .windowNotFound(id):
@@ -36,6 +39,9 @@ final class ScreenCaptureKitFrameProvider {
     func captureWindow(_ window: WindowInfo) async throws -> CaptureImageFrame {
         guard !window.isSynthetic else {
             throw ScreenCaptureKitFrameError.syntheticWindow
+        }
+        guard CGPreflightScreenCaptureAccess() else {
+            throw ScreenCaptureKitFrameError.permissionRequired
         }
 
         do {

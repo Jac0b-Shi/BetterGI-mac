@@ -28,12 +28,14 @@ struct OverviewPage: View {
                     title: "屏幕录制",
                     granted: appState.screenCapturePermissionGranted,
                     requestMessage: appState.screenCapturePermissionRequestMessage,
+                    requestEnabled: appState.screenCaptureAuthorizationState == .notRequested,
                     request: appState.requestScreenCapturePermission
                 )
                 permissionLine(
                     title: "辅助功能",
                     granted: appState.accessibilityPermissionGranted,
                     requestMessage: nil,
+                    requestEnabled: true,
                     request: appState.requestAccessibilityPermission
                 )
             }
@@ -121,6 +123,7 @@ struct OverviewPage: View {
         title: String,
         granted: Bool,
         requestMessage: String?,
+        requestEnabled: Bool,
         request: @escaping () -> Void
     ) -> some View {
         BGISettingLine(
@@ -133,8 +136,9 @@ struct OverviewPage: View {
                 Label("已授权", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
             } else {
-                Button("请求授权", action: request)
+                Button(requestEnabled ? "请求授权" : "已请求", action: request)
                     .buttonStyle(.bordered)
+                    .disabled(!requestEnabled)
             }
         }
     }

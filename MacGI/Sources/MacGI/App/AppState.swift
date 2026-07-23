@@ -245,6 +245,7 @@ final class AppState: ObservableObject {
     @Published var inputStatus: RuntimeStatus = .missing
     @Published var coreStatus: RuntimeStatus = .starting
     @Published private(set) var screenCapturePermissionGranted = false
+    @Published private(set) var screenCaptureAuthorizationState: ScreenCaptureAuthorizationState = .checking
     @Published private(set) var accessibilityPermissionGranted = false
     @Published private(set) var screenCapturePermissionRequestMessage: String?
     @Published private(set) var runtimeLifecycleMessage = "运行时尚未启动。"
@@ -397,14 +398,18 @@ final class AppState: ObservableObject {
 
     var onHUDPresentationChanged: ((Bool) -> Void)?
     private var frontmostApplicationPID: pid_t?
+    private let screenCapturePermissionCoordinator: ScreenCapturePermissionCoordinator
 
     init(
         resourceStore: BGIRuntimeResourceStore = .defaultStore(),
         inputDispatcher: any InputDispatching = CGEventInputDispatcher(),
         isTargetWindowFrontmost: @escaping (WindowInfo) -> Bool = ForegroundWindowGuard.isTargetFrontmost,
         launchArguments: [String] = ProcessInfo.processInfo.arguments,
-        userDefaults: UserDefaults = .standard
+        userDefaults: UserDefaults = .standard,
+        screenCapturePermissionCoordinator: ScreenCapturePermissionCoordinator? = nil
     ) {
+        self.screenCapturePermissionCoordinator =
+            screenCapturePermissionCoordinator ?? ScreenCapturePermissionCoordinator()
         self.userDefaults = userDefaults
         dryRunLaunchEnabled = launchArguments.contains("--dry-run")
         safetyGate = InputSafetyGate(
@@ -809,7 +814,7 @@ final class AppState: ObservableObject {
     }
 
     func refreshPermissionStatus() {
-        screenCapturePermissionGranted = MacGIPermissionRequester.screenCaptureGranted
+        applyScreenCaptureAuthorizationState(screenCapturePermissionCoordinator.refresh())
         accessibilityPermissionGranted = MacGIPermissionRequester.accessibilityGranted
     }
 
@@ -846,12 +851,19 @@ final class AppState: ObservableObject {
     private static let hideHUDWhenGameUnfocusedKey = "hud.hideWhenGameUnfocused"
 
     func requestScreenCapturePermission() {
-        let result = MacGIPermissionRequester.requestScreenCapture()
-        logPermissionRequestResult(result, name: "Screen Recording")
-        refreshPermissionStatus()
-        screenCapturePermissionRequestMessage = screenCapturePermissionGranted
-            ? nil
-            : "已向 macOS 请求授权；若系统未显示弹窗，请检查当前 App 的 TCC 记录。"
+        let state = screenCapturePermissionCoordinator.requestOnce(
+            source: "AppState.requestScreenCapturePermission")
+        applyScreenCaptureAuthorizationState(state)
+        switch state {
+        case .granted:
+            addLog(.info, "macOS Screen Recording permission is already granted.")
+        case .restartRequired:
+            addLog(.info, "macOS Screen Recording permission changed; reopen BetterGI before capture.")
+        case .settingsRequired:
+            addLog(.info, "Submitted the only Screen Recording permission request for this launch.")
+        case .checking, .notRequested, .requesting:
+            break
+        }
     }
 
     func requestAccessibilityPermission() {
@@ -869,6 +881,27 @@ final class AppState: ObservableObject {
             addLog(.info, "macOS \(name) permission is already granted.")
         case .requestSubmitted:
             addLog(.info, "Submitted macOS \(name) permission request; reopen BetterGI after granting access if required.")
+        }
+    }
+
+    private func applyScreenCaptureAuthorizationState(
+        _ state: ScreenCaptureAuthorizationState
+    ) {
+        screenCaptureAuthorizationState = state
+        screenCapturePermissionGranted = state.permitsCapture
+        screenCapturePermissionRequestMessage = switch state {
+        case .checking:
+            "正在检查屏幕录制权限。"
+        case .notRequested:
+            nil
+        case .requesting:
+            "正在等待 macOS 屏幕录制授权。"
+        case .settingsRequired:
+            "本次启动已发出授权请求；完成授权后请退出并重新打开 BetterGI。"
+        case .restartRequired:
+            "屏幕录制权限已更改；请退出并重新打开 BetterGI 后再启动运行时。"
+        case .granted:
+            nil
         }
     }
 
