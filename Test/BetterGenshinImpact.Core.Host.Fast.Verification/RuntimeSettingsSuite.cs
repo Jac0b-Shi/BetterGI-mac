@@ -5,6 +5,7 @@ using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.Core.Recorder;
 using BetterGenshinImpact.Core.Recorder.Model;
 using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.GameTask.Macro;
 using BetterGenshinImpact.Service.Notification;
 using BetterGenshinImpact.Verification.Framework;
 using Microsoft.Extensions.Logging;
@@ -36,7 +37,9 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                     "fPressHoldToContinuationEnabled": false,
                     "fFireInterval": 100,
                     "spacePressHoldToContinuationEnabled": false,
-                    "spaceFireInterval": 100
+                    "spaceFireInterval": 100,
+                    "runaroundMouseXInterval": 240,
+                    "runaroundInterval": 10
                   },
                   "keyBindingsConfig": {
                     "moveForward": 71,
@@ -86,6 +89,8 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 fFireInterval = 80,
                 spacePressHoldToContinuationEnabled = true,
                 spaceFireInterval = 120,
+                runaroundMouseXInterval = 240,
+                runaroundInterval = 10,
             }));
             var repeatedKeys = new List<int>();
             using (var auxiliaryControls = new AuxiliaryControlCoordinator(
@@ -151,6 +156,92 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 context.Require(
                     stopped.Value<string>("state") == "stopped",
                     "Auxiliary controls accepted a late key-down edge after runtime stop.");
+            }
+
+            var turnAroundPlatform =
+                new RecordingTurnAroundRuntimePlatform(macroCatalog);
+            TurnAroundRuntimePlatform.Configure(turnAroundPlatform);
+            _ = macroCatalog.Save(JObject.FromObject(new
+            {
+                fPressHoldToContinuationEnabled = true,
+                fFireInterval = 80,
+                spacePressHoldToContinuationEnabled = true,
+                spaceFireInterval = 120,
+                runaroundMouseXInterval = 0,
+                runaroundInterval = 10,
+            }));
+            TurnAroundMacro.Done(cancellationToken);
+            context.Require(
+                turnAroundPlatform.LastX == 1 &&
+                macroCatalog.Snapshot().RunaroundMouseXInterval == 1,
+                "Shared TurnAroundMacro did not preserve upstream zero-distance normalization.");
+            _ = macroCatalog.Save(JObject.FromObject(new
+            {
+                fPressHoldToContinuationEnabled = true,
+                fFireInterval = 80,
+                spacePressHoldToContinuationEnabled = true,
+                spaceFireInterval = 120,
+                runaroundMouseXInterval = 240,
+                runaroundInterval = 10,
+            }));
+            using (var holdHotKeys = new HoldHotKeyCoordinator(
+                       cancellationToken,
+                       loggerFactory.CreateLogger<HoldHotKeyCoordinator>()))
+            {
+                holdHotKeys.Start();
+                var baselineMoveCount = turnAroundPlatform.MoveCount;
+                var armed = JObject.FromObject(holdHotKeys.HandleKeyEdge(
+                    HoldHotKeyCoordinator.TurnAroundHotKey, true));
+                for (var retry = 0;
+                     retry < 50 &&
+                     turnAroundPlatform.MoveCount == baselineMoveCount;
+                     retry++)
+                {
+                    await Task.Delay(10, cancellationToken);
+                }
+                var released = JObject.FromObject(holdHotKeys.HandleKeyEdge(
+                    HoldHotKeyCoordinator.TurnAroundHotKey, false));
+                await Task.Delay(30, cancellationToken);
+                var moveCountAfterRelease = turnAroundPlatform.MoveCount;
+                await Task.Delay(30, cancellationToken);
+                context.Require(
+                    armed.Value<string>("state") == "armed" &&
+                    released.Value<string>("state") == "released" &&
+                    turnAroundPlatform.LastX == 240 &&
+                    moveCountAfterRelease > baselineMoveCount &&
+                    turnAroundPlatform.MoveCount == moveCountAfterRelease,
+                    "Turn-around hold hotkey did not preserve the upstream move, interval and release lifecycle.");
+            }
+            var blockedInput = new ForegroundInputCoordinator(
+                new PlatformCallbackChannel(),
+                "verification",
+                cancellationToken,
+                TimeSpan.FromMilliseconds(5),
+                () => false);
+            var macTurnAround = new MacTurnAroundRuntimePlatform(
+                macroCatalog, blockedInput, cancellationToken);
+            using (var blockedCancellation =
+                   CancellationTokenSource.CreateLinkedTokenSource(
+                       cancellationToken))
+            {
+                var blockedMove = Task.Run(() =>
+                {
+                    try
+                    {
+                        macTurnAround.MoveMouseBy(
+                            240, 0, blockedCancellation.Token);
+                        return false;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return true;
+                    }
+                }, cancellationToken);
+                await Task.Delay(25, cancellationToken);
+                blockedCancellation.Cancel();
+                context.Require(
+                    await blockedMove,
+                    "Turn-around key-up could not cancel an input waiting for game focus.");
             }
 
             var scriptHostServices = new MacScriptHostServices(loggerFactory);
@@ -251,7 +342,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             }));
             var hotKeys = JArray.FromObject(hotKeyCatalog.List());
             context.Require(
-                hotKeys.Count == 20 &&
+                hotKeys.Count == 21 &&
                 hotKeys.Single(item =>
                     item.Value<string>("id") == "AutoPickEnabledHotkey")
                     .Value<string>("hotKey") == "F6" &&
@@ -264,6 +355,9 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 hotKeys.Single(item =>
                     item.Value<string>("id") == "QuickTeleportTickHotkey")
                     .Value<bool>("dispatchOnPress") == false &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "TurnAroundHotkey")
+                    .Value<bool>("dispatchOnRelease") &&
                 hotKeyUpdates.Contains(("QuickTeleportTickHotkey", "F6")) &&
                 hotKeyUpdates.Contains(("QuickTeleportTickHotkey", "")) &&
                 quickTeleportPlatform.TickHotkey == "",
@@ -292,6 +386,8 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 persisted["preserved"]?.Value<int>("value") == 42 &&
                 persisted["macroConfig"]?.Value<int>("fFireInterval") == 80 &&
                 persisted["macroConfig"]?.Value<int>("spaceFireInterval") == 120 &&
+                persisted["macroConfig"]?.Value<int>("runaroundMouseXInterval") == 240 &&
+                persisted["macroConfig"]?.Value<int>("runaroundInterval") == 10 &&
                 persisted["notificationConfig"]?.Value<bool>("jsNotificationEnabled") == true &&
                 persisted["notificationConfig"]?.Value<bool>("windowsUwpNotificationEnabled") == true &&
                 persisted["notificationConfig"]?.Value<string>("notificationEventSubscribe") ==
@@ -366,6 +462,11 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
         server.MacroSettings.AttachUpdated(auxiliaryControls.ApplySettings);
         server.AttachAuxiliaryControlCoordinator(auxiliaryControls);
         auxiliaryControls.Start();
+        using var holdHotKeys = new HoldHotKeyCoordinator(
+            serverCancellation.Token,
+            loggerFactory.CreateLogger<HoldHotKeyCoordinator>());
+        server.AttachHoldHotKeyCoordinator(holdHotKeys);
+        holdHotKeys.Start();
         var serverTask = server.RunAsync(serverCancellation.Token);
 
         try
@@ -389,6 +490,8 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                         fFireInterval = 70,
                         spacePressHoldToContinuationEnabled = false,
                         spaceFireInterval = 130,
+                        runaroundMouseXInterval = 260,
+                        runaroundInterval = 12,
                     }
                 }), cancellationToken);
             var macroResult = JObject.FromObject(macroSave.Result!);
@@ -396,6 +499,8 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 macroSave.Error is null &&
                 macroResult.Value<int>("fFireInterval") == 70 &&
                 macroResult.Value<int>("spaceFireInterval") == 130 &&
+                macroResult.Value<int>("runaroundMouseXInterval") == 260 &&
+                macroResult.Value<int>("runaroundInterval") == 12 &&
                 macroResult.Value<int>("pickUpOrInteractKeyCode") == 71 &&
                 macroResult.Value<int>("jumpKeyCode") == 74,
                 macroSave.Error?.Message ?? "macro.settings.save returned an invalid result.");
@@ -473,6 +578,31 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                     "hotKey.settings.save did not preserve the platform-owned runtime binding.");
 
             RunnerContext.Instance.IsSuspend = false;
+
+            var turnAroundDown = await ExchangeAsync(
+                connection, "hotkey-turn-down", "hotKey.invoke", sessionToken,
+                JObject.FromObject(new
+                {
+                    id = HoldHotKeyCoordinator.TurnAroundHotKey,
+                    isDown = true,
+                }), cancellationToken);
+            var turnAroundUp = await ExchangeAsync(
+                connection, "hotkey-turn-up", "hotKey.invoke", sessionToken,
+                JObject.FromObject(new
+                {
+                    id = HoldHotKeyCoordinator.TurnAroundHotKey,
+                    isDown = false,
+                }), cancellationToken);
+            context.Require(
+                turnAroundDown.Error is null &&
+                JObject.FromObject(turnAroundDown.Result!)
+                    .Value<string>("state") == "armed" &&
+                turnAroundUp.Error is null &&
+                JObject.FromObject(turnAroundUp.Result!)
+                    .Value<string>("state") == "released",
+                turnAroundDown.Error?.Message ??
+                turnAroundUp.Error?.Message ??
+                "hotKey.invoke did not preserve the hold edge contract.");
             var suspend = await ExchangeAsync(
                 connection, "hotkey-suspend", "hotKey.invoke",
                 sessionToken, JObject.FromObject(new
@@ -607,5 +737,34 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
         await stream.WriteAsync(response, cancellationToken);
         await stream.FlushAsync(cancellationToken);
         return new string(buffer);
+    }
+
+    private sealed class RecordingTurnAroundRuntimePlatform(
+        MacroSettingsCatalog settings) : ITurnAroundRuntimePlatform
+    {
+        private int _moveCount;
+        private int _lastX;
+
+        public int RunaroundInterval => settings.Snapshot().RunaroundInterval;
+        public int RunaroundMouseXInterval
+        {
+            get => settings.Snapshot().RunaroundMouseXInterval;
+            set => settings.SetRunaroundMouseXInterval(value);
+        }
+        public int MoveCount => Volatile.Read(ref _moveCount);
+        public int LastX => Volatile.Read(ref _lastX);
+
+        public void MoveMouseBy(
+            int x,
+            int y,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Volatile.Write(ref _lastX, x);
+            Interlocked.Increment(ref _moveCount);
+        }
+
+        public void Wait(int milliseconds, CancellationToken cancellationToken) =>
+            Task.Delay(milliseconds, cancellationToken).GetAwaiter().GetResult();
     }
 }

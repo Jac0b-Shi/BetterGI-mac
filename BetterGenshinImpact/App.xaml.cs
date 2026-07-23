@@ -243,6 +243,8 @@ public partial class App : Application
         GameTask.AutoPathing.NavigationPlatform.Configure(new Core.Runtime.Windows.WindowsNavigationPlatform());
         GameTask.QuickTeleport.QuickTeleportRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsQuickTeleportRuntimePlatform());
+        GameTask.Macro.TurnAroundRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsTurnAroundRuntimePlatform());
         GameTask.AutoEat.AutoEatRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsAutoEatRuntimePlatform());
         GameTask.GameLoading.GameLoadingRuntimePlatform.Configure(

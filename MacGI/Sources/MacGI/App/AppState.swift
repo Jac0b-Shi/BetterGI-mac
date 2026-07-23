@@ -363,9 +363,9 @@ final class AppState: ObservableObject {
         }
     }
     private lazy var hotKeyMonitor = MacHotKeyMonitor(
-        handler: { [weak self] binding in
+        handler: { [weak self] binding, isDown in
             MainActor.assumeIsolated {
-                self?.handleHotKey(binding)
+                self?.handleHotKey(binding, isDown: isDown)
             }
         },
         captureHandler: { [weak self] id, value, error in
@@ -1134,7 +1134,8 @@ final class AppState: ObservableObject {
                     hotKeyType: hotKeyType, action: item.action,
                     executionOwner: item.executionOwner,
                     isHold: item.isHold,
-                    dispatchOnPress: item.dispatchOnPress)
+                    dispatchOnPress: item.dispatchOnPress,
+                    dispatchOnRelease: item.dispatchOnRelease)
             }
             if !hotKey.isEmpty,
                item.hotKey.caseInsensitiveCompare(hotKey) == .orderedSame {
@@ -1144,7 +1145,8 @@ final class AppState: ObservableObject {
                     hotKeyType: item.hotKeyType, action: item.action,
                     executionOwner: item.executionOwner,
                     isHold: item.isHold,
-                    dispatchOnPress: item.dispatchOnPress)
+                    dispatchOnPress: item.dispatchOnPress,
+                    dispatchOnRelease: item.dispatchOnRelease)
             }
             return item
         }
@@ -1185,12 +1187,17 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func handleHotKey(_ binding: BetterGIHotKeyBinding) {
+    private func handleHotKey(
+        _ binding: BetterGIHotKeyBinding,
+        isDown: Bool
+    ) {
         if binding.executionOwner == "core" {
             guard let supervisor = betterGICoreSupervisor else { return }
             Task { [weak self] in
                 do {
-                    let state = try await supervisor.invokeHotKey(id: binding.id)
+                    let state = try await supervisor.invokeHotKey(
+                        id: binding.id,
+                        isDown: isDown)
                     self?.hotKeyStatusMessage =
                         state.map { "\(binding.functionName)：\($0)" } ?? binding.functionName
                     await self?.loadTriggerStatesFromCore()
@@ -1204,6 +1211,7 @@ final class AppState: ObservableObject {
             return
         }
 
+        guard isDown else { return }
         switch binding.action {
         case "runtime.toggle":
             toggleRuntime()
@@ -1229,7 +1237,9 @@ final class AppState: ObservableObject {
         fEnabled: Bool? = nil,
         fInterval: Int? = nil,
         spaceEnabled: Bool? = nil,
-        spaceInterval: Int? = nil
+        spaceInterval: Int? = nil,
+        runaroundMouseXInterval: Int? = nil,
+        runaroundInterval: Int? = nil
     ) {
         guard let supervisor = betterGICoreSupervisor, let current = macroSettings else {
             addLog(.error, "辅助操控设置保存失败：BetterGI Core 尚未就绪。")
@@ -1242,6 +1252,10 @@ final class AppState: ObservableObject {
             spacePressHoldToContinuationEnabled:
                 spaceEnabled ?? current.spacePressHoldToContinuationEnabled,
             spaceFireInterval: spaceInterval ?? current.spaceFireInterval,
+            runaroundMouseXInterval:
+                runaroundMouseXInterval ?? current.runaroundMouseXInterval,
+            runaroundInterval:
+                runaroundInterval ?? current.runaroundInterval,
             pickUpOrInteractKey: current.pickUpOrInteractKey,
             jumpKey: current.jumpKey)
         macroSettingsSaveRevision += 1

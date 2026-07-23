@@ -176,6 +176,13 @@ using var auxiliaryControls = new AuxiliaryControlCoordinator(
     loggerFactory.CreateLogger<AuxiliaryControlCoordinator>());
 server.MacroSettings.AttachUpdated(auxiliaryControls.ApplySettings);
 server.AttachAuxiliaryControlCoordinator(auxiliaryControls);
+BetterGenshinImpact.GameTask.Macro.TurnAroundRuntimePlatform.Configure(
+    new MacTurnAroundRuntimePlatform(
+        server.MacroSettings, foregroundInputCoordinator, shutdown.Token));
+using var holdHotKeys = new HoldHotKeyCoordinator(
+    shutdown.Token,
+    loggerFactory.CreateLogger<HoldHotKeyCoordinator>());
+server.AttachHoldHotKeyCoordinator(holdHotKeys);
 var autoFightRuntimePlatform = new MacAutoFightRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
 AutoFightRuntimePlatform.Configure(autoFightRuntimePlatform);

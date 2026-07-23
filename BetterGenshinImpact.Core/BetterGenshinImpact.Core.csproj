@@ -116,6 +116,8 @@
     <Compile Include="../BetterGenshinImpact/GameTask/QuickTeleport/QuickTeleportConfig.cs" Link="GameTask/QuickTeleport/QuickTeleportConfig.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/QuickTeleport/QuickTeleportTrigger.cs" Link="GameTask/QuickTeleport/QuickTeleportTrigger.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/QuickTeleport/QuickTeleportRuntimePlatform.cs" Link="GameTask/QuickTeleport/QuickTeleportRuntimePlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Macro/TurnAroundMacro.cs" Link="GameTask/Macro/TurnAroundMacro.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Macro/TurnAroundRuntimePlatform.cs" Link="GameTask/Macro/TurnAroundRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvChatUi.cs" Link="GameTask/Common/BgiVision/BvChatUi.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvImage.cs" Link="GameTask/Common/BgiVision/BvImage.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvOcr.cs" Link="GameTask/Common/BgiVision/BvOcr.cs" />

@@ -31,6 +31,9 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
                 RequiredInterval(settings, "fFireInterval"),
                 RequiredBoolean(settings, "spacePressHoldToContinuationEnabled"),
                 RequiredInterval(settings, "spaceFireInterval"),
+                RequiredRunaroundMouseXInterval(
+                    settings, "runaroundMouseXInterval"),
+                RequiredRunaroundInterval(settings, "runaroundInterval"),
                 current.PickUpOrInteractKeyCode,
                 current.JumpKeyCode);
             var macro = root["macroConfig"] as JsonObject ?? [];
@@ -40,6 +43,9 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
             macro["spacePressHoldToContinuationEnabled"] =
                 next.SpacePressHoldToContinuationEnabled;
             macro["spaceFireInterval"] = next.SpaceFireInterval;
+            macro["runaroundMouseXInterval"] =
+                next.RunaroundMouseXInterval;
+            macro["runaroundInterval"] = next.RunaroundInterval;
             root["macroConfig"] = macro;
             SaveRoot(root);
         }
@@ -53,6 +59,18 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
             return ReadSnapshot(LoadRoot());
     }
 
+    public void SetRunaroundMouseXInterval(int value)
+    {
+        lock (_lock)
+        {
+            var root = LoadRoot();
+            var macro = root["macroConfig"] as JsonObject ?? [];
+            macro["runaroundMouseXInterval"] = value;
+            root["macroConfig"] = macro;
+            SaveRoot(root);
+        }
+    }
+
     private static object Describe(MacroSettingsSnapshot settings) => new
     {
         fPressHoldToContinuationEnabled =
@@ -61,6 +79,8 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
         spacePressHoldToContinuationEnabled =
             settings.SpacePressHoldToContinuationEnabled,
         spaceFireInterval = settings.SpaceFireInterval,
+        runaroundMouseXInterval = settings.RunaroundMouseXInterval,
+        runaroundInterval = settings.RunaroundInterval,
         pickUpOrInteractKeyCode = settings.PickUpOrInteractKeyCode,
         jumpKeyCode = settings.JumpKeyCode
     };
@@ -74,6 +94,8 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
             macro?["fFireInterval"]?.GetValue<int>() ?? 100,
             macro?["spacePressHoldToContinuationEnabled"]?.GetValue<bool>() ?? false,
             macro?["spaceFireInterval"]?.GetValue<int>() ?? 100,
+            macro?["runaroundMouseXInterval"]?.GetValue<int>() ?? 500,
+            macro?["runaroundInterval"]?.GetValue<int>() ?? 10,
             keyBindings?["pickUpOrInteract"]?.GetValue<int>() ?? 0x46,
             keyBindings?["jump"]?.GetValue<int>() ?? 0x20);
     }
@@ -111,6 +133,28 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
             : throw new ArgumentOutOfRangeException(name, "Interval must be between 10 and 10000 ms.");
     }
 
+    private static int RequiredRunaroundMouseXInterval(
+        JObject settings,
+        string name)
+    {
+        var value = settings.Value<int?>(name)
+            ?? throw new ArgumentException($"{name} is required.");
+        return value is >= -10_000 and <= 10_000
+            ? value
+            : throw new ArgumentOutOfRangeException(
+                name, "Mouse distance must be between -10000 and 10000.");
+    }
+
+    private static int RequiredRunaroundInterval(JObject settings, string name)
+    {
+        var value = settings.Value<int?>(name)
+            ?? throw new ArgumentException($"{name} is required.");
+        return value is >= 1 and <= 10_000
+            ? value
+            : throw new ArgumentOutOfRangeException(
+                name, "Turn-around interval must be between 1 and 10000 ms.");
+    }
+
 }
 
 public sealed record MacroSettingsSnapshot(
@@ -118,5 +162,7 @@ public sealed record MacroSettingsSnapshot(
     int FFireInterval,
     bool SpacePressHoldToContinuationEnabled,
     int SpaceFireInterval,
+    int RunaroundMouseXInterval,
+    int RunaroundInterval,
     int PickUpOrInteractKeyCode,
     int JumpKeyCode);

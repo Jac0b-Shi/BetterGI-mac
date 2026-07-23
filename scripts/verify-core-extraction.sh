@@ -61,7 +61,21 @@ rg -q '"macro.keyEdge"' BetterGenshinImpact.Core.Host/CoreRpcServer.cs \
   || fail "physical auxiliary-control edges do not cross the authenticated RPC boundary"
 if rg -n 'continuationTask|thresholdMilliseconds|intervalMilliseconds' \
   MacGI/Sources/MacGI/App/AppState.swift; then
-  fail "Swift AppState must not own auxiliary-control timing"
+    fail "Swift AppState must not own auxiliary-control timing"
+fi
+rg -q 'TurnAroundRuntimePlatform.Configure' \
+  BetterGenshinImpact.Core.Host/Program.cs \
+  && rg -q 'new Core.Runtime.Windows.WindowsTurnAroundRuntimePlatform' \
+    BetterGenshinImpact/App.xaml.cs \
+  || fail "shared turn-around macro is not composed on both macOS and Windows"
+rg -q 'DispatchOnRelease: true' \
+  BetterGenshinImpact.Core.Host/Runtime/HotKeySettingsCatalog.cs \
+  && rg -q 'dispatchOnRelease' \
+    MacGI/Sources/MacGI/Runtime/MacHotKeyMonitor.swift \
+  || fail "turn-around hotkey release edges do not reach the Core lifecycle"
+if rg -n 'runaround.*Task|TurnAroundMacro\.Done' \
+  MacGI/Sources/MacGI/App/AppState.swift; then
+  fail "Swift AppState must not own turn-around macro execution"
 fi
 rg -q '\["htmlMask"\]\s*=\s*typeof\(MacHtmlMask\)' \
   Test/BetterGenshinImpact.RealUser.Verification/Program.cs \

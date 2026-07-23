@@ -54,6 +54,7 @@ struct BetterGIHotKeyBinding: Sendable, Equatable, Identifiable {
     let executionOwner: String
     let isHold: Bool
     let dispatchOnPress: Bool
+    let dispatchOnRelease: Bool
 
     var hotKeyTypeName: String {
         hotKeyType == "GlobalRegister" ? "全局热键" : "键鼠监听"
@@ -75,6 +76,8 @@ struct BetterGIMacroSettings: Sendable, Equatable {
     let fFireInterval: Int
     let spacePressHoldToContinuationEnabled: Bool
     let spaceFireInterval: Int
+    let runaroundMouseXInterval: Int
+    let runaroundInterval: Int
     let pickUpOrInteractKey: KeyCode
     let jumpKey: KeyCode
 }
@@ -656,10 +659,13 @@ actor BetterGICoreProcessSupervisor {
             ]))
     }
 
-    func invokeHotKey(id: String) throws -> String? {
+    func invokeHotKey(id: String, isDown: Bool) throws -> String? {
         guard let result = try runningClient().request(
             method: "hotKey.invoke",
-            parameters: ["id": id]) as? [String: Any]
+            parameters: [
+                "id": id,
+                "isDown": isDown,
+            ]) as? [String: Any]
         else {
             throw BetterGICoreRPCError.protocolViolation(
                 "Invalid hotKey.invoke result.")
@@ -684,6 +690,9 @@ actor BetterGICoreProcessSupervisor {
                     "spacePressHoldToContinuationEnabled":
                         settings.spacePressHoldToContinuationEnabled,
                     "spaceFireInterval": settings.spaceFireInterval,
+                    "runaroundMouseXInterval":
+                        settings.runaroundMouseXInterval,
+                    "runaroundInterval": settings.runaroundInterval,
                 ],
             ]))
     }
@@ -711,6 +720,9 @@ actor BetterGICoreProcessSupervisor {
               let fInterval = result["fFireInterval"] as? Int,
               let spaceEnabled = result["spacePressHoldToContinuationEnabled"] as? Bool,
               let spaceInterval = result["spaceFireInterval"] as? Int,
+              let runaroundMouseXInterval =
+                result["runaroundMouseXInterval"] as? Int,
+              let runaroundInterval = result["runaroundInterval"] as? Int,
               let pickUpOrInteractVirtualKey =
                 result["pickUpOrInteractKeyCode"] as? Int,
               let jumpVirtualKey = result["jumpKeyCode"] as? Int,
@@ -726,6 +738,8 @@ actor BetterGICoreProcessSupervisor {
             fFireInterval: fInterval,
             spacePressHoldToContinuationEnabled: spaceEnabled,
             spaceFireInterval: spaceInterval,
+            runaroundMouseXInterval: runaroundMouseXInterval,
+            runaroundInterval: runaroundInterval,
             pickUpOrInteractKey: pickUpOrInteractKey,
             jumpKey: jumpKey)
     }
@@ -784,7 +798,8 @@ actor BetterGICoreProcessSupervisor {
                   let action = value["action"] as? String,
                   let executionOwner = value["executionOwner"] as? String,
                   let isHold = value["isHold"] as? Bool,
-                  let dispatchOnPress = value["dispatchOnPress"] as? Bool
+                  let dispatchOnPress = value["dispatchOnPress"] as? Bool,
+                  let dispatchOnRelease = value["dispatchOnRelease"] as? Bool
             else {
                 throw BetterGICoreRPCError.protocolViolation(
                     "Invalid hotkey binding descriptor.")
@@ -798,7 +813,8 @@ actor BetterGICoreProcessSupervisor {
                 action: action,
                 executionOwner: executionOwner,
                 isHold: isHold,
-                dispatchOnPress: dispatchOnPress)
+                dispatchOnPress: dispatchOnPress,
+                dispatchOnRelease: dispatchOnRelease)
         }
     }
 

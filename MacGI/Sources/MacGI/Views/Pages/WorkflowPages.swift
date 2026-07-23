@@ -684,6 +684,59 @@ struct MacroPage: View {
                     .disabled(appState.macroSettings == nil)
                 }
             }
+
+            BGIOriginalCard(
+                icon: .symbol("cursorarrow.motionlines"),
+                title: "那维莱特 - 转圈圈",
+                subtitle: "按住已绑定快捷键时持续水平平移鼠标。"
+            ) {
+                EmptyView()
+            } content: {
+                VStack(spacing: 0) {
+                    BGISettingLine(
+                        title: "移动鼠标距离",
+                        subtitle: "可以为负数，绝对值越大移动越快。"
+                    ) {
+                        Stepper(
+                            "\(appState.macroSettings?.runaroundMouseXInterval ?? 500)",
+                            value: Binding(
+                                get: {
+                                    appState.macroSettings?
+                                        .runaroundMouseXInterval ?? 500
+                                },
+                                set: {
+                                    appState.saveMacroSettings(
+                                        runaroundMouseXInterval: $0)
+                                }),
+                            in: -10_000...10_000,
+                            step: 10)
+                        .frame(width: 170)
+                        .disabled(appState.macroSettings == nil)
+                    }
+
+                    Divider()
+
+                    BGISettingLine(
+                        title: "移动鼠标间隔",
+                        subtitle: "每次水平移动之间的等待时间。"
+                    ) {
+                        Stepper(
+                            "\(appState.macroSettings?.runaroundInterval ?? 10) ms",
+                            value: Binding(
+                                get: {
+                                    appState.macroSettings?
+                                        .runaroundInterval ?? 10
+                                },
+                                set: {
+                                    appState.saveMacroSettings(
+                                        runaroundInterval: $0)
+                                }),
+                            in: 1...1000)
+                        .frame(width: 170)
+                        .disabled(appState.macroSettings == nil)
+                    }
+                }
+            }
         }
     }
 }

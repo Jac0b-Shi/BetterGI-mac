@@ -45,6 +45,7 @@ public sealed class CoreRpcServer(
     private SoloTaskCoordinator? _soloTasks;
     private KeyMouseScriptCoordinator? _keyMouseScripts;
     private AuxiliaryControlCoordinator? _auxiliaryControls;
+    private HoldHotKeyCoordinator? _holdHotKeys;
     private int _platformAssetsInitialized;
     private readonly SemaphoreSlim _runtimeMutationLock = new(1, 1);
     public PlatformCallbackChannel PlatformCallbacks => _platformCallbacks;
@@ -117,6 +118,19 @@ public sealed class CoreRpcServer(
         {
             throw new InvalidOperationException(
                 "Auxiliary control coordinator has already been attached.");
+        }
+    }
+
+    public void AttachHoldHotKeyCoordinator(HoldHotKeyCoordinator coordinator)
+    {
+        ArgumentNullException.ThrowIfNull(coordinator);
+        if (Interlocked.CompareExchange(
+                ref _holdHotKeys,
+                coordinator,
+                null) is not null)
+        {
+            throw new InvalidOperationException(
+                "Hold hotkey coordinator has already been attached.");
         }
     }
 
@@ -271,6 +285,7 @@ public sealed class CoreRpcServer(
                     request.Id,
                     await InvokeHotKeyAsync(
                         RequiredString(request.Params, "id"),
+                        request.Params?.Value<bool?>("isDown") ?? true,
                         _shutdown.Token));
             }
             object? result = request.Method switch
@@ -469,7 +484,8 @@ public sealed class CoreRpcServer(
                 "keyMouse.recording",
                 "keyMouse.playback",
                 "notification.native",
-                "macro.hold-continuation"
+                "macro.hold-continuation",
+                "macro.turn-around"
             }
         };
     }
@@ -537,6 +553,7 @@ public sealed class CoreRpcServer(
             if (!dispatcher.IsRunning)
                 dispatcher.Start();
             _auxiliaryControls?.Start();
+            _holdHotKeys?.Start();
             return RuntimeStatus();
         }
         finally
@@ -558,6 +575,8 @@ public sealed class CoreRpcServer(
                 await _keyMouseScripts.StopAsync();
             if (_auxiliaryControls is not null)
                 await _auxiliaryControls.StopAsync();
+            if (_holdHotKeys is not null)
+                await _holdHotKeys.StopAsync();
             await RequiredTriggerDispatcher().StopAsync(cancellationToken);
             return RuntimeStatus();
         }
@@ -616,6 +635,10 @@ public sealed class CoreRpcServer(
         _auxiliaryControls ?? throw new CapabilityUnavailableException(
             "Auxiliary controls are unavailable until Core composition completes.");
 
+    private HoldHotKeyCoordinator RequiredHoldHotKeys() =>
+        _holdHotKeys ?? throw new CapabilityUnavailableException(
+            "Hold hotkeys are unavailable until Core composition completes.");
+
     private object ListTriggers()
     {
         var triggers = GameTaskManager.TriggerDictionary
@@ -657,9 +680,14 @@ public sealed class CoreRpcServer(
 
     private async Task<object> InvokeHotKeyAsync(
         string id,
+        bool isDown,
         CancellationToken cancellationToken)
     {
         var descriptor = _hotKeySettings.RequireDescriptor(id);
+        if (descriptor.DispatchOnRelease)
+            return RequiredHoldHotKeys().HandleKeyEdge(id, isDown);
+        if (!isDown)
+            return new { id, state = "released" };
         if (!descriptor.DispatchOnPress)
             return new { id, state = "observed" };
         if (descriptor.ExecutionOwner != "core")

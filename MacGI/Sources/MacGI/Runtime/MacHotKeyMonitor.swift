@@ -107,7 +107,7 @@ final class MacHotKeyMonitor {
         let signature: MacHotKeySignature
     }
 
-    private let handler: (BetterGIHotKeyBinding) -> Void
+    private let handler: (BetterGIHotKeyBinding, Bool) -> Void
     private let captureHandler: (String, String?, String?) -> Void
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -115,9 +115,10 @@ final class MacHotKeyMonitor {
     private var targetProcessID: pid_t = 0
     private var runtimeActive = false
     private var capture: (id: String, hotKeyType: String)?
+    private var activeReleaseBindings: [String: BetterGIHotKeyBinding] = [:]
 
     init(
-        handler: @escaping (BetterGIHotKeyBinding) -> Void,
+        handler: @escaping (BetterGIHotKeyBinding, Bool) -> Void,
         captureHandler: @escaping (String, String?, String?) -> Void
     ) {
         self.handler = handler
@@ -129,6 +130,11 @@ final class MacHotKeyMonitor {
         targetProcessID: pid_t?,
         runtimeActive: Bool
     ) throws {
+        if self.bindings.map(\.binding) != bindings ||
+            self.targetProcessID != (targetProcessID ?? 0) ||
+            self.runtimeActive && !runtimeActive {
+            releaseActiveBindings()
+        }
         self.bindings = bindings.compactMap { binding in
             guard let signature = MacHotKeySignature.parse(binding.hotKey) else {
                 return nil
@@ -157,6 +163,7 @@ final class MacHotKeyMonitor {
     }
 
     func stop() {
+        releaseActiveBindings()
         if let eventTap {
             CGEvent.tapEnable(tap: eventTap, enable: false)
         }
@@ -182,8 +189,10 @@ final class MacHotKeyMonitor {
         else {
             return
         }
+        let isDown = type == .keyDown || type == .otherMouseDown
 
         if let capture {
+            guard isDown else { return }
             if signature.modifiers.isEmpty,
                let key = signature.key,
                [.delete, .backspace, .escape].contains(key) {
@@ -202,10 +211,21 @@ final class MacHotKeyMonitor {
         }
 
         guard let registered = bindings.first(where: {
-            $0.signature == signature && $0.binding.dispatchOnPress
+            $0.signature == signature
         }) else {
             return
         }
+        if !isDown {
+            guard registered.binding.dispatchOnRelease,
+                  activeReleaseBindings.removeValue(
+                    forKey: registered.binding.id) != nil
+            else {
+                return
+            }
+            handler(registered.binding, false)
+            return
+        }
+        guard registered.binding.dispatchOnPress else { return }
         if registered.binding.hotKeyType == "KeyboardMonitor" {
             guard runtimeActive,
                   targetProcessID > 0,
@@ -215,7 +235,13 @@ final class MacHotKeyMonitor {
                 return
             }
         }
-        handler(registered.binding)
+        if registered.binding.dispatchOnRelease {
+            guard activeReleaseBindings[registered.binding.id] == nil else {
+                return
+            }
+            activeReleaseBindings[registered.binding.id] = registered.binding
+        }
+        handler(registered.binding, true)
     }
 
     private func startIfNeeded() throws {
@@ -225,7 +251,9 @@ final class MacHotKeyMonitor {
         }
         let mask =
             (CGEventMask(1) << CGEventType.keyDown.rawValue) |
-            (CGEventMask(1) << CGEventType.otherMouseDown.rawValue)
+            (CGEventMask(1) << CGEventType.keyUp.rawValue) |
+            (CGEventMask(1) << CGEventType.otherMouseDown.rawValue) |
+            (CGEventMask(1) << CGEventType.otherMouseUp.rawValue)
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
@@ -241,6 +269,14 @@ final class MacHotKeyMonitor {
         runLoopSource = source
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
+    }
+
+    private func releaseActiveBindings() {
+        let active = Array(activeReleaseBindings.values)
+        activeReleaseBindings.removeAll()
+        for binding in active {
+            handler(binding, false)
+        }
     }
 }
 

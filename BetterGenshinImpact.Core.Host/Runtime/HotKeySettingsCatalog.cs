@@ -112,6 +112,10 @@ public sealed class HotKeySettingsCatalog(RuntimeLayout layout)
         new(
             "KeyMouseMacroRecordHotkey", "操控辅助", "启动/停止键鼠录制",
             "keyMouseMacroRecordHotkey", "recording.toggle", "swift", false, true),
+        new(
+            "TurnAroundHotkey", "操控辅助", "长按旋转视角 - 那维莱特转圈",
+            "turnAroundHotkey", "macro.turnAround", "core", true, true,
+            DispatchOnRelease: true),
     ];
 
     public void AttachUpdated(Action<string, string> callback) =>
@@ -280,6 +284,7 @@ public sealed class HotKeySettingsCatalog(RuntimeLayout layout)
             executionOwner = descriptor.ExecutionOwner,
             isHold = descriptor.IsHold,
             dispatchOnPress = descriptor.DispatchOnPress,
+            dispatchOnRelease = descriptor.DispatchOnRelease,
         };
     }
 
@@ -293,5 +298,6 @@ public sealed class HotKeySettingsCatalog(RuntimeLayout layout)
         bool IsHold,
         bool DispatchOnPress,
         string DefaultHotKey = "",
-        string DefaultHotKeyType = "KeyboardMonitor");
+        string DefaultHotKeyType = "KeyboardMonitor",
+        bool DispatchOnRelease = false);
 }

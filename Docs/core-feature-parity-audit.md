@@ -108,15 +108,21 @@ notifier implementations are extracted.
 
 ### Auxiliary controls
 
-The production page currently exposes the two upstream hold-continuation
-controls that have a complete macOS path. Core reads and writes
-`macroConfig`, supplies the configured `KeyBindingsConfig` pickup and jump
-virtual keys, and owns the 200/300 ms thresholds and configured repeat
-intervals. AppKit observes physical key state only while the game is frontmost;
-all generated presses still pass through the normal input safety gate and carry
-an injection marker so neither recording nor hold monitoring can feed back on
-BetterGI-generated events. Other upstream macro actions remain absent from the
-page rather than appearing as clickable placeholders.
+The production page exposes the two upstream hold-continuation controls and
+the Neuvillette turn-around macro. Core reads and writes `macroConfig`,
+supplies the configured `KeyBindingsConfig` pickup and jump virtual keys, and
+owns the 200/300 ms thresholds, repeat intervals, turn distance and turn
+interval. The shared `TurnAroundMacro` owns the zero-distance normalization,
+mouse movement and wait sequence; Windows and macOS only compose their
+platform input/configuration adapters.
+
+AppKit observes physical key state only while the game is frontmost. Hold
+hotkeys forward both press and release edges, and release remains deliverable
+after focus loss so Core can cancel an input blocked at the foreground safety
+gate. All generated input carries an injection marker so recording and
+monitoring cannot feed back on BetterGI-generated events. Other upstream macro
+actions remain absent from the page rather than appearing as clickable
+placeholders.
 
 ### Hotkeys
 
@@ -137,8 +143,9 @@ not dispatched as an action: Core reads its live-updated key through the
 existing physical key-state callback, matching the upstream trigger contract.
 
 Only upstream entries whose action has a complete production path are exposed.
-Screenshot, one-key combat/reward, turn-around, quick-buy, Serenitea Pot and
-path-recorder hotkeys remain absent until those shared actions are extracted.
+Screenshot, one-key combat/reward, quick enhancement, quick-buy, Serenitea Pot
+and path-recorder hotkeys remain absent until those shared actions are
+extracted.
 
 ## Verification tiers
 
