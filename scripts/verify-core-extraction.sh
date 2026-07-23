@@ -52,6 +52,17 @@ rg -q 'AddHostObject\("htmlMask", _htmlMaskFactory' \
 rg -q '"htmlMask.closeAll"' BetterGenshinImpact.Core.Host/Program.cs \
   && rg -q 'case "htmlMask.closeAll"' MacGI/Sources/MacGI/Runtime/MacHTMLMaskController.swift \
   || fail "runtime stop does not close platform-owned HTML masks"
+rg -q 'class AuxiliaryControlCoordinator' \
+  BetterGenshinImpact.Core.Host/Runtime/AuxiliaryControlCoordinator.cs \
+  || fail "auxiliary control timing is not owned by Core"
+rg -q '"macro.keyEdge"' BetterGenshinImpact.Core.Host/CoreRpcServer.cs \
+  && rg -q 'method: "macro.keyEdge"' \
+    MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \
+  || fail "physical auxiliary-control edges do not cross the authenticated RPC boundary"
+if rg -n 'continuationTask|thresholdMilliseconds|intervalMilliseconds' \
+  MacGI/Sources/MacGI/App/AppState.swift; then
+  fail "Swift AppState must not own auxiliary-control timing"
+fi
 rg -q '\["htmlMask"\]\s*=\s*typeof\(MacHtmlMask\)' \
   Test/BetterGenshinImpact.RealUser.Verification/Program.cs \
   || fail "real User verification does not audit the production htmlMask surface"

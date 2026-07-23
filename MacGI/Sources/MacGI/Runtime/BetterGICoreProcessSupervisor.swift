@@ -688,6 +688,23 @@ actor BetterGICoreProcessSupervisor {
             ]))
     }
 
+    func sendAuxiliaryControlEdge(
+        control: String,
+        isDown: Bool
+    ) throws -> String? {
+        guard let result = try runningClient().request(
+            method: "macro.keyEdge",
+            parameters: [
+                "control": control,
+                "isDown": isDown,
+            ]) as? [String: Any]
+        else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid macro.keyEdge result.")
+        }
+        return result["state"] as? String
+    }
+
     private func parseMacroSettings(_ value: Any) throws -> BetterGIMacroSettings {
         guard let result = value as? [String: Any],
               let fEnabled = result["fPressHoldToContinuationEnabled"] as? Bool,

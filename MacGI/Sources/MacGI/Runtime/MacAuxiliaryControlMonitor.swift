@@ -8,6 +8,7 @@ final class MacAuxiliaryControlMonitor {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var targetProcessID: pid_t = 0
+    private var pressedKeys: Set<KeyCode> = []
 
     init(handler: @escaping (KeyCode, Bool) -> Void) {
         self.handler = handler
@@ -40,6 +41,11 @@ final class MacAuxiliaryControlMonitor {
     }
 
     func stop() {
+        let keysToRelease = pressedKeys
+        pressedKeys.removeAll()
+        for key in keysToRelease {
+            handler(key, false)
+        }
         if let eventTap {
             CGEvent.tapEnable(tap: eventTap, enable: false)
         }
@@ -67,7 +73,13 @@ final class MacAuxiliaryControlMonitor {
         guard let key = KeyCode.allCases.first(where: { $0.cgKeyCode == cgKeyCode }) else {
             return
         }
-        handler(key, type == .keyDown)
+        if type == .keyDown {
+            if pressedKeys.insert(key).inserted {
+                handler(key, true)
+            }
+        } else if type == .keyUp, pressedKeys.remove(key) != nil {
+            handler(key, false)
+        }
     }
 }
 

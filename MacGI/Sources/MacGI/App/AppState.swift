@@ -374,8 +374,6 @@ final class AppState: ObservableObject {
                     id: id, value: value, error: error)
             }
         })
-    private var fContinuationTask: Task<Void, Never>?
-    private var spaceContinuationTask: Task<Void, Never>?
     private var confirmedMapMaskSelectedLabelIDs: Set<String> = []
     private var captureTimestamps: [Date] = []
     @Published private(set) var measuredCaptureFPS = 0
@@ -1287,70 +1285,31 @@ final class AppState: ObservableObject {
 
     private func stopAuxiliaryControlMonitor() {
         auxiliaryControlMonitor.stop()
-        fContinuationTask?.cancel()
-        fContinuationTask = nil
-        spaceContinuationTask?.cancel()
-        spaceContinuationTask = nil
     }
 
     private func handleAuxiliaryControlKey(_ key: KeyCode, isDown: Bool) {
-        guard let settings = macroSettings else { return }
-        if key == settings.pickUpOrInteractKey &&
-            settings.fPressHoldToContinuationEnabled {
-            if isDown {
-                if fContinuationTask == nil {
-                    fContinuationTask = continuationTask(
-                        key: settings.pickUpOrInteractKey,
-                        thresholdMilliseconds: 200,
-                        intervalMilliseconds: settings.fFireInterval,
-                        clear: { [weak self] in self?.fContinuationTask = nil })
-                }
-            } else {
-                fContinuationTask?.cancel()
-                fContinuationTask = nil
-            }
+        guard let settings = macroSettings,
+              let supervisor = betterGICoreSupervisor
+        else {
+            return
         }
-        if key == settings.jumpKey &&
-            settings.spacePressHoldToContinuationEnabled {
-            if isDown {
-                if spaceContinuationTask == nil {
-                    spaceContinuationTask = continuationTask(
-                        key: settings.jumpKey,
-                        thresholdMilliseconds: 300,
-                        intervalMilliseconds: settings.spaceFireInterval,
-                        clear: { [weak self] in self?.spaceContinuationTask = nil })
-                }
-            } else {
-                spaceContinuationTask?.cancel()
-                spaceContinuationTask = nil
-            }
+        let control: String
+        if key == settings.pickUpOrInteractKey {
+            control = "pickUpOrInteract"
+        } else if key == settings.jumpKey {
+            control = "jump"
+        } else {
+            return
         }
-    }
-
-    private func continuationTask(
-        key: KeyCode,
-        thresholdMilliseconds: Int,
-        intervalMilliseconds: Int,
-        clear: @escaping @MainActor () -> Void
-    ) -> Task<Void, Never> {
         Task { [weak self] in
-            defer { clear() }
             do {
-                try await Task.sleep(for: .milliseconds(thresholdMilliseconds))
-                while !Task.isCancelled {
-                    try await Task.sleep(for: .milliseconds(intervalMilliseconds))
-                    guard let self,
-                          self.runtimeLifecycle == .running,
-                          self.isTargetWindowFrontmost(self.selectedWindow)
-                    else {
-                        return
-                    }
-                    _ = self.dispatchInput(
-                        .keyPress(key: key),
-                        source: .runtimeTrigger)
-                }
+                _ = try await supervisor.sendAuxiliaryControlEdge(
+                    control: control,
+                    isDown: isDown)
             } catch {
-                return
+                self?.addLog(
+                    .error,
+                    "辅助操控输入转发失败：\(error.localizedDescription)")
             }
         }
     }

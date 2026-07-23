@@ -157,10 +157,25 @@ server.AttachPlatformAssetInitializer(() =>
         autoPickConfigProvider, paddleAutoPickRecognizer, yapAutoPickRecognizer);
 });
 BetterGenshinImpact.Core.Recognition.OCR.ImageRegionOcrPlatform.Configure(imageRegionOcrService);
-TaskControlPlatform.Configure(new MacTaskControlPlatform(
+var taskControlPlatform = new MacTaskControlPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token, captureRing,
     loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.Common.TaskControl"),
-    foregroundInputCoordinator, new GameActionKeyResolver(layout)));
+    foregroundInputCoordinator, new GameActionKeyResolver(layout));
+TaskControlPlatform.Configure(taskControlPlatform);
+using var auxiliaryControls = new AuxiliaryControlCoordinator(
+    server.MacroSettings,
+    (windowsVirtualKey, cancellationToken) =>
+        foregroundInputCoordinator.Dispatch(
+            JObject.FromObject(new
+            {
+                action = "keyPress",
+                windowsVirtualKey,
+            }),
+            cancellationToken),
+    shutdown.Token,
+    loggerFactory.CreateLogger<AuxiliaryControlCoordinator>());
+server.MacroSettings.AttachUpdated(auxiliaryControls.ApplySettings);
+server.AttachAuxiliaryControlCoordinator(auxiliaryControls);
 var autoFightRuntimePlatform = new MacAutoFightRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
 AutoFightRuntimePlatform.Configure(autoFightRuntimePlatform);

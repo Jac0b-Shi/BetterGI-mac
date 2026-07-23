@@ -63,6 +63,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 }
                 """, cancellationToken);
 
+            using var loggerFactory = LoggerFactory.Create(_ => { });
             var macroCatalog = new MacroSettingsCatalog(layout);
             var keyResolver = new GameActionKeyResolver(layout);
             var moveForward = keyResolver.Resolve(
@@ -86,8 +87,72 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 spacePressHoldToContinuationEnabled = true,
                 spaceFireInterval = 120,
             }));
+            var repeatedKeys = new List<int>();
+            using (var auxiliaryControls = new AuxiliaryControlCoordinator(
+                       macroCatalog,
+                       (windowsVirtualKey, token) =>
+                       {
+                           token.ThrowIfCancellationRequested();
+                           lock (repeatedKeys)
+                               repeatedKeys.Add(windowsVirtualKey);
+                       },
+                       cancellationToken,
+                       loggerFactory.CreateLogger<AuxiliaryControlCoordinator>()))
+            {
+                auxiliaryControls.Start();
+                var armed = JObject.FromObject(
+                    auxiliaryControls.HandleKeyEdge(
+                        AuxiliaryControlCoordinator.PickUpOrInteractControl,
+                        true));
+                var held = JObject.FromObject(
+                    auxiliaryControls.HandleKeyEdge(
+                        AuxiliaryControlCoordinator.PickUpOrInteractControl,
+                        true));
+                await Task.Delay(150, cancellationToken);
+                lock (repeatedKeys)
+                {
+                    context.Require(
+                        repeatedKeys.Count == 0,
+                        "Auxiliary controls emitted input before the upstream hold threshold.");
+                }
+                for (var retry = 0; retry < 50; retry++)
+                {
+                    lock (repeatedKeys)
+                    {
+                        if (repeatedKeys.Count > 0)
+                            break;
+                    }
+                    await Task.Delay(20, cancellationToken);
+                }
+                int[] emittedKeys;
+                lock (repeatedKeys)
+                    emittedKeys = repeatedKeys.ToArray();
+                context.Require(
+                    armed.Value<string>("state") == "armed" &&
+                    held.Value<string>("state") == "held" &&
+                    emittedKeys.Length > 0 &&
+                    emittedKeys.All(key => key == 71),
+                    "Auxiliary controls did not preserve the upstream hold threshold, key binding or key-down deduplication.");
+                _ = auxiliaryControls.HandleKeyEdge(
+                    AuxiliaryControlCoordinator.PickUpOrInteractControl,
+                    false);
+                await Task.Delay(120, cancellationToken);
+                lock (repeatedKeys)
+                {
+                    context.Require(
+                        repeatedKeys.Count == emittedKeys.Length,
+                        "Auxiliary controls continued after the physical key-up edge.");
+                }
+                await auxiliaryControls.StopAsync();
+                var stopped = JObject.FromObject(
+                    auxiliaryControls.HandleKeyEdge(
+                        AuxiliaryControlCoordinator.PickUpOrInteractControl,
+                        true));
+                context.Require(
+                    stopped.Value<string>("state") == "stopped",
+                    "Auxiliary controls accepted a late key-down edge after runtime stop.");
+            }
 
-            using var loggerFactory = LoggerFactory.Create(_ => { });
             var scriptHostServices = new MacScriptHostServices(loggerFactory);
             var notificationCatalog = new NotificationSettingsCatalog(
                 layout, new PlatformCallbackChannel(), "verification", cancellationToken,
@@ -293,6 +358,14 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             layout,
             loggerFactory.CreateLogger<KeyMouseScriptCoordinator>(),
             serverCancellation.Token));
+        using var auxiliaryControls = new AuxiliaryControlCoordinator(
+            server.MacroSettings,
+            (_, token) => token.ThrowIfCancellationRequested(),
+            serverCancellation.Token,
+            loggerFactory.CreateLogger<AuxiliaryControlCoordinator>());
+        server.MacroSettings.AttachUpdated(auxiliaryControls.ApplySettings);
+        server.AttachAuxiliaryControlCoordinator(auxiliaryControls);
+        auxiliaryControls.Start();
         var serverTask = server.RunAsync(serverCancellation.Token);
 
         try
@@ -326,6 +399,31 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 macroResult.Value<int>("pickUpOrInteractKeyCode") == 71 &&
                 macroResult.Value<int>("jumpKeyCode") == 74,
                 macroSave.Error?.Message ?? "macro.settings.save returned an invalid result.");
+
+            var macroKeyDown = await ExchangeAsync(
+                connection, "macro-key-down", "macro.keyEdge", sessionToken,
+                JObject.FromObject(new
+                {
+                    control = AuxiliaryControlCoordinator.PickUpOrInteractControl,
+                    isDown = true,
+                }), cancellationToken);
+            var macroKeyUp = await ExchangeAsync(
+                connection, "macro-key-up", "macro.keyEdge", sessionToken,
+                JObject.FromObject(new
+                {
+                    control = AuxiliaryControlCoordinator.PickUpOrInteractControl,
+                    isDown = false,
+                }), cancellationToken);
+            context.Require(
+                macroKeyDown.Error is null &&
+                JObject.FromObject(macroKeyDown.Result!).Value<string>("state") ==
+                    "armed" &&
+                macroKeyUp.Error is null &&
+                JObject.FromObject(macroKeyUp.Result!).Value<string>("state") ==
+                    "released",
+                macroKeyDown.Error?.Message ??
+                macroKeyUp.Error?.Message ??
+                "macro.keyEdge did not preserve the Core-owned press lifecycle.");
 
             var notificationGet = await ExchangeAsync(
                 connection, "notification-get", "notification.settings.get",

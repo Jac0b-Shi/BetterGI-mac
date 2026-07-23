@@ -8,20 +8,25 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 public sealed class MacroSettingsCatalog(RuntimeLayout layout)
 {
     private readonly object _lock = new();
+    private Action<MacroSettingsSnapshot>? _updated;
+
+    public void AttachUpdated(Action<MacroSettingsSnapshot> callback) =>
+        _updated = callback ?? throw new ArgumentNullException(nameof(callback));
 
     public object Get()
     {
         lock (_lock)
-            return Describe(ReadSettings(LoadRoot()));
+            return Describe(ReadSnapshot(LoadRoot()));
     }
 
     public object Save(JObject settings)
     {
+        MacroSettingsSnapshot next;
         lock (_lock)
         {
             var root = LoadRoot();
-            var current = ReadSettings(root);
-            var next = new Settings(
+            var current = ReadSnapshot(root);
+            next = new MacroSettingsSnapshot(
                 RequiredBoolean(settings, "fPressHoldToContinuationEnabled"),
                 RequiredInterval(settings, "fFireInterval"),
                 RequiredBoolean(settings, "spacePressHoldToContinuationEnabled"),
@@ -29,31 +34,42 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
                 current.PickUpOrInteractKeyCode,
                 current.JumpKeyCode);
             var macro = root["macroConfig"] as JsonObject ?? [];
-            macro["fPressHoldToContinuationEnabled"] = next.FEnabled;
-            macro["fFireInterval"] = next.FInterval;
-            macro["spacePressHoldToContinuationEnabled"] = next.SpaceEnabled;
-            macro["spaceFireInterval"] = next.SpaceInterval;
+            macro["fPressHoldToContinuationEnabled"] =
+                next.FPressHoldToContinuationEnabled;
+            macro["fFireInterval"] = next.FFireInterval;
+            macro["spacePressHoldToContinuationEnabled"] =
+                next.SpacePressHoldToContinuationEnabled;
+            macro["spaceFireInterval"] = next.SpaceFireInterval;
             root["macroConfig"] = macro;
             SaveRoot(root);
-            return Describe(next);
         }
+        _updated?.Invoke(next);
+        return Describe(next);
     }
 
-    private static object Describe(Settings settings) => new
+    public MacroSettingsSnapshot Snapshot()
     {
-        fPressHoldToContinuationEnabled = settings.FEnabled,
-        fFireInterval = settings.FInterval,
-        spacePressHoldToContinuationEnabled = settings.SpaceEnabled,
-        spaceFireInterval = settings.SpaceInterval,
+        lock (_lock)
+            return ReadSnapshot(LoadRoot());
+    }
+
+    private static object Describe(MacroSettingsSnapshot settings) => new
+    {
+        fPressHoldToContinuationEnabled =
+            settings.FPressHoldToContinuationEnabled,
+        fFireInterval = settings.FFireInterval,
+        spacePressHoldToContinuationEnabled =
+            settings.SpacePressHoldToContinuationEnabled,
+        spaceFireInterval = settings.SpaceFireInterval,
         pickUpOrInteractKeyCode = settings.PickUpOrInteractKeyCode,
         jumpKeyCode = settings.JumpKeyCode
     };
 
-    private static Settings ReadSettings(JsonObject root)
+    private static MacroSettingsSnapshot ReadSnapshot(JsonObject root)
     {
         var macro = root["macroConfig"] as JsonObject;
         var keyBindings = root["keyBindingsConfig"] as JsonObject;
-        return new Settings(
+        return new MacroSettingsSnapshot(
             macro?["fPressHoldToContinuationEnabled"]?.GetValue<bool>() ?? false,
             macro?["fFireInterval"]?.GetValue<int>() ?? 100,
             macro?["spacePressHoldToContinuationEnabled"]?.GetValue<bool>() ?? false,
@@ -95,11 +111,12 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
             : throw new ArgumentOutOfRangeException(name, "Interval must be between 10 and 10000 ms.");
     }
 
-    private sealed record Settings(
-        bool FEnabled,
-        int FInterval,
-        bool SpaceEnabled,
-        int SpaceInterval,
-        int PickUpOrInteractKeyCode,
-        int JumpKeyCode);
 }
+
+public sealed record MacroSettingsSnapshot(
+    bool FPressHoldToContinuationEnabled,
+    int FFireInterval,
+    bool SpacePressHoldToContinuationEnabled,
+    int SpaceFireInterval,
+    int PickUpOrInteractKeyCode,
+    int JumpKeyCode);

@@ -44,11 +44,13 @@ public sealed class CoreRpcServer(
     private MacTriggerDispatcher? _triggerDispatcher;
     private SoloTaskCoordinator? _soloTasks;
     private KeyMouseScriptCoordinator? _keyMouseScripts;
+    private AuxiliaryControlCoordinator? _auxiliaryControls;
     private int _platformAssetsInitialized;
     private readonly SemaphoreSlim _runtimeMutationLock = new(1, 1);
     public PlatformCallbackChannel PlatformCallbacks => _platformCallbacks;
     public SoloTaskSettingsCatalog SoloTaskSettings => _soloTaskSettings;
     public TriggerSettingsCatalog TriggerSettings => _triggerSettings;
+    public MacroSettingsCatalog MacroSettings => _macroSettings;
     public HotKeySettingsCatalog HotKeySettings => _hotKeySettings;
 
     private SchedulerCoordinator Scheduler => _scheduler ??= new SchedulerCoordinator(
@@ -102,6 +104,20 @@ public sealed class CoreRpcServer(
         ArgumentNullException.ThrowIfNull(coordinator);
         if (Interlocked.CompareExchange(ref _keyMouseScripts, coordinator, null) is not null)
             throw new InvalidOperationException("Key/mouse script coordinator has already been attached.");
+    }
+
+    public void AttachAuxiliaryControlCoordinator(
+        AuxiliaryControlCoordinator coordinator)
+    {
+        ArgumentNullException.ThrowIfNull(coordinator);
+        if (Interlocked.CompareExchange(
+                ref _auxiliaryControls,
+                coordinator,
+                null) is not null)
+        {
+            throw new InvalidOperationException(
+                "Auxiliary control coordinator has already been attached.");
+        }
     }
 
     public void AttachNotificationSettings(NotificationSettingsCatalog settings)
@@ -236,6 +252,14 @@ public sealed class CoreRpcServer(
             }
             if (request.Method == "keyMouse.stop")
                 return RpcResponse.Success(request.Id, await KeyMouseScripts.StopAsync());
+            if (request.Method == "macro.keyEdge")
+            {
+                return RpcResponse.Success(
+                    request.Id,
+                    RequiredAuxiliaryControls().HandleKeyEdge(
+                        RequiredString(request.Params, "control"),
+                        RequiredBoolean(request.Params, "isDown")));
+            }
             if (request.Method == "notification.test")
                 return RpcResponse.Success(
                     request.Id,
@@ -512,6 +536,7 @@ public sealed class CoreRpcServer(
             var dispatcher = RequiredTriggerDispatcher();
             if (!dispatcher.IsRunning)
                 dispatcher.Start();
+            _auxiliaryControls?.Start();
             return RuntimeStatus();
         }
         finally
@@ -531,6 +556,8 @@ public sealed class CoreRpcServer(
                 await _soloTasks.StopActiveAsync(cancellationToken);
             if (_keyMouseScripts is not null)
                 await _keyMouseScripts.StopAsync();
+            if (_auxiliaryControls is not null)
+                await _auxiliaryControls.StopAsync();
             await RequiredTriggerDispatcher().StopAsync(cancellationToken);
             return RuntimeStatus();
         }
@@ -584,6 +611,10 @@ public sealed class CoreRpcServer(
     private MacTriggerDispatcher RequiredTriggerDispatcher() =>
         _triggerDispatcher ?? throw new CapabilityUnavailableException(
             "The macOS trigger dispatcher is unavailable until Core composition completes.");
+
+    private AuxiliaryControlCoordinator RequiredAuxiliaryControls() =>
+        _auxiliaryControls ?? throw new CapabilityUnavailableException(
+            "Auxiliary controls are unavailable until Core composition completes.");
 
     private object ListTriggers()
     {
@@ -695,6 +726,10 @@ public sealed class CoreRpcServer(
 
     private static int RequiredInt(JObject? parameters, string name) =>
         parameters?.Value<int?>(name) ?? throw new ArgumentException($"{name} is required.");
+
+    private static bool RequiredBoolean(JObject? parameters, string name) =>
+        parameters?.Value<bool?>(name)
+        ?? throw new ArgumentException($"{name} is required.");
 
     private static string[] RequiredStrings(JObject? parameters, string name)
     {
