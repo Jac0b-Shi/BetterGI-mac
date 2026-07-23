@@ -63,6 +63,25 @@ using BetterGenshinImpact.GameTask.FarmingPlan;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
+var selectedSuite = "all";
+for (var argumentIndex = 0; argumentIndex < args.Length; argumentIndex++)
+{
+    if (args[argumentIndex] != "--suite") continue;
+    if (++argumentIndex >= args.Length)
+        throw new ArgumentException("--suite requires a value.");
+    selectedSuite = args[argumentIndex].ToLowerInvariant();
+}
+var suiteRanks = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+{
+    ["contracts"] = 0,
+    ["artifacts"] = 1,
+    ["models"] = 2,
+    ["recognition"] = 3,
+    ["all"] = 3,
+};
+if (!suiteRanks.TryGetValue(selectedSuite, out var selectedSuiteRank))
+    throw new ArgumentException($"Unknown verification suite: {selectedSuite}");
+
 var recorder = new RecordingInputBackend();
 var overlayRecorder = new RecordingOverlayDrawPlatform();
 OverlayDrawPlatform.Configure(overlayRecorder);
@@ -87,6 +106,13 @@ void Assert(string label, bool condition, string detail)
 {
     if (condition) { Console.WriteLine($"  PASS: {label}"); passed++; }
     else { Console.WriteLine($"  FAIL: {label} — {detail}"); failed++; }
+}
+
+int Finish()
+{
+    Console.WriteLine();
+    Console.WriteLine($"=== {passed} passed, {failed} failed ===");
+    return failed > 0 ? 1 : 0;
 }
 
 using (var overlayFrame = new Mat(1080, 1920, MatType.CV_8UC4))
@@ -719,6 +745,9 @@ Assert("RecV5 path uses PaddleOCR", recPathNorm.Contains("/PaddleOCR/"), recPath
 Assert("RecV5 path does not use PaddleOcr", !recPathNorm.Contains("/PaddleOcr/"), recPathNorm);
 Console.WriteLine();
 
+if (selectedSuiteRank == suiteRanks["contracts"])
+    return Finish();
+
 // ==== B11.5 Artifact manifest ====
 Console.WriteLine("B11.5: Artifact manifest path validation");
 var manifestPath = System.IO.Path.Combine(
@@ -1307,6 +1336,9 @@ Console.WriteLine("B12.1: Path chain verification — Downloader → Resolver �
 }
 Console.WriteLine();
 
+if (selectedSuiteRank == suiteRanks["artifacts"])
+    return Finish();
+
 // ==== B12.2 Locked release installation and artifact integrity ====
 Console.WriteLine("B12.2: Locked release artifact integrity");
 var lockedRuntimeRoot = Path.Combine(Path.GetTempPath(), "bgi-locked-runtime-" + Guid.NewGuid().ToString("N")[..8]);
@@ -1605,6 +1637,13 @@ var verificationOcrService = new VerificationOcrService();
 BetterGenshinImpact.Core.Recognition.OCR.ImageRegionOcrPlatform.Configure(verificationOcrService);
 BetterGenshinImpact.GameTask.Model.TaskParameterPlatform.Configure(
     new VerificationTaskParameterPlatform("zh-CN"));
+
+if (selectedSuiteRank == suiteRanks["models"])
+{
+    if (Directory.Exists(lockedRuntimeRoot)) Directory.Delete(lockedRuntimeRoot, recursive: true);
+    Microsoft.ML.OnnxRuntime.OrtEnv.Instance().Dispose();
+    return Finish();
+}
 
 Console.WriteLine("AutoArtifactSalvage: real Grid, Paddle OCR, ONNX and ClearScript");
 var artifactGridFixture = Path.Combine(
@@ -3295,10 +3334,8 @@ finally
     if (Directory.Exists(lockedRuntimeRoot)) Directory.Delete(lockedRuntimeRoot, recursive: true);
 }
 
-Console.WriteLine();
-Console.WriteLine($"=== {passed} passed, {failed} failed ===");
 Microsoft.ML.OnnxRuntime.OrtEnv.Instance().Dispose();
-Environment.ExitCode = failed > 0 ? 1 : 0;
+return Finish();
 
 class DeadProvider : BetterGenshinImpact.Core.Abstractions.Runtime.IOcrRuntimeConfigProvider
 {

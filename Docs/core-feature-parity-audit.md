@@ -39,7 +39,7 @@ priority, exclusivity and whether an expander may be shown.
 | AutoAlbum | complete | shares the upstream AutoMusicGame configuration |
 | AutoCook | complete | complete |
 | AutoArtifactSalvage | complete | complete |
-| AutoRedeemCode | complete | multiline launch input is owned by the task action, not a settings document |
+| AutoRedeemCode | complete | multiline launch input is owned by the task action, not a settings document; the descriptor therefore does not expose an expander |
 
 The upstream Grid icon collection and model-accuracy entries are developer
 tools rather than normal automation tasks and are intentionally absent from the
@@ -79,16 +79,25 @@ Use the smallest tier that owns the changed behavior:
 
 ```bash
 # Settings, catalogs, scheduler editing and other contract changes.
-scripts/verify-core-fast.sh all
+scripts/verify-core-development.sh fast
+
+# Shared Core contracts without artifact installation or model startup.
+scripts/verify-core-development.sh contracts
+
+# Manifest, source-lock, downloader and synthetic archive checks.
+scripts/verify-core-development.sh artifacts
+
+# Locked release installation, ONNX sessions and real OCR.
+scripts/verify-core-development.sh models
 
 # Any PathExecutor, action-handler or downloaded route-library change.
-scripts/verify-pathing-library.sh
+scripts/verify-core-development.sh pathing
 
 # Static architecture and production-fallback gate.
-scripts/verify-core-static.sh
+scripts/verify-core-development.sh static
 
 # Full Core behavior, recognition, artifact and model runtime verification.
-scripts/verify-core-full.sh
+scripts/verify-core-development.sh full
 ```
 
 The legacy Core and Host verifier programs remain full integration gates. New
@@ -100,7 +109,9 @@ dependency graph once and runs each verifier with `--no-build`; local iteration
 must not use an implicit `dotnet run` build.
 
 Measured on Apple Silicon with a warm package cache, rebuilding the legacy Core
-verifier took about 16 seconds while `dotnet run --no-build` took about 96
-seconds. The runtime pathing verifier completed its isolated warm loop in under
-9 seconds. The expensive full gate is therefore reserved for model,
-recognition, artifact, native-runtime and phase-completion changes.
+verifier took about 16 seconds while the former unfiltered `dotnet run
+--no-build` took 105 seconds. The cumulative `contracts` boundary completes 88
+shared-Core checks in about 7.5 seconds including up-to-date builds. The runtime
+pathing verifier completed its isolated warm loop in under 9 seconds. The
+expensive full gate is therefore reserved for model, recognition, artifact,
+native-runtime and phase-completion changes.

@@ -20,6 +20,7 @@ on:
       - "Test/BetterGenshinImpact.RealUser.Verification/**"
       - "MacGI/**"
       - "scripts/verify-core-extraction.sh"
+      - "scripts/verify-core-development.sh"
       - "scripts/verify-core-fast.sh"
       - "scripts/verify-core-full.sh"
       - "scripts/verify-core-static.sh"
@@ -54,7 +55,7 @@ jobs:
         run: >
           dotnet run
           --project Test/BetterGenshinImpact.Core.Verification/BetterGenshinImpact.Core.Verification.csproj
-          -c Debug --no-build
+          -c Debug --no-build -- --suite all
       - name: Verify Core Host RPC and ClearScript
         run: >
           dotnet run

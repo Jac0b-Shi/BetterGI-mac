@@ -299,7 +299,7 @@ if rg -n 'PathExecutorPlatform\.Current|PathExecutorAutoSkipPlatform\.Current|Sc
 fi
 rg -q 'GameTask/AutoBoss/\*\.cs' BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj \
   || fail "upstream AutoBoss sources are not linked into Core"
-rg -Fq 'Descriptor("AutoBoss", "自动首领讨伐", true, true)' \
+rg -Fq 'Descriptor("AutoBoss", "自动首领讨伐", true)' \
   BetterGenshinImpact.Core.Host/Runtime/SoloTaskCoordinator.cs \
   || fail "AutoBoss is not exposed by the truthful Core solo-task catalog"
 rg -q 'new AutoBossTask' BetterGenshinImpact.Core.Host/Runtime/MacDispatcherRuntimePlatform.cs \
@@ -322,20 +322,23 @@ rg -q '"solo.settings.get" => _soloTaskSettings.Get' BetterGenshinImpact.Core.Ho
 rg -q '"solo.settings.save" => _soloTaskSettings.Save' BetterGenshinImpact.Core.Host/CoreRpcServer.cs \
   || fail "Core Host does not own independent-task settings writes"
 for descriptor in \
-  'Descriptor("AutoGeniusInvokation", "自动七圣召唤", true, true)' \
-  'Descriptor("AutoWood", "自动伐木", true, true)' \
-  'Descriptor("AutoBoss", "自动首领讨伐", true, true)' \
-  'Descriptor("AutoDomain", "自动秘境", true, true)' \
-  'Descriptor("AutoArtifactSalvage", "自动分解圣遗物", true, true)' \
-  'Descriptor("AutoMusicGame", "自动千音雅集", true, true)' \
-  'Descriptor("AutoAlbum", "自动千音雅集（整个专辑）", true, true)' \
-  'Descriptor("AutoCook", "自动烹饪", true, true)'; do
+  'Descriptor("AutoGeniusInvokation", "自动七圣召唤", true)' \
+  'Descriptor("AutoWood", "自动伐木", true)' \
+  'Descriptor("AutoBoss", "自动首领讨伐", true)' \
+  'Descriptor("AutoDomain", "自动秘境", true)' \
+  'Descriptor("AutoArtifactSalvage", "自动分解圣遗物", true)' \
+  'Descriptor("AutoMusicGame", "自动千音雅集", true)' \
+  'Descriptor("AutoAlbum", "自动千音雅集（整个专辑）", true)' \
+  'Descriptor("AutoCook", "自动烹饪", true)'; do
   rg -Fq "${descriptor}" BetterGenshinImpact.Core.Host/Runtime/SoloTaskCoordinator.cs \
     || fail "composed independent-task settings are missing from the truthful catalog: ${descriptor}"
 done
-rg -q '"AutoRedeemCode", "自动使用兑换码", true, true' \
+rg -q '"AutoRedeemCode", "自动使用兑换码", true' \
   BetterGenshinImpact.Core.Host/Runtime/SoloTaskCoordinator.cs \
   || fail "AutoRedeemCode input task is missing from the truthful Core catalog"
+rg -q 'settingsAvailable = settings\.IsAvailable\(name\)' \
+  BetterGenshinImpact.Core.Host/Runtime/SoloTaskCoordinator.cs \
+  || fail "independent-task setting availability is not derived from the Core settings catalog"
 rg -qx 'UseRedeemCode' MacGI/Resources/game-task-assets.manifest \
   || fail "composed UseRedeemCode assets are missing from the canonical package manifest"
 rg -q 'new UseRedemptionCodeTask' \
