@@ -718,6 +718,22 @@ try
     Require(productionTriggerList.Error is null && productionTriggerNames.SetEquals(new[]
         { "GameLoading", "AutoPick", "QuickTeleport", "AutoSkip", "AutoFish", "AutoEat", "MapMask", "SkillCd" }),
         productionTriggerList.Error?.Message ?? "core.initialize did not register the exact production trigger set");
+    var productionTriggerDocuments = JArray.FromObject(productionTriggerList.Result!);
+    Require(
+        productionTriggerDocuments.Single(item => item?["name"]?.Value<string>() == "GameLoading")
+            ?["canSetEnabled"]?.Value<bool>() == false &&
+        productionTriggerDocuments
+            .Where(item => item?["name"]?.Value<string>() != "GameLoading")
+            .All(item => item?["canSetEnabled"]?.Value<bool>() == true),
+        "trigger.list did not preserve the upstream GameLoading direct-toggle boundary.");
+    var initialGameLoadingEnabled = GameTaskManager.TriggerDictionary!["GameLoading"].IsEnabled;
+    var gameLoadingToggle = await ExchangeAsync(
+        connection, "disable-game-loading-trigger", "trigger.setEnabled", sessionToken,
+        JObject.FromObject(new { name = "GameLoading", enabled = !initialGameLoadingEnabled }),
+        cancellation.Token);
+    Require(gameLoadingToggle.Error?.Code == "CapabilityUnavailable" &&
+            GameTaskManager.TriggerDictionary!["GameLoading"].IsEnabled == initialGameLoadingEnabled,
+        "trigger.setEnabled did not reject the upstream read-only GameLoading trigger.");
     var mapMaskTriggerSettings = await ExchangeAsync(
         connection, "map-mask-trigger-settings", "trigger.settings.get", sessionToken,
         JObject.FromObject(new { name = "MapMask" }), cancellation.Token);
@@ -1306,7 +1322,8 @@ try
     var triggerDocuments = JArray.FromObject(triggerList.Result!);
     Require(triggerList.Error is null && triggerDocuments.Count == 1 &&
             triggerDocuments[0]?["name"]?.Value<string>() == "Verification" &&
-            triggerDocuments[0]?["enabled"]?.Value<bool>() == false,
+            triggerDocuments[0]?["enabled"]?.Value<bool>() == false &&
+            triggerDocuments[0]?["canSetEnabled"]?.Value<bool>() == true,
         triggerList.Error?.Message ?? "trigger.list did not expose the shared GameTaskManager registry");
     var triggerEnable = await ExchangeAsync(
         connection, "trigger-enable", "trigger.setEnabled", sessionToken,

@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.GameTask.GameLoading;
 using BetterGenshinImpact.GameTask.MapMask;
 
 namespace BetterGenshinImpact.Core.Host;
@@ -504,6 +505,7 @@ public sealed class CoreRpcServer(
                 name = pair.Key,
                 displayName = pair.Value.Name,
                 enabled = pair.Value.IsEnabled,
+                canSetEnabled = CanSetTriggerEnabled(pair.Value),
                 priority = pair.Value.Priority,
                 exclusive = pair.Value.IsExclusive,
                 settingsAvailable = _triggerSettings.IsAvailable(pair.Key),
@@ -521,10 +523,16 @@ public sealed class CoreRpcServer(
                 "The shared trigger registry is unavailable until core.initialize completes with the platform attached.");
         if (!triggers.TryGetValue(name, out var trigger))
             throw new CapabilityUnavailableException($"Trigger '{name}' is not composed in the macOS Core.");
+        if (!CanSetTriggerEnabled(trigger))
+            throw new CapabilityUnavailableException(
+                $"Trigger '{name}' is controlled by its upstream configuration and cannot be toggled directly.");
         trigger.IsEnabled = enabled;
         _triggerSettings.SaveEnabled(name, enabled);
         return new { name, enabled = trigger.IsEnabled };
     }
+
+    private static bool CanSetTriggerEnabled(ITaskTrigger trigger) =>
+        trigger is not GameLoadingTrigger;
 
     private static string RequiredString(JObject? parameters, string name) =>
         parameters?.Value<string>(name) is { Length: > 0 } value

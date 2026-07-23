@@ -194,6 +194,7 @@ struct MacGIFeature: Identifiable, Equatable {
     var statusText: String
     var icon: BGIIcon
     var isEnabled: Bool
+    var canSetEnabled: Bool
     var settingsAvailable: Bool
     var autoHangoutEventEnabled: Bool?
 }
@@ -1272,7 +1273,8 @@ final class AppState: ObservableObject {
     }
 
     func canControlFeature(_ id: String) -> Bool {
-        betterGICoreSupervisor != nil && features.contains(where: { $0.id == id })
+        betterGICoreSupervisor != nil
+            && features.contains(where: { $0.id == id && $0.canSetEnabled })
     }
 
     func setFeature(_ id: String, enabled: Bool) {
@@ -1316,6 +1318,7 @@ final class AppState: ObservableObject {
                     statusText: "C# Core · P\(state.priority)\(state.exclusive ? " · Exclusive" : "")",
                     icon: presentation?.icon ?? .symbol("bolt"),
                     isEnabled: state.enabled,
+                    canSetEnabled: state.canSetEnabled,
                     settingsAvailable: state.settingsAvailable,
                     autoHangoutEventEnabled: state.autoHangoutEventEnabled
                 )

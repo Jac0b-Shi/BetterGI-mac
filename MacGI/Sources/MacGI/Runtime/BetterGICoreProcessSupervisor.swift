@@ -6,6 +6,7 @@ struct BetterGICoreTriggerState: Sendable, Equatable {
     let name: String
     let displayName: String
     let enabled: Bool
+    let canSetEnabled: Bool
     let priority: Int
     let exclusive: Bool
     let settingsAvailable: Bool
@@ -674,6 +675,7 @@ actor BetterGICoreProcessSupervisor {
             guard let name = item["name"] as? String,
                   let displayName = item["displayName"] as? String,
                   let enabled = item["enabled"] as? Bool,
+                  let canSetEnabled = item["canSetEnabled"] as? Bool,
                   let priority = item["priority"] as? Int,
                   let exclusive = item["exclusive"] as? Bool,
                   let settingsAvailable = item["settingsAvailable"] as? Bool else {
@@ -681,6 +683,7 @@ actor BetterGICoreProcessSupervisor {
             }
             return BetterGICoreTriggerState(
                 name: name, displayName: displayName, enabled: enabled,
+                canSetEnabled: canSetEnabled,
                 priority: priority, exclusive: exclusive,
                 settingsAvailable: settingsAvailable,
                 autoHangoutEventEnabled: item["autoHangoutEventEnabled"] as? Bool
