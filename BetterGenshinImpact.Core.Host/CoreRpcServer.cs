@@ -251,6 +251,7 @@ public sealed class CoreRpcServer(
                     request.Params?["config"] as JObject ?? throw new ArgumentException("config is required.")),
                 "catalog.listScriptProjects" => _scriptProjectCatalog.List(),
                 "catalog.getScriptProject" => _scriptProjectCatalog.Get(RequiredString(request.Params, "folderName")),
+                "catalog.getScriptProjectRootLocation" => _scriptProjectCatalog.GetRootLocation(),
                 "trigger.list" => ListTriggers(),
                 "trigger.setEnabled" => SetTriggerEnabled(
                     RequiredString(request.Params, "name"),

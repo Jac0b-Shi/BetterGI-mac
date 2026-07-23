@@ -384,7 +384,9 @@ struct JSScriptPage: View {
         VStack(alignment: .leading, spacing: 14) {
             BGIPageTitle(title: "自定义 Javascript 脚本（实验功能）")
             HStack(spacing: 8) {
-                BGIUnavailableAction("打开脚本目录", systemImage: "folder")
+                Button { appState.openScriptProjectRootLocation() } label: {
+                    Label("打开脚本目录", systemImage: "folder")
+                }
                 BGIUnavailableAction("脚本仓库", systemImage: "archivebox")
                 Button { appState.runSchedulerGroups() } label: {
                     Label("运行所选配置组", systemImage: "play.fill")

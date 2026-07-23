@@ -4,6 +4,37 @@ import Testing
 
 @Suite("AppState scheduler catalog")
 struct AppStateSchedulerCatalogTests {
+    @Test("Script settings preserve every JSON value kind")
+    func scriptSettingsPreserveEveryJSONValueKind() throws {
+        let source = Data(
+            """
+            {
+              "null": null,
+              "string": "value",
+              "bool": true,
+              "integer": 42,
+              "number": 2.5,
+              "strings": ["a", "b"],
+              "array": [1, false, null, {"nested": "value"}],
+              "object": {"enabled": true, "count": 3}
+            }
+            """.utf8
+        )
+        let raw = try #require(
+            JSONSerialization.jsonObject(with: source) as? [String: Any]
+        )
+        let values = try raw.mapValues(BetterGIJSONValue.init(any:))
+        let roundTrippedData = try JSONSerialization.data(
+            withJSONObject: values.mapValues(\.any),
+            options: [.sortedKeys]
+        )
+        let roundTrippedRaw = try #require(
+            JSONSerialization.jsonObject(with: roundTrippedData) as? [String: Any]
+        )
+
+        #expect(try roundTrippedRaw.mapValues(BetterGIJSONValue.init(any:)) == values)
+    }
+
     @Test("Debug Core resolver locates the staged SwiftPM helper")
     func debugCoreResolverLocatesStagedHelper() throws {
         let buildRoot = FileManager.default.temporaryDirectory

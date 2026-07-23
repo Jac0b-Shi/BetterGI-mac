@@ -537,6 +537,23 @@ final class AppState: ObservableObject {
         }
     }
 
+    func openScriptProjectRootLocation() {
+        guard let supervisor = betterGICoreSupervisor else {
+            addLog(.error, "Open script directory failed: BetterGI Core is unavailable.")
+            return
+        }
+        Task { [weak self] in
+            do {
+                let path = try await supervisor.scriptProjectRootLocation()
+                guard NSWorkspace.shared.open(URL(fileURLWithPath: path)) else {
+                    throw BetterGICoreRPCError.socket("Finder could not open the script directory.")
+                }
+            } catch {
+                self?.addLog(.error, "Open script directory failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
     func exportMergedSchedulerPathing() {
         guard let supervisor = betterGICoreSupervisor, let group = selectedSchedulerGroup else { return }
         Task { [weak self] in

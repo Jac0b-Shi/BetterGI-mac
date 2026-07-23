@@ -185,14 +185,29 @@ private struct SchedulerProjectCommonSettingsSheet: View {
                     }
                 }
                 Spacer()
-                HStack { Spacer(); Button("取消") { dismiss() }; Button("保存") { save(value) }.keyboardShortcut(.defaultAction) }
-            } else if let error { Text(error).foregroundStyle(BGIColors.danger) } else { ProgressView() }
+            } else if let error {
+                Text(error).foregroundStyle(BGIColors.danger).textSelection(.enabled)
+                Button("重试") { Task { await load() } }
+                Spacer()
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                Button("保存") {
+                    if let settings { save(settings) }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(settings == nil)
+            }
         }
         .padding(24).frame(width: 520, height: 420)
         .task { await load() }
     }
 
     private func load() async {
+        error = nil
         do { settings = try await appState.loadProjectCommonSettings(projectIndex) }
         catch { self.error = error.localizedDescription }
     }
@@ -219,9 +234,25 @@ private struct SchedulerProjectCustomSettingsSheet: View {
                         ForEach(settings.schema) { settingControl($0) }
                     }.padding()
                 }
-                Divider()
-                HStack { Spacer(); Button("取消") { dismiss() }; Button("保存") { save() }.keyboardShortcut(.defaultAction) }.padding()
-            } else if let error { Text(error).foregroundStyle(BGIColors.danger).padding() } else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
+            } else if let error {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(error).foregroundStyle(BGIColors.danger).textSelection(.enabled)
+                    Button("重试") { Task { await load() } }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            Divider()
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                Button("保存") { save() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(settings == nil)
+            }
+            .padding()
         }
         .frame(width: 620, height: 600).task { await load() }
     }
@@ -269,7 +300,11 @@ private struct SchedulerProjectCustomSettingsSheet: View {
             if !enabled { values.removeAll { $0 == option } }
             settings?.values[name] = .strings(values)
         }) }
-    private func load() async { do { settings = try await appState.loadProjectCustomSettings(projectIndex) } catch { self.error = error.localizedDescription } }
+    private func load() async {
+        error = nil
+        do { settings = try await appState.loadProjectCustomSettings(projectIndex) }
+        catch { self.error = error.localizedDescription }
+    }
     private func save() { guard let settings else { return }; Task { do { try await appState.saveProjectCustomSettings(settings); dismiss() } catch { self.error = error.localizedDescription } } }
 }
 

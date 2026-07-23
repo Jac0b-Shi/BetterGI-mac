@@ -21,6 +21,12 @@ public sealed class ScriptProjectCatalog(RuntimeLayout layout)
 
     public ScriptProjectDocument Get(string folderName) => Read(ValidateFolderName(folderName));
 
+    public object GetRootLocation()
+    {
+        layout.EnsureCreated();
+        return new { path = Root };
+    }
+
     private ScriptProjectSummary ReadSummary(string folderName)
     {
         var directory = Path.Combine(Root, ValidateFolderName(folderName));

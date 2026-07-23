@@ -594,6 +594,10 @@ actor BetterGICoreProcessSupervisor {
         return try client.listScriptProjects()
     }
 
+    func scriptProjectRootLocation() throws -> String {
+        try runningClient().scriptProjectRootLocation()
+    }
+
     func runSchedulerGroup(name: String) throws -> String {
         guard case .running = state, let client else {
             throw BetterGICoreRPCError.socket("BetterGI Core is not running.")

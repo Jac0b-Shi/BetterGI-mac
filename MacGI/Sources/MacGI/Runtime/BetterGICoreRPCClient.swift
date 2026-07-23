@@ -1,4 +1,5 @@
 import Darwin
+import CoreFoundation
 import Foundation
 
 enum BetterGICoreRPCError: Error, LocalizedError, Equatable {
@@ -39,22 +40,54 @@ struct BetterGIScriptGroupProjectSummary: Equatable, Sendable, Identifiable {
 }
 
 enum BetterGIJSONValue: Equatable, Sendable {
+    case null
     case string(String)
     case bool(Bool)
     case strings([String])
+    case integer(Int64)
+    case number(Double)
+    case array([BetterGIJSONValue])
+    case object([String: BetterGIJSONValue])
 
     init(any: Any) throws {
-        if let value = any as? String { self = .string(value) }
-        else if let value = any as? Bool { self = .bool(value) }
-        else if let value = any as? [String] { self = .strings(value) }
-        else { throw BetterGICoreRPCError.protocolViolation("Unsupported settings value.") }
+        switch any {
+        case is NSNull:
+            self = .null
+        case let value as String:
+            self = .string(value)
+        case let value as Bool:
+            self = .bool(value)
+        case let value as [String]:
+            self = .strings(value)
+        case let value as [Any]:
+            self = .array(try value.map(Self.init(any:)))
+        case let value as [String: Any]:
+            self = .object(try value.mapValues(Self.init(any:)))
+        case let value as NSNumber:
+            if CFGetTypeID(value) == CFBooleanGetTypeID() {
+                self = .bool(value.boolValue)
+            } else if CFNumberIsFloatType(value) {
+                self = .number(value.doubleValue)
+            } else {
+                self = .integer(value.int64Value)
+            }
+        default:
+            throw BetterGICoreRPCError.protocolViolation(
+                "Unsupported JSON settings value: \(String(describing: type(of: any)))."
+            )
+        }
     }
 
     var any: Any {
         switch self {
+        case .null: NSNull()
         case .string(let value): value
         case .bool(let value): value
         case .strings(let value): value
+        case .integer(let value): value
+        case .number(let value): value
+        case .array(let value): value.map(\.any)
+        case .object(let value): value.mapValues(\.any)
         }
     }
 }
@@ -329,6 +362,15 @@ final class BetterGICoreRPCClient: @unchecked Sendable {
             else { throw BetterGICoreRPCError.protocolViolation("Invalid script-project summary.") }
             return BetterGIScriptProjectSummary(folderName: folderName, name: name, version: version)
         }
+    }
+
+    func scriptProjectRootLocation() throws -> String {
+        guard let result = try request(method: "catalog.getScriptProjectRootLocation") as? [String: Any],
+              let path = result["path"] as? String
+        else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid script project root location.")
+        }
+        return path
     }
 
     @discardableResult
