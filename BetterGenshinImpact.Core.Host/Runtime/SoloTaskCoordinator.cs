@@ -17,20 +17,34 @@ public sealed class SoloTaskCoordinator(
 
     public object List() => new[]
     {
-        Descriptor("AutoGeniusInvokation", "自动七圣召唤", true),
-        Descriptor("AutoWood", "自动伐木", true),
-        Descriptor("AutoFight", "自动战斗", true),
-        Descriptor("AutoDomain", "自动秘境", true),
-        Descriptor("AutoBoss", "自动首领讨伐", true),
-        Descriptor("AutoStygianOnslaught", "自动幽境危战", true),
-        Descriptor("AutoFishing", "全自动钓鱼（单个鱼塘）", true),
-        Descriptor("AutoLeyLineOutcrop", "自动地脉花", true),
-        Descriptor("AutoMusicGame", "自动千音雅集", true),
-        Descriptor("AutoAlbum", "自动千音雅集（整个专辑）", true),
-        Descriptor("AutoCook", "自动烹饪", true),
-        Descriptor("AutoArtifactSalvage", "自动分解圣遗物", true),
+        Descriptor("AutoGeniusInvokation", "自动七圣召唤", "全自动打牌", true),
         Descriptor(
-            "AutoRedeemCode", "自动使用兑换码", true,
+            "AutoWood", "自动伐木",
+            "装备「王树瑞佑」，通过循环重启游戏刷新并收集木材", true),
+        Descriptor("AutoFight", "自动战斗", "自动执行选择的战斗策略", true),
+        Descriptor("AutoDomain", "自动秘境", "基于钟离的自动循环刷本", true),
+        Descriptor("AutoBoss", "自动首领讨伐", "自动传送、战斗并领取奖励", true),
+        Descriptor(
+            "AutoStygianOnslaught", "自动幽境危战",
+            "自动传送并进入幽境危战", true),
+        Descriptor(
+            "AutoFishing", "全自动钓鱼（单个鱼塘）",
+            "不要携带跟宠！在出现钓鱼F按钮的位置启动本任务", true),
+        Descriptor("AutoLeyLineOutcrop", "自动地脉花", "自动定位并刷取地脉花", true),
+        Descriptor(
+            "AutoMusicGame", "自动千音雅集",
+            "可以自动演奏单个，也可以全自动完成整个专辑", true),
+        Descriptor(
+            "AutoAlbum", "自动千音雅集（整个专辑）",
+            "可以自动演奏单个，也可以全自动完成整个专辑", true),
+        Descriptor(
+            "AutoCook", "自动烹饪",
+            "在手动烹饪界面运行，自动识别并点击结束烹饪", true),
+        Descriptor(
+            "AutoArtifactSalvage", "自动分解圣遗物",
+            "指定匹配表达式逐一筛选分解，支持5星圣遗物", true),
+        Descriptor(
+            "AutoRedeemCode", "自动使用兑换码", "自动使用输入的兑换码", true,
             inputKind: "multilineText", inputTitle: "输入兑换码",
             inputPlaceholder: "每行一条兑换码"),
     };
@@ -182,12 +196,13 @@ public sealed class SoloTaskCoordinator(
     }
 
     private object Descriptor(
-        string name, string displayName, bool available,
+        string name, string displayName, string description, bool available,
         string? inputKind = null, string? inputTitle = null,
         string? inputPlaceholder = null) => new
     {
         name,
         displayName,
+        description,
         available,
         settingsAvailable = settings.IsAvailable(name),
         inputKind,

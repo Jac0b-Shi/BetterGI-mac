@@ -184,7 +184,7 @@ struct SoloTasksPage: View {
                 if task.settingsAvailable {
                     BGIExpandableTaskCard(
                         icon: icon(for: task.name), title: task.displayName,
-                        subtitle: task.unavailableReason ?? detail(for: task.name)
+                        subtitle: task.unavailableReason ?? task.description
                     ) {
                         taskAction(task)
                     } content: {
@@ -192,7 +192,7 @@ struct SoloTasksPage: View {
                     }
                 } else {
                     BGITaskCard(icon: icon(for: task.name), title: task.displayName,
-                                subtitle: task.unavailableReason ?? detail(for: task.name)) {
+                                subtitle: task.unavailableReason ?? task.description) {
                         taskAction(task)
                     }
                 }
@@ -961,16 +961,6 @@ struct SoloTasksPage: View {
         }
     }
 
-    private func detail(for name: String) -> String {
-        switch name {
-        case "AutoFishing":
-            "在出现钓鱼交互提示的位置启动；识别、抛竿和收杆均由共享 C# 任务执行。"
-        case "AutoRedeemCode":
-            "输入兑换码后，由 BetterGI C# Core 打开设置并逐条兑换。"
-        default:
-            "BetterGI C# Core 独立任务。"
-        }
-    }
 }
 
 private struct AutoArtifactSalvageSettingsEditor: View {

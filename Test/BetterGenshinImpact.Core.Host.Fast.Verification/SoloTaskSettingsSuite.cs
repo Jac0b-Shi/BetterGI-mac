@@ -71,6 +71,32 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 context.Require(
                     item.Value<bool>("settingsAvailable") == catalog.IsAvailable(name),
                     $"Solo task '{name}' settings availability drifted from the Core catalog.");
+                context.Require(
+                    !string.IsNullOrWhiteSpace(item.Value<string>("description")),
+                    $"Solo task '{name}' did not expose its upstream description.");
+            }
+            var upstreamDescriptions = new Dictionary<string, string>
+            {
+                ["AutoGeniusInvokation"] = "全自动打牌",
+                ["AutoWood"] = "装备「王树瑞佑」，通过循环重启游戏刷新并收集木材",
+                ["AutoFight"] = "自动执行选择的战斗策略",
+                ["AutoDomain"] = "基于钟离的自动循环刷本",
+                ["AutoBoss"] = "自动传送、战斗并领取奖励",
+                ["AutoStygianOnslaught"] = "自动传送并进入幽境危战",
+                ["AutoFishing"] = "不要携带跟宠！在出现钓鱼F按钮的位置启动本任务",
+                ["AutoLeyLineOutcrop"] = "自动定位并刷取地脉花",
+                ["AutoMusicGame"] = "可以自动演奏单个，也可以全自动完成整个专辑",
+                ["AutoAlbum"] = "可以自动演奏单个，也可以全自动完成整个专辑",
+                ["AutoCook"] = "在手动烹饪界面运行，自动识别并点击结束烹饪",
+                ["AutoArtifactSalvage"] = "指定匹配表达式逐一筛选分解，支持5星圣遗物",
+                ["AutoRedeemCode"] = "自动使用输入的兑换码",
+            };
+            foreach (var (name, description) in upstreamDescriptions)
+            {
+                context.Require(
+                    descriptors.Single(item => item.Value<string>("name") == name)
+                        .Value<string>("description") == description,
+                    $"Solo task '{name}' description drifted from the upstream task settings page.");
             }
             context.Require(
                 descriptors.Single(item => item.Value<string>("name") == "AutoRedeemCode")

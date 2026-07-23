@@ -100,6 +100,7 @@ struct BetterGICoreMapMaskLabel: Sendable, Equatable, Identifiable {
 struct BetterGICoreSoloTask: Sendable, Equatable, Identifiable {
     let name: String
     let displayName: String
+    let description: String
     let available: Bool
     let unavailableReason: String?
     let settingsAvailable: Bool
@@ -1204,11 +1205,13 @@ actor BetterGICoreProcessSupervisor {
         return try items.map { item in
             guard let name = item["name"] as? String,
                   let displayName = item["displayName"] as? String,
+                  let description = item["description"] as? String,
                   let available = item["available"] as? Bool else {
                 throw BetterGICoreRPCError.protocolViolation("Invalid solo task descriptor.")
             }
             return BetterGICoreSoloTask(
-                name: name, displayName: displayName, available: available,
+                name: name, displayName: displayName, description: description,
+                available: available,
                 unavailableReason: item["unavailableReason"] as? String,
                 settingsAvailable: item["settingsAvailable"] as? Bool ?? false,
                 inputKind: item["inputKind"] as? String,
