@@ -78,12 +78,16 @@ final class MacKeyMouseEventRecorder {
     private var targetProcessID: pid_t = 0
     private var captureRect = CGRect.zero
     private var scaleFactor = 1.0
+    private var ignoredHotKey: MacHotKeySignature?
 
     var isRecording: Bool {
         lock.withLock { eventTap != nil }
     }
 
-    func start(targetWindow: WindowInfo) throws {
+    func start(
+        targetWindow: WindowInfo,
+        ignoring ignoredHotKey: MacHotKeySignature? = nil
+    ) throws {
         guard AXIsProcessTrusted() else {
             throw MacKeyMouseRecordingError.accessibilityPermissionMissing
         }
@@ -119,6 +123,7 @@ final class MacKeyMouseEventRecorder {
             targetProcessID = targetWindow.ownerPID
             captureRect = targetWindow.captureRect
             scaleFactor = targetWindow.scaleFactor
+            self.ignoredHotKey = ignoredHotKey
             eventTap = tap
             runLoopSource = source
         }
@@ -142,6 +147,7 @@ final class MacKeyMouseEventRecorder {
             self.runLoopSource = nil
             events = []
             pressedKeyCodes = []
+            ignoredHotKey = nil
             return snapshot
         }
 
@@ -172,6 +178,10 @@ final class MacKeyMouseEventRecorder {
         guard NSWorkspace.shared.frontmostApplication?.processIdentifier ==
                 lock.withLock({ targetProcessID })
         else {
+            return
+        }
+        if let signature = MacHotKeySignature.from(type: type, event: event),
+           signature == lock.withLock({ ignoredHotKey }) {
             return
         }
 

@@ -689,24 +689,129 @@ struct MacroPage: View {
 }
 
 struct HotkeyPage: View {
+    @EnvironmentObject private var appState: AppState
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             BGIPageTitle(title: "快捷键设置")
             Text("全局热键只支持组合键和功能键；键鼠监听支持任意键盘单键、鼠标侧键，功能启动后才生效。")
                 .font(BGIFonts.body)
                 .foregroundStyle(BGIColors.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
 
-            BGISectionCard("热键列表", subtitle: "点击类型按钮可以切换快捷键类型，长按需求的功能不能使用全局热键。", symbolName: "bolt") {
-                BGIDataTable(
-                    headers: ["功能", "快捷键类型", "配置快捷键"],
-                    rows: [
-                        ["启动/停止截图器", "全局热键", "⌘⇧S"],
-                        ["停止任意独立任务", "键鼠监听", "F12"],
-                        ["显示/隐藏 HUD", "全局热键", "⌘⇧H"],
-                        ["一键战斗宏", "键鼠监听", "Mouse4"]
-                    ]
-                )
+            if !appState.hotKeyStatusMessage.isEmpty {
+                Text(appState.hotKeyStatusMessage)
+                    .font(BGIFonts.caption)
+                    .foregroundStyle(BGIColors.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+
+            if appState.hotKeyBindings.isEmpty {
+                BGISectionCard(
+                    "快捷键尚未就绪",
+                    subtitle: "BetterGI Core 启动后会加载可用的快捷键。",
+                    symbolName: "keyboard"
+                ) {
+                    EmptyView()
+                }
+            } else {
+                ForEach(Array(groupedBindings.enumerated()), id: \.offset) {
+                    _, group in
+                    BGISectionCard(
+                        group.category,
+                        symbolName: symbolName(for: group.category)
+                    ) {
+                        VStack(spacing: 0) {
+                            ForEach(group.bindings) { binding in
+                                hotKeyRow(binding)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var groupedBindings:
+        [(category: String, bindings: [BetterGIHotKeyBinding])]
+    {
+        appState.hotKeyBindings.reduce(into: []) { groups, binding in
+            if let index = groups.firstIndex(where: {
+                $0.category == binding.category
+            }) {
+                groups[index].bindings.append(binding)
+            } else {
+                groups.append((
+                    category: binding.category,
+                    bindings: [binding]))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func hotKeyRow(_ binding: BetterGIHotKeyBinding) -> some View {
+        BGISettingLine(
+            title: binding.functionName,
+            subtitle: binding.isHold
+                ? "键鼠监听 · 按住生效"
+                : binding.hotKeyTypeName
+        ) {
+            HStack(spacing: 8) {
+                Button {
+                    appState.switchHotKeyType(binding)
+                } label: {
+                    Text(binding.hotKeyTypeName)
+                        .frame(width: 74)
+                }
+                .buttonStyle(.bordered)
+                .disabled(binding.isHold)
+                .help(binding.isHold ? "按住型快捷键固定使用键鼠监听" : "切换快捷键类型")
+
+                Button {
+                    if appState.hotKeyCaptureID == binding.id {
+                        appState.cancelHotKeyCapture()
+                    } else {
+                        appState.beginHotKeyCapture(binding)
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName:
+                            appState.hotKeyCaptureID == binding.id
+                            ? "record.circle.fill"
+                            : "keyboard")
+                        Text(
+                            appState.hotKeyCaptureID == binding.id
+                            ? "按键中"
+                            : binding.displayHotKey)
+                            .lineLimit(1)
+                    }
+                    .frame(minWidth: 86)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(
+                    appState.hotKeyCaptureID == binding.id
+                    ? BGIColors.warning
+                    : BGIColors.accent)
+
+                Button {
+                    appState.clearHotKey(binding)
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.borderless)
+                .disabled(binding.hotKey.isEmpty)
+                .help("清除快捷键")
+            }
+        }
+    }
+
+    private func symbolName(for category: String) -> String {
+        switch category {
+        case "系统控制": "gearshape"
+        case "实时任务": "bolt"
+        case "独立任务": "square.stack.3d.up"
+        case "操控辅助": "gamecontroller"
+        default: "keyboard"
         }
     }
 }

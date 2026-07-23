@@ -31,6 +31,32 @@ struct BetterGINotificationSettings: Sendable, Equatable {
     let macOSNotificationEnabled: Bool
 }
 
+struct BetterGIHotKeyBinding: Sendable, Equatable, Identifiable {
+    let id: String
+    let category: String
+    let functionName: String
+    let hotKey: String
+    let hotKeyType: String
+    let action: String
+    let executionOwner: String
+    let isHold: Bool
+    let dispatchOnPress: Bool
+
+    var hotKeyTypeName: String {
+        hotKeyType == "GlobalRegister" ? "全局热键" : "键鼠监听"
+    }
+
+    var displayHotKey: String {
+        guard !hotKey.isEmpty, hotKey != "< None >" else { return "未设置" }
+        return hotKey
+            .replacingOccurrences(of: "Ctrl", with: "⌃")
+            .replacingOccurrences(of: "Shift", with: "⇧")
+            .replacingOccurrences(of: "Alt", with: "⌥")
+            .replacingOccurrences(of: "Win", with: "⌘")
+            .replacingOccurrences(of: " + ", with: "")
+    }
+}
+
 struct BetterGIMacroSettings: Sendable, Equatable {
     let fPressHoldToContinuationEnabled: Bool
     let fFireInterval: Int
@@ -590,6 +616,38 @@ actor BetterGICoreProcessSupervisor {
         }
     }
 
+    func hotKeyBindings() throws -> [BetterGIHotKeyBinding] {
+        try parseHotKeyBindings(
+            runningClient().request(method: "hotKey.settings.list"))
+    }
+
+    func saveHotKeyBinding(
+        id: String,
+        hotKey: String,
+        hotKeyType: String
+    ) throws -> [BetterGIHotKeyBinding] {
+        try parseHotKeyBindings(runningClient().request(
+            method: "hotKey.settings.save",
+            parameters: [
+                "binding": [
+                    "id": id,
+                    "hotKey": hotKey,
+                    "hotKeyType": hotKeyType,
+                ],
+            ]))
+    }
+
+    func invokeHotKey(id: String) throws -> String? {
+        guard let result = try runningClient().request(
+            method: "hotKey.invoke",
+            parameters: ["id": id]) as? [String: Any]
+        else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid hotKey.invoke result.")
+        }
+        return result["state"] as? String
+    }
+
     func macroSettings() throws -> BetterGIMacroSettings {
         try parseMacroSettings(runningClient().request(method: "macro.settings.get"))
     }
@@ -648,6 +706,40 @@ actor BetterGICoreProcessSupervisor {
         return BetterGINotificationSettings(
             jsNotificationEnabled: jsEnabled,
             macOSNotificationEnabled: nativeEnabled)
+    }
+
+    private func parseHotKeyBindings(_ value: Any) throws
+        -> [BetterGIHotKeyBinding]
+    {
+        guard let values = value as? [[String: Any]] else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid hotkey settings result.")
+        }
+        return try values.map { value in
+            guard let id = value["id"] as? String,
+                  let category = value["category"] as? String,
+                  let functionName = value["functionName"] as? String,
+                  let hotKey = value["hotKey"] as? String,
+                  let hotKeyType = value["hotKeyType"] as? String,
+                  let action = value["action"] as? String,
+                  let executionOwner = value["executionOwner"] as? String,
+                  let isHold = value["isHold"] as? Bool,
+                  let dispatchOnPress = value["dispatchOnPress"] as? Bool
+            else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid hotkey binding descriptor.")
+            }
+            return BetterGIHotKeyBinding(
+                id: id,
+                category: category,
+                functionName: functionName,
+                hotKey: hotKey,
+                hotKeyType: hotKeyType,
+                action: action,
+                executionOwner: executionOwner,
+                isHold: isHold,
+                dispatchOnPress: dispatchOnPress)
+        }
     }
 
     private func parseKeyMousePlaybackStatus(_ value: Any) throws

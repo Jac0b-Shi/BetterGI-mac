@@ -4,6 +4,7 @@ using BetterGenshinImpact.Core.Host.Runtime;
 using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.Core.Recorder;
 using BetterGenshinImpact.Core.Recorder.Model;
+using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.Verification.Framework;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
@@ -43,6 +44,14 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                   "notificationConfig": {
                     "jsNotificationEnabled": false,
                     "windowsUwpNotificationEnabled": false
+                  },
+                  "hotKeyConfig": {
+                    "bgiEnabledHotkey": "F11",
+                    "bgiEnabledHotkeyType": "GlobalRegister",
+                    "autoPickEnabledHotkey": "F7",
+                    "autoPickEnabledHotkeyType": "KeyboardMonitor",
+                    "autoSkipEnabledHotkey": "",
+                    "autoSkipEnabledHotkeyType": "KeyboardMonitor"
                   }
                 }
                 """, cancellationToken);
@@ -82,6 +91,73 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 macOSNotificationEnabled = true,
             }));
 
+            var hotKeyUpdates = new List<(string Id, string HotKey)>();
+            var hotKeyCatalog = new HotKeySettingsCatalog(layout);
+            var quickTeleportPlatform = new MacQuickTeleportRuntimePlatform(
+                layout, new PlatformCallbackChannel(), "verification",
+                cancellationToken);
+            hotKeyCatalog.AttachUpdated((id, hotKey) =>
+            {
+                hotKeyUpdates.Add((id, hotKey));
+                if (id == "QuickTeleportTickHotkey")
+                    quickTeleportPlatform.UpdateTickHotkey(hotKey);
+            });
+            _ = hotKeyCatalog.Save(JObject.FromObject(new
+            {
+                id = "AutoSkipEnabledHotkey",
+                hotKey = "F7",
+                hotKeyType = "KeyboardMonitor",
+            }));
+            _ = hotKeyCatalog.Save(JObject.FromObject(new
+            {
+                id = "QuickTeleportTickHotkey",
+                hotKey = "F6",
+                hotKeyType = "KeyboardMonitor",
+            }));
+            _ = hotKeyCatalog.Save(JObject.FromObject(new
+            {
+                id = "AutoPickEnabledHotkey",
+                hotKey = "F6",
+                hotKeyType = "KeyboardMonitor",
+            }));
+            var hotKeys = JArray.FromObject(hotKeyCatalog.List());
+            context.Require(
+                hotKeys.Count == 20 &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "AutoPickEnabledHotkey")
+                    .Value<string>("hotKey") == "F6" &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "AutoSkipEnabledHotkey")
+                    .Value<string>("hotKey") == "F7" &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "QuickTeleportTickHotkey")
+                    .Value<string>("hotKey") == "" &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "QuickTeleportTickHotkey")
+                    .Value<bool>("dispatchOnPress") == false &&
+                hotKeyUpdates.Contains(("QuickTeleportTickHotkey", "F6")) &&
+                hotKeyUpdates.Contains(("QuickTeleportTickHotkey", "")) &&
+                quickTeleportPlatform.TickHotkey == "",
+                "Hotkey settings did not preserve the upstream catalog, duplicate removal or hold observation contract.");
+            context.Require(
+                Throws<ArgumentException>(
+                () => hotKeyCatalog.Save(JObject.FromObject(new
+                {
+                    id = "AutoPickEnabledHotkey",
+                    hotKey = "Ctrl + F7",
+                    hotKeyType = "KeyboardMonitor",
+                }))),
+                "Hotkey settings accepted a modifier combination that the macOS monitor cannot parse.");
+            context.Require(
+                Throws<ArgumentException>(
+                () => hotKeyCatalog.Save(JObject.FromObject(new
+                {
+                    id = "BgiEnabledHotkey",
+                    hotKey = "A",
+                    hotKeyType = "GlobalRegister",
+                }))),
+                "Hotkey settings accepted an unmodified global character key.");
+
             var persisted = JObject.Parse(await File.ReadAllTextAsync(configPath, cancellationToken));
             context.Require(
                 persisted["preserved"]?.Value<int>("value") == 42 &&
@@ -89,6 +165,9 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 persisted["macroConfig"]?.Value<int>("spaceFireInterval") == 120 &&
                 persisted["notificationConfig"]?.Value<bool>("jsNotificationEnabled") == true &&
                 persisted["notificationConfig"]?.Value<bool>("windowsUwpNotificationEnabled") == true &&
+                persisted["hotKeyConfig"]?.Value<string>("autoPickEnabledHotkey") == "F6" &&
+                persisted["hotKeyConfig"]?.Value<string>("autoSkipEnabledHotkey") == "F7" &&
+                persisted["hotKeyConfig"]?.Value<string>("quickTeleportTickHotkey") == "" &&
                 scriptHostServices.JsNotificationEnabled,
                 "Runtime settings did not preserve unrelated config or update Core notification state.");
 
@@ -188,6 +267,55 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 notificationResult.Value<bool>("macOSNotificationEnabled"),
                 notificationGet.Error?.Message ?? "notification.settings.get returned an invalid result.");
 
+            var hotKeyList = await ExchangeAsync(
+                connection, "hotkey-list", "hotKey.settings.list",
+                sessionToken, null, cancellationToken);
+            var hotKeyListResult = JArray.FromObject(hotKeyList.Result!);
+            context.Require(
+                hotKeyList.Error is null &&
+                hotKeyListResult.Any(item =>
+                    item.Value<string>("id") == "BgiEnabledHotkey" &&
+                    item.Value<string>("hotKey") == "F11"),
+                hotKeyList.Error?.Message ??
+                    "hotKey.settings.list did not return the persisted upstream binding.");
+
+            var hotKeySave = await ExchangeAsync(
+                connection, "hotkey-save", "hotKey.settings.save",
+                sessionToken, JObject.FromObject(new
+                {
+                    binding = new
+                    {
+                        id = "BgiEnabledHotkey",
+                        hotKey = "Ctrl + Shift + F10",
+                        hotKeyType = "GlobalRegister",
+                    }
+                }), cancellationToken);
+            var hotKeySaveResult = JArray.FromObject(hotKeySave.Result!);
+            context.Require(
+                hotKeySave.Error is null &&
+                hotKeySaveResult.Any(item =>
+                    item.Value<string>("id") == "BgiEnabledHotkey" &&
+                    item.Value<string>("hotKey") == "Ctrl + Shift + F10" &&
+                    item.Value<string>("executionOwner") == "swift"),
+                hotKeySave.Error?.Message ??
+                    "hotKey.settings.save did not preserve the platform-owned runtime binding.");
+
+            RunnerContext.Instance.IsSuspend = false;
+            var suspend = await ExchangeAsync(
+                connection, "hotkey-suspend", "hotKey.invoke",
+                sessionToken, JObject.FromObject(new
+                {
+                    id = "SuspendHotkey",
+                }), cancellationToken);
+            var suspendResult = JObject.FromObject(suspend.Result!);
+            context.Require(
+                suspend.Error is null &&
+                suspendResult.Value<string>("state") == "paused" &&
+                RunnerContext.Instance.IsSuspend,
+                suspend.Error?.Message ??
+                    "hotKey.invoke did not toggle the shared RunnerContext suspension state.");
+            RunnerContext.Instance.IsSuspend = false;
+
             var saveRecording = await ExchangeAsync(
                 connection, "recording-save", "keyMouse.saveRecording", sessionToken,
                 JObject.FromObject(new
@@ -252,5 +380,19 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             new RpcRequest(id, method, parameters, sessionToken), cancellationToken);
         return await connection.ReadResponseAsync(cancellationToken)
             ?? throw new EndOfStreamException($"Core disconnected during {method}.");
+    }
+
+    private static bool Throws<TException>(Action action)
+        where TException : Exception
+    {
+        try
+        {
+            action();
+            return false;
+        }
+        catch (TException)
+        {
+            return true;
+        }
     }
 }

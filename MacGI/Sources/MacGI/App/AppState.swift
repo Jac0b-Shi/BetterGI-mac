@@ -252,7 +252,10 @@ final class AppState: ObservableObject {
     @Published private(set) var screenCapturePermissionRequestMessage: String?
     @Published private(set) var runtimeLifecycleMessage = "运行时尚未启动。"
     @Published var runtimeLifecycle: RuntimeLifecycle = .stopped {
-        didSet { recomputeHUDPresentation() }
+        didSet {
+            recomputeHUDPresentation()
+            refreshHotKeyMonitor()
+        }
     }
     @Published var isHUDVisible = false {
         didSet { recomputeHUDPresentation() }
@@ -305,6 +308,7 @@ final class AppState: ObservableObject {
         didSet {
             updateGameWindowFocus(frontmostPID: frontmostApplicationPID)
             refreshAuxiliaryControlMonitor()
+            refreshHotKeyMonitor()
         }
     }
 
@@ -349,12 +353,26 @@ final class AppState: ObservableObject {
     private var keyMousePlaybackPollTask: Task<Void, Never>?
     private var notificationSettingsSaveRevision = 0
     private var macroSettingsSaveRevision = 0
+    private var hotKeySettingsSaveRevision = 0
+    private var hotKeyMonitorErrorLogged = false
     private lazy var auxiliaryControlMonitor = MacAuxiliaryControlMonitor {
         [weak self] key, isDown in
         MainActor.assumeIsolated {
             self?.handleAuxiliaryControlKey(key, isDown: isDown)
         }
     }
+    private lazy var hotKeyMonitor = MacHotKeyMonitor(
+        handler: { [weak self] binding in
+            MainActor.assumeIsolated {
+                self?.handleHotKey(binding)
+            }
+        },
+        captureHandler: { [weak self] id, value, error in
+            MainActor.assumeIsolated {
+                self?.completeHotKeyCapture(
+                    id: id, value: value, error: error)
+            }
+        })
     private var fContinuationTask: Task<Void, Never>?
     private var spaceContinuationTask: Task<Void, Never>?
     private var confirmedMapMaskSelectedLabelIDs: Set<String> = []
@@ -390,6 +408,9 @@ final class AppState: ObservableObject {
     @Published private(set) var notificationSettings: BetterGINotificationSettings?
     @Published private(set) var notificationTestStatus = ""
     @Published private(set) var macroSettings: BetterGIMacroSettings?
+    @Published private(set) var hotKeyBindings: [BetterGIHotKeyBinding] = []
+    @Published private(set) var hotKeyCaptureID: String?
+    @Published private(set) var hotKeyStatusMessage = ""
     @Published private(set) var autoGeniusInvokationSettings:
         BetterGICoreAutoGeniusInvokationSettings?
     @Published private(set) var autoCookSettings: BetterGICoreAutoCookSettings?
@@ -720,7 +741,14 @@ final class AppState: ObservableObject {
                     throw BetterGICoreRPCError.protocolViolation(
                         "原神窗口未处于前台，录制未启动。")
                 }
-                try self.keyMouseEventRecorder.start(targetWindow: self.selectedWindow)
+                let recordingHotKey = self.hotKeyBindings.first {
+                    $0.action == "recording.toggle"
+                }.flatMap {
+                    MacHotKeySignature.parse($0.hotKey)
+                }
+                try self.keyMouseEventRecorder.start(
+                    targetWindow: self.selectedWindow,
+                    ignoring: recordingHotKey)
                 self.keyMouseRecordingState = "recording"
                 self.addLog(.info, "键鼠录制已启动。")
             } catch is CancellationError {
@@ -927,6 +955,185 @@ final class AppState: ObservableObject {
         } catch {
             macroSettings = nil
             addLog(.error, "辅助操控设置加载失败：\(error.localizedDescription)")
+        }
+    }
+
+    private func loadHotKeySettingsFromCore() async {
+        guard let supervisor = betterGICoreSupervisor else {
+            hotKeyBindings = []
+            hotKeyMonitor.stop()
+            return
+        }
+        do {
+            hotKeyBindings = try await supervisor.hotKeyBindings()
+            hotKeyStatusMessage = ""
+            refreshHotKeyMonitor()
+        } catch {
+            hotKeyBindings = []
+            hotKeyMonitor.stop()
+            addLog(.error, "快捷键设置加载失败：\(error.localizedDescription)")
+        }
+    }
+
+    func beginHotKeyCapture(_ binding: BetterGIHotKeyBinding) {
+        do {
+            try hotKeyMonitor.beginCapture(
+                id: binding.id, hotKeyType: binding.hotKeyType)
+            hotKeyCaptureID = binding.id
+            hotKeyStatusMessage = "请按下新的快捷键；Delete、Backspace 或 Escape 清除。"
+        } catch {
+            hotKeyCaptureID = nil
+            hotKeyStatusMessage = error.localizedDescription
+            addLog(.error, "快捷键录入启动失败：\(error.localizedDescription)")
+        }
+    }
+
+    func cancelHotKeyCapture() {
+        hotKeyMonitor.cancelCapture()
+        hotKeyCaptureID = nil
+        hotKeyStatusMessage = ""
+    }
+
+    func clearHotKey(_ binding: BetterGIHotKeyBinding) {
+        saveHotKeyBinding(binding, hotKey: "", hotKeyType: binding.hotKeyType)
+    }
+
+    func switchHotKeyType(_ binding: BetterGIHotKeyBinding) {
+        guard !binding.isHold else { return }
+        let nextType = binding.hotKeyType == "GlobalRegister"
+            ? "KeyboardMonitor"
+            : "GlobalRegister"
+        saveHotKeyBinding(binding, hotKey: "", hotKeyType: nextType)
+    }
+
+    private func completeHotKeyCapture(
+        id: String,
+        value: String?,
+        error: String?
+    ) {
+        guard hotKeyCaptureID == id,
+              let binding = hotKeyBindings.first(where: { $0.id == id })
+        else {
+            return
+        }
+        if let error {
+            hotKeyStatusMessage = error
+            return
+        }
+        guard let value else { return }
+        hotKeyCaptureID = nil
+        hotKeyStatusMessage = ""
+        saveHotKeyBinding(
+            binding, hotKey: value, hotKeyType: binding.hotKeyType)
+    }
+
+    private func saveHotKeyBinding(
+        _ binding: BetterGIHotKeyBinding,
+        hotKey: String,
+        hotKeyType: String
+    ) {
+        guard let supervisor = betterGICoreSupervisor else {
+            addLog(.error, "快捷键设置保存失败：BetterGI Core 尚未就绪。")
+            return
+        }
+        hotKeySettingsSaveRevision += 1
+        let revision = hotKeySettingsSaveRevision
+        hotKeyBindings = hotKeyBindings.map { item in
+            if item.id == binding.id {
+                return BetterGIHotKeyBinding(
+                    id: item.id, category: item.category,
+                    functionName: item.functionName, hotKey: hotKey,
+                    hotKeyType: hotKeyType, action: item.action,
+                    executionOwner: item.executionOwner,
+                    isHold: item.isHold,
+                    dispatchOnPress: item.dispatchOnPress)
+            }
+            if !hotKey.isEmpty,
+               item.hotKey.caseInsensitiveCompare(hotKey) == .orderedSame {
+                return BetterGIHotKeyBinding(
+                    id: item.id, category: item.category,
+                    functionName: item.functionName, hotKey: "",
+                    hotKeyType: item.hotKeyType, action: item.action,
+                    executionOwner: item.executionOwner,
+                    isHold: item.isHold,
+                    dispatchOnPress: item.dispatchOnPress)
+            }
+            return item
+        }
+        refreshHotKeyMonitor()
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let saved = try await supervisor.saveHotKeyBinding(
+                    id: binding.id, hotKey: hotKey, hotKeyType: hotKeyType)
+                if revision == self.hotKeySettingsSaveRevision {
+                    self.hotKeyBindings = saved
+                    self.refreshHotKeyMonitor()
+                }
+            } catch {
+                if revision == self.hotKeySettingsSaveRevision {
+                    await self.loadHotKeySettingsFromCore()
+                }
+                self.addLog(.error, "快捷键设置保存失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func refreshHotKeyMonitor() {
+        do {
+            try hotKeyMonitor.update(
+                bindings: hotKeyBindings,
+                targetProcessID:
+                    isWindowValid && !selectedWindow.isSynthetic
+                    ? selectedWindow.ownerPID
+                    : nil,
+                runtimeActive: runtimeLifecycle == .running)
+            hotKeyMonitorErrorLogged = false
+        } catch {
+            if !hotKeyMonitorErrorLogged {
+                addLog(.error, "快捷键监听启动失败：\(error.localizedDescription)")
+                hotKeyMonitorErrorLogged = true
+            }
+        }
+    }
+
+    private func handleHotKey(_ binding: BetterGIHotKeyBinding) {
+        if binding.executionOwner == "core" {
+            guard let supervisor = betterGICoreSupervisor else { return }
+            Task { [weak self] in
+                do {
+                    let state = try await supervisor.invokeHotKey(id: binding.id)
+                    self?.hotKeyStatusMessage =
+                        state.map { "\(binding.functionName)：\($0)" } ?? binding.functionName
+                    await self?.loadTriggerStatesFromCore()
+                    await self?.loadSoloTasksFromCore()
+                } catch {
+                    self?.addLog(
+                        .error,
+                        "快捷键「\(binding.functionName)」执行失败：\(error.localizedDescription)")
+                }
+            }
+            return
+        }
+
+        switch binding.action {
+        case "runtime.toggle":
+            toggleRuntime()
+        case "overlay.log.toggle":
+            showOverlayLogBox.toggle()
+            showOverlayStatus = showOverlayLogBox
+            showOverlayMetrics = showOverlayLogBox
+        case "recording.toggle":
+            if keyMouseRecordingState == "recording" ||
+                keyMouseRecordingState == "starting" {
+                stopKeyMouseRecording()
+            } else {
+                startKeyMouseRecording()
+            }
+        default:
+            addLog(
+                .error,
+                "快捷键「\(binding.functionName)」没有可用的平台动作。")
         }
     }
 
@@ -1139,6 +1346,7 @@ final class AppState: ObservableObject {
             await loadKeyMouseScriptsFromCore()
             await loadNotificationSettingsFromCore()
             await loadMacroSettingsFromCore()
+            await loadHotKeySettingsFromCore()
             attemptAutoStartRuntime()
         } catch {
             NSLog("BetterGI Core startup failed: %@", error.localizedDescription)
@@ -1591,6 +1799,8 @@ final class AppState: ObservableObject {
         schedulerCatalogIssues = [
             CoreCatalogIssue(path: "Core/catalog", message: error.localizedDescription)
         ]
+        hotKeyBindings = []
+        hotKeyMonitor.stop()
     }
 
     var enabledFeatures: [MacGIFeature] {

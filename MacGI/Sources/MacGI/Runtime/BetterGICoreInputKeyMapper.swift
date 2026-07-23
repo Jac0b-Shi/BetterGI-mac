@@ -72,6 +72,9 @@ enum BetterGICoreInputKeyMapper {
             if character >= "A", character <= "Z" { return KeyCode(rawValue: character.lowercased()) }
             if character >= "0", character <= "9" { return KeyCode(rawValue: "digit\(character)") }
         }
+        if key.hasPrefix("D"), let digit = Int(key.dropFirst()), (0...9).contains(digit) {
+            return KeyCode(rawValue: "digit\(digit)")
+        }
         if key.hasPrefix("F"), let number = Int(key.dropFirst()), (1...12).contains(number) {
             return KeyCode(rawValue: "f\(number)")
         }
@@ -90,15 +93,16 @@ enum BetterGICoreInputKeyMapper {
         case "VK_CONTROL", "VK_LCONTROL", "VK_CTRL", "VK_LCTRL", "CONTROL", "CTRL": .leftControl
         case "VK_MENU", "VK_LMENU", "VK_ALT", "ALT": .leftOption
         case "VK_OEM_COMMA", "COMMA", ",": .comma
-        case "VK_OEM_MINUS", "MINUS", "-": .minus
-        case "VK_OEM_PLUS", "EQUAL", "=": .equal
-        case "VK_OEM_PERIOD", "PERIOD", ".": .period
-        case "VK_OEM_2", "SLASH", "/": .slash
-        case "VK_OEM_5", "BACKSLASH", "\\": .backslash
-        case "VK_OEM_1", "SEMICOLON", ";": .semicolon
-        case "VK_OEM_4", "LBRACKET", "[": .leftBracket
-        case "VK_OEM_6", "RBRACKET", "]": .rightBracket
-        case "VK_OEM_3", "GRAVE", "TILDE", "`": .grave
+        case "VK_OEM_MINUS", "OEMMINUS", "MINUS", "-": .minus
+        case "VK_OEM_PLUS", "OEMPLUS", "EQUAL", "=": .equal
+        case "VK_OEM_PERIOD", "OEMPERIOD", "PERIOD", ".": .period
+        case "VK_OEM_2", "OEMQUESTION", "SLASH", "/": .slash
+        case "VK_OEM_5", "OEMPIPE", "BACKSLASH", "\\": .backslash
+        case "VK_OEM_1", "OEMSEMICOLON", "SEMICOLON", ";": .semicolon
+        case "VK_OEM_4", "OEMOPENBRACKETS", "LBRACKET", "[": .leftBracket
+        case "VK_OEM_6", "OEMCLOSEBRACKETS", "RBRACKET", "]": .rightBracket
+        case "OEMQUOTES", "APOSTROPHE", "'": .apostrophe
+        case "VK_OEM_3", "OEMTILDE", "GRAVE", "TILDE", "`": .grave
         default: key.hasPrefix("VK_") ? keyCode(from: String(key.dropFirst(3))) : nil
         }
     }

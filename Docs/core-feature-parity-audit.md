@@ -118,6 +118,28 @@ an injection marker so neither recording nor hold monitoring can feed back on
 BetterGI-generated events. Other upstream macro actions remain absent from the
 page rather than appearing as clickable placeholders.
 
+### Hotkeys
+
+Core owns the supported hotkey catalog and persists the original upstream
+`hotKeyConfig` property names and `KeyboardMonitor` / `GlobalRegister` values.
+The macOS page no longer renders sample bindings. It records physical keyboard
+or side-button input in the upstream WPF string format, clears duplicate
+bindings atomically, and reloads the same Core-owned document.
+
+AppKit observes the configured physical keys. `KeyboardMonitor` bindings are
+accepted only while the runtime is active and the selected Wine game process
+is frontmost; `GlobalRegister` bindings remain available for system control.
+Generated BetterGI input is marked and excluded from hotkey observation. Core
+executes cancellation, shared `RunnerContext` suspension, trigger toggles and
+solo-task toggles. Swift owns only runtime capture start/stop, overlay
+presentation and macOS key/mouse recording. The QuickTeleport hold binding is
+not dispatched as an action: Core reads its live-updated key through the
+existing physical key-state callback, matching the upstream trigger contract.
+
+Only upstream entries whose action has a complete production path are exposed.
+Screenshot, one-key combat/reward, turn-around, quick-buy, Serenitea Pot and
+path-recorder hotkeys remain absent until those shared actions are extracted.
+
 ## Verification tiers
 
 Use the smallest tier that owns the changed behavior:

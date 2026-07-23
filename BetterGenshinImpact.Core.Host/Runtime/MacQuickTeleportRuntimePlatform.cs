@@ -12,6 +12,7 @@ public sealed class MacQuickTeleportRuntimePlatform : IQuickTeleportRuntimePlatf
     private readonly PlatformCallbackChannel _callbacks;
     private readonly string _sessionToken;
     private readonly CancellationToken _cancellationToken;
+    private string _tickHotkey;
 
     public MacQuickTeleportRuntimePlatform(
         RuntimeLayout layout,
@@ -25,12 +26,13 @@ public sealed class MacQuickTeleportRuntimePlatform : IQuickTeleportRuntimePlatf
         var root = LoadRoot(layout);
         Config = root?["quickTeleportConfig"]?.Deserialize<QuickTeleportConfig>(ConfigJson.Options)
             ?? new QuickTeleportConfig();
-        TickHotkey = root?["hotKeyConfig"]?["quickTeleportTickHotkey"]?.GetValue<string>() ?? "";
+        _tickHotkey =
+            root?["hotKeyConfig"]?["quickTeleportTickHotkey"]?.GetValue<string>() ?? "";
         IsHdrCapture = root?["captureMode"]?.GetValue<string>() == "WindowsGraphicsCaptureHdr";
     }
 
     public QuickTeleportConfig Config { get; }
-    public string TickHotkey { get; }
+    public string TickHotkey => Volatile.Read(ref _tickHotkey);
     public bool IsHdrCapture { get; }
 
     public void UpdateConfig(QuickTeleportConfig config)
@@ -39,6 +41,9 @@ public sealed class MacQuickTeleportRuntimePlatform : IQuickTeleportRuntimePlatf
         Config.WaitTeleportPanelDelay = config.WaitTeleportPanelDelay;
         Config.HotkeyTpEnabled = config.HotkeyTpEnabled;
     }
+
+    public void UpdateTickHotkey(string hotkey) =>
+        Volatile.Write(ref _tickHotkey, hotkey ?? "");
 
     public bool IsTickHotkeyPressed()
     {

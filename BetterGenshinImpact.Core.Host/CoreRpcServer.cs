@@ -1,6 +1,7 @@
 using BetterGenshinImpact.Core.Host.Protocol;
 using BetterGenshinImpact.Core.Host.Runtime;
 using BetterGenshinImpact.Core.Host.Transport;
+using BetterGenshinImpact.Core.Script;
 using Newtonsoft.Json.Linq;
 using System.Net.Sockets;
 using System.Runtime.Versioning;
@@ -26,6 +27,7 @@ public sealed class CoreRpcServer(
     private readonly SoloTaskSettingsCatalog _soloTaskSettings = new(layout);
     private readonly TriggerSettingsCatalog _triggerSettings = new(layout);
     private readonly MacroSettingsCatalog _macroSettings = new(layout);
+    private readonly HotKeySettingsCatalog _hotKeySettings = new(layout);
     private NotificationSettingsCatalog? _notificationSettings;
     private readonly PlatformCallbackChannel _platformCallbacks = new();
     private SchedulerCoordinator? _scheduler;
@@ -47,6 +49,7 @@ public sealed class CoreRpcServer(
     public PlatformCallbackChannel PlatformCallbacks => _platformCallbacks;
     public SoloTaskSettingsCatalog SoloTaskSettings => _soloTaskSettings;
     public TriggerSettingsCatalog TriggerSettings => _triggerSettings;
+    public HotKeySettingsCatalog HotKeySettings => _hotKeySettings;
 
     private SchedulerCoordinator Scheduler => _scheduler ??= new SchedulerCoordinator(
         layout, _platformCallbacks, sessionToken, _shutdown.Token);
@@ -235,6 +238,14 @@ public sealed class CoreRpcServer(
                 return RpcResponse.Success(request.Id, await KeyMouseScripts.StopAsync());
             if (request.Method == "notification.test")
                 return RpcResponse.Success(request.Id, NotificationSettings.Test());
+            if (request.Method == "hotKey.invoke")
+            {
+                return RpcResponse.Success(
+                    request.Id,
+                    await InvokeHotKeyAsync(
+                        RequiredString(request.Params, "id"),
+                        _shutdown.Token));
+            }
             object? result = request.Method switch
             {
                 "core.handshake" => Handshake(),
@@ -365,6 +376,10 @@ public sealed class CoreRpcServer(
                 "macro.settings.save" => _macroSettings.Save(
                     request.Params?["settings"] as JObject
                     ?? throw new ArgumentException("settings is required.")),
+                "hotKey.settings.list" => _hotKeySettings.List(),
+                "hotKey.settings.save" => _hotKeySettings.Save(
+                    request.Params?["binding"] as JObject
+                    ?? throw new ArgumentException("binding is required.")),
                 "runtime.status" => RuntimeStatus(),
                 "scheduler.run" => Scheduler.Run(RequiredString(request.Params, "groupName")),
                 "scheduler.runGroups" => Scheduler.RunGroups(
@@ -604,6 +619,67 @@ public sealed class CoreRpcServer(
         trigger.IsEnabled = enabled;
         _triggerSettings.SaveEnabled(name, enabled);
         return new { name, enabled = trigger.IsEnabled };
+    }
+
+    private async Task<object> InvokeHotKeyAsync(
+        string id,
+        CancellationToken cancellationToken)
+    {
+        var descriptor = _hotKeySettings.RequireDescriptor(id);
+        if (!descriptor.DispatchOnPress)
+            return new { id, state = "observed" };
+        if (descriptor.ExecutionOwner != "core")
+        {
+            throw new CapabilityUnavailableException(
+                $"Hotkey '{id}' is owned by the macOS application layer.");
+        }
+
+        if (descriptor.Action == "automation.cancel")
+        {
+            CancellationContext.Instance.ManualCancel();
+            var schedulerStopped = _scheduler is not null &&
+                await _scheduler.StopActiveAsync(cancellationToken);
+            var soloStopped = _soloTasks is not null &&
+                await _soloTasks.StopActiveAsync(cancellationToken);
+            if (_keyMouseScripts is not null)
+                await _keyMouseScripts.StopAsync();
+            return new
+            {
+                id,
+                state = "cancelled",
+                schedulerStopped,
+                soloStopped,
+            };
+        }
+        if (descriptor.Action == "automation.suspend.toggle")
+        {
+            RunnerContext.Instance.IsSuspend = !RunnerContext.Instance.IsSuspend;
+            return new
+            {
+                id,
+                state = RunnerContext.Instance.IsSuspend ? "paused" : "running",
+            };
+        }
+        if (descriptor.Action == "trigger.toggleHangout")
+            return _triggerSettings.ToggleAutoHangoutEventEnabled();
+        if (descriptor.Action.StartsWith("trigger.toggle:", StringComparison.Ordinal))
+        {
+            var name = descriptor.Action["trigger.toggle:".Length..];
+            var triggers = GameTaskManager.TriggerDictionary
+                ?? throw new CapabilityUnavailableException(
+                    "The shared trigger registry is unavailable until core.initialize completes.");
+            if (!triggers.TryGetValue(name, out var trigger))
+            {
+                throw new CapabilityUnavailableException(
+                    $"Trigger '{name}' is not composed in the macOS Core.");
+            }
+            return SetTriggerEnabled(name, !trigger.IsEnabled);
+        }
+        if (descriptor.Action.StartsWith("solo.toggle:", StringComparison.Ordinal))
+            return SoloTasks.Toggle(descriptor.Action["solo.toggle:".Length..]);
+
+        throw new CapabilityUnavailableException(
+            $"Hotkey action '{descriptor.Action}' is not composed in the macOS Core.");
     }
 
     private static bool CanSetTriggerEnabled(ITaskTrigger trigger) =>

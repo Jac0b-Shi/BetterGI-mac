@@ -230,6 +230,11 @@ NavigationPlatform.Configure(new MacNavigationPlatform(
 var quickTeleportRuntimePlatform = new MacQuickTeleportRuntimePlatform(
     layout, server.PlatformCallbacks, sessionToken, shutdown.Token);
 QuickTeleportRuntimePlatform.Configure(quickTeleportRuntimePlatform);
+server.HotKeySettings.AttachUpdated((id, hotkey) =>
+{
+    if (id == "QuickTeleportTickHotkey")
+        quickTeleportRuntimePlatform.UpdateTickHotkey(hotkey);
+});
 server.TriggerSettings.AttachQuickTeleportUpdated(quickTeleportRuntimePlatform.UpdateConfig);
 BetterGenshinImpact.GameTask.AutoFight.Script.CombatCommandPlatform.Configure(
     new MacCombatCommandPlatform(globalMethodRuntime));

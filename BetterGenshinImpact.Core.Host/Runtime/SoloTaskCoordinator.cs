@@ -86,6 +86,28 @@ public sealed class SoloTaskCoordinator(
         }
     }
 
+    public object Toggle(string name)
+    {
+        lock (_lock)
+        {
+            if (_activeTask is { IsCompleted: false })
+            {
+                if (!string.Equals(_activeName, name, StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        $"Solo task '{_activeName}' is already running.");
+                _state = "stopping";
+                _activeCancellation?.Cancel();
+                return new
+                {
+                    taskId = _activeTaskId,
+                    name = _activeName,
+                    state = _state,
+                };
+            }
+        }
+        return Start(name);
+    }
+
     public async Task<bool> StopActiveAsync(CancellationToken cancellationToken)
     {
         Task? activeTask;

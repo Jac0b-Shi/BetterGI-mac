@@ -78,6 +78,23 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
         _ => throw Unavailable(name),
     };
 
+    public object ToggleAutoHangoutEventEnabled()
+    {
+        lock (_lock)
+        {
+            var root = LoadRoot();
+            var config = LoadConfig<AutoSkipConfig>(root, "autoSkipConfig");
+            config.AutoHangoutEventEnabled = !config.AutoHangoutEventEnabled;
+            SaveConfig(root, "autoSkipConfig", config);
+            _autoSkipUpdated?.Invoke(config);
+            return new
+            {
+                name = "AutoSkipHangout",
+                enabled = config.AutoHangoutEventEnabled,
+            };
+        }
+    }
+
     private object SaveSkillCd(JObject settings)
     {
         var triggerOnSkillUse = RequiredBoolean(settings, "triggerOnSkillUse");
