@@ -12,6 +12,7 @@ public sealed class HoldHotKeyCoordinator(
     public const string TurnAroundHotKey = "TurnAroundHotkey";
     public const string ConfirmButtonHotKey = "ClickGenshinConfirmButtonHotkey";
     public const string CancelButtonHotKey = "ClickGenshinCancelButtonHotkey";
+    public const string QuickEnhanceHotKey = "EnhanceArtifactHotkey";
 
     private readonly object _lock = new();
     private readonly IReadOnlyDictionary<string, Action<CancellationToken>> _actions =

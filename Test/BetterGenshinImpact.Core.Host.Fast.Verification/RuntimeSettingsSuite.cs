@@ -39,7 +39,8 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                     "spacePressHoldToContinuationEnabled": false,
                     "spaceFireInterval": 100,
                     "runaroundMouseXInterval": 240,
-                    "runaroundInterval": 10
+                    "runaroundInterval": 10,
+                    "enhanceWaitDelay": 37
                   },
                   "keyBindingsConfig": {
                     "moveForward": 71,
@@ -91,6 +92,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 spaceFireInterval = 120,
                 runaroundMouseXInterval = 240,
                 runaroundInterval = 10,
+                enhanceWaitDelay = 37,
             }));
             var repeatedKeys = new List<int>();
             using (var auxiliaryControls = new AuxiliaryControlCoordinator(
@@ -169,6 +171,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 spaceFireInterval = 120,
                 runaroundMouseXInterval = 0,
                 runaroundInterval = 10,
+                enhanceWaitDelay = 37,
             }));
             TurnAroundMacro.Done(cancellationToken);
             context.Require(
@@ -183,7 +186,34 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 spaceFireInterval = 120,
                 runaroundMouseXInterval = 240,
                 runaroundInterval = 10,
+                enhanceWaitDelay = 37,
             }));
+            var quickEnhancePlatform =
+                new RecordingQuickEnhanceArtifactRuntimePlatform(
+                    macroCatalog.Snapshot().EnhanceWaitDelay);
+            QuickEnhanceArtifactRuntimePlatform.Configure(quickEnhancePlatform);
+            quickEnhancePlatform.IsInitialized = false;
+            QuickEnhanceArtifactMacro.Done(cancellationToken);
+            context.Require(
+                quickEnhancePlatform.NotStartedCount == 1 &&
+                quickEnhancePlatform.Operations.Count == 0,
+                "Shared QuickEnhanceArtifactMacro did not preserve the upstream not-started guard.");
+            quickEnhancePlatform.IsInitialized = true;
+            QuickEnhanceArtifactMacro.Done(cancellationToken);
+            context.Require(
+                quickEnhancePlatform.Operations.SequenceEqual(
+                [
+                    "click:1760,770",
+                    "wait:100",
+                    "click:1760,1020",
+                    "wait:137",
+                    "click:150,150",
+                    "wait:100",
+                    "click:150,220",
+                    "wait:100",
+                    "move:1760,770",
+                ]),
+                "Shared QuickEnhanceArtifactMacro diverged from the upstream click and delay sequence.");
             using (var holdHotKeys = new HoldHotKeyCoordinator(
                        cancellationToken,
                        loggerFactory.CreateLogger<HoldHotKeyCoordinator>(),
@@ -411,7 +441,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             }));
             var hotKeys = JArray.FromObject(hotKeyCatalog.List());
             context.Require(
-                hotKeys.Count == 23 &&
+                hotKeys.Count == 24 &&
                 hotKeys.Single(item =>
                     item.Value<string>("id") == "AutoPickEnabledHotkey")
                     .Value<string>("hotKey") == "F6" &&
@@ -438,6 +468,12 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 hotKeys.Single(item =>
                     item.Value<string>("id") ==
                         "ClickGenshinCancelButtonHotkey")
+                    .Value<bool>("dispatchOnRelease") &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "EnhanceArtifactHotkey")
+                    .Value<bool>("isHold") &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "EnhanceArtifactHotkey")
                     .Value<bool>("dispatchOnRelease") &&
                 hotKeyUpdates.Contains(("QuickTeleportTickHotkey", "F6")) &&
                 hotKeyUpdates.Contains(("QuickTeleportTickHotkey", "")) &&
@@ -469,6 +505,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 persisted["macroConfig"]?.Value<int>("spaceFireInterval") == 120 &&
                 persisted["macroConfig"]?.Value<int>("runaroundMouseXInterval") == 240 &&
                 persisted["macroConfig"]?.Value<int>("runaroundInterval") == 10 &&
+                persisted["macroConfig"]?.Value<int>("enhanceWaitDelay") == 37 &&
                 persisted["notificationConfig"]?.Value<bool>("jsNotificationEnabled") == true &&
                 persisted["notificationConfig"]?.Value<bool>("windowsUwpNotificationEnabled") == true &&
                 persisted["notificationConfig"]?.Value<string>("notificationEventSubscribe") ==
@@ -591,6 +628,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                         spaceFireInterval = 130,
                         runaroundMouseXInterval = 260,
                         runaroundInterval = 12,
+                        enhanceWaitDelay = 45,
                     }
                 }), cancellationToken);
             var macroResult = JObject.FromObject(macroSave.Result!);
@@ -600,6 +638,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 macroResult.Value<int>("spaceFireInterval") == 130 &&
                 macroResult.Value<int>("runaroundMouseXInterval") == 260 &&
                 macroResult.Value<int>("runaroundInterval") == 12 &&
+                macroResult.Value<int>("enhanceWaitDelay") == 45 &&
                 macroResult.Value<int>("pickUpOrInteractKeyCode") == 71 &&
                 macroResult.Value<int>("jumpKeyCode") == 74,
                 macroSave.Error?.Message ?? "macro.settings.save returned an invalid result.");
@@ -898,5 +937,40 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
 
         public void Wait(int milliseconds, CancellationToken cancellationToken) =>
             Task.Delay(milliseconds, cancellationToken).GetAwaiter().GetResult();
+    }
+
+    private sealed class RecordingQuickEnhanceArtifactRuntimePlatform(
+        int enhanceWaitDelay) : IQuickEnhanceArtifactRuntimePlatform
+    {
+        public bool IsInitialized { get; set; }
+        public int EnhanceWaitDelay { get; } = enhanceWaitDelay;
+        public int NotStartedCount { get; private set; }
+        public List<string> Operations { get; } = [];
+
+        public void NotifyNotStarted() => NotStartedCount++;
+
+        public void ClickGame1080P(
+            double x,
+            double y,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Operations.Add($"click:{x:0},{y:0}");
+        }
+
+        public void MoveGame1080P(
+            double x,
+            double y,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Operations.Add($"move:{x:0},{y:0}");
+        }
+
+        public void Wait(int milliseconds, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Operations.Add($"wait:{milliseconds}");
+        }
     }
 }

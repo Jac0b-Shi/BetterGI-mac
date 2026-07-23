@@ -34,6 +34,7 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
                 RequiredRunaroundMouseXInterval(
                     settings, "runaroundMouseXInterval"),
                 RequiredRunaroundInterval(settings, "runaroundInterval"),
+                RequiredEnhanceWaitDelay(settings, "enhanceWaitDelay"),
                 current.PickUpOrInteractKeyCode,
                 current.JumpKeyCode);
             var macro = root["macroConfig"] as JsonObject ?? [];
@@ -46,6 +47,7 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
             macro["runaroundMouseXInterval"] =
                 next.RunaroundMouseXInterval;
             macro["runaroundInterval"] = next.RunaroundInterval;
+            macro["enhanceWaitDelay"] = next.EnhanceWaitDelay;
             root["macroConfig"] = macro;
             SaveRoot(root);
         }
@@ -81,6 +83,7 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
         spaceFireInterval = settings.SpaceFireInterval,
         runaroundMouseXInterval = settings.RunaroundMouseXInterval,
         runaroundInterval = settings.RunaroundInterval,
+        enhanceWaitDelay = settings.EnhanceWaitDelay,
         pickUpOrInteractKeyCode = settings.PickUpOrInteractKeyCode,
         jumpKeyCode = settings.JumpKeyCode
     };
@@ -96,6 +99,7 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
             macro?["spaceFireInterval"]?.GetValue<int>() ?? 100,
             macro?["runaroundMouseXInterval"]?.GetValue<int>() ?? 500,
             macro?["runaroundInterval"]?.GetValue<int>() ?? 10,
+            macro?["enhanceWaitDelay"]?.GetValue<int>() ?? 0,
             keyBindings?["pickUpOrInteract"]?.GetValue<int>() ?? 0x46,
             keyBindings?["jump"]?.GetValue<int>() ?? 0x20);
     }
@@ -155,6 +159,16 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
                 name, "Turn-around interval must be between 1 and 10000 ms.");
     }
 
+    private static int RequiredEnhanceWaitDelay(JObject settings, string name)
+    {
+        var value = settings.Value<int?>(name)
+            ?? throw new ArgumentException($"{name} is required.");
+        return value is >= 0 and <= 1_000
+            ? value
+            : throw new ArgumentOutOfRangeException(
+                name, "Enhance wait delay must be between 0 and 1000 ms.");
+    }
+
 }
 
 public sealed record MacroSettingsSnapshot(
@@ -164,5 +178,6 @@ public sealed record MacroSettingsSnapshot(
     int SpaceFireInterval,
     int RunaroundMouseXInterval,
     int RunaroundInterval,
+    int EnhanceWaitDelay,
     int PickUpOrInteractKeyCode,
     int JumpKeyCode);

@@ -245,6 +245,8 @@ public partial class App : Application
             new Core.Runtime.Windows.WindowsQuickTeleportRuntimePlatform());
         GameTask.Macro.TurnAroundRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsTurnAroundRuntimePlatform());
+        GameTask.Macro.QuickEnhanceArtifactRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsQuickEnhanceArtifactRuntimePlatform());
         GameTask.AutoEat.AutoEatRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsAutoEatRuntimePlatform());
         GameTask.GameLoading.GameLoadingRuntimePlatform.Configure(

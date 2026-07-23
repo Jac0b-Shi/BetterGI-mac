@@ -126,6 +126,10 @@ public sealed class HotKeySettingsCatalog(RuntimeLayout layout)
             "快捷点击原神内取消按钮",
             "clickGenshinCancelButtonHotkey", "macro.dialog.cancel",
             "core", true, true, DispatchOnRelease: true),
+        new(
+            "EnhanceArtifactHotkey", "操控辅助", "按下快速强化圣遗物",
+            "enhanceArtifactHotkey", "macro.artifact.enhance",
+            "core", true, true, DispatchOnRelease: true),
     ];
 
     public void AttachUpdated(Action<string, string> callback) =>

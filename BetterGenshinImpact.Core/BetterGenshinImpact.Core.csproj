@@ -119,6 +119,8 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Macro/TurnAroundMacro.cs" Link="GameTask/Macro/TurnAroundMacro.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Macro/TurnAroundRuntimePlatform.cs" Link="GameTask/Macro/TurnAroundRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Macro/DialogButtonClickMacro.cs" Link="GameTask/Macro/DialogButtonClickMacro.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Macro/QuickEnhanceArtifactMacro.cs" Link="GameTask/Macro/QuickEnhanceArtifactMacro.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Macro/QuickEnhanceArtifactRuntimePlatform.cs" Link="GameTask/Macro/QuickEnhanceArtifactRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvChatUi.cs" Link="GameTask/Common/BgiVision/BvChatUi.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvImage.cs" Link="GameTask/Common/BgiVision/BvImage.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvOcr.cs" Link="GameTask/Common/BgiVision/BvOcr.cs" />
