@@ -12,6 +12,7 @@ using System.Windows;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.Core.Script.Group;
+using BetterGenshinImpact.Core.Script.OneDragon;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Common.Job;
@@ -349,35 +350,14 @@ public partial class OneDragonFlowViewModel : ViewModel
 
         TaskList.Clear();
 
-        // 旧格式兼容：TaskDefinitions 为空时，TaskEnabledList 键为任务名
-        bool isOldFormat = SelectedConfig.TaskDefinitions == null || SelectedConfig.TaskDefinitions.Count == 0;
-
-        // 使用 TaskOrder 恢复顺序；若无则回退到 TaskEnabledList 的键顺序
-        var orderedKeys = SelectedConfig.TaskOrder?.Count > 0
-            ? SelectedConfig.TaskOrder
-            : SelectedConfig.TaskEnabledList.Keys.ToList();
-
-        foreach (var key in orderedKeys)
+        var plan = OneDragonPlan.FromConfig(SelectedConfig);
+        foreach (var step in plan.OrderedSteps)
         {
-            if (!SelectedConfig.TaskEnabledList.TryGetValue(key, out var enabled))
-            {
-                continue;
-            }
-
-            OneDragonTaskItem taskItem;
-            if (isOldFormat)
-            {
-                taskItem = new OneDragonTaskItem(key) { IsEnabled = enabled };
-            }
-            else
-            {
-                if (!SelectedConfig.TaskDefinitions.TryGetValue(key, out var name))
-                {
-                    continue;
-                }
-                taskItem = new OneDragonTaskItem(name, key) { IsEnabled = enabled };
-            }
-            taskItem.IsNextTask = key == SelectedConfig.NextTaskId;
+            var taskItem = plan.UsesLegacyTaskNames
+                ? new OneDragonTaskItem(step.Name)
+                : new OneDragonTaskItem(step.Name, step.Id);
+            taskItem.IsEnabled = step.IsEnabled;
+            taskItem.IsNextTask = step.IsResumeStep;
             TaskList.Add(taskItem);
         }
     }
@@ -548,16 +528,23 @@ public partial class OneDragonFlowViewModel : ViewModel
         // 启动等待之前先进行取消操作的初始化，便于在任务开始前终止任务.
         CancellationContext.Instance.Set();
 
-        var taskListCopy = new List<OneDragonTaskItem>(TaskList);//避免执行过程中修改TaskList
+        var plan = OneDragonPlan.FromOrderedSteps(
+            TaskList.Select(task => new OneDragonPlanStep(
+                task.Id,
+                task.Name,
+                task.IsEnabled,
+                task.Id == SelectedConfig.NextTaskId)),
+            SelectedConfig.NextTaskId);
+        var tasksById = TaskList.ToDictionary(task => task.Id, StringComparer.Ordinal);
+        var taskListCopy = plan.ExecutionSteps
+            .Select(step => tasksById[step.Id])
+            .ToList();
 
-        // 如果设置了 NextTaskId，从指定任务开始执行
         if (!string.IsNullOrEmpty(SelectedConfig.NextTaskId))
         {
-            var taskIndex = taskListCopy.FindIndex(t => t.Id == SelectedConfig.NextTaskId);
-            if (taskIndex >= 0)
+            if (plan.ResumeMarkerFound)
             {
-                _logger.LogInformation("一条龙：任务将从 {Name} 开始执行", taskListCopy[taskIndex].Name);
-                taskListCopy = taskListCopy.Skip(taskIndex).ToList();
+                _logger.LogInformation("一条龙：任务将从 {Name} 开始执行", taskListCopy[0].Name);
             }
             else
             {

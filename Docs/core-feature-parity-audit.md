@@ -44,12 +44,14 @@ priority, exclusivity and whether an expander may be shown.
 The upstream Grid icon collection and model-accuracy entries are developer
 tools rather than normal automation tasks and are intentionally absent from the
 production macOS task catalog. One-dragon execution remains a separate workflow
-surface and must not be represented as an independent task card. Its upstream
-configuration, ordered task coordinator, ScriptGroup mixing, resume marker and
-completion actions have not yet been extracted from the WPF ViewModel, so
-macOS does not expose a production OneDragon navigation entry. A static gate
-rejects reintroducing the removed hard-coded Swift page before that Core-owned
-workflow exists.
+surface and must not be represented as an independent task card. The shared
+`OneDragonPlan` now owns old/new configuration compatibility, explicit order,
+duplicate task names, enabled state and resume-marker fallback; the Windows
+ViewModel consumes that same plan for display and execution-window selection.
+Task construction, ScriptGroup mixing, notification sequencing and completion
+actions still remain in the WPF layer, so macOS does not expose a production
+OneDragon navigation entry yet. A static gate rejects reintroducing the removed
+hard-coded Swift page before that Core-owned workflow exists.
 
 ## Runtime pathing actions
 

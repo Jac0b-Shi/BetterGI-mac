@@ -318,6 +318,7 @@
     <Compile Include="../BetterGenshinImpact/Core/Config/ConfigJson.cs" Link="Core/Config/ConfigJson.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Config/ScreenshotPrivacy.cs" Link="Core/Config/ScreenshotPrivacy.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Config/Global.cs" Link="Core/Config/Global.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Config/OneDragonFlowConfig.cs" Link="Core/Config/OneDragonFlowConfig.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Config/PathingPartyConfig.cs" Link="Core/Config/PathingPartyConfig.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Config/PathingConditionConfig.cs" Link="Core/Config/PathingConditionConfig.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Config/PathingPartyTaskCycleConfig.cs" Link="Core/Config/PathingPartyTaskCycleConfig.cs" />
@@ -335,6 +336,7 @@
     <Compile Include="../BetterGenshinImpact/Core/Script/Group/ScriptGroupConfig.cs" Link="Core/Script/Group/ScriptGroupConfig.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Script/Group/ScriptGroupProject.cs" Link="Core/Script/Group/ScriptGroupProject.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Script/Group/ScriptGroupProject.Execution.cs" Link="Core/Script/Group/ScriptGroupProject.Execution.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Script/OneDragon/OneDragonPlan.cs" Link="Core/Script/OneDragon/OneDragonPlan.cs" />
   </ItemGroup>
 
   <!-- Shared scheduler lifecycle state; combat recognition remains in RunnerContext.Combat.cs and is linked with that task slice. -->
