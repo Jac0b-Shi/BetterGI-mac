@@ -3,7 +3,7 @@ import Foundation
 @testable import MacGI
 import Testing
 
-@Suite("BetterGI Core shared capture ring")
+@Suite("BetterGI Core shared capture ring", .serialized)
 struct BetterGICoreCaptureRingTests {
     @Test("Writes committed BGRA frames with monotonic IDs and alternating slots")
     func writesCommittedFrames() throws {
@@ -67,6 +67,29 @@ struct BetterGICoreCaptureRingTests {
         ])
     }
 
+    @Test("Keeps the POSIX ring usable when capture dimensions grow")
+    func keepsRingUsableWhenDimensionsGrow() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "bettergi-capture-ring-resize-\(UUID().uuidString)",
+                isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let ring = BetterGICoreCaptureRing(runURL: root)
+        let first = try ring.write(makeFrame())
+        let larger = try ring.write(makeSolidFrame(width: 64, height: 64))
+
+        #expect(first["ringName"] as? String == larger["ringName"] as? String)
+        #expect(
+            first["slotCapacity"] as? Int ==
+                BetterGICoreCaptureRing.minimumSlotCapacity)
+        #expect(
+            larger["slotCapacity"] as? Int ==
+                BetterGICoreCaptureRing.minimumSlotCapacity)
+        #expect(larger["width"] as? Int == 64)
+        #expect(larger["height"] as? Int == 64)
+    }
+
     private func makeFrame() throws -> CaptureImageFrame {
         let pixelBytes: [UInt8] = [
             0, 0, 255, 255, 0, 255, 0, 255,
@@ -90,6 +113,33 @@ struct BetterGICoreCaptureRingTests {
             scaleFactor: 2, pixelFormat: 0x42475241, bytesPerRow: 8, sourceWindow: window
         )
         return CaptureImageFrame(metadata: metadata, cgImage: image, backendName: "Test")
+    }
+
+    private func makeSolidFrame(
+        width: Int,
+        height: Int
+    ) throws -> CaptureImageFrame {
+        let context = try #require(CGContext(
+            data: nil, width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo.byteOrder32Little.rawValue |
+                CGImageAlphaInfo.premultipliedFirst.rawValue
+        ))
+        let image = try #require(context.makeImage())
+        let window = WindowInfo(
+            id: 42, ownerPID: 10, ownerName: "wine", title: "原神",
+            frame: CGRect(x: 100, y: 200, width: width, height: height),
+            layer: 0, isOnScreen: true, scaleFactor: 2
+        )
+        let metadata = CapturedFrame(
+            frameIndex: 2, timestamp: Date(timeIntervalSince1970: 2),
+            width: width, height: height, scaleFactor: 2,
+            pixelFormat: 0x42475241, bytesPerRow: width * 4,
+            sourceWindow: window
+        )
+        return CaptureImageFrame(
+            metadata: metadata, cgImage: image, backendName: "Test")
     }
 
     private func readUInt64(_ data: Data, at offset: Int) -> UInt64 {

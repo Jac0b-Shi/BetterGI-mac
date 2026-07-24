@@ -16,6 +16,7 @@ func openBetterGISharedMemory(
 final class BetterGICoreCaptureRing {
     static let headerSize = 128
     static let slotCount = 2
+    static let minimumSlotCapacity = 64 * 1024 * 1024
     private static let magic: [UInt8] = Array("BGIRING1".utf8)
 
     let sharedMemoryName: String
@@ -127,7 +128,10 @@ final class BetterGICoreCaptureRing {
     }
 
     private func ensureCapacity(for dataLength: Int) throws {
-        let requiredCapacity = Self.pageAligned(dataLength)
+        // macOS POSIX shm objects cannot grow after their first ftruncate.
+        let requiredCapacity = max(
+            Self.minimumSlotCapacity,
+            Self.pageAligned(dataLength))
         guard mapping == nil || requiredCapacity > slotCapacity else {
             return
         }

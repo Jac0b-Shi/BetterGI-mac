@@ -61,6 +61,9 @@ double-buffered POSIX shared-memory object. The authenticated callback carries
 only committed frame metadata and the shared-memory name; production capture
 never writes a frame ring under `Application Support`. The legacy
 `Run/capture-ring.bin` path is accepted only by explicit verifier fixtures.
+Each slot is sized to 64 MiB when the object is created because macOS does not
+allow a POSIX shared-memory object to grow after its first `ftruncate`. This
+keeps one ring valid across live capture-size changes through 4K-class frames.
 
 The upstream ClearScript `htmlMask` host remains C#-owned. Core preserves the
 upstream window and request/response contract, while Swift implements the
