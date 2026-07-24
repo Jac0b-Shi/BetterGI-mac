@@ -11,22 +11,35 @@ using BetterGenshinImpact.Service.Notification.Model.Enum;
 using BetterGenshinImpact.Service.Notifier;
 using BetterGenshinImpact.Service.Notifier.Exception;
 using BetterGenshinImpact.Service.Notifier.Interface;
+#if BGI_FULL_WINDOWS
 using Microsoft.Extensions.Hosting;
+#endif
 using Microsoft.Extensions.Logging;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace BetterGenshinImpact.Service.Notification;
 
 /// <summary>
 ///     通知服务类，管理和分发各种通知
 /// </summary>
-public class NotificationService : IHostedService, IDisposable
+public class NotificationService
+#if BGI_FULL_WINDOWS
+    : IHostedService, IDisposable
+#else
+    : IDisposable
+#endif
 {
     private static readonly object InstanceLock = new();
     private static NotificationService? _instance;
 
     private readonly NotifierManager _notifierManager;
     private readonly HttpClient _notifyHttpClient;
-    private readonly CancellationTokenSource? _webSocketCts;
+    private CancellationTokenSource _webSocketCts;
+    private readonly Func<NotificationConfig> _configProvider;
+    private readonly Func<INotifier?> _nativeNotifierFactory;
+    private readonly Func<Image<Rgb24>?> _screenshotProvider;
+    private readonly ILogger _logger;
 
     // 缓存配置对象引用
     private NotificationConfig? _notificationConfig;
@@ -34,9 +47,30 @@ public class NotificationService : IHostedService, IDisposable
     /// <summary>
     ///     构造函数
     /// </summary>
+#if BGI_FULL_WINDOWS
     public NotificationService(NotifierManager notifierManager)
+        : this(
+            notifierManager,
+            () => TaskContext.Instance().Config.NotificationConfig,
+            () => new WindowsUwpNotifier(),
+            CaptureWindowsScreenshot,
+            TaskControl.Logger)
+    {
+    }
+#endif
+
+    public NotificationService(
+        NotifierManager notifierManager,
+        Func<NotificationConfig> configProvider,
+        Func<INotifier?> nativeNotifierFactory,
+        Func<Image<Rgb24>?> screenshotProvider,
+        ILogger logger)
     {
         _notifierManager = notifierManager ?? throw new ArgumentNullException(nameof(notifierManager));
+        _configProvider = configProvider ?? throw new ArgumentNullException(nameof(configProvider));
+        _nativeNotifierFactory = nativeNotifierFactory ?? throw new ArgumentNullException(nameof(nativeNotifierFactory));
+        _screenshotProvider = screenshotProvider ?? throw new ArgumentNullException(nameof(screenshotProvider));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _notifyHttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         _webSocketCts = new CancellationTokenSource();
         NotificationRuntimePlatform.Configure(new ServiceRuntimePlatform(this));
@@ -52,9 +86,10 @@ public class NotificationService : IHostedService, IDisposable
     /// </summary>
     public void Dispose()
     {
-        // _webSocketCts?.Cancel();
-        _webSocketCts?.Dispose();
-        _notifyHttpClient?.Dispose();
+        _webSocketCts.Cancel();
+        _notifierManager.RemoveAllNotifiers();
+        _webSocketCts.Dispose();
+        _notifyHttpClient.Dispose();
         GC.SuppressFinalize(this);
     }
 
@@ -63,7 +98,7 @@ public class NotificationService : IHostedService, IDisposable
     /// </summary>
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _notificationConfig = TaskContext.Instance().Config.NotificationConfig;
+        _notificationConfig = _configProvider();
         InitializeNotifiers();
         return Task.CompletedTask;
     }
@@ -73,7 +108,7 @@ public class NotificationService : IHostedService, IDisposable
     /// </summary>
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        _webSocketCts?.Cancel();
+        _webSocketCts.Cancel();
         return Task.CompletedTask;
     }
 
@@ -93,7 +128,7 @@ public class NotificationService : IHostedService, IDisposable
     /// </summary>
     private void InitializeNotifiers()
     {
-        if (_notificationConfig == null) _notificationConfig = TaskContext.Instance().Config.NotificationConfig;
+        if (_notificationConfig == null) _notificationConfig = _configProvider();
 
         // 初始化各类通知器
         InitializeWebhookNotifier();
@@ -133,7 +168,9 @@ public class NotificationService : IHostedService, IDisposable
     {
         if (_notificationConfig?.WindowsUwpNotificationEnabled == true)
         {
-            _notifierManager.RegisterNotifier(new WindowsUwpNotifier());
+            var notifier = _nativeNotifierFactory();
+            if (notifier is not null)
+                _notifierManager.RegisterNotifier(notifier);
         }
     }
 
@@ -195,7 +232,7 @@ public class NotificationService : IHostedService, IDisposable
             _notifierManager.RegisterNotifier(new WebSocketNotifier(
                 _notificationConfig.WebSocketEndpoint,
                 jsonSerializerOptions,
-                _webSocketCts ?? new CancellationTokenSource()
+                _webSocketCts
             ));
         }
     }
@@ -299,7 +336,8 @@ public class NotificationService : IHostedService, IDisposable
             _notificationConfig.DiscordWebhookUrl,
             _notificationConfig.DiscordWebhookUsername,
             _notificationConfig.DiscordWebhookAvatarUrl,
-            _notificationConfig.DiscordWebhookImageEncoder
+            _notificationConfig.DiscordWebhookImageEncoder,
+            _logger
         ));
     }
 
@@ -356,8 +394,11 @@ public class NotificationService : IHostedService, IDisposable
     /// </summary>
     public void RefreshNotifiers()
     {
-        _notificationConfig = TaskContext.Instance().Config.NotificationConfig;
+        _notificationConfig = _configProvider();
+        _webSocketCts.Cancel();
         _notifierManager.RemoveAllNotifiers();
+        _webSocketCts.Dispose();
+        _webSocketCts = new CancellationTokenSource();
         InitializeNotifiers();
     }
 
@@ -393,26 +434,12 @@ public class NotificationService : IHostedService, IDisposable
     /// </summary>
     private static BaseNotificationData CreateTestNotificationData()
     {
-        var testData = new BaseNotificationData
+        return new BaseNotificationData
         {
             Event = NotificationEvent.Test.Code,
             Result = NotificationEventResult.Success,
             Message = "这是一条测试通知信息"
         };
-
-        if (TaskContext.Instance().IsInitialized)
-        {
-            try
-            {
-                testData.Screenshot = TaskControl.CaptureToRectArea().CacheImage;
-            }
-            catch (Exception ex)
-            {
-                TaskControl.Logger.LogWarning(ex, "获取测试通知截图失败");
-            }
-        }
-
-        return testData;
     }
 
     /// <summary>
@@ -431,7 +458,7 @@ public class NotificationService : IHostedService, IDisposable
         }
         catch (Exception ex)
         {
-            TaskControl.Logger.LogError(ex, "发送通知时发生错误");
+            _logger.LogError(ex, "发送通知时发生错误");
         }
     }
 
@@ -457,16 +484,11 @@ public class NotificationService : IHostedService, IDisposable
 
         try
         {
-            var mat = TaskControl.CaptureGameImageNoRetry(TaskTriggerDispatcher.GlobalGameCapture);
-            if (mat != null)
-            {
-                var imageRegion = new ImageRegion(mat, 0, 0);
-                notificationData.Screenshot = imageRegion.CacheImage;
-            }
+            notificationData.Screenshot = _screenshotProvider();
         }
         catch (Exception ex)
         {
-            TaskControl.Logger.LogDebug(ex, "补充通知截图失败");
+            _logger.LogDebug(ex, "补充通知截图失败");
         }
 
         await Task.CompletedTask;
@@ -487,10 +509,20 @@ public class NotificationService : IHostedService, IDisposable
             }
             catch (Exception ex)
             {
-                TaskControl.Logger.LogError(ex, "后台发送通知时发生错误");
+                _logger.LogError(ex, "后台发送通知时发生错误");
             }
         });
     }
+
+#if BGI_FULL_WINDOWS
+    private static Image<Rgb24>? CaptureWindowsScreenshot()
+    {
+        if (!TaskContext.Instance().IsInitialized)
+            return null;
+        using var capture = TaskControl.CaptureToRectArea();
+        return capture.CacheImage.Clone();
+    }
+#endif
 
     private sealed class ServiceRuntimePlatform(NotificationService service)
         : INotificationRuntimePlatform
