@@ -456,6 +456,8 @@ public sealed class CoreRpcServer(
                 "oneDragon.list" => _oneDragonCatalog.List(),
                 "oneDragon.get" => _oneDragonCatalog.Get(
                     RequiredString(request.Params, "name")),
+                "oneDragon.select" => SelectOneDragonConfig(
+                    RequiredString(request.Params, "name")),
                 "oneDragon.create" => _oneDragonCatalog.Create(
                     RequiredString(request.Params, "name")),
                 "oneDragon.save" => _oneDragonCatalog.Save(
@@ -783,6 +785,12 @@ public sealed class CoreRpcServer(
         trigger.IsEnabled = enabled;
         _triggerSettings.SaveEnabled(name, enabled);
         return new { name, enabled = trigger.IsEnabled };
+    }
+
+    private object SelectOneDragonConfig(string name)
+    {
+        _oneDragonCatalog.Select(name);
+        return new { selectedName = name };
     }
 
     private async Task<object> InvokeHotKeyAsync(

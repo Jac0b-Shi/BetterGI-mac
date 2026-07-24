@@ -9,14 +9,22 @@ using System.Text.Json.Nodes;
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
 public sealed record OneDragonConfigSummary(
-    string Name,
-    int TaskCount,
-    int EnabledTaskCount);
+    [property: JsonProperty("name")] string Name,
+    [property: JsonProperty("taskCount")] int TaskCount,
+    [property: JsonProperty("enabledTaskCount")] int EnabledTaskCount,
+    [property: JsonProperty("selected")] bool Selected);
+
+public sealed record OneDragonTaskSummary(
+    [property: JsonProperty("id")] string Id,
+    [property: JsonProperty("name")] string Name,
+    [property: JsonProperty("isEnabled")] bool IsEnabled,
+    [property: JsonProperty("isResumeStep")] bool IsResumeStep);
 
 public sealed record OneDragonConfigDocument(
-    string Name,
-    JObject Config,
-    IReadOnlyList<OneDragonPlanStep> Tasks);
+    [property: JsonProperty("name")] string Name,
+    [property: JsonProperty("config")] JObject Config,
+    [property: JsonProperty("tasks")] IReadOnlyList<OneDragonTaskSummary> Tasks,
+    [property: JsonProperty("builtInTaskNames")] IReadOnlyList<string> BuiltInTaskNames);
 
 public sealed class OneDragonCatalog(RuntimeLayout layout)
 {
@@ -38,10 +46,11 @@ public sealed class OneDragonCatalog(RuntimeLayout layout)
     {
         layout.EnsureCreated();
         EnsureDefaultConfig();
+        var selectedName = ReadSelectedName();
         return Directory
             .EnumerateFiles(layout.OneDragonPath, "*.json", SearchOption.TopDirectoryOnly)
             .OrderBy(Path.GetFileName, StringComparer.Ordinal)
-            .Select(ReadSummary)
+            .Select(path => ReadSummary(path, selectedName))
             .ToArray();
     }
 
@@ -72,18 +81,19 @@ public sealed class OneDragonCatalog(RuntimeLayout layout)
     {
         ArgumentNullException.ThrowIfNull(document);
         ValidateName(name);
-        var config = JsonConvert.DeserializeObject<OneDragonFlowConfig>(
-                document.ToString(Formatting.None))
-            ?? throw new InvalidDataException("OneDragon config document is invalid.");
+        var preservedDocument = (JObject)document.DeepClone();
+        var config = DeserializeConfig(
+            preservedDocument,
+            "OneDragon config document is invalid.");
         if (!string.Equals(config.Name, name, StringComparison.Ordinal))
             throw new InvalidDataException(
                 $"OneDragon config name '{config.Name}' does not match target '{name}'.");
         ValidatePlan(config);
         lock (_writeLock)
         {
-            Write(Resolve(name), config);
+            Write(Resolve(name), preservedDocument);
             SaveSelectedName(name);
-            return ToDocument(config);
+            return ToDocument(preservedDocument);
         }
     }
 
@@ -99,12 +109,16 @@ public sealed class OneDragonCatalog(RuntimeLayout layout)
                 throw new FileNotFoundException($"OneDragon config does not exist: {name}", source);
             if (File.Exists(destination))
                 throw new IOException($"OneDragon config already exists: {newName}");
-            var config = ReadConfig(source);
-            config.Name = newName;
-            Write(destination, config);
+            var document = ReadRawDocument(source);
+            SetConfigName(document, newName);
+            var config = DeserializeConfig(
+                document,
+                $"OneDragon config is invalid: {source}");
+            ValidatePlan(config);
+            Write(destination, document);
             File.Delete(source);
             SaveSelectedName(newName);
-            return ToDocument(config);
+            return ToDocument(document);
         }
     }
 
@@ -190,18 +204,19 @@ public sealed class OneDragonCatalog(RuntimeLayout layout)
         }
     }
 
-    private OneDragonConfigSummary ReadSummary(string path)
+    private OneDragonConfigSummary ReadSummary(string path, string? selectedName)
     {
         var config = ReadConfig(path);
         var plan = OneDragonPlan.FromConfig(config);
         return new OneDragonConfigSummary(
             config.Name,
             plan.OrderedSteps.Count,
-            plan.OrderedSteps.Count(step => step.IsEnabled));
+            plan.OrderedSteps.Count(step => step.IsEnabled),
+            string.Equals(config.Name, selectedName, StringComparison.Ordinal));
     }
 
     private OneDragonConfigDocument ReadDocument(string path) =>
-        ToDocument(ReadConfig(path));
+        ToDocument(ReadRawDocument(path));
 
     private static OneDragonConfigDocument ToDocument(OneDragonFlowConfig config)
     {
@@ -209,17 +224,78 @@ public sealed class OneDragonCatalog(RuntimeLayout layout)
         return new OneDragonConfigDocument(
             config.Name,
             JObject.FromObject(config),
-            plan.OrderedSteps);
+            ToTaskSummaries(plan.OrderedSteps),
+            DefaultTaskNames);
+    }
+
+    private static OneDragonConfigDocument ToDocument(JObject document)
+    {
+        var config = DeserializeConfig(
+            document,
+            "OneDragon config document is invalid.");
+        ValidatePlan(config);
+        var plan = OneDragonPlan.FromConfig(config);
+        return new OneDragonConfigDocument(
+            config.Name,
+            (JObject)document.DeepClone(),
+            ToTaskSummaries(plan.OrderedSteps),
+            DefaultTaskNames);
+    }
+
+    private static IReadOnlyList<OneDragonTaskSummary> ToTaskSummaries(
+        IReadOnlyList<OneDragonPlanStep> steps)
+    {
+        return steps.Select(step => new OneDragonTaskSummary(
+            step.Id,
+            step.Name,
+            step.IsEnabled,
+            step.IsResumeStep)).ToArray();
     }
 
     private static OneDragonFlowConfig ReadConfig(string path)
     {
-        var config = JsonConvert.DeserializeObject<OneDragonFlowConfig>(
-                File.ReadAllText(path, Encoding.UTF8))
-            ?? throw new InvalidDataException($"OneDragon config is invalid: {path}");
+        var config = DeserializeConfig(
+            ReadRawDocument(path),
+            $"OneDragon config is invalid: {path}");
         ValidateName(config.Name);
         ValidatePlan(config);
         return config;
+    }
+
+    private static JObject ReadRawDocument(string path)
+    {
+        try
+        {
+            return JObject.Parse(File.ReadAllText(path, Encoding.UTF8));
+        }
+        catch (Newtonsoft.Json.JsonException exception)
+        {
+            throw new InvalidDataException(
+                $"OneDragon config is invalid: {path}",
+                exception);
+        }
+    }
+
+    private static OneDragonFlowConfig DeserializeConfig(
+        JObject document,
+        string errorMessage)
+    {
+        return JsonConvert.DeserializeObject<OneDragonFlowConfig>(
+                document.ToString(Formatting.None))
+            ?? throw new InvalidDataException(errorMessage);
+    }
+
+    private static void SetConfigName(JObject document, string name)
+    {
+        var property = document.Properties().FirstOrDefault(
+            item => string.Equals(
+                item.Name,
+                nameof(OneDragonFlowConfig.Name),
+                StringComparison.OrdinalIgnoreCase));
+        if (property is null)
+            document[nameof(OneDragonFlowConfig.Name)] = name;
+        else
+            property.Value = name;
     }
 
     private string ResolveExisting(string name)
@@ -251,12 +327,17 @@ public sealed class OneDragonCatalog(RuntimeLayout layout)
 
     private static void Write(string path, OneDragonFlowConfig config)
     {
+        Write(path, JObject.FromObject(config));
+    }
+
+    private static void Write(string path, JObject document)
+    {
         var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             File.WriteAllText(
                 temporary,
-                JsonConvert.SerializeObject(config, Formatting.Indented),
+                document.ToString(Formatting.Indented),
                 new UTF8Encoding(false));
             File.Move(temporary, path, true);
         }
@@ -301,5 +382,21 @@ public sealed class OneDragonCatalog(RuntimeLayout layout)
             if (File.Exists(temporary))
                 File.Delete(temporary);
         }
+    }
+
+    private string? ReadSelectedName()
+    {
+        var path = Path.Combine(layout.UserPath, "config.json");
+        if (!File.Exists(path))
+            return null;
+        var root = JsonNode.Parse(
+                File.ReadAllText(path),
+                documentOptions: new JsonDocumentOptions
+                {
+                    AllowTrailingCommas = true,
+                    CommentHandling = JsonCommentHandling.Skip,
+                }) as JsonObject
+            ?? throw new InvalidDataException("User/config.json root must be an object.");
+        return root["selectedOneDragonFlowConfigName"]?.GetValue<string>();
     }
 }
