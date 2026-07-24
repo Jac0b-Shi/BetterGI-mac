@@ -604,15 +604,15 @@ try
     var capture = desk.Derive(m, 0, 0);            // DesktopRegion → GameCaptureRegion (TranslationConverter set)
     var sub = capture.DeriveCrop(400, 300, 200, 100);
     sub.Click();
-    Assert("At least 3 calls", recorder.Calls.Count >= 3, $"got {recorder.Calls.Count}: [{string.Join(", ", recorder.Calls)}]");
-    var moveCall = recorder.Calls.FirstOrDefault(x => x.StartsWith("MoveMouseTo"));
-    Assert("MoveMouseTo present", moveCall != null, "missing");
-    Assert("Center X=500", moveCall!.Contains("X=500"), moveCall);
-    Assert("Center Y=350", moveCall.Contains("Y=350"), moveCall);
-    var downCall = recorder.Calls.FirstOrDefault(x => x.StartsWith("LeftButtonDown"));
-    var upCall = recorder.Calls.FirstOrDefault(x => x.StartsWith("LeftButtonUp"));
-    Assert("LeftButtonDown", downCall != null, "missing");
-    Assert("LeftButtonUp", upCall != null, "missing");
+    Assert("One semantic click", recorder.Calls.Count == 1,
+        $"got {recorder.Calls.Count}: [{string.Join(", ", recorder.Calls)}]");
+    var clickCall = recorder.Calls.FirstOrDefault();
+    Assert("LeftClick present", clickCall?.StartsWith("LeftClick") == true,
+        clickCall ?? "missing");
+    Assert("Center X=500", clickCall?.Contains("X=500") == true,
+        clickCall ?? "missing");
+    Assert("Center Y=350", clickCall?.Contains("Y=350") == true,
+        clickCall ?? "missing");
 }
 catch (Exception ex)
 {
@@ -2240,8 +2240,8 @@ Assert("ClaimBattlePassRewardsTask opens battle pass through semantic input",
     string.Join(" | ", recordingTaskControl.Calls));
 Assert("ClaimBattlePassRewardsTask preserves both upstream tab clicks",
     recorder.Calls.SequenceEqual([
-        "MoveMouseTo(X=960, Y=45)", "LeftButtonDown()", "LeftButtonUp()",
-        "MoveMouseTo(X=858, Y=45)", "LeftButtonDown()", "LeftButtonUp()"
+        "LeftClick(X=960, Y=45)",
+        "LeftClick(X=858, Y=45)"
     ]), string.Join(" | ", recorder.Calls));
 Assert("ClaimBattlePassRewardsTask captures both reward pages and main UI",
     battlePassCaptureCount >= 5, $"captures={battlePassCaptureCount}");
@@ -2689,7 +2689,7 @@ recorder.Clear();
 GameCaptureRegion.GameRegion1080PPosClick(1500, 1000);
 Assert("SetTime shared game-region click uses composed capture metrics",
     recorder.Calls.SequenceEqual([
-        "MoveMouseTo(X=1500, Y=1000)", "LeftButtonDown()", "LeftButtonUp()"
+        "LeftClick(X=1500, Y=1000)"
     ]), string.Join(" | ", recorder.Calls));
 var setTimePosition = (double[])typeof(BetterGenshinImpact.GameTask.Common.Job.SetTimeTask)
     .GetMethod("GetPosition", BindingFlags.Instance | BindingFlags.NonPublic)!
