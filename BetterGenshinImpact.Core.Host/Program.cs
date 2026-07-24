@@ -287,8 +287,7 @@ var autoFishingRuntimePlatform = new MacAutoFishingRuntimePlatform(
 AutoFishingRuntimePlatform.Configure(autoFishingRuntimePlatform);
 server.SoloTaskSettings.AttachAutoFishingConfigUpdated(autoFishingRuntimePlatform.UpdateConfig);
 var autoDomainRuntimePlatform = new MacAutoDomainRuntimePlatform(
-    () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory,
-    server.PlatformCallbacks, sessionToken, shutdown.Token);
+    () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
 var autoSkipRuntimePlatform = new MacAutoSkipRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, loggerFactory, imageRegionOcrService,
     server.PlatformCallbacks, sessionToken, shutdown.Token, foregroundInputCoordinator,
@@ -379,11 +378,10 @@ var tpConfig = MacDispatcherRuntimePlatform.LoadUserConfig<
 var autoLeyLineOutcropRuntimePlatform = new MacAutoLeyLineOutcropRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService,
     autoFightRuntimePlatform, autoPickConfigProvider, tpConfig.MapScaleFactor,
-    loggerFactory, server.PlatformCallbacks, sessionToken, shutdown.Token);
+    loggerFactory);
 var autoStygianOnslaughtRuntimePlatform = new MacAutoStygianOnslaughtRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService,
-    autoPickConfigProvider, loggerFactory, server.PlatformCallbacks,
-    sessionToken, shutdown.Token);
+    autoPickConfigProvider, loggerFactory);
 var autoGeniusInvokationRuntimePlatform = new MacAutoGeniusInvokationRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo,
     imageRegionOcrService, loggerFactory);
@@ -391,7 +389,7 @@ var autoFightConfig = MacDispatcherRuntimePlatform.LoadUserConfig<AutoFightConfi
     layout, "autoFightConfig");
 var autoBossRuntimePlatform = new MacAutoBossRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, autoFightConfig,
-    loggerFactory, server.PlatformCallbacks, sessionToken, shutdown.Token);
+    loggerFactory);
 var autoBossPathExecutorFactory = new AutoBossPathExecutorFactory(
     scriptGroupExecutionServices,
     scriptGroupExecutionServices.CreateDefaultPartyConfig);

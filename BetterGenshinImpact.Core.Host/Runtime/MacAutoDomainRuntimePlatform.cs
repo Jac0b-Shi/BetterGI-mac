@@ -1,4 +1,3 @@
-using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.ONNX;
@@ -6,20 +5,18 @@ using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.AutoDomain;
 using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.Service.Notification.Model.Enum;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
 using OpenCvSharp;
+using NotifyService = BetterGenshinImpact.Service.Notification.Notify;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
 public sealed class MacAutoDomainRuntimePlatform(
     Func<ISystemInfo> systemInfo,
     MacImageRegionOcrService ocrService,
-    ILoggerFactory loggerFactory,
-    PlatformCallbackChannel callbacks,
-    string sessionToken,
-    CancellationToken cancellationToken) : IAutoDomainRuntimePlatform
+    ILoggerFactory loggerFactory) : IAutoDomainRuntimePlatform
 {
     public ISystemInfo SystemInfo => systemInfo();
     public IOcrService OcrService => ocrService;
@@ -48,13 +45,19 @@ public sealed class MacAutoDomainRuntimePlatform(
 
     public void Notify(AutoDomainNotification notification, string message)
     {
-        var kind = notification == AutoDomainNotification.Retry ? "error" : "info";
-        var response = callbacks.InvokeAsync("notification.emit", JObject.FromObject(new
+        var eventName = notification switch
         {
-            kind,
-            message,
-        }), sessionToken, cancellationToken).GetAwaiter().GetResult();
-        if (response?.Value<bool?>("acknowledged") != true)
-            throw new InvalidDataException("notification.emit did not return acknowledged=true.");
+            AutoDomainNotification.Start => NotificationEvent.DomainStart,
+            AutoDomainNotification.Retry => NotificationEvent.DomainRetry,
+            AutoDomainNotification.Reward => NotificationEvent.DomainReward,
+            AutoDomainNotification.End => NotificationEvent.DomainEnd,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(notification), notification, null),
+        };
+        var notificationData = NotifyService.Event(eventName);
+        if (notification == AutoDomainNotification.Retry)
+            notificationData.Error(message);
+        else
+            notificationData.Success(message);
     }
 }

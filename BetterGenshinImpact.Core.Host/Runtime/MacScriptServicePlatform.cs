@@ -10,10 +10,12 @@ using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Service.Notification.Model.Enum;
 using Newtonsoft.Json.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Runtime.Versioning;
+using NotifyService = BetterGenshinImpact.Service.Notification.Notify;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
@@ -123,9 +125,14 @@ public sealed class MacScriptServicePlatform(
         }
         Logger.LogInformation("空月祝福处理完毕");
     }
-    public void NotifyGroupStart(string groupName) => Notify("info", $"配置组{groupName}启动");
-    public void NotifyGroupEndSuccess(string groupName) => Notify("info", $"配置组{groupName}结束");
-    public void NotifyGroupEndError(string message) => Notify("error", message);
+    public void NotifyGroupStart(string groupName) =>
+        NotifyService.Event(NotificationEvent.GroupStart)
+            .Success($"配置组{groupName}启动");
+    public void NotifyGroupEndSuccess(string groupName) =>
+        NotifyService.Event(NotificationEvent.GroupEnd)
+            .Success($"配置组{groupName}结束");
+    public void NotifyGroupEndError(string message) =>
+        NotifyService.Event(NotificationEvent.GroupEnd).Error(message);
     public void CloseGame() => RequireAcknowledgement("game.close", null);
     public void RestartApplication(string taskProgressName)
     {
@@ -192,6 +199,4 @@ public sealed class MacScriptServicePlatform(
     private void Click() => inputCoordinator.Dispatch(
         JObject.FromObject(new { action = "mouseClick", button = "left" }), hostCancellationToken);
 
-    private void Notify(string kind, string message) => RequireAcknowledgement(
-        "notification.emit", JObject.FromObject(new { kind, message }));
 }

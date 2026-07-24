@@ -486,6 +486,7 @@
     <Compile Include="../BetterGenshinImpact/Service/Notification/NotificationConfig.cs" Link="Service/Notification/NotificationConfig.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notification/NotificationEventSubscriptionHelper.cs" Link="Service/Notification/NotificationEventSubscriptionHelper.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notification/NotificationRuntimePlatform.cs" Link="Service/Notification/NotificationRuntimePlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Notification/Notify.cs" Link="Service/Notification/Notify.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notification/NotificationService.cs" Link="Service/Notification/NotificationService.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notification/Converter/BaseDateTimeJsonConverter.cs" Link="Service/Notification/Converter/BaseDateTimeJsonConverter.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notification/Converter/DateTimeJsonConverter.cs" Link="Service/Notification/Converter/DateTimeJsonConverter.cs" />

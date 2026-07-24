@@ -1,6 +1,8 @@
 using BetterGenshinImpact.GameTask.AutoMusicGame;
 using BetterGenshinImpact.GameTask.Model;
+using BetterGenshinImpact.Service.Notification.Model.Enum;
 using Microsoft.Extensions.Logging;
+using NotifyService = BetterGenshinImpact.Service.Notification.Notify;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
@@ -15,9 +17,21 @@ public sealed class MacAutoAlbumRuntimePlatform(
     public void Notify(
         AutoAlbumNotification notification, string message, Exception? exception = null)
     {
-        if (notification == AutoAlbumNotification.Error)
-            Logger.LogError(exception, "{Message}", message);
-        else
-            Logger.LogInformation("AutoAlbum {Notification}: {Message}", notification, message);
+        switch (notification)
+        {
+            case AutoAlbumNotification.Start:
+                NotifyService.Event(NotificationEvent.AlbumStart).Success(message);
+                break;
+            case AutoAlbumNotification.End:
+                NotifyService.Event(NotificationEvent.AlbumEnd).Success(message);
+                break;
+            case AutoAlbumNotification.Error:
+                NotifyService.Event(NotificationEvent.AlbumError)
+                    .Error(message, exception ?? new Exception(message));
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(notification), notification, null);
+        }
     }
 }

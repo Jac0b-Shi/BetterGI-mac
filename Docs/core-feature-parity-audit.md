@@ -111,7 +111,14 @@ list, screenshot option and all 13 upstream remote channels: Webhook, WebSocket,
 Feishu, OneBot, Work Weixin, email, Bark, Telegram, xxtui, DingTalk, Discord,
 ServerChan and MeoW. Their configuration, validation, notifier construction,
 refresh and test sends use the shared `NotificationService`; Swift only renders
-field descriptors and forwards save/test RPC requests.
+field descriptors and forwards save/test RPC requests. Configuration-group
+start/end, task cancellation/error, AutoAlbum, AutoDomain, AutoBoss,
+AutoLeyLineOutcrop and AutoStygianOnslaught events also enter that same service,
+so event subscriptions, screenshots and every enabled remote channel apply to
+real unattended execution rather than only to JS and test notifications. The
+static gate rejects direct runtime `notification.emit` calls outside the native
+macOS notifier adapter, and the `notification-routing` Fast suite verifies
+Webhook delivery plus subscription filtering through the production adapters.
 
 ### Auxiliary controls
 

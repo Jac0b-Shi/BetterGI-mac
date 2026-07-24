@@ -1,7 +1,9 @@
 using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.Service.Notification.Model.Enum;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
+using NotifyService = BetterGenshinImpact.Service.Notification.Notify;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
@@ -28,13 +30,11 @@ public sealed class MacTaskRunnerPlatform(
 
     public void EndTask() => inputCoordinator.ReleaseAllWhenFocused(hostCancellationToken);
 
-    public void NotifyCancellation(string message) => Notify("info", message);
+    public void NotifyCancellation(string message) =>
+        NotifyService.Event(NotificationEvent.TaskCancel).Success(message);
 
     public void NotifyError(string message, Exception exception) =>
-        Notify("error", $"{message}: {exception.Message}");
-
-    private void Notify(string kind, string message) => RequireAcknowledgement(
-        "notification.emit", JObject.FromObject(new { kind, message }));
+        NotifyService.Event(NotificationEvent.TaskError).Error(message, exception);
 
     private void RequireAcknowledgement(string method, JObject? parameters)
     {

@@ -64,8 +64,9 @@ validation, OCR distinction from the all-songs page, difficulty/reward traversal
 concurrent song-end detection and full-album loop. Core owns the shared
 `autoMusicGameConfig` snapshot for both task entries; Swift reuses the typed
 settings DTO and does not create a second album configuration model. macOS
-propagates task failures to `solo.status`, while Windows retains the upstream
-notification-and-return behavior.
+propagates task failures to `solo.status` while preserving the upstream
+album start/end/error notification events through the shared
+`NotificationService`.
 
 AutoRedeemCode now links the original `UseRedemptionCodeTask`: ReturnMainUI,
 settings/account navigation, OCR locators, per-code paste/confirm handling,

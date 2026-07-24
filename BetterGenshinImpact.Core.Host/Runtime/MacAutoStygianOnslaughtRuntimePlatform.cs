@@ -1,11 +1,11 @@
 using BetterGenshinImpact.Core.Abstractions.Runtime;
-using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
 using BetterGenshinImpact.GameTask.AutoStygianOnslaught;
 using BetterGenshinImpact.GameTask.Model;
+using BetterGenshinImpact.Service.Notification.Model.Enum;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
+using NotifyService = BetterGenshinImpact.Service.Notification.Notify;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
@@ -13,10 +13,7 @@ public sealed class MacAutoStygianOnslaughtRuntimePlatform(
     Func<ISystemInfo> systemInfo,
     IOcrService ocrService,
     IAutoPickConfigProvider autoPickConfigProvider,
-    ILoggerFactory loggerFactory,
-    PlatformCallbackChannel callbacks,
-    string sessionToken,
-    CancellationToken cancellationToken) : IAutoStygianOnslaughtRuntimePlatform
+    ILoggerFactory loggerFactory) : IAutoStygianOnslaughtRuntimePlatform
 {
     public ISystemInfo SystemInfo => systemInfo();
     public IOcrService OcrService { get; } = ocrService;
@@ -26,13 +23,15 @@ public sealed class MacAutoStygianOnslaughtRuntimePlatform(
 
     public void Notify(AutoStygianOnslaughtNotification notification, string message)
     {
-        var response = callbacks.InvokeAsync("notification.emit", JObject.FromObject(new
+        var eventName = notification switch
         {
-            kind = "info",
-            message,
-        }), sessionToken, cancellationToken).GetAwaiter().GetResult();
-        if (response?.Value<bool?>("acknowledged") != true)
-            throw new InvalidDataException("notification.emit did not return acknowledged=true.");
+            AutoStygianOnslaughtNotification.Start => NotificationEvent.DomainStart,
+            AutoStygianOnslaughtNotification.Reward => NotificationEvent.DomainReward,
+            AutoStygianOnslaughtNotification.End => NotificationEvent.DomainEnd,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(notification), notification, null),
+        };
+        NotifyService.Event(eventName).Success(message);
     }
 
     public Task RunArtifactSalvage(

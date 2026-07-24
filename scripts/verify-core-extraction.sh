@@ -723,6 +723,12 @@ rg -q 'new NotificationService' \
   && ! rg -q 'new WebhookNotifier|DispatchAsync|SendWebhookAsync' \
     BetterGenshinImpact.Core.Host/Runtime/NotificationSettingsCatalog.cs \
   || fail "macOS notifications bypass the shared upstream NotificationService"
+if rg -n '"notification\.emit"' \
+  BetterGenshinImpact.Core.Host/Runtime \
+  --glob '*.cs' \
+  --glob '!NotificationSettingsCatalog.cs'; then
+  fail "macOS runtime events bypass the shared notification subscription and notifier chain"
+fi
 
 git diff --check
 print -- "Core extraction static gate passed."
