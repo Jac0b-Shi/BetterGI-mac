@@ -52,11 +52,13 @@ The shared `OneDragonRunner` owns built-in versus ScriptGroup classification,
 ordered execution, task intervals, cancellation checks, DragonStart/DragonEnd
 timing, reward-check ordering and completion action selection. Windows reaches
 that runner through `WindowsOneDragonExecutionPlatform`; the WPF ViewModel no
-longer contains a second orchestration loop. macOS still needs its built-in
-task request executor, OneDragon configuration/RPC catalog and workflow UI
-before a production navigation entry can be exposed. A static gate rejects
-reintroducing the removed hard-coded Swift page before that platform
-composition exists.
+longer contains a second orchestration loop. macOS reaches the same runner
+through `MacOneDragonExecutionPlatform`; the Core Host owns configuration
+selection, lossless JSON persistence, built-in task options, CRUD, status and
+execution RPCs. Swift presents the workflow, preserves unknown configuration
+values and forwards platform callbacks without owning task classification or
+execution order. The static gate requires that Core-backed route and rejects
+reintroducing a hard-coded Swift built-in task catalog.
 
 ## Runtime pathing actions
 

@@ -32,6 +32,8 @@ struct MainWindowView: View {
             FeaturesPage()
         case .soloTask:
             SoloTasksPage()
+        case .oneDragon:
+            OneDragonWorkspaceView()
         case .scheduler:
             SchedulerPage()
         case .jsScript:

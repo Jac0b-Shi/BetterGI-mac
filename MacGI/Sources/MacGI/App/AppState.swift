@@ -116,6 +116,7 @@ enum NavigationPage: String, CaseIterable, Identifiable {
     case launch
     case realtime
     case soloTask
+    case oneDragon
     case scheduler
     case jsScript
     case mapTracking
@@ -133,6 +134,7 @@ enum NavigationPage: String, CaseIterable, Identifiable {
         case .launch: "启动"
         case .realtime: "实时触发"
         case .soloTask: "独立任务"
+        case .oneDragon: "一条龙"
         case .scheduler: "调度器"
         case .jsScript: "JS 脚本"
         case .mapTracking: "地图追踪"
@@ -150,6 +152,7 @@ enum NavigationPage: String, CaseIterable, Identifiable {
         case .launch: "截图器与启动"
         case .realtime: "自动化任务"
         case .soloTask: "独立运行"
+        case .oneDragon: "无人值守"
         case .scheduler: "全自动"
         case .jsScript: "脚本仓库"
         case .mapTracking: "路径追踪"
@@ -167,6 +170,7 @@ enum NavigationPage: String, CaseIterable, Identifiable {
         case .launch: "play"
         case .realtime: "timer"
         case .soloTask: "checklist"
+        case .oneDragon: "tray.full"
         case .scheduler: "cpu"
         case .jsScript: "doc.text"
         case .mapTracking: "map"
@@ -296,6 +300,15 @@ final class AppState: ObservableObject {
     @Published var schedulerExecutionStatus = "Idle"
     @Published var schedulerExecutionError: String?
     @Published var currentSchedulerProjectID: String?
+    @Published var oneDragonConfigs: [BetterGIOneDragonConfigSummary] = []
+    @Published var selectedOneDragonConfigName = ""
+    @Published var oneDragonDocument: BetterGIOneDragonConfigDocument?
+    @Published var oneDragonStatus = BetterGIOneDragonStatus(
+        taskID: nil,
+        configName: nil,
+        state: "idle",
+        error: nil)
+    @Published var oneDragonCatalogStatus = "Core unavailable"
     @Published private(set) var pathingEntries: [BetterGIPathingEntry] = []
     @Published private(set) var pathingCatalogStatus = "Core unavailable"
 
@@ -335,6 +348,7 @@ final class AppState: ObservableObject {
     let latestFrameStore = LatestFrameStore()
     private var runtimeFrameIndex: UInt64 = 0
     private var schedulerExecutionTask: Task<Void, Never>?
+    private var oneDragonExecutionTask: Task<Void, Never>?
     private var betterGICoreSupervisor: BetterGICoreProcessSupervisor?
     private var coreStartupTask: Task<Void, Never>?
     private var coreStartupInFlight = false
@@ -1692,6 +1706,8 @@ final class AppState: ObservableObject {
             await loadSoloTasksFromCore()
             await loadSchedulerGroupsFromCore()
             await synchronizeSchedulerStatusFromCore()
+            await loadOneDragonConfigsFromCore()
+            await synchronizeOneDragonStatusFromCore()
             await loadScriptProjectsFromCore()
             await loadPathingEntriesFromCore()
             await loadKeyMouseScriptsFromCore()
@@ -2002,6 +2018,139 @@ final class AppState: ObservableObject {
         }
     }
 
+    private func loadOneDragonConfigsFromCore(preferredName: String? = nil) async {
+        guard let supervisor = betterGICoreSupervisor else {
+            oneDragonConfigs = []
+            selectedOneDragonConfigName = ""
+            oneDragonDocument = nil
+            oneDragonCatalogStatus = "Core unavailable"
+            return
+        }
+        do {
+            let configs = try await supervisor.listOneDragonConfigs()
+                .sorted {
+                    $0.name.localizedStandardCompare($1.name) == .orderedAscending
+                }
+            oneDragonConfigs = configs
+            let selectedName =
+                preferredName.flatMap { preferred in
+                    configs.contains(where: { $0.name == preferred })
+                        ? preferred
+                        : nil
+                }
+                ?? configs.first(where: \.selected)?.name
+                ?? configs.first(where: {
+                    $0.name == selectedOneDragonConfigName
+                })?.name
+                ?? configs.first?.name
+                ?? ""
+            selectedOneDragonConfigName = selectedName
+            oneDragonCatalogStatus = "Core loaded \(configs.count)"
+            if selectedName.isEmpty {
+                oneDragonDocument = nil
+            } else {
+                await loadOneDragonDocumentFromCore(name: selectedName)
+            }
+        } catch {
+            oneDragonConfigs = []
+            selectedOneDragonConfigName = ""
+            oneDragonDocument = nil
+            oneDragonCatalogStatus = "Core unavailable"
+            addLog(.error, "加载一条龙配置失败：\(error.localizedDescription)")
+        }
+    }
+
+    private func loadOneDragonDocumentFromCore(name: String) async {
+        guard let supervisor = betterGICoreSupervisor else { return }
+        do {
+            let document = try await supervisor.oneDragonConfig(name: name)
+            guard selectedOneDragonConfigName == name else { return }
+            oneDragonDocument = document
+        } catch {
+            oneDragonDocument = nil
+            addLog(.error, "读取一条龙配置失败：\(error.localizedDescription)")
+        }
+    }
+
+    private func synchronizeOneDragonStatusFromCore() async {
+        guard let supervisor = betterGICoreSupervisor else { return }
+        do {
+            let status = try await supervisor.oneDragonStatus()
+            switch status.state {
+            case "idle":
+                oneDragonStatus = status
+            case "running", "completed", "cancelled", "failed":
+                guard let taskID = status.taskID else {
+                    throw BetterGICoreRPCError.protocolViolation(
+                        "oneDragon.status \(status.state) omitted taskId.")
+                }
+                oneDragonStatus = BetterGIOneDragonStatus(
+                    taskID: taskID,
+                    configName: status.configName,
+                    state: oneDragonStatus.state,
+                    error: status.error)
+                try handleCoreOneDragonEvent(
+                    taskID: taskID,
+                    state: status.state,
+                    error: status.error)
+            case "stopping":
+                oneDragonStatus = status
+            default:
+                throw BetterGICoreRPCError.protocolViolation(
+                    "oneDragon.status contains unsupported state \(status.state).")
+            }
+        } catch {
+            oneDragonStatus = BetterGIOneDragonStatus(
+                taskID: nil,
+                configName: nil,
+                state: "unavailable",
+                error: error.localizedDescription)
+            addLog(.error, "同步一条龙状态失败：\(error.localizedDescription)")
+        }
+    }
+
+    private func mutateOneDragonDocument(
+        _ mutation: (inout BetterGIOneDragonConfigDocument) -> Void
+    ) {
+        guard oneDragonStatus.taskID == nil,
+              var document = oneDragonDocument else {
+            addLog(.error, "运行期间不能修改一条龙任务。")
+            return
+        }
+        mutation(&document)
+        oneDragonDocument = document
+        saveOneDragonConfig()
+    }
+
+    private static func oneDragonObject(
+        _ value: BetterGIJSONValue?
+    ) -> [String: BetterGIJSONValue] {
+        guard case .object(let object) = value else { return [:] }
+        return object
+    }
+
+    private static func oneDragonStringArray(
+        _ value: BetterGIJSONValue?
+    ) -> [String] {
+        switch value {
+        case .strings(let values):
+            return values
+        case .array(let values):
+            return values.compactMap {
+                guard case .string(let value) = $0 else { return nil }
+                return value
+            }
+        default:
+            return []
+        }
+    }
+
+    private static let terminalOneDragonStates = [
+        "completed",
+        "cancelled",
+        "failed",
+    ]
+
     private func loadScriptProjectsFromCore() async {
         guard let supervisor = betterGICoreSupervisor else {
             scriptProjects = []
@@ -2143,6 +2292,15 @@ final class AppState: ObservableObject {
 
     private func setCoreCatalogUnavailable(_ error: Error) {
         schedulerGroups = []
+        oneDragonConfigs = []
+        selectedOneDragonConfigName = ""
+        oneDragonDocument = nil
+        oneDragonStatus = BetterGIOneDragonStatus(
+            taskID: nil,
+            configName: nil,
+            state: "idle",
+            error: nil)
+        oneDragonCatalogStatus = "Core unavailable"
         scriptProjects = []
         pathingEntries = []
         pathingCatalogStatus = "Core unavailable"
@@ -2293,8 +2451,367 @@ final class AppState: ObservableObject {
         }
     }
 
+    func reloadOneDragonConfigsFromCore() {
+        Task { [weak self] in
+            await self?.loadOneDragonConfigsFromCore()
+        }
+    }
+
+    func selectOneDragonConfig(_ name: String) {
+        guard selectedOneDragonConfigName != name ||
+                oneDragonDocument?.name != name else { return }
+        guard let supervisor = betterGICoreSupervisor else {
+            addLog(.error, "无法选择一条龙配置：Core 尚未就绪。")
+            return
+        }
+        selectedOneDragonConfigName = name
+        Task { [weak self] in
+            do {
+                try await supervisor.selectOneDragonConfig(name: name)
+                await self?.loadOneDragonConfigsFromCore(preferredName: name)
+            } catch {
+                self?.addLog(.error, "选择一条龙配置失败：\(error.localizedDescription)")
+                await self?.loadOneDragonConfigsFromCore()
+            }
+        }
+    }
+
+    func createOneDragonConfig(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let supervisor = betterGICoreSupervisor else {
+            addLog(.error, "无法新建一条龙配置：名称为空或 Core 尚未就绪。")
+            return
+        }
+        Task { [weak self] in
+            do {
+                let document = try await supervisor.createOneDragonConfig(name: trimmed)
+                self?.selectedOneDragonConfigName = document.name
+                self?.oneDragonDocument = document
+                await self?.loadOneDragonConfigsFromCore(preferredName: document.name)
+            } catch {
+                self?.addLog(.error, "新建一条龙配置失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    func renameSelectedOneDragonConfig(to newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let supervisor = betterGICoreSupervisor,
+              !selectedOneDragonConfigName.isEmpty else {
+            addLog(.error, "无法重命名一条龙配置。")
+            return
+        }
+        let oldName = selectedOneDragonConfigName
+        Task { [weak self] in
+            do {
+                let document = try await supervisor.renameOneDragonConfig(
+                    name: oldName,
+                    newName: trimmed)
+                self?.selectedOneDragonConfigName = document.name
+                self?.oneDragonDocument = document
+                await self?.loadOneDragonConfigsFromCore(preferredName: document.name)
+            } catch {
+                self?.addLog(.error, "重命名一条龙配置失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    func deleteSelectedOneDragonConfig() {
+        guard oneDragonStatus.taskID == nil,
+              let supervisor = betterGICoreSupervisor,
+              !selectedOneDragonConfigName.isEmpty else {
+            addLog(.error, "运行期间不能删除一条龙配置。")
+            return
+        }
+        let name = selectedOneDragonConfigName
+        Task { [weak self] in
+            do {
+                let selected = try await supervisor.deleteOneDragonConfig(name: name)
+                await self?.loadOneDragonConfigsFromCore(preferredName: selected)
+            } catch {
+                self?.addLog(.error, "删除一条龙配置失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    func setOneDragonConfigValue(_ key: String, _ value: BetterGIJSONValue) {
+        guard var document = oneDragonDocument else { return }
+        document.config[key] = value
+        oneDragonDocument = document
+    }
+
+    func oneDragonStringValue(_ key: String, default defaultValue: String = "") -> String {
+        guard case .string(let value) = oneDragonDocument?.config[key] else {
+            return defaultValue
+        }
+        return value
+    }
+
+    func oneDragonBoolValue(_ key: String, default defaultValue: Bool = false) -> Bool {
+        guard case .bool(let value) = oneDragonDocument?.config[key] else {
+            return defaultValue
+        }
+        return value
+    }
+
+    func oneDragonIntValue(_ key: String, default defaultValue: Int = 0) -> Int {
+        switch oneDragonDocument?.config[key] {
+        case .integer(let value):
+            return Int(value)
+        case .number(let value):
+            return Int(value)
+        default:
+            return defaultValue
+        }
+    }
+
+    func oneDragonStringsValue(_ key: String) -> [String] {
+        switch oneDragonDocument?.config[key] {
+        case .strings(let values):
+            return values
+        case .array(let values):
+            return values.compactMap {
+                guard case .string(let value) = $0 else { return nil }
+                return value
+            }
+        default:
+            return []
+        }
+    }
+
+    func saveOneDragonConfig() {
+        guard let supervisor = betterGICoreSupervisor,
+              let document = oneDragonDocument,
+              oneDragonStatus.taskID == nil else {
+            addLog(.error, "运行期间不能保存一条龙配置。")
+            return
+        }
+        Task { [weak self] in
+            do {
+                let saved = try await supervisor.saveOneDragonConfig(document)
+                self?.oneDragonDocument = saved
+                await self?.loadOneDragonConfigsFromCore(preferredName: saved.name)
+                self?.addLog(.info, "一条龙配置已保存：\(saved.name)")
+            } catch {
+                self?.addLog(.error, "保存一条龙配置失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    func setOneDragonTaskEnabled(id: String, enabled: Bool) {
+        mutateOneDragonDocument { document in
+            guard let index = document.tasks.firstIndex(where: { $0.id == id }) else {
+                return
+            }
+            document.tasks[index].isEnabled = enabled
+            var values = Self.oneDragonObject(
+                document.config["TaskEnabledList"])
+            values[id] = .bool(enabled)
+            document.config["TaskEnabledList"] = .object(values)
+        }
+    }
+
+    func addOneDragonTask(_ name: String) {
+        guard !name.isEmpty else { return }
+        mutateOneDragonDocument { document in
+            let id = UUID().uuidString
+            var definitions = Self.oneDragonObject(
+                document.config["TaskDefinitions"])
+            var enabled = Self.oneDragonObject(
+                document.config["TaskEnabledList"])
+            var order = Self.oneDragonStringArray(
+                document.config["TaskOrder"])
+            let insertionIndex: Int
+            if document.builtInTaskNames.contains(name) {
+                insertionIndex = document.tasks.lastIndex {
+                    document.builtInTaskNames.contains($0.name)
+                }.map { $0 + 1 } ?? 0
+            } else {
+                insertionIndex = document.tasks.endIndex
+            }
+            definitions[id] = .string(name)
+            enabled[id] = .bool(true)
+            order.insert(id, at: min(insertionIndex, order.endIndex))
+            document.config["TaskDefinitions"] = .object(definitions)
+            document.config["TaskEnabledList"] = .object(enabled)
+            document.config["TaskOrder"] = .strings(order)
+            document.tasks.insert(
+                BetterGIOneDragonTask(
+                    id: id,
+                    name: name,
+                    isEnabled: true,
+                    isResumeStep: false),
+                at: insertionIndex)
+        }
+    }
+
+    func removeOneDragonTask(id: String) {
+        mutateOneDragonDocument { document in
+            document.tasks.removeAll { $0.id == id }
+            var definitions = Self.oneDragonObject(
+                document.config["TaskDefinitions"])
+            var enabled = Self.oneDragonObject(
+                document.config["TaskEnabledList"])
+            definitions[id] = nil
+            enabled[id] = nil
+            document.config["TaskDefinitions"] = .object(definitions)
+            document.config["TaskEnabledList"] = .object(enabled)
+            document.config["TaskOrder"] = .strings(
+                Self.oneDragonStringArray(document.config["TaskOrder"])
+                    .filter { $0 != id })
+            if case .string(let nextTaskID) = document.config["NextTaskId"],
+               nextTaskID == id {
+                document.config["NextTaskId"] = .string("")
+            }
+        }
+    }
+
+    func moveOneDragonTask(id: String, offset: Int) {
+        mutateOneDragonDocument { document in
+            guard let source = document.tasks.firstIndex(where: { $0.id == id }) else {
+                return
+            }
+            let destination = source + offset
+            guard document.tasks.indices.contains(destination) else { return }
+            document.tasks.swapAt(source, destination)
+            document.config["TaskOrder"] = .strings(document.tasks.map(\.id))
+        }
+    }
+
+    func setOneDragonResumeTask(id: String?) {
+        mutateOneDragonDocument { document in
+            let nextID = id ?? ""
+            document.config["NextTaskId"] = .string(nextID)
+            for index in document.tasks.indices {
+                document.tasks[index].isResumeStep =
+                    document.tasks[index].id == nextID
+            }
+        }
+    }
+
+    func runOneDragon() {
+        guard canRunOneDragon,
+              let supervisor = betterGICoreSupervisor,
+              !selectedOneDragonConfigName.isEmpty else {
+            addLog(.error, "无法启动一条龙：\(oneDragonRunReadiness)")
+            return
+        }
+        let configName = selectedOneDragonConfigName
+        oneDragonExecutionTask?.cancel()
+        oneDragonStatus = BetterGIOneDragonStatus(
+            taskID: nil,
+            configName: configName,
+            state: "starting",
+            error: nil)
+        oneDragonExecutionTask = Task { [weak self] in
+            do {
+                let status = try await supervisor.startOneDragon(name: configName)
+                guard !Task.isCancelled, let self else { return }
+                if !Self.terminalOneDragonStates.contains(self.oneDragonStatus.state) {
+                    self.oneDragonStatus = status
+                    self.appStatus = .running
+                }
+            } catch {
+                self?.oneDragonStatus = BetterGIOneDragonStatus(
+                    taskID: nil,
+                    configName: configName,
+                    state: "failed",
+                    error: error.localizedDescription)
+                self?.appStatus = .error
+                self?.addLog(.error, "启动一条龙失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    func stopOneDragon() {
+        oneDragonExecutionTask?.cancel()
+        oneDragonExecutionTask = nil
+        guard let supervisor = betterGICoreSupervisor,
+              let taskID = oneDragonStatus.taskID else { return }
+        Task { [weak self] in
+            do {
+                self?.oneDragonStatus = try await supervisor.stopOneDragon(
+                    taskID: taskID)
+            } catch {
+                self?.addLog(.error, "停止一条龙失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    func handleCoreOneDragonEvent(
+        taskID: String,
+        state: String,
+        error: String?
+    ) throws {
+        guard state == "running" || Self.terminalOneDragonStates.contains(state) else {
+            throw BetterGICorePlatformAdapterError.invalidParameters(
+                "oneDragon.event contains unsupported state \(state).")
+        }
+        if let activeTaskID = oneDragonStatus.taskID,
+           activeTaskID != taskID {
+            throw BetterGICorePlatformAdapterError.invalidParameters(
+                "oneDragon.event taskId \(taskID) does not match active task \(activeTaskID).")
+        }
+        if Self.terminalOneDragonStates.contains(state),
+           oneDragonStatus.taskID == nil {
+            throw BetterGICorePlatformAdapterError.invalidParameters(
+                "oneDragon.event terminal state \(state) has no active task.")
+        }
+        let configName = oneDragonStatus.configName ?? selectedOneDragonConfigName
+        oneDragonStatus = BetterGIOneDragonStatus(
+            taskID: Self.terminalOneDragonStates.contains(state) ? nil : taskID,
+            configName: configName,
+            state: state,
+            error: error)
+        switch state {
+        case "running":
+            appStatus = .running
+        case "completed", "cancelled":
+            oneDragonExecutionTask = nil
+            appStatus = .idle
+        case "failed":
+            oneDragonExecutionTask = nil
+            appStatus = .error
+        default:
+            preconditionFailure("OneDragon event state was validated before mutation.")
+        }
+    }
+
+    var selectedOneDragonConfig: BetterGIOneDragonConfigSummary? {
+        oneDragonConfigs.first { $0.name == selectedOneDragonConfigName }
+    }
+
+    var canRunOneDragon: Bool {
+        coreStatus == .ok
+            && runtimeLifecycle == .running
+            && selectedOneDragonConfig?.enabledTaskCount ?? 0 > 0
+            && isWindowValid
+            && !selectedWindow.isSynthetic
+            && currentSchedulerProjectID == nil
+            && oneDragonStatus.taskID == nil
+            && !safetyGate.emergencyStop
+    }
+
+    var oneDragonRunReadiness: String {
+        guard coreStatus == .ok else { return "Core 尚未就绪" }
+        guard runtimeLifecycle == .running else { return "请先启动 BetterGI 运行时" }
+        guard selectedOneDragonConfig != nil else { return "尚未选择配置" }
+        guard selectedOneDragonConfig?.enabledTaskCount ?? 0 > 0 else {
+            return "请至少启用一个任务"
+        }
+        guard isWindowValid, !selectedWindow.isSynthetic else {
+            return "尚未选择真实游戏窗口"
+        }
+        guard currentSchedulerProjectID == nil else { return "调度器正在运行" }
+        guard oneDragonStatus.taskID == nil else { return "一条龙正在运行" }
+        guard !safetyGate.emergencyStop else { return "紧急停止已启用" }
+        if dryRunLaunchEnabled { return "Dry-Run：不会发送真实输入" }
+        return "已就绪"
+    }
+
     func runSchedulerGroups() {
-        guard currentSchedulerProjectID == nil else {
+        guard currentSchedulerProjectID == nil, oneDragonStatus.taskID == nil else {
             addLog(.error, "Cannot run scheduler: another scheduler task is already active.")
             return
         }

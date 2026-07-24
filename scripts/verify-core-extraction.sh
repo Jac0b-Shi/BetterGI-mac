@@ -21,10 +21,6 @@ if rg -n 'Assets[\\/]+GameTask' BetterGenshinImpact.Core.Host MacGI/Sources/MacG
   exit 1
 fi
 
-if rg -n 'OneDragonPage|sidebarButton\(\.oneDragon\)|case \.oneDragon|oneDragonItems' \
-  MacGI/Sources/MacGI --glob '*.swift'; then
-  fail "unextracted OneDragon workflow must not expose a production placeholder"
-fi
 rg -q 'Core/Script/OneDragon/OneDragonRunner.cs' \
   BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj \
   && rg -q 'new OneDragonRunner\(' \
@@ -32,6 +28,19 @@ rg -q 'Core/Script/OneDragon/OneDragonRunner.cs' \
   && rg -q 'preserveCancellationContext: true' \
     BetterGenshinImpact/Core/Runtime/Windows/WindowsOneDragonExecutionPlatform.cs \
   || fail "OneDragon orchestration is not routed through the shared Core runner"
+rg -q '"oneDragon.select"' BetterGenshinImpact.Core.Host/CoreRpcServer.cs \
+  && rg -q '"oneDragon.start"' BetterGenshinImpact.Core.Host/CoreRpcServer.cs \
+  && rg -q 'func startOneDragon' \
+    MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \
+  && rg -q 'OneDragonWorkspaceView' \
+    MacGI/Sources/MacGI/Views/MainWindowView.swift \
+  && rg -q 'builtInTaskNames' \
+    MacGI/Sources/MacGI/Views/Pages/OneDragonWorkspaceView.swift \
+  || fail "macOS OneDragon workflow is not composed through the Core RPC contract"
+if rg -n '^[[:space:]]+"(领取邮件|合成树脂|自动秘境|自动首领讨伐|自动幽境危战|自动地脉花|领取每日奖励|领取尘歌壶奖励)",[[:space:]]*$' \
+  MacGI/Sources/MacGI/Views/Pages/OneDragonWorkspaceView.swift; then
+  fail "macOS OneDragon workflow must obtain built-in task options from Core"
+fi
 if rg -n 'Notify\.Event\(NotificationEvent\.Dragon(Start|End)\)|foreach \(var task in taskListCopy\)' \
   BetterGenshinImpact/ViewModel/Pages/OneDragonFlowViewModel.cs; then
   fail "WPF ViewModel must not own a second OneDragon orchestration loop"

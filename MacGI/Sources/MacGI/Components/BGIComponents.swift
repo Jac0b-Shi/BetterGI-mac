@@ -459,6 +459,7 @@ struct BGINavSidebar: View {
             sidebarButton(.launch)
             sidebarButton(.realtime)
             sidebarButton(.soloTask)
+            sidebarButton(.oneDragon)
             automationHeader
             sidebarButton(.scheduler, indent: 28)
             sidebarButton(.jsScript, indent: 28)

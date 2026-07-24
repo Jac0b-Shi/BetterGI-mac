@@ -431,7 +431,12 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                 )
             }
             let error = parameters["error"] as? [String: Any]
-            if let message = error?["message"] as? String {
+            let message = error?["message"] as? String
+            try appState.handleCoreOneDragonEvent(
+                taskID: taskID,
+                state: state,
+                error: message)
+            if let message {
                 appState.addLog(.error, "Core one-dragon \(taskID) \(state): \(message)")
             } else {
                 appState.addLog(.info, "Core one-dragon \(taskID) \(state)")

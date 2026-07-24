@@ -433,6 +433,36 @@ struct BetterGICoreSchedulerStatus: Sendable, Equatable {
     let error: String?
 }
 
+struct BetterGIOneDragonConfigSummary: Sendable, Equatable, Identifiable {
+    let name: String
+    let taskCount: Int
+    let enabledTaskCount: Int
+    let selected: Bool
+
+    var id: String { name }
+}
+
+struct BetterGIOneDragonTask: Sendable, Equatable, Identifiable {
+    let id: String
+    let name: String
+    var isEnabled: Bool
+    var isResumeStep: Bool
+}
+
+struct BetterGIOneDragonConfigDocument: Sendable, Equatable {
+    var name: String
+    var config: [String: BetterGIJSONValue]
+    var tasks: [BetterGIOneDragonTask]
+    let builtInTaskNames: [String]
+}
+
+struct BetterGIOneDragonStatus: Sendable, Equatable {
+    let taskID: String?
+    let configName: String?
+    let state: String
+    let error: String?
+}
+
 actor BetterGICoreProcessSupervisor {
     private static let startupPollLimit = 4_800
     enum StartupPhase: Sendable {
@@ -1493,6 +1523,99 @@ actor BetterGICoreProcessSupervisor {
             error: result["error"] as? String)
     }
 
+    func listOneDragonConfigs() throws -> [BetterGIOneDragonConfigSummary] {
+        guard let items = try runningClient().request(method: "oneDragon.list")
+            as? [[String: Any]] else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid oneDragon.list result.")
+        }
+        return try items.map { item in
+            guard let name = item["name"] as? String,
+                  let taskCount = item["taskCount"] as? Int,
+                  let enabledTaskCount = item["enabledTaskCount"] as? Int,
+                  let selected = item["selected"] as? Bool else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid OneDragon config summary.")
+            }
+            return BetterGIOneDragonConfigSummary(
+                name: name,
+                taskCount: taskCount,
+                enabledTaskCount: enabledTaskCount,
+                selected: selected)
+        }
+    }
+
+    func oneDragonConfig(name: String) throws -> BetterGIOneDragonConfigDocument {
+        try decodeOneDragonConfig(try runningClient().request(
+            method: "oneDragon.get",
+            parameters: ["name": name]))
+    }
+
+    func selectOneDragonConfig(name: String) throws {
+        guard let result = try runningClient().request(
+            method: "oneDragon.select",
+            parameters: ["name": name]) as? [String: Any],
+              result["selectedName"] as? String == name else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid oneDragon.select result.")
+        }
+    }
+
+    func createOneDragonConfig(name: String) throws
+        -> BetterGIOneDragonConfigDocument
+    {
+        try decodeOneDragonConfig(try runningClient().request(
+            method: "oneDragon.create",
+            parameters: ["name": name]))
+    }
+
+    func saveOneDragonConfig(_ document: BetterGIOneDragonConfigDocument) throws
+        -> BetterGIOneDragonConfigDocument
+    {
+        try decodeOneDragonConfig(try runningClient().request(
+            method: "oneDragon.save",
+            parameters: [
+                "name": document.name,
+                "config": document.config.mapValues(\.any),
+            ]))
+    }
+
+    func renameOneDragonConfig(name: String, newName: String) throws
+        -> BetterGIOneDragonConfigDocument
+    {
+        try decodeOneDragonConfig(try runningClient().request(
+            method: "oneDragon.rename",
+            parameters: ["name": name, "newName": newName]))
+    }
+
+    func deleteOneDragonConfig(name: String) throws -> String {
+        guard let result = try runningClient().request(
+            method: "oneDragon.delete",
+            parameters: ["name": name]) as? [String: Any],
+              let selectedName = result["selectedName"] as? String else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid oneDragon.delete result.")
+        }
+        return selectedName
+    }
+
+    func startOneDragon(name: String) throws -> BetterGIOneDragonStatus {
+        try decodeOneDragonStatus(try runningClient().request(
+            method: "oneDragon.start",
+            parameters: ["name": name]))
+    }
+
+    func stopOneDragon(taskID: String) throws -> BetterGIOneDragonStatus {
+        try decodeOneDragonStatus(try runningClient().request(
+            method: "oneDragon.stop",
+            parameters: ["taskId": taskID]))
+    }
+
+    func oneDragonStatus() throws -> BetterGIOneDragonStatus {
+        try decodeOneDragonStatus(
+            try runningClient().request(method: "oneDragon.status"))
+    }
+
     func listTriggers() throws -> [BetterGICoreTriggerState] {
         guard case .running = state, let client else {
             throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
@@ -1518,6 +1641,53 @@ actor BetterGICoreProcessSupervisor {
                 autoHangoutEventEnabled: item["autoHangoutEventEnabled"] as? Bool
             )
         }
+    }
+
+    private func decodeOneDragonConfig(_ value: Any?)
+        throws -> BetterGIOneDragonConfigDocument
+    {
+        guard let result = value as? [String: Any],
+              let name = result["name"] as? String,
+              let rawConfig = result["config"] as? [String: Any],
+              let rawTasks = result["tasks"] as? [[String: Any]],
+              let builtInTaskNames = result["builtInTaskNames"] as? [String] else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid OneDragon config document.")
+        }
+        let tasks = try rawTasks.map { item in
+            guard let id = item["id"] as? String,
+                  let name = item["name"] as? String,
+                  let isEnabled = item["isEnabled"] as? Bool,
+                  let isResumeStep = item["isResumeStep"] as? Bool else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid OneDragon task.")
+            }
+            return BetterGIOneDragonTask(
+                id: id,
+                name: name,
+                isEnabled: isEnabled,
+                isResumeStep: isResumeStep)
+        }
+        return BetterGIOneDragonConfigDocument(
+            name: name,
+            config: try rawConfig.mapValues(BetterGIJSONValue.init(any:)),
+            tasks: tasks,
+            builtInTaskNames: builtInTaskNames)
+    }
+
+    private func decodeOneDragonStatus(_ value: Any?)
+        throws -> BetterGIOneDragonStatus
+    {
+        guard let result = value as? [String: Any],
+              let state = result["state"] as? String else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid OneDragon status.")
+        }
+        return BetterGIOneDragonStatus(
+            taskID: result["taskId"] as? String,
+            configName: result["configName"] as? String,
+            state: state,
+            error: result["error"] as? String)
     }
 
     func autoEatTriggerSettings() throws -> BetterGICoreAutoEatTriggerSettings {

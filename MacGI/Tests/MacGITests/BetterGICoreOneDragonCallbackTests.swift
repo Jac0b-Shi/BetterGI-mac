@@ -15,13 +15,11 @@ struct BetterGICoreOneDragonCallbackTests {
             resourceStore: BGIRuntimeResourceStore(rootURL: root))
         let adapter = BetterGICorePlatformAdapter(appState: appState)
 
-        for state in ["running", "completed", "cancelled", "failed"] {
+        for state in ["running", "completed"] {
             let parameters = OneDragonEventParameters([
                 "taskId": "task-1",
                 "state": state,
-                "error": state == "failed"
-                    ? ["message": "verification failure"]
-                    : NSNull(),
+                "error": NSNull(),
             ])
             try await Task.detached { () throws -> Void in
                 let result = try adapter.handle(
@@ -33,6 +31,51 @@ struct BetterGICoreOneDragonCallbackTests {
                 }
             }.value
         }
+
+        #expect(appState.oneDragonStatus.taskID == nil)
+        #expect(appState.oneDragonStatus.state == "completed")
+        #expect(appState.appStatus == .idle)
+    }
+
+    @MainActor
+    @Test("Failed event retains error and clears the active task")
+    func failedEventRetainsError() throws {
+        let appState = makeOneDragonAppState("failed")
+        appState.oneDragonStatus = BetterGIOneDragonStatus(
+            taskID: "task-2",
+            configName: "每日",
+            state: "running",
+            error: nil)
+
+        try appState.handleCoreOneDragonEvent(
+            taskID: "task-2",
+            state: "failed",
+            error: "verification failure")
+
+        #expect(appState.oneDragonStatus.taskID == nil)
+        #expect(appState.oneDragonStatus.state == "failed")
+        #expect(appState.oneDragonStatus.error == "verification failure")
+        #expect(appState.appStatus == .error)
+    }
+
+    @MainActor
+    @Test("Terminal event cannot overwrite a new pending start")
+    func terminalEventCannotOverwritePendingStart() {
+        let appState = makeOneDragonAppState("stale")
+        appState.oneDragonStatus = BetterGIOneDragonStatus(
+            taskID: nil,
+            configName: "夜班",
+            state: "starting",
+            error: nil)
+
+        #expect(throws: BetterGICorePlatformAdapterError.self) {
+            try appState.handleCoreOneDragonEvent(
+                taskID: "old-task",
+                state: "completed",
+                error: nil)
+        }
+        #expect(appState.oneDragonStatus.state == "starting")
+        #expect(appState.oneDragonStatus.configName == "夜班")
     }
 
     @MainActor
@@ -57,7 +100,17 @@ struct BetterGICoreOneDragonCallbackTests {
                     parameters: parameters.value)
             }.value
         }
+        #expect(appState.oneDragonStatus.state == "idle")
     }
+}
+
+@MainActor
+private func makeOneDragonAppState(_ suffix: String) -> AppState {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent(
+            "bettergi-one-dragon-\(suffix)-\(UUID().uuidString)",
+            isDirectory: true)
+    return AppState(resourceStore: BGIRuntimeResourceStore(rootURL: root))
 }
 
 private final class OneDragonEventParameters: @unchecked Sendable {
