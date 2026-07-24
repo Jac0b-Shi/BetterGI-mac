@@ -249,6 +249,8 @@ public partial class App : Application
             new Core.Runtime.Windows.WindowsQuickEnhanceArtifactRuntimePlatform());
         GameTask.QuickBuy.QuickBuyRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsQuickBuyRuntimePlatform());
+        GameTask.QuickClaimReward.OneKeyClaimRewardRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsOneKeyClaimRewardRuntimePlatform());
         GameTask.AutoEat.AutoEatRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsAutoEatRuntimePlatform());
         GameTask.GameLoading.GameLoadingRuntimePlatform.Configure(

@@ -101,6 +101,24 @@ rg -q 'Shared QuickBuyTask diverged from the upstream Serenitea Pot sequence' \
   && rg -q 'QuickBuyTask cancellation left the synthetic mouse button pressed' \
     Test/BetterGenshinImpact.Core.Host.Fast.Verification/RuntimeSettingsSuite.cs \
   || fail "quick-buy interaction and cancellation contracts are not verified"
+rg -q 'OneKeyClaimRewardRuntimePlatform.Configure' \
+  BetterGenshinImpact.Core.Host/Program.cs \
+  && rg -q 'new Core.Runtime.Windows.WindowsOneKeyClaimRewardRuntimePlatform' \
+    BetterGenshinImpact/App.xaml.cs \
+  && rg -q 'OneKeyClaimRewardTask.Instance.RunHotKey' \
+    BetterGenshinImpact.Core.Host/Program.cs \
+  && rg -qx 'QuickClaimReward' \
+    MacGI/Resources/game-task-assets.manifest \
+  || fail "shared one-key claim-reward task is not composed end to end"
+if rg -n '\b(TaskContext|Simulation\.SendInput|SystemControl|Toast|Vanara|Wpf)\b' \
+  BetterGenshinImpact/GameTask/QuickClaimReward/OneKeyClaimRewardTask.cs; then
+  fail "shared OneKeyClaimRewardTask still owns Windows runtime dependencies"
+fi
+rg -q 'OneKeyClaimRewardTask drifted from the upstream hold-mode scroll chunking' \
+  Test/BetterGenshinImpact.Core.Host.Fast.Verification/RuntimeSettingsSuite.cs \
+  && rg -q 'One-key claim reward bypassed the runtime-start guard' \
+    Test/BetterGenshinImpact.Core.Host.Fast.Verification/RuntimeSettingsSuite.cs \
+  || fail "one-key claim-reward settings, scroll and lifecycle contracts are not verified"
 rg -Fq 'DialogButtonClickMacro.Done(DialogButtonType.Confirm)' \
   BetterGenshinImpact/ViewModel/Pages/HotKeyPageViewModel.cs \
   && rg -q 'CreateDialogButtonAction' \

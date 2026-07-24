@@ -74,6 +74,13 @@ public sealed class MacTaskControlPlatform(
         return captureRing.Read(response).DeriveTo1080P();
     }
 
+    public ImageRegion CaptureToRectArea(
+        bool forceNew,
+        CancellationToken operationCancellation) =>
+        WithCancellation(
+            operationCancellation,
+            () => CaptureToRectArea(forceNew));
+
     public Action<CancellationToken> CreateDialogButtonAction(
         DialogButtonType buttonType) =>
         cancellationToken => WithCancellation(

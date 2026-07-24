@@ -124,6 +124,8 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Macro/QuickEnhanceArtifactRuntimePlatform.cs" Link="GameTask/Macro/QuickEnhanceArtifactRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/QuickBuy/QuickBuyTask.cs" Link="GameTask/QuickBuy/QuickBuyTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/QuickBuy/QuickBuyRuntimePlatform.cs" Link="GameTask/QuickBuy/QuickBuyRuntimePlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/QuickClaimReward/OneKeyClaimRewardTask.cs" Link="GameTask/QuickClaimReward/OneKeyClaimRewardTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/QuickClaimReward/OneKeyClaimRewardRuntimePlatform.cs" Link="GameTask/QuickClaimReward/OneKeyClaimRewardRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvChatUi.cs" Link="GameTask/Common/BgiVision/BvChatUi.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvImage.cs" Link="GameTask/Common/BgiVision/BvImage.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvOcr.cs" Link="GameTask/Common/BgiVision/BvOcr.cs" />

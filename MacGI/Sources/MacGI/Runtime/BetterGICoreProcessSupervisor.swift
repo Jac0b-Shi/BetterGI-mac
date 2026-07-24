@@ -79,6 +79,11 @@ struct BetterGIMacroSettings: Sendable, Equatable {
     let runaroundMouseXInterval: Int
     let runaroundInterval: Int
     let enhanceWaitDelay: Int
+    let oneKeyClaimRewardHotkeyMode: String
+    let oneKeyClaimRewardHotkeyModeOptions: [String]
+    let oneKeyClaimRewardHoldMode: String
+    let oneKeyClaimRewardScrollDownEnabled: Bool
+    let oneKeyClaimRewardScrollDownAmount: Int
     let pickUpOrInteractKey: KeyCode
     let jumpKey: KeyCode
 }
@@ -695,6 +700,12 @@ actor BetterGICoreProcessSupervisor {
                         settings.runaroundMouseXInterval,
                     "runaroundInterval": settings.runaroundInterval,
                     "enhanceWaitDelay": settings.enhanceWaitDelay,
+                    "oneKeyClaimRewardHotkeyMode":
+                        settings.oneKeyClaimRewardHotkeyMode,
+                    "oneKeyClaimRewardScrollDownEnabled":
+                        settings.oneKeyClaimRewardScrollDownEnabled,
+                    "oneKeyClaimRewardScrollDownAmount":
+                        settings.oneKeyClaimRewardScrollDownAmount,
                 ],
             ]))
     }
@@ -726,6 +737,16 @@ actor BetterGICoreProcessSupervisor {
                 result["runaroundMouseXInterval"] as? Int,
               let runaroundInterval = result["runaroundInterval"] as? Int,
               let enhanceWaitDelay = result["enhanceWaitDelay"] as? Int,
+              let oneKeyClaimRewardHotkeyMode =
+                result["oneKeyClaimRewardHotkeyMode"] as? String,
+              let oneKeyClaimRewardHotkeyModeOptions =
+                result["oneKeyClaimRewardHotkeyModeOptions"] as? [String],
+              let oneKeyClaimRewardHoldMode =
+                result["oneKeyClaimRewardHoldMode"] as? String,
+              let oneKeyClaimRewardScrollDownEnabled =
+                result["oneKeyClaimRewardScrollDownEnabled"] as? Bool,
+              let oneKeyClaimRewardScrollDownAmount =
+                result["oneKeyClaimRewardScrollDownAmount"] as? Int,
               let pickUpOrInteractVirtualKey =
                 result["pickUpOrInteractKeyCode"] as? Int,
               let jumpVirtualKey = result["jumpKeyCode"] as? Int,
@@ -744,6 +765,14 @@ actor BetterGICoreProcessSupervisor {
             runaroundMouseXInterval: runaroundMouseXInterval,
             runaroundInterval: runaroundInterval,
             enhanceWaitDelay: enhanceWaitDelay,
+            oneKeyClaimRewardHotkeyMode: oneKeyClaimRewardHotkeyMode,
+            oneKeyClaimRewardHotkeyModeOptions:
+                oneKeyClaimRewardHotkeyModeOptions,
+            oneKeyClaimRewardHoldMode: oneKeyClaimRewardHoldMode,
+            oneKeyClaimRewardScrollDownEnabled:
+                oneKeyClaimRewardScrollDownEnabled,
+            oneKeyClaimRewardScrollDownAmount:
+                oneKeyClaimRewardScrollDownAmount,
             pickUpOrInteractKey: pickUpOrInteractKey,
             jumpKey: jumpKey)
     }

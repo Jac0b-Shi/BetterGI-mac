@@ -1,4 +1,5 @@
 using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.GameTask.QuickClaimReward;
 using Newtonsoft.Json.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -35,6 +36,15 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
                     settings, "runaroundMouseXInterval"),
                 RequiredRunaroundInterval(settings, "runaroundInterval"),
                 RequiredEnhanceWaitDelay(settings, "enhanceWaitDelay"),
+                RequiredOneKeyClaimRewardMode(
+                    settings,
+                    "oneKeyClaimRewardHotkeyMode"),
+                RequiredBoolean(
+                    settings,
+                    "oneKeyClaimRewardScrollDownEnabled"),
+                RequiredOneKeyClaimRewardScrollAmount(
+                    settings,
+                    "oneKeyClaimRewardScrollDownAmount"),
                 current.PickUpOrInteractKeyCode,
                 current.JumpKeyCode);
             var macro = root["macroConfig"] as JsonObject ?? [];
@@ -48,6 +58,12 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
                 next.RunaroundMouseXInterval;
             macro["runaroundInterval"] = next.RunaroundInterval;
             macro["enhanceWaitDelay"] = next.EnhanceWaitDelay;
+            macro["oneKeyClaimRewardHotkeyMode"] =
+                next.OneKeyClaimRewardHotkeyMode;
+            macro["oneKeyClaimRewardScrollDownEnabled"] =
+                next.OneKeyClaimRewardScrollDownEnabled;
+            macro["oneKeyClaimRewardScrollDownAmount"] =
+                next.OneKeyClaimRewardScrollDownAmount;
             root["macroConfig"] = macro;
             SaveRoot(root);
         }
@@ -84,6 +100,18 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
         runaroundMouseXInterval = settings.RunaroundMouseXInterval,
         runaroundInterval = settings.RunaroundInterval,
         enhanceWaitDelay = settings.EnhanceWaitDelay,
+        oneKeyClaimRewardHotkeyMode =
+            settings.OneKeyClaimRewardHotkeyMode,
+        oneKeyClaimRewardHotkeyModeOptions = new[]
+        {
+            OneKeyClaimRewardTask.ClickOnceMode,
+            OneKeyClaimRewardTask.HoldMode,
+        },
+        oneKeyClaimRewardHoldMode = OneKeyClaimRewardTask.HoldMode,
+        oneKeyClaimRewardScrollDownEnabled =
+            settings.OneKeyClaimRewardScrollDownEnabled,
+        oneKeyClaimRewardScrollDownAmount =
+            settings.OneKeyClaimRewardScrollDownAmount,
         pickUpOrInteractKeyCode = settings.PickUpOrInteractKeyCode,
         jumpKeyCode = settings.JumpKeyCode
     };
@@ -100,6 +128,12 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
             macro?["runaroundMouseXInterval"]?.GetValue<int>() ?? 500,
             macro?["runaroundInterval"]?.GetValue<int>() ?? 10,
             macro?["enhanceWaitDelay"]?.GetValue<int>() ?? 0,
+            macro?["oneKeyClaimRewardHotkeyMode"]?.GetValue<string>()
+                ?? OneKeyClaimRewardTask.ClickOnceMode,
+            macro?["oneKeyClaimRewardScrollDownEnabled"]?.GetValue<bool>()
+                ?? false,
+            macro?["oneKeyClaimRewardScrollDownAmount"]?.GetValue<int>()
+                ?? 2,
             keyBindings?["pickUpOrInteract"]?.GetValue<int>() ?? 0x46,
             keyBindings?["jump"]?.GetValue<int>() ?? 0x20);
     }
@@ -169,6 +203,33 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
                 name, "Enhance wait delay must be between 0 and 1000 ms.");
     }
 
+    private static string RequiredOneKeyClaimRewardMode(
+        JObject settings,
+        string name)
+    {
+        var value = settings.Value<string>(name)
+            ?? throw new ArgumentException($"{name} is required.");
+        return value is OneKeyClaimRewardTask.ClickOnceMode
+            or OneKeyClaimRewardTask.HoldMode
+            ? value
+            : throw new ArgumentException(
+                $"Unsupported one-key claim reward mode: {value}",
+                name);
+    }
+
+    private static int RequiredOneKeyClaimRewardScrollAmount(
+        JObject settings,
+        string name)
+    {
+        var value = settings.Value<int?>(name)
+            ?? throw new ArgumentException($"{name} is required.");
+        return value is >= 1 and <= 1_000
+            ? value
+            : throw new ArgumentOutOfRangeException(
+                name,
+                "Scroll amount must be between 1 and 1000.");
+    }
+
 }
 
 public sealed record MacroSettingsSnapshot(
@@ -179,5 +240,8 @@ public sealed record MacroSettingsSnapshot(
     int RunaroundMouseXInterval,
     int RunaroundInterval,
     int EnhanceWaitDelay,
+    string OneKeyClaimRewardHotkeyMode,
+    bool OneKeyClaimRewardScrollDownEnabled,
+    int OneKeyClaimRewardScrollDownAmount,
     int PickUpOrInteractKeyCode,
     int JumpKeyCode);

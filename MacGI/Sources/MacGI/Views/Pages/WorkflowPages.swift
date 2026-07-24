@@ -778,6 +778,102 @@ struct MacroPage: View {
                     .foregroundStyle(BGIColors.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
+
+            BGIOriginalCard(
+                icon: .symbol("gift"),
+                title: "一键领取奖励",
+                subtitle: "识别当前页面的领取按钮或礼物图标并点击，需要配置快捷键进行触发"
+            ) {
+                EmptyView()
+            } content: {
+                VStack(spacing: 0) {
+                    BGISettingLine(
+                        title: "模式选择",
+                        subtitle: "点按一次会领取当前页面可见图标；按住持续会在松开快捷键时立即停止"
+                    ) {
+                        Picker(
+                            "",
+                            selection: Binding(
+                                get: {
+                                    appState.macroSettings?
+                                        .oneKeyClaimRewardHotkeyMode ?? ""
+                                },
+                                set: {
+                                    appState.saveMacroSettings(
+                                        oneKeyClaimRewardHotkeyMode: $0)
+                                })
+                        ) {
+                            ForEach(
+                                appState.macroSettings?
+                                    .oneKeyClaimRewardHotkeyModeOptions ?? [],
+                                id: \.self
+                            ) {
+                                Text($0).tag($0)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 170)
+                        .disabled(appState.macroSettings == nil)
+                    }
+
+                    Divider()
+
+                    BGISettingLine(
+                        title: "未找到领取图标时滚轮下滑",
+                        subtitle: "仅在按住持续模式下可用。"
+                    ) {
+                        Toggle(
+                            "",
+                            isOn: Binding(
+                                get: {
+                                    appState.macroSettings?
+                                        .oneKeyClaimRewardScrollDownEnabled
+                                        ?? false
+                                },
+                                set: {
+                                    appState.saveMacroSettings(
+                                        oneKeyClaimRewardScrollDownEnabled: $0)
+                                })
+                        )
+                        .labelsHidden()
+                        .disabled(
+                            appState.macroSettings == nil ||
+                            appState.macroSettings?
+                                .oneKeyClaimRewardHotkeyMode !=
+                                appState.macroSettings?
+                                    .oneKeyClaimRewardHoldMode)
+                    }
+
+                    Divider()
+
+                    BGISettingLine(
+                        title: "滚轮下滑幅度",
+                        subtitle: "数值越大，每次未找到领取图标时向下滚动越多"
+                    ) {
+                        Stepper(
+                            "\(appState.macroSettings?.oneKeyClaimRewardScrollDownAmount ?? 2)",
+                            value: Binding(
+                                get: {
+                                    appState.macroSettings?
+                                        .oneKeyClaimRewardScrollDownAmount ?? 2
+                                },
+                                set: {
+                                    appState.saveMacroSettings(
+                                        oneKeyClaimRewardScrollDownAmount: $0)
+                                }),
+                            in: 1...1000)
+                        .frame(width: 170)
+                        .disabled(
+                            appState.macroSettings == nil ||
+                            appState.macroSettings?
+                                .oneKeyClaimRewardHotkeyMode !=
+                                appState.macroSettings?
+                                    .oneKeyClaimRewardHoldMode ||
+                            appState.macroSettings?
+                                .oneKeyClaimRewardScrollDownEnabled != true)
+                    }
+                }
+            }
         }
     }
 }

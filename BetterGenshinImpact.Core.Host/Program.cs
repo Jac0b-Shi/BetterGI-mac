@@ -193,6 +193,16 @@ BetterGenshinImpact.GameTask.QuickBuy.QuickBuyRuntimePlatform.Configure(
         foregroundInputCoordinator,
         shutdown.Token,
         loggerFactory.CreateLogger<MacQuickBuyRuntimePlatform>()));
+BetterGenshinImpact.GameTask.QuickClaimReward
+    .OneKeyClaimRewardRuntimePlatform.Configure(
+        new MacOneKeyClaimRewardRuntimePlatform(
+            () => gameTaskManagerPlatform.SystemInfo,
+            server.MacroSettings,
+            taskControlPlatform,
+            foregroundInputCoordinator,
+            shutdown.Token,
+            loggerFactory.CreateLogger<
+                MacOneKeyClaimRewardRuntimePlatform>()));
 using var holdHotKeys = new HoldHotKeyCoordinator(
     shutdown.Token,
     loggerFactory.CreateLogger<HoldHotKeyCoordinator>(),
@@ -210,6 +220,9 @@ using var holdHotKeys = new HoldHotKeyCoordinator(
             BetterGenshinImpact.GameTask.Macro.QuickEnhanceArtifactMacro.Done,
         [HoldHotKeyCoordinator.QuickBuyHotKey] =
             taskControlPlatform.CreateQuickBuyAction(),
+        [HoldHotKeyCoordinator.OneKeyClaimRewardHotKey] =
+            BetterGenshinImpact.GameTask.QuickClaimReward
+                .OneKeyClaimRewardTask.Instance.RunHotKey,
     });
 server.AttachHoldHotKeyCoordinator(holdHotKeys);
 var autoFightRuntimePlatform = new MacAutoFightRuntimePlatform(

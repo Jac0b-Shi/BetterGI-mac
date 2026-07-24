@@ -134,6 +134,10 @@ public sealed class HotKeySettingsCatalog(RuntimeLayout layout)
             "QuickBuyHotkey", "操控辅助", "按下快速购买商店物品",
             "quickBuyHotkey", "macro.quickBuy",
             "core", true, true, DispatchOnRelease: true),
+        new(
+            "OneKeyClaimRewardHotkey", "操控辅助", "一键领取奖励",
+            "oneKeyClaimRewardHotkey", "macro.claimReward",
+            "core", true, true, DispatchOnRelease: true),
     ];
 
     public void AttachUpdated(Action<string, string> callback) =>

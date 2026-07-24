@@ -7,9 +7,11 @@ using BetterGenshinImpact.Core.Recorder.Model;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Macro;
 using BetterGenshinImpact.GameTask.QuickBuy;
+using BetterGenshinImpact.GameTask.QuickClaimReward;
 using BetterGenshinImpact.Service.Notification;
 using BetterGenshinImpact.Verification.Framework;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Newtonsoft.Json.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -41,7 +43,10 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                     "spaceFireInterval": 100,
                     "runaroundMouseXInterval": 240,
                     "runaroundInterval": 10,
-                    "enhanceWaitDelay": 37
+                    "enhanceWaitDelay": 37,
+                    "oneKeyClaimRewardHotkeyMode": "点按一次",
+                    "oneKeyClaimRewardScrollDownEnabled": false,
+                    "oneKeyClaimRewardScrollDownAmount": 2
                   },
                   "keyBindingsConfig": {
                     "moveForward": 71,
@@ -94,6 +99,10 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 runaroundMouseXInterval = 240,
                 runaroundInterval = 10,
                 enhanceWaitDelay = 37,
+                oneKeyClaimRewardHotkeyMode =
+                    OneKeyClaimRewardTask.HoldMode,
+                oneKeyClaimRewardScrollDownEnabled = true,
+                oneKeyClaimRewardScrollDownAmount = 23,
             }));
             var repeatedKeys = new List<int>();
             using (var auxiliaryControls = new AuxiliaryControlCoordinator(
@@ -173,6 +182,10 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 runaroundMouseXInterval = 0,
                 runaroundInterval = 10,
                 enhanceWaitDelay = 37,
+                oneKeyClaimRewardHotkeyMode =
+                    OneKeyClaimRewardTask.HoldMode,
+                oneKeyClaimRewardScrollDownEnabled = true,
+                oneKeyClaimRewardScrollDownAmount = 23,
             }));
             TurnAroundMacro.Done(cancellationToken);
             context.Require(
@@ -188,6 +201,10 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 runaroundMouseXInterval = 240,
                 runaroundInterval = 10,
                 enhanceWaitDelay = 37,
+                oneKeyClaimRewardHotkeyMode =
+                    OneKeyClaimRewardTask.HoldMode,
+                oneKeyClaimRewardScrollDownEnabled = true,
+                oneKeyClaimRewardScrollDownAmount = 23,
             }));
             var quickEnhancePlatform =
                 new RecordingQuickEnhanceArtifactRuntimePlatform(
@@ -260,6 +277,25 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                     "wait:200",
                 ]),
                 "Shared QuickBuyTask diverged from the upstream standard-shop sequence.");
+            var claimRewardPlatform =
+                new RecordingOneKeyClaimRewardRuntimePlatform(
+                    new OneKeyClaimRewardSettings(
+                        OneKeyClaimRewardTask.HoldMode,
+                        ScrollDownEnabled: true,
+                        ScrollDownAmount: 23));
+            OneKeyClaimRewardRuntimePlatform.Configure(claimRewardPlatform);
+            OneKeyClaimRewardTask.ScrollDown(
+                claimRewardPlatform,
+                configuredAmount: 23,
+                cancellationToken);
+            context.Require(
+                OneKeyClaimRewardTask.IsHoldMode(
+                    claimRewardPlatform.Settings) &&
+                OneKeyClaimRewardTask.CanScrollDown(
+                    claimRewardPlatform.Settings) &&
+                claimRewardPlatform.Scrolls.SequenceEqual([-10, -10, -3]),
+                "OneKeyClaimRewardTask drifted from the upstream hold-mode scroll chunking.");
+            claimRewardPlatform.IsInitialized = false;
             using (var dragCancellation =
                    CancellationTokenSource.CreateLinkedTokenSource(
                        cancellationToken))
@@ -285,6 +321,8 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                        {
                            [HoldHotKeyCoordinator.TurnAroundHotKey] =
                                TurnAroundMacro.Done,
+                           [HoldHotKeyCoordinator.OneKeyClaimRewardHotKey] =
+                               OneKeyClaimRewardTask.Instance.RunHotKey,
                        }))
             {
                 holdHotKeys.Start();
@@ -300,6 +338,13 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 }
                 var released = JObject.FromObject(holdHotKeys.HandleKeyEdge(
                     HoldHotKeyCoordinator.TurnAroundHotKey, false));
+                _ = holdHotKeys.HandleKeyEdge(
+                    HoldHotKeyCoordinator.OneKeyClaimRewardHotKey,
+                    true);
+                await Task.Delay(20, cancellationToken);
+                _ = holdHotKeys.HandleKeyEdge(
+                    HoldHotKeyCoordinator.OneKeyClaimRewardHotKey,
+                    false);
                 await Task.Delay(30, cancellationToken);
                 var moveCountAfterRelease = turnAroundPlatform.MoveCount;
                 await Task.Delay(30, cancellationToken);
@@ -310,6 +355,10 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                     moveCountAfterRelease > baselineMoveCount &&
                     turnAroundPlatform.MoveCount == moveCountAfterRelease,
                     "Turn-around hold hotkey did not preserve the upstream move, interval and release lifecycle.");
+                context.Require(
+                    claimRewardPlatform.NotStartedCount == 1 &&
+                    claimRewardPlatform.CaptureCount == 0,
+                    "One-key claim reward bypassed the runtime-start guard.");
             }
             var confirmCount = 0;
             var cancelCount = 0;
@@ -504,7 +553,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             }));
             var hotKeys = JArray.FromObject(hotKeyCatalog.List());
             context.Require(
-                hotKeys.Count == 25 &&
+                hotKeys.Count == 26 &&
                 hotKeys.Single(item =>
                     item.Value<string>("id") == "AutoPickEnabledHotkey")
                     .Value<string>("hotKey") == "F6" &&
@@ -544,6 +593,12 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 hotKeys.Single(item =>
                     item.Value<string>("id") == "QuickBuyHotkey")
                     .Value<bool>("dispatchOnRelease") &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "OneKeyClaimRewardHotkey")
+                    .Value<bool>("isHold") &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "OneKeyClaimRewardHotkey")
+                    .Value<bool>("dispatchOnRelease") &&
                 hotKeyUpdates.Contains(("QuickTeleportTickHotkey", "F6")) &&
                 hotKeyUpdates.Contains(("QuickTeleportTickHotkey", "")) &&
                 quickTeleportPlatform.TickHotkey == "",
@@ -575,6 +630,13 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 persisted["macroConfig"]?.Value<int>("runaroundMouseXInterval") == 240 &&
                 persisted["macroConfig"]?.Value<int>("runaroundInterval") == 10 &&
                 persisted["macroConfig"]?.Value<int>("enhanceWaitDelay") == 37 &&
+                persisted["macroConfig"]?.Value<string>(
+                    "oneKeyClaimRewardHotkeyMode") ==
+                    OneKeyClaimRewardTask.HoldMode &&
+                persisted["macroConfig"]?.Value<bool>(
+                    "oneKeyClaimRewardScrollDownEnabled") == true &&
+                persisted["macroConfig"]?.Value<int>(
+                    "oneKeyClaimRewardScrollDownAmount") == 23 &&
                 persisted["notificationConfig"]?.Value<bool>("jsNotificationEnabled") == true &&
                 persisted["notificationConfig"]?.Value<bool>("windowsUwpNotificationEnabled") == true &&
                 persisted["notificationConfig"]?.Value<string>("notificationEventSubscribe") ==
@@ -669,6 +731,12 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                         if (token.WaitHandle.WaitOne(5))
                             token.ThrowIfCancellationRequested();
                     },
+                [HoldHotKeyCoordinator.OneKeyClaimRewardHotKey] =
+                    token =>
+                    {
+                        if (token.WaitHandle.WaitOne(5))
+                            token.ThrowIfCancellationRequested();
+                    },
             });
         server.AttachHoldHotKeyCoordinator(holdHotKeys);
         holdHotKeys.Start();
@@ -698,6 +766,10 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                         runaroundMouseXInterval = 260,
                         runaroundInterval = 12,
                         enhanceWaitDelay = 45,
+                        oneKeyClaimRewardHotkeyMode =
+                            OneKeyClaimRewardTask.HoldMode,
+                        oneKeyClaimRewardScrollDownEnabled = true,
+                        oneKeyClaimRewardScrollDownAmount = 17,
                     }
                 }), cancellationToken);
             var macroResult = JObject.FromObject(macroSave.Result!);
@@ -708,6 +780,24 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 macroResult.Value<int>("runaroundMouseXInterval") == 260 &&
                 macroResult.Value<int>("runaroundInterval") == 12 &&
                 macroResult.Value<int>("enhanceWaitDelay") == 45 &&
+                macroResult.Value<string>(
+                    "oneKeyClaimRewardHotkeyMode") ==
+                    OneKeyClaimRewardTask.HoldMode &&
+                macroResult.Value<string>(
+                    "oneKeyClaimRewardHoldMode") ==
+                    OneKeyClaimRewardTask.HoldMode &&
+                ((JArray)macroResult[
+                    "oneKeyClaimRewardHotkeyModeOptions"]!)
+                    .Values<string>()
+                    .SequenceEqual(
+                    [
+                        OneKeyClaimRewardTask.ClickOnceMode,
+                        OneKeyClaimRewardTask.HoldMode,
+                    ]) &&
+                macroResult.Value<bool>(
+                    "oneKeyClaimRewardScrollDownEnabled") &&
+                macroResult.Value<int>(
+                    "oneKeyClaimRewardScrollDownAmount") == 17 &&
                 macroResult.Value<int>("pickUpOrInteractKeyCode") == 71 &&
                 macroResult.Value<int>("jumpKeyCode") == 74,
                 macroSave.Error?.Message ?? "macro.settings.save returned an invalid result.");
@@ -814,6 +904,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                      {
                          HoldHotKeyCoordinator.ConfirmButtonHotKey,
                          HoldHotKeyCoordinator.CancelButtonHotKey,
+                         HoldHotKeyCoordinator.OneKeyClaimRewardHotKey,
                      })
             {
                 var down = await ExchangeAsync(
@@ -1115,5 +1206,48 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
 
         public void LogWarning(Exception exception) =>
             Operations.Add($"warning:{exception.GetType().Name}");
+    }
+
+    private sealed class RecordingOneKeyClaimRewardRuntimePlatform(
+        OneKeyClaimRewardSettings settings)
+        : IOneKeyClaimRewardRuntimePlatform
+    {
+        public bool IsInitialized { get; set; } = true;
+        public bool IsGameProcessActive => true;
+        public OneKeyClaimRewardSettings Settings { get; } = settings;
+        public ILogger Logger { get; } =
+            NullLogger<RecordingOneKeyClaimRewardRuntimePlatform>.Instance;
+        public int NotStartedCount { get; private set; }
+        public int CaptureCount { get; private set; }
+        public List<int> Scrolls { get; } = [];
+
+        public void NotifyNotStarted() => NotStartedCount++;
+
+        public BetterGenshinImpact.GameTask.Model.Area.ImageRegion Capture(
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CaptureCount++;
+            throw new InvalidOperationException(
+                "The not-started contract must not capture.");
+        }
+
+        public void Click(
+            BetterGenshinImpact.GameTask.Model.Area.Region region,
+            CancellationToken cancellationToken) =>
+            throw new InvalidOperationException(
+                "The not-started contract must not click.");
+
+        public void PressEscape(CancellationToken cancellationToken) =>
+            throw new InvalidOperationException(
+                "The not-started contract must not press Escape.");
+
+        public void VerticalScroll(
+            int clicks,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Scrolls.Add(clicks);
+        }
     }
 }

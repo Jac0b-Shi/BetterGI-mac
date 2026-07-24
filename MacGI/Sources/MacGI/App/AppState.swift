@@ -1240,7 +1240,10 @@ final class AppState: ObservableObject {
         spaceInterval: Int? = nil,
         runaroundMouseXInterval: Int? = nil,
         runaroundInterval: Int? = nil,
-        enhanceWaitDelay: Int? = nil
+        enhanceWaitDelay: Int? = nil,
+        oneKeyClaimRewardHotkeyMode: String? = nil,
+        oneKeyClaimRewardScrollDownEnabled: Bool? = nil,
+        oneKeyClaimRewardScrollDownAmount: Int? = nil
     ) {
         guard let supervisor = betterGICoreSupervisor, let current = macroSettings else {
             addLog(.error, "辅助操控设置保存失败：BetterGI Core 尚未就绪。")
@@ -1259,6 +1262,19 @@ final class AppState: ObservableObject {
                 runaroundInterval ?? current.runaroundInterval,
             enhanceWaitDelay:
                 enhanceWaitDelay ?? current.enhanceWaitDelay,
+            oneKeyClaimRewardHotkeyMode:
+                oneKeyClaimRewardHotkeyMode
+                    ?? current.oneKeyClaimRewardHotkeyMode,
+            oneKeyClaimRewardHotkeyModeOptions:
+                current.oneKeyClaimRewardHotkeyModeOptions,
+            oneKeyClaimRewardHoldMode:
+                current.oneKeyClaimRewardHoldMode,
+            oneKeyClaimRewardScrollDownEnabled:
+                oneKeyClaimRewardScrollDownEnabled
+                    ?? current.oneKeyClaimRewardScrollDownEnabled,
+            oneKeyClaimRewardScrollDownAmount:
+                oneKeyClaimRewardScrollDownAmount
+                    ?? current.oneKeyClaimRewardScrollDownAmount,
             pickUpOrInteractKey: current.pickUpOrInteractKey,
             jumpKey: current.jumpKey)
         macroSettingsSaveRevision += 1
