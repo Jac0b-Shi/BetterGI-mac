@@ -66,6 +66,15 @@ rg -Fq '"takeScreenshotHotkey", "capture.screenshot", "core"' \
   && rg -Fq 'new GameScreenshotTask(' \
     BetterGenshinImpact/GameTask/TaskTriggerDispatcher.cs \
   || fail "game screenshot hotkey is not composed through the shared Core task"
+rg -Fq '"pathRecorderHotkey", "pathRecorder.toggle", "core"' \
+  BetterGenshinImpact.Core.Host/Runtime/HotKeySettingsCatalog.cs \
+  && rg -Fq '"addWaypointHotkey", "pathRecorder.addWaypoint", "core"' \
+    BetterGenshinImpact.Core.Host/Runtime/HotKeySettingsCatalog.cs \
+  && rg -Fq 'new PathRecorderTask(' \
+    BetterGenshinImpact.Core.Host/Program.cs \
+  && rg -Fq 'new WindowsRuntimePlatform(this)' \
+    BetterGenshinImpact/GameTask/AutoPathing/PathRecorder.cs \
+  || fail "path recorder hotkeys are not composed through the shared Core task"
 rg -q 'AddHostObject\("dispatcher", new Dispatcher' \
   BetterGenshinImpact.Core.Host/Runtime/MacScriptProjectHostInitializer.cs \
   || fail "ClearScript dispatcher host is not registered"

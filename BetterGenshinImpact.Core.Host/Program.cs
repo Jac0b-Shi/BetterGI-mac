@@ -337,6 +337,11 @@ PathExecutorAutoSkipPlatform.Configure(new PathExecutorAutoSkipSessionFactory())
 server.AttachPathExecutorPlatform(pathExecutorPlatform);
 NavigationPlatform.Configure(new MacNavigationPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token));
+server.AttachPathRecorder(new PathRecorderTask(
+    new MacPathRecorderRuntimePlatform(
+        layout,
+        loggerFactory.CreateLogger<PathRecorderTask>()),
+    new NavigationPathRecorderPositionProvider()));
 var quickTeleportRuntimePlatform = new MacQuickTeleportRuntimePlatform(
     layout, server.PlatformCallbacks, sessionToken, shutdown.Token);
 QuickTeleportRuntimePlatform.Configure(quickTeleportRuntimePlatform);

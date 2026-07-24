@@ -113,8 +113,14 @@ public sealed class HotKeySettingsCatalog(RuntimeLayout layout)
             "AutoCookGameHotkey", "独立任务", "启动/停止自动烹饪",
             "autoCookGameHotkey", "solo.toggle:AutoCook", "core", false, true),
         new(
-            "KeyMouseMacroRecordHotkey", "操控辅助", "启动/停止键鼠录制",
+            "KeyMouseMacroRecordHotkey", "开发者", "启动/停止键鼠录制",
             "keyMouseMacroRecordHotkey", "recording.toggle", "swift", false, true),
+        new(
+            "PathRecorderHotkey", "开发者", "启动/停止路径记录器",
+            "pathRecorderHotkey", "pathRecorder.toggle", "core", false, true),
+        new(
+            "AddWaypointHotkey", "开发者", "添加路径点",
+            "addWaypointHotkey", "pathRecorder.addWaypoint", "core", false, true),
         new(
             "TurnAroundHotkey", "操控辅助", "长按旋转视角 - 那维莱特转圈",
             "turnAroundHotkey", "macro.turnAround", "core", true, true,

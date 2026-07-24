@@ -8,6 +8,7 @@ using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.AutoFight;
+using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.GameLoading;
 using BetterGenshinImpact.GameTask.MapMask;
 
@@ -49,6 +50,7 @@ public sealed class CoreRpcServer(
     private HoldHotKeyCoordinator? _holdHotKeys;
     private OneShotHotKeyCoordinator? _oneShotHotKeys;
     private IGameScreenshotAction? _gameScreenshotAction;
+    private IPathRecorderAction? _pathRecorder;
     private int _platformAssetsInitialized;
     private readonly SemaphoreSlim _runtimeMutationLock = new(1, 1);
     public PlatformCallbackChannel PlatformCallbacks => _platformCallbacks;
@@ -159,6 +161,17 @@ public sealed class CoreRpcServer(
         {
             throw new InvalidOperationException(
                 "Game screenshot action has already been attached.");
+        }
+    }
+
+    public void AttachPathRecorder(IPathRecorderAction recorder)
+    {
+        ArgumentNullException.ThrowIfNull(recorder);
+        if (Interlocked.CompareExchange(
+                ref _pathRecorder, recorder, null) is not null)
+        {
+            throw new InvalidOperationException(
+                "Path recorder has already been attached.");
         }
     }
 
@@ -777,6 +790,10 @@ public sealed class CoreRpcServer(
                 .TakeScreenshot(cancellationToken);
             return new { id, state = "saved", path };
         }
+        if (descriptor.Action == "pathRecorder.toggle")
+            return RequiredPathRecorder().Toggle();
+        if (descriptor.Action == "pathRecorder.addWaypoint")
+            return RequiredPathRecorder().AddWaypoint();
         if (descriptor.Action == "trigger.toggleHangout")
             return _triggerSettings.ToggleAutoHangoutEventEnabled();
         if (descriptor.Action.StartsWith("trigger.toggle:", StringComparison.Ordinal))
@@ -808,6 +825,11 @@ public sealed class CoreRpcServer(
         _gameScreenshotAction
         ?? throw new CapabilityUnavailableException(
             "Game screenshot action is unavailable until Core composition completes.");
+
+    private IPathRecorderAction RequiredPathRecorder() =>
+        _pathRecorder
+        ?? throw new CapabilityUnavailableException(
+            "Path recorder is unavailable until Core composition completes.");
 
     private static string RequiredString(JObject? parameters, string name) =>
         parameters?.Value<string>(name) is { Length: > 0 } value

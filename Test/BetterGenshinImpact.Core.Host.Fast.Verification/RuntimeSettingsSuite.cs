@@ -6,6 +6,7 @@ using BetterGenshinImpact.Core.Recorder;
 using BetterGenshinImpact.Core.Recorder.Model;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.AutoFight;
+using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.Macro;
 using BetterGenshinImpact.GameTask.QuickBuy;
 using BetterGenshinImpact.GameTask.QuickClaimReward;
@@ -738,10 +739,16 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             }));
             var hotKeys = JArray.FromObject(hotKeyCatalog.List());
             context.Require(
-                hotKeys.Count == 29 &&
+                hotKeys.Count == 31 &&
                 hotKeys.Single(item =>
                     item.Value<string>("id") == "TakeScreenshotHotkey")
                     .Value<string>("action") == "capture.screenshot" &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "PathRecorderHotkey")
+                    .Value<string>("action") == "pathRecorder.toggle" &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "AddWaypointHotkey")
+                    .Value<string>("action") == "pathRecorder.addWaypoint" &&
                 hotKeys.Single(item =>
                     item.Value<string>("id") == "AutoPickEnabledHotkey")
                     .Value<string>("hotKey") == "F6" &&
@@ -920,6 +927,8 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             layout.LogPath, "screenshot", "verification.png");
         var screenshotAction = new RecordingGameScreenshotAction(screenshotPath);
         server.AttachGameScreenshotAction(screenshotAction);
+        var pathRecorder = new RecordingPathRecorderAction();
+        server.AttachPathRecorder(pathRecorder);
         using var auxiliaryControls = new AuxiliaryControlCoordinator(
             server.MacroSettings,
             (_, token) => token.ThrowIfCancellationRequested(),
@@ -1118,6 +1127,13 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 hotKeyListResult.Any(item =>
                     item.Value<string>("id") == "TakeScreenshotHotkey" &&
                     item.Value<string>("action") == "capture.screenshot" &&
+                    item.Value<string>("executionOwner") == "core") &&
+                hotKeyListResult.Any(item =>
+                    item.Value<string>("id") == "PathRecorderHotkey" &&
+                    item.Value<string>("category") == "开发者" &&
+                    item.Value<string>("executionOwner") == "core") &&
+                hotKeyListResult.Any(item =>
+                    item.Value<string>("id") == "AddWaypointHotkey" &&
                     item.Value<string>("executionOwner") == "core"),
                 hotKeyList.Error?.Message ??
                     "hotKey.settings.list did not return the persisted upstream binding.");
@@ -1234,6 +1250,41 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 File.Exists(screenshotPath),
                 screenshot.Error?.Message ??
                     "hotKey.invoke did not execute the Core-owned screenshot action.");
+
+            var pathStart = await ExchangeAsync(
+                connection, "hotkey-path-start", "hotKey.invoke",
+                sessionToken, JObject.FromObject(new
+                {
+                    id = "PathRecorderHotkey",
+                }), cancellationToken);
+            var pathAdd = await ExchangeAsync(
+                connection, "hotkey-path-add", "hotKey.invoke",
+                sessionToken, JObject.FromObject(new
+                {
+                    id = "AddWaypointHotkey",
+                }), cancellationToken);
+            var pathSave = await ExchangeAsync(
+                connection, "hotkey-path-save", "hotKey.invoke",
+                sessionToken, JObject.FromObject(new
+                {
+                    id = "PathRecorderHotkey",
+                }), cancellationToken);
+            context.Require(
+                pathStart.Error is null &&
+                JObject.FromObject(pathStart.Result!)
+                    .Value<string>("state") == "recording" &&
+                pathAdd.Error is null &&
+                JObject.FromObject(pathAdd.Result!)
+                    .Value<string>("state") == "waypointAdded" &&
+                pathSave.Error is null &&
+                JObject.FromObject(pathSave.Result!)
+                    .Value<string>("state") == "saved" &&
+                pathRecorder.ToggleCount == 2 &&
+                pathRecorder.AddCount == 1,
+                pathStart.Error?.Message ??
+                    pathAdd.Error?.Message ??
+                    pathSave.Error?.Message ??
+                    "hotKey.invoke did not route path recorder actions through Core.");
 
             var saveRecording = await ExchangeAsync(
                 connection, "recording-save", "keyMouse.saveRecording", sessionToken,
@@ -1629,6 +1680,27 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                     "Screenshot verification path omitted its directory."));
             File.WriteAllText(path, "screenshot");
             return path;
+        }
+    }
+
+    private sealed class RecordingPathRecorderAction : IPathRecorderAction
+    {
+        public int ToggleCount { get; private set; }
+        public int AddCount { get; private set; }
+
+        public PathRecorderResult Toggle()
+        {
+            ToggleCount++;
+            return new PathRecorderResult(
+                ToggleCount == 1 ? "recording" : "saved",
+                ToggleCount == 1 ? 1 : 2,
+                ToggleCount == 1 ? null : "verification.json");
+        }
+
+        public PathRecorderResult AddWaypoint(string waypointType = "")
+        {
+            AddCount++;
+            return new PathRecorderResult("waypointAdded", 2);
         }
     }
 }

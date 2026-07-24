@@ -12,6 +12,7 @@ return await VerificationRunner.RunAsync(args,
     new RuntimeSettingsSuite(),
     new SchedulerStatusSuite(),
     new GameScreenshotSuite(),
+    new PathRecorderSuite(),
     new HtmlMaskContractSuite(),
     new CaptureRingContractSuite(),
 ]);

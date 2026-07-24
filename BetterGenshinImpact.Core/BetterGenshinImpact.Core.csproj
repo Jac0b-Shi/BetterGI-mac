@@ -74,6 +74,7 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoTrackPath/TpTaskParam.cs" Link="GameTask/AutoTrackPath/TpTaskParam.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoTrackPath/TpTaskRuntimePlatform.cs" Link="GameTask/AutoTrackPath/TpTaskRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoPathing/PathExecutor.cs" Link="GameTask/AutoPathing/PathExecutor.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoPathing/PathRecorderTask.cs" Link="GameTask/AutoPathing/PathRecorderTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoPathing/SkillBoostHelper.cs" Link="GameTask/AutoPathing/SkillBoostHelper.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/CombatScenes.cs" Link="GameTask/AutoFight/Model/CombatScenes.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/AutoFightParam.cs" Link="GameTask/AutoFight/AutoFightParam.cs" />
