@@ -13,6 +13,7 @@ public sealed class HoldHotKeyCoordinator(
     public const string ConfirmButtonHotKey = "ClickGenshinConfirmButtonHotkey";
     public const string CancelButtonHotKey = "ClickGenshinCancelButtonHotkey";
     public const string QuickEnhanceHotKey = "EnhanceArtifactHotkey";
+    public const string QuickBuyHotKey = "QuickBuyHotkey";
 
     private readonly object _lock = new();
     private readonly IReadOnlyDictionary<string, Action<CancellationToken>> _actions =

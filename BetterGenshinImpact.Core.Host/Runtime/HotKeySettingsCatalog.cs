@@ -130,6 +130,10 @@ public sealed class HotKeySettingsCatalog(RuntimeLayout layout)
             "EnhanceArtifactHotkey", "操控辅助", "按下快速强化圣遗物",
             "enhanceArtifactHotkey", "macro.artifact.enhance",
             "core", true, true, DispatchOnRelease: true),
+        new(
+            "QuickBuyHotkey", "操控辅助", "按下快速购买商店物品",
+            "quickBuyHotkey", "macro.quickBuy",
+            "core", true, true, DispatchOnRelease: true),
     ];
 
     public void AttachUpdated(Action<string, string> callback) =>

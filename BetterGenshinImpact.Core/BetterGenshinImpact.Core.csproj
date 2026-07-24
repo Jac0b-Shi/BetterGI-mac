@@ -45,6 +45,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="BetterGenshinImpact.Core.Verification" />
+    <InternalsVisibleTo Include="BetterGenshinImpact.Core.Host.Fast.Verification" />
   </ItemGroup>
 
   <!-- ==================== LINKED: upstream business logic ==================== -->
@@ -121,6 +122,8 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Macro/DialogButtonClickMacro.cs" Link="GameTask/Macro/DialogButtonClickMacro.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Macro/QuickEnhanceArtifactMacro.cs" Link="GameTask/Macro/QuickEnhanceArtifactMacro.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Macro/QuickEnhanceArtifactRuntimePlatform.cs" Link="GameTask/Macro/QuickEnhanceArtifactRuntimePlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/QuickBuy/QuickBuyTask.cs" Link="GameTask/QuickBuy/QuickBuyTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/QuickBuy/QuickBuyRuntimePlatform.cs" Link="GameTask/QuickBuy/QuickBuyRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvChatUi.cs" Link="GameTask/Common/BgiVision/BvChatUi.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvImage.cs" Link="GameTask/Common/BgiVision/BvImage.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvOcr.cs" Link="GameTask/Common/BgiVision/BvOcr.cs" />

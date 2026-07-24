@@ -247,6 +247,8 @@ public partial class App : Application
             new Core.Runtime.Windows.WindowsTurnAroundRuntimePlatform());
         GameTask.Macro.QuickEnhanceArtifactRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsQuickEnhanceArtifactRuntimePlatform());
+        GameTask.QuickBuy.QuickBuyRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsQuickBuyRuntimePlatform());
         GameTask.AutoEat.AutoEatRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsAutoEatRuntimePlatform());
         GameTask.GameLoading.GameLoadingRuntimePlatform.Configure(

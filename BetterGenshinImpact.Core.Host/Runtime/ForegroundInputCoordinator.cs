@@ -80,7 +80,8 @@ public sealed class ForegroundInputCoordinator(
             .GetAwaiter().GetResult() as JObject
         ?? throw new InvalidDataException("window.metrics did not return an object.");
 
-    private bool IsGameFocused(CancellationToken cancellationToken) => focusProbe?.Invoke()
+    public bool IsGameFocused(CancellationToken cancellationToken = default) =>
+        focusProbe?.Invoke()
         ?? Metrics(cancellationToken).Value<bool?>("isActive")
         ?? throw new InvalidDataException("window.metrics did not return isActive.");
 

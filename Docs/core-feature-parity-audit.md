@@ -109,8 +109,9 @@ notifier implementations are extracted.
 ### Auxiliary controls
 
 The production page exposes the two upstream hold-continuation controls, the
-Neuvillette turn-around macro, quick artifact enhancement and the upstream
-confirm/cancel button hold actions. Core reads and writes `macroConfig`,
+Neuvillette turn-around macro, quick artifact enhancement, quick shop purchase
+and the upstream confirm/cancel button hold actions. Core reads and writes
+`macroConfig`,
 supplies the configured `KeyBindingsConfig` pickup and jump virtual keys, and
 owns the 200/300 ms thresholds, repeat intervals, turn distance and turn
 interval. The shared `TurnAroundMacro` owns the zero-distance normalization,
@@ -121,7 +122,10 @@ and reads `EnhanceWaitDelay` from the same Core-owned config on both
 platforms. The shared `DialogButtonClickMacro`
 preserves the upstream black, white and co-op button recognition order; macOS
 reads the current shared-memory frame and routes the recognized click through
-the cancellable foreground input gate.
+the cancellable foreground input gate. The shared `QuickBuyTask` owns the
+Serenitea Pot template branch, ordinary-shop branch and both drag/click
+sequences; macOS supplies only shared-memory capture, focus-safe mouse input
+and overlay cleanup.
 
 AppKit observes physical key state only while the game is frontmost. Hold
 hotkeys forward both press and release edges, and release remains deliverable
@@ -151,8 +155,8 @@ live-updated key through the existing physical key-state callback, matching the
 upstream trigger contract.
 
 Only upstream entries whose action has a complete production path are exposed.
-Screenshot, one-key combat/reward, quick-buy, Serenitea Pot and path-recorder
-hotkeys remain absent until those shared actions are extracted.
+Screenshot, one-key combat/reward, Serenitea Pot and path-recorder hotkeys
+remain absent until those shared actions are extracted.
 
 ## Verification tiers
 

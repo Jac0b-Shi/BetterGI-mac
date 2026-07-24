@@ -84,6 +84,23 @@ rg -q 'QuickEnhanceArtifactRuntimePlatform.Configure' \
   && rg -q '"enhanceWaitDelay": settings.enhanceWaitDelay' \
     MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \
   || fail "quick-enhance macro or its persisted delay is not composed end to end"
+rg -q 'QuickBuyRuntimePlatform.Configure' \
+  BetterGenshinImpact.Core.Host/Program.cs \
+  && rg -q 'new Core.Runtime.Windows.WindowsQuickBuyRuntimePlatform' \
+    BetterGenshinImpact/App.xaml.cs \
+  && rg -q 'CreateQuickBuyAction' \
+    BetterGenshinImpact.Core.Host/Program.cs \
+  && rg -qx 'QuickBuy' MacGI/Resources/game-task-assets.manifest \
+  || fail "shared quick-buy recognition and hotkey action are not composed end to end"
+if rg -n '\b(TaskContext|Simulation\.SendInput|SystemControl|Toast|VisionContext)\b' \
+  BetterGenshinImpact/GameTask/QuickBuy/QuickBuyTask.cs; then
+  fail "shared QuickBuyTask still owns Windows runtime dependencies"
+fi
+rg -q 'Shared QuickBuyTask diverged from the upstream Serenitea Pot sequence' \
+  Test/BetterGenshinImpact.Core.Host.Fast.Verification/RuntimeSettingsSuite.cs \
+  && rg -q 'QuickBuyTask cancellation left the synthetic mouse button pressed' \
+    Test/BetterGenshinImpact.Core.Host.Fast.Verification/RuntimeSettingsSuite.cs \
+  || fail "quick-buy interaction and cancellation contracts are not verified"
 rg -Fq 'DialogButtonClickMacro.Done(DialogButtonType.Confirm)' \
   BetterGenshinImpact/ViewModel/Pages/HotKeyPageViewModel.cs \
   && rg -q 'CreateDialogButtonAction' \

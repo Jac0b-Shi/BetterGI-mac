@@ -186,6 +186,13 @@ BetterGenshinImpact.GameTask.Macro.QuickEnhanceArtifactRuntimePlatform.Configure
         foregroundInputCoordinator,
         shutdown.Token,
         loggerFactory.CreateLogger<MacQuickEnhanceArtifactRuntimePlatform>()));
+BetterGenshinImpact.GameTask.QuickBuy.QuickBuyRuntimePlatform.Configure(
+    new MacQuickBuyRuntimePlatform(
+        () => gameTaskManagerPlatform.SystemInfo,
+        taskControlPlatform,
+        foregroundInputCoordinator,
+        shutdown.Token,
+        loggerFactory.CreateLogger<MacQuickBuyRuntimePlatform>()));
 using var holdHotKeys = new HoldHotKeyCoordinator(
     shutdown.Token,
     loggerFactory.CreateLogger<HoldHotKeyCoordinator>(),
@@ -201,6 +208,8 @@ using var holdHotKeys = new HoldHotKeyCoordinator(
                 BetterGenshinImpact.GameTask.Macro.DialogButtonType.Cancel),
         [HoldHotKeyCoordinator.QuickEnhanceHotKey] =
             BetterGenshinImpact.GameTask.Macro.QuickEnhanceArtifactMacro.Done,
+        [HoldHotKeyCoordinator.QuickBuyHotKey] =
+            taskControlPlatform.CreateQuickBuyAction(),
     });
 server.AttachHoldHotKeyCoordinator(holdHotKeys);
 var autoFightRuntimePlatform = new MacAutoFightRuntimePlatform(

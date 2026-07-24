@@ -3,6 +3,7 @@ using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Macro;
 using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.GameTask.QuickBuy;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System.Runtime.Versioning;
@@ -79,6 +80,15 @@ public sealed class MacTaskControlPlatform(
             cancellationToken,
             () => DialogButtonClickMacro.Done(
                 buttonType, cancellationToken));
+
+    public Action<CancellationToken> CreateQuickBuyAction() =>
+        cancellationToken => WithCancellation(
+            cancellationToken,
+            () =>
+            {
+                QuickBuyTask.Done(cancellationToken);
+                return true;
+            });
 
     private T WithCancellation<T>(
         CancellationToken operationCancellation,

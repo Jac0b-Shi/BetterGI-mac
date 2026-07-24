@@ -6,6 +6,7 @@ using BetterGenshinImpact.Core.Recorder;
 using BetterGenshinImpact.Core.Recorder.Model;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Macro;
+using BetterGenshinImpact.GameTask.QuickBuy;
 using BetterGenshinImpact.Service.Notification;
 using BetterGenshinImpact.Verification.Framework;
 using Microsoft.Extensions.Logging;
@@ -214,6 +215,68 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                     "move:1760,770",
                 ]),
                 "Shared QuickEnhanceArtifactMacro diverged from the upstream click and delay sequence.");
+            var sereniteaQuickBuy = new RecordingQuickBuyRuntimePlatform();
+            QuickBuyTask.Execute(
+                sereniteaQuickBuy,
+                isSereniteaPot: true,
+                cancellationToken);
+            context.Require(
+                sereniteaQuickBuy.Operations.SequenceEqual(
+                [
+                    "move:1450,690",
+                    "wait:100",
+                    "down",
+                    "wait:50",
+                    "moveBy:1000,0",
+                    "wait:200",
+                    "up",
+                    "wait:200",
+                    "click:1600,1020",
+                    "wait:200",
+                    "click:960,850",
+                ]),
+                "Shared QuickBuyTask diverged from the upstream Serenitea Pot sequence.");
+            var standardQuickBuy = new RecordingQuickBuyRuntimePlatform();
+            QuickBuyTask.Execute(
+                standardQuickBuy,
+                isSereniteaPot: false,
+                cancellationToken);
+            context.Require(
+                standardQuickBuy.Operations.SequenceEqual(
+                [
+                    "bottomRight:225,60",
+                    "wait:100",
+                    "move:742,601",
+                    "wait:100",
+                    "down",
+                    "wait:50",
+                    "moveBy:1000,0",
+                    "wait:200",
+                    "up",
+                    "wait:100",
+                    "click:1100,780",
+                    "wait:200",
+                    "bottomRight:225,60",
+                    "wait:200",
+                ]),
+                "Shared QuickBuyTask diverged from the upstream standard-shop sequence.");
+            using (var dragCancellation =
+                   CancellationTokenSource.CreateLinkedTokenSource(
+                       cancellationToken))
+            {
+                var cancelledQuickBuy =
+                    new RecordingQuickBuyRuntimePlatform(
+                        cancelOnWait: 50,
+                        dragCancellation);
+                context.Require(
+                    Throws<OperationCanceledException>(() =>
+                        QuickBuyTask.Execute(
+                            cancelledQuickBuy,
+                            isSereniteaPot: false,
+                            dragCancellation.Token)) &&
+                    cancelledQuickBuy.Operations.LastOrDefault() == "up",
+                    "QuickBuyTask cancellation left the synthetic mouse button pressed.");
+            }
             using (var holdHotKeys = new HoldHotKeyCoordinator(
                        cancellationToken,
                        loggerFactory.CreateLogger<HoldHotKeyCoordinator>(),
@@ -441,7 +504,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             }));
             var hotKeys = JArray.FromObject(hotKeyCatalog.List());
             context.Require(
-                hotKeys.Count == 24 &&
+                hotKeys.Count == 25 &&
                 hotKeys.Single(item =>
                     item.Value<string>("id") == "AutoPickEnabledHotkey")
                     .Value<string>("hotKey") == "F6" &&
@@ -474,6 +537,12 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                     .Value<bool>("isHold") &&
                 hotKeys.Single(item =>
                     item.Value<string>("id") == "EnhanceArtifactHotkey")
+                    .Value<bool>("dispatchOnRelease") &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "QuickBuyHotkey")
+                    .Value<bool>("isHold") &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "QuickBuyHotkey")
                     .Value<bool>("dispatchOnRelease") &&
                 hotKeyUpdates.Contains(("QuickTeleportTickHotkey", "F6")) &&
                 hotKeyUpdates.Contains(("QuickTeleportTickHotkey", "")) &&
@@ -972,5 +1041,79 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             cancellationToken.ThrowIfCancellationRequested();
             Operations.Add($"wait:{milliseconds}");
         }
+    }
+
+    private sealed class RecordingQuickBuyRuntimePlatform(
+        int? cancelOnWait = null,
+        CancellationTokenSource? cancellation = null)
+        : IQuickBuyRuntimePlatform
+    {
+        public bool IsInitialized => true;
+        public bool IsGameProcessActive => true;
+        public List<string> Operations { get; } = [];
+
+        public void NotifyNotStarted() =>
+            throw new InvalidOperationException("Unexpected not-started notification.");
+
+        public BetterGenshinImpact.GameTask.Model.Area.ImageRegion Capture() =>
+            throw new InvalidOperationException("Sequence verification does not capture.");
+
+        public void MoveGame1080P(
+            double x,
+            double y,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Operations.Add($"move:{x:0},{y:0}");
+        }
+
+        public void ClickGame1080P(
+            double x,
+            double y,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Operations.Add($"click:{x:0},{y:0}");
+        }
+
+        public void ClickFromBottomRight1080P(
+            double x,
+            double y,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Operations.Add($"bottomRight:{x:0},{y:0}");
+        }
+
+        public void MoveMouseBy(
+            int x,
+            int y,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Operations.Add($"moveBy:{x},{y}");
+        }
+
+        public void LeftButtonDown(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Operations.Add("down");
+        }
+
+        public void LeftButtonUp(CancellationToken cancellationToken) =>
+            Operations.Add("up");
+
+        public void Wait(int milliseconds, CancellationToken cancellationToken)
+        {
+            Operations.Add($"wait:{milliseconds}");
+            if (cancelOnWait == milliseconds && cancellation is not null)
+                cancellation.Cancel();
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
+        public void ClearOverlay() => Operations.Add("clear");
+
+        public void LogWarning(Exception exception) =>
+            Operations.Add($"warning:{exception.GetType().Name}");
     }
 }

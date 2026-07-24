@@ -765,6 +765,19 @@ struct MacroPage: View {
                     .disabled(appState.macroSettings == nil)
                 }
             }
+
+            BGIOriginalCard(
+                icon: .symbol("cart"),
+                title: "快速购买",
+                subtitle: "在物品购买或兑换页使用，从选中物品处开始，按住快捷键持续购买。"
+            ) {
+                EmptyView()
+            } content: {
+                Text("请在快捷键设置中绑定“按下快速购买商店物品”。")
+                    .font(BGIFonts.body)
+                    .foregroundStyle(BGIColors.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }
