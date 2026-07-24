@@ -1,6 +1,7 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Host.Protocol;
 using BetterGenshinImpact.Core.Host.Runtime;
+using BetterGenshinImpact.Core.Script.Group;
 using BetterGenshinImpact.Verification.Framework;
 using Newtonsoft.Json.Linq;
 
@@ -60,6 +61,45 @@ public sealed class PathingCatalogSuite : IVerificationSuite
                 project.FolderName == Path.Combine("采集", "甜甜花") &&
                 project.Name == "route.json",
                 "Pathing catalog did not build the real upstream project identity.");
+
+            var groupPath = Path.Combine(layout.ScriptGroupPath, "路线组.json");
+            await File.WriteAllTextAsync(
+                groupPath,
+                """
+                {
+                  "index": 1,
+                  "name": "路线组",
+                  "config": {
+                    "pathingConfig": {
+                      "enabled": true,
+                      "autoPickEnabled": false,
+                      "partyName": "采集队"
+                    }
+                  },
+                  "projects": []
+                }
+                """,
+                cancellationToken);
+            var groupCatalog = new ScriptGroupCatalog(layout);
+            var candidate = groupCatalog.ListAddCandidates("Pathing").Single(item =>
+                item.Id == Path.Combine("采集", "甜甜花", "route.json"));
+            _ = groupCatalog.AddProjects(
+                "路线组",
+                "Pathing",
+                new JArray(candidate.Id),
+                shellCommand: null);
+            var scheduledGroup = ScriptGroup.FromJson(
+                await File.ReadAllTextAsync(groupPath, cancellationToken));
+            var scheduledProject = scheduledGroup.Projects.Single();
+            context.Require(
+                scheduledProject.Type == "Pathing" &&
+                scheduledProject.Name == "route.json" &&
+                scheduledProject.FolderName == Path.Combine("采集", "甜甜花") &&
+                ReferenceEquals(scheduledProject.GroupInfo, scheduledGroup) &&
+                scheduledProject.GroupInfo.Config.PathingConfig.Enabled &&
+                !scheduledProject.GroupInfo.Config.PathingConfig.AutoPickEnabled &&
+                scheduledProject.GroupInfo.Config.PathingConfig.PartyName == "采集队",
+                "Scheduler pathing project lost its route identity or group-level pathing configuration.");
 
             var updateObserved = false;
             catalog.AttachSettingsUpdated(_ => updateObserved = true);
