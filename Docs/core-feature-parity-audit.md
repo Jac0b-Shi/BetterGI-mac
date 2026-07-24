@@ -106,10 +106,12 @@ Core owns `notificationConfig.jsNotificationEnabled` and maps the upstream
 native-notification switch to the macOS notification center. Script
 notifications still pass through `IScriptHostServices`, then cross the platform
 callback boundary to `UNUserNotificationCenter`; Swift does not decide whether
-a script may emit. The production page exposes only JS permission, native
-notification permission and a real test action. Webhook, Feishu, OneBot and
-other upstream notifier channels remain unexposed until their shared Core
-notifier implementations are extracted.
+a script may emit. The production page renders the Core-owned event subscription
+list, screenshot option and all 13 upstream remote channels: Webhook, WebSocket,
+Feishu, OneBot, Work Weixin, email, Bark, Telegram, xxtui, DingTalk, Discord,
+ServerChan and MeoW. Their configuration, validation, notifier construction,
+refresh and test sends use the shared `NotificationService`; Swift only renders
+field descriptors and forwards save/test RPC requests.
 
 ### Auxiliary controls
 
@@ -179,8 +181,12 @@ Only upstream entries whose action has a complete production path are exposed.
 The game-screenshot hotkey executes the shared `GameScreenshotTask` on both
 Windows and macOS. Core owns timestamped PNG naming, the upstream UID cover and
 the `log/screenshot` output contract; macOS reads the real shared-memory frame.
-The path-recorder hotkeys remain absent until the shared recorder is separated
-from its WPF WebView editor.
+The path-recorder and add-waypoint hotkeys execute the shared
+`PathRecorderTask`. Core owns map/matching settings, stable position lookup,
+teleport/path waypoint semantics, route metadata, timestamped JSON naming and
+the recording lifecycle. Windows retains the optional WebView editor adapter;
+macOS follows the upstream no-editor branch and saves directly to
+`User/AutoPathing`.
 
 ## Verification tiers
 
