@@ -19,6 +19,12 @@
     <PackageReference Include="OpenCvSharp4.runtime.osx.arm64" Version="4.13.0.20260627" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="..\BetterGenshinImpact\User\avatar_macro_default.json"
+             Link="User\avatar_macro_default.json"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="BetterGenshinImpact.Core.Host.Verification" />
     <InternalsVisibleTo Include="BetterGenshinImpact.Core.Host.Fast.Verification" />
     <InternalsVisibleTo Include="BetterGenshinImpact.RealUser.Verification" />

@@ -15,6 +15,7 @@ public sealed class HoldHotKeyCoordinator(
     public const string QuickEnhanceHotKey = "EnhanceArtifactHotkey";
     public const string QuickBuyHotKey = "QuickBuyHotkey";
     public const string OneKeyClaimRewardHotKey = "OneKeyClaimRewardHotkey";
+    public const string OneKeyFightHotKey = "OneKeyFightHotkey";
 
     private readonly object _lock = new();
     private readonly IReadOnlyDictionary<string, Action<CancellationToken>> _actions =

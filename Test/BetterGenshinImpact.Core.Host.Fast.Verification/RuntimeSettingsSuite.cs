@@ -5,6 +5,7 @@ using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.Core.Recorder;
 using BetterGenshinImpact.Core.Recorder.Model;
 using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.Macro;
 using BetterGenshinImpact.GameTask.QuickBuy;
 using BetterGenshinImpact.GameTask.QuickClaimReward;
@@ -44,6 +45,9 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                     "runaroundMouseXInterval": 240,
                     "runaroundInterval": 10,
                     "enhanceWaitDelay": 37,
+                    "combatMacroEnabled": false,
+                    "combatMacroHotkeyMode": "按住时重复(新)",
+                    "combatMacroPriority": 1,
                     "oneKeyClaimRewardHotkeyMode": "点按一次",
                     "oneKeyClaimRewardScrollDownEnabled": false,
                     "oneKeyClaimRewardScrollDownAmount": 2
@@ -99,6 +103,9 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 runaroundMouseXInterval = 240,
                 runaroundInterval = 10,
                 enhanceWaitDelay = 37,
+                combatMacroEnabled = true,
+                combatMacroHotkeyMode = OneKeyFightTask.TickMode,
+                combatMacroPriority = 3,
                 oneKeyClaimRewardHotkeyMode =
                     OneKeyClaimRewardTask.HoldMode,
                 oneKeyClaimRewardScrollDownEnabled = true,
@@ -182,6 +189,9 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 runaroundMouseXInterval = 0,
                 runaroundInterval = 10,
                 enhanceWaitDelay = 37,
+                combatMacroEnabled = true,
+                combatMacroHotkeyMode = OneKeyFightTask.TickMode,
+                combatMacroPriority = 3,
                 oneKeyClaimRewardHotkeyMode =
                     OneKeyClaimRewardTask.HoldMode,
                 oneKeyClaimRewardScrollDownEnabled = true,
@@ -201,6 +211,9 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 runaroundMouseXInterval = 240,
                 runaroundInterval = 10,
                 enhanceWaitDelay = 37,
+                combatMacroEnabled = true,
+                combatMacroHotkeyMode = OneKeyFightTask.TickMode,
+                combatMacroPriority = 3,
                 oneKeyClaimRewardHotkeyMode =
                     OneKeyClaimRewardTask.HoldMode,
                 oneKeyClaimRewardScrollDownEnabled = true,
@@ -284,6 +297,24 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                         ScrollDownEnabled: true,
                         ScrollDownAmount: 23));
             OneKeyClaimRewardRuntimePlatform.Configure(claimRewardPlatform);
+            var avatarMacroPath = Path.Combine(
+                layout.UserPath,
+                "avatar_macro.json");
+            var oneKeyFightPlatform =
+                new RecordingOneKeyFightRuntimePlatform(
+                    new OneKeyFightSettings(
+                        Enabled: true,
+                        HotkeyMode: OneKeyFightTask.TickMode,
+                        Priority: 3),
+                    avatarMacroPath);
+            OneKeyFightRuntimePlatform.Configure(oneKeyFightPlatform);
+            context.Require(
+                OneKeyFightTask.IsEnabled() &&
+                OneKeyFightTask.IsTickMode() &&
+                !OneKeyFightTask.IsHoldOnMode() &&
+                !OneKeyFightTask.IsHoldFinishMode() &&
+                OneKeyFightTask.GetAvatarMacroJsonPath() == avatarMacroPath,
+                "OneKeyFightTask did not consume the composed settings and avatar-macro path.");
             OneKeyClaimRewardTask.ScrollDown(
                 claimRewardPlatform,
                 configuredAmount: 23,
@@ -323,6 +354,12 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                                TurnAroundMacro.Done,
                            [HoldHotKeyCoordinator.OneKeyClaimRewardHotKey] =
                                OneKeyClaimRewardTask.Instance.RunHotKey,
+                           [HoldHotKeyCoordinator.OneKeyFightHotKey] =
+                               token =>
+                               {
+                                   if (token.WaitHandle.WaitOne(5))
+                                       token.ThrowIfCancellationRequested();
+                               },
                        }))
             {
                 holdHotKeys.Start();
@@ -553,7 +590,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             }));
             var hotKeys = JArray.FromObject(hotKeyCatalog.List());
             context.Require(
-                hotKeys.Count == 26 &&
+                hotKeys.Count == 27 &&
                 hotKeys.Single(item =>
                     item.Value<string>("id") == "AutoPickEnabledHotkey")
                     .Value<string>("hotKey") == "F6" &&
@@ -599,6 +636,12 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 hotKeys.Single(item =>
                     item.Value<string>("id") == "OneKeyClaimRewardHotkey")
                     .Value<bool>("dispatchOnRelease") &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "OneKeyFightHotkey")
+                    .Value<bool>("isHold") &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "OneKeyFightHotkey")
+                    .Value<bool>("dispatchOnRelease") &&
                 hotKeyUpdates.Contains(("QuickTeleportTickHotkey", "F6")) &&
                 hotKeyUpdates.Contains(("QuickTeleportTickHotkey", "")) &&
                 quickTeleportPlatform.TickHotkey == "",
@@ -630,6 +673,13 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 persisted["macroConfig"]?.Value<int>("runaroundMouseXInterval") == 240 &&
                 persisted["macroConfig"]?.Value<int>("runaroundInterval") == 10 &&
                 persisted["macroConfig"]?.Value<int>("enhanceWaitDelay") == 37 &&
+                persisted["macroConfig"]?.Value<bool>(
+                    "combatMacroEnabled") == true &&
+                persisted["macroConfig"]?.Value<string>(
+                    "combatMacroHotkeyMode") ==
+                    OneKeyFightTask.TickMode &&
+                persisted["macroConfig"]?.Value<int>(
+                    "combatMacroPriority") == 3 &&
                 persisted["macroConfig"]?.Value<string>(
                     "oneKeyClaimRewardHotkeyMode") ==
                     OneKeyClaimRewardTask.HoldMode &&
@@ -737,6 +787,12 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                         if (token.WaitHandle.WaitOne(5))
                             token.ThrowIfCancellationRequested();
                     },
+                [HoldHotKeyCoordinator.OneKeyFightHotKey] =
+                    token =>
+                    {
+                        if (token.WaitHandle.WaitOne(5))
+                            token.ThrowIfCancellationRequested();
+                    },
             });
         server.AttachHoldHotKeyCoordinator(holdHotKeys);
         holdHotKeys.Start();
@@ -766,6 +822,10 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                         runaroundMouseXInterval = 260,
                         runaroundInterval = 12,
                         enhanceWaitDelay = 45,
+                        combatMacroEnabled = true,
+                        combatMacroHotkeyMode =
+                            OneKeyFightTask.HoldOnMode,
+                        combatMacroPriority = 4,
                         oneKeyClaimRewardHotkeyMode =
                             OneKeyClaimRewardTask.HoldMode,
                         oneKeyClaimRewardScrollDownEnabled = true,
@@ -780,6 +840,18 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 macroResult.Value<int>("runaroundMouseXInterval") == 260 &&
                 macroResult.Value<int>("runaroundInterval") == 12 &&
                 macroResult.Value<int>("enhanceWaitDelay") == 45 &&
+                macroResult.Value<bool>("combatMacroEnabled") &&
+                macroResult.Value<string>("combatMacroHotkeyMode") ==
+                    OneKeyFightTask.HoldOnMode &&
+                ((JArray)macroResult["combatMacroHotkeyModeOptions"]!)
+                    .Values<string>()
+                    .SequenceEqual(
+                    [
+                        OneKeyFightTask.HoldOnMode,
+                        OneKeyFightTask.HoldFinishMode,
+                        OneKeyFightTask.TickMode,
+                    ]) &&
+                macroResult.Value<int>("combatMacroPriority") == 4 &&
                 macroResult.Value<string>(
                     "oneKeyClaimRewardHotkeyMode") ==
                     OneKeyClaimRewardTask.HoldMode &&
@@ -801,6 +873,21 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 macroResult.Value<int>("pickUpOrInteractKeyCode") == 71 &&
                 macroResult.Value<int>("jumpKeyCode") == 74,
                 macroSave.Error?.Message ?? "macro.settings.save returned an invalid result.");
+
+            var avatarMacroLocation = await ExchangeAsync(
+                connection,
+                "macro-avatar-location",
+                "macro.avatar.location",
+                sessionToken,
+                null,
+                cancellationToken);
+            context.Require(
+                avatarMacroLocation.Error is null &&
+                JObject.FromObject(avatarMacroLocation.Result!)
+                    .Value<string>("path") ==
+                    Path.Combine(layout.UserPath, "avatar_macro.json"),
+                avatarMacroLocation.Error?.Message ??
+                "macro.avatar.location did not return the Core-owned macro path.");
 
             var macroKeyDown = await ExchangeAsync(
                 connection, "macro-key-down", "macro.keyEdge", sessionToken,
@@ -905,6 +992,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                          HoldHotKeyCoordinator.ConfirmButtonHotKey,
                          HoldHotKeyCoordinator.CancelButtonHotKey,
                          HoldHotKeyCoordinator.OneKeyClaimRewardHotKey,
+                         HoldHotKeyCoordinator.OneKeyFightHotKey,
                      })
             {
                 var down = await ExchangeAsync(
@@ -1249,5 +1337,17 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             cancellationToken.ThrowIfCancellationRequested();
             Scrolls.Add(clicks);
         }
+    }
+
+    private sealed class RecordingOneKeyFightRuntimePlatform(
+        OneKeyFightSettings settings,
+        string avatarMacroPath)
+        : IOneKeyFightRuntimePlatform
+    {
+        public OneKeyFightSettings Settings { get; } = settings;
+        public ILogger Logger { get; } =
+            NullLogger<RecordingOneKeyFightRuntimePlatform>.Instance;
+
+        public string EnsureAvatarMacroPath() => avatarMacroPath;
     }
 }

@@ -138,6 +138,10 @@ public sealed class HotKeySettingsCatalog(RuntimeLayout layout)
             "OneKeyClaimRewardHotkey", "操控辅助", "一键领取奖励",
             "oneKeyClaimRewardHotkey", "macro.claimReward",
             "core", true, true, DispatchOnRelease: true),
+        new(
+            "OneKeyFightHotkey", "操控辅助", "一键战斗宏快捷键",
+            "oneKeyFightHotkey", "macro.oneKeyFight",
+            "core", true, true, DispatchOnRelease: true),
     ];
 
     public void AttachUpdated(Action<string, string> callback) =>

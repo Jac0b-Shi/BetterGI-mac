@@ -251,6 +251,8 @@ public partial class App : Application
             new Core.Runtime.Windows.WindowsQuickBuyRuntimePlatform());
         GameTask.QuickClaimReward.OneKeyClaimRewardRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsOneKeyClaimRewardRuntimePlatform());
+        GameTask.AutoFight.OneKeyFightRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsOneKeyFightRuntimePlatform());
         GameTask.AutoEat.AutoEatRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsAutoEatRuntimePlatform());
         GameTask.GameLoading.GameLoadingRuntimePlatform.Configure(

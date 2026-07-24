@@ -203,6 +203,12 @@ BetterGenshinImpact.GameTask.QuickClaimReward
             shutdown.Token,
             loggerFactory.CreateLogger<
                 MacOneKeyClaimRewardRuntimePlatform>()));
+BetterGenshinImpact.GameTask.AutoFight.OneKeyFightRuntimePlatform.Configure(
+    new MacOneKeyFightRuntimePlatform(
+        layout,
+        server.MacroSettings,
+        loggerFactory.CreateLogger<
+            BetterGenshinImpact.GameTask.AutoFight.OneKeyFightTask>()));
 using var holdHotKeys = new HoldHotKeyCoordinator(
     shutdown.Token,
     loggerFactory.CreateLogger<HoldHotKeyCoordinator>(),
@@ -223,10 +229,14 @@ using var holdHotKeys = new HoldHotKeyCoordinator(
         [HoldHotKeyCoordinator.OneKeyClaimRewardHotKey] =
             BetterGenshinImpact.GameTask.QuickClaimReward
                 .OneKeyClaimRewardTask.Instance.RunHotKey,
+        [HoldHotKeyCoordinator.OneKeyFightHotKey] =
+            BetterGenshinImpact.GameTask.AutoFight
+                .OneKeyFightTask.Instance.RunHotKey,
     });
 server.AttachHoldHotKeyCoordinator(holdHotKeys);
 var autoFightRuntimePlatform = new MacAutoFightRuntimePlatform(
-    layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
+    layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService,
+    loggerFactory, server.MacroSettings);
 AutoFightRuntimePlatform.Configure(autoFightRuntimePlatform);
 server.SoloTaskSettings.AttachAutoFightConfigUpdated(autoFightRuntimePlatform.UpdateConfig);
 var autoWoodRuntimePlatform = new MacAutoWoodRuntimePlatform();

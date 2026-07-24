@@ -622,6 +622,108 @@ struct MacroPage: View {
             BGIPageTitle(title: "辅助操控设置")
 
             BGIOriginalCard(
+                icon: .symbol("doc.text"),
+                title: "一键宏（按角色）",
+                subtitle: "触发后会识别当前出战角色，并根据配置执行对应的宏"
+            ) {
+                Toggle(
+                    "",
+                    isOn: Binding(
+                        get: {
+                            appState.macroSettings?
+                                .combatMacroEnabled ?? false
+                        },
+                        set: {
+                            appState.saveMacroSettings(
+                                combatMacroEnabled: $0)
+                        })
+                )
+                .labelsHidden()
+                .disabled(appState.macroSettings == nil)
+            } content: {
+                VStack(spacing: 0) {
+                    BGISettingLine(
+                        title: "快捷键触发方式",
+                        subtitle: "按住时重复：按住时重复执行；触发：按下启动再按关闭"
+                    ) {
+                        Picker(
+                            "",
+                            selection: Binding(
+                                get: {
+                                    appState.macroSettings?
+                                        .combatMacroHotkeyMode ?? ""
+                                },
+                                set: {
+                                    appState.saveMacroSettings(
+                                        combatMacroHotkeyMode: $0)
+                                })
+                        ) {
+                            ForEach(
+                                appState.macroSettings?
+                                    .combatMacroHotkeyModeOptions ?? [],
+                                id: \.self
+                            ) {
+                                Text($0).tag($0)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 180)
+                        .disabled(appState.macroSettings == nil)
+                    }
+
+                    Divider()
+
+                    BGISettingLine(
+                        title: "宏配置",
+                        subtitle: "配置每个角色执行的宏，比如：胡桃A重跳"
+                    ) {
+                        HStack(spacing: 10) {
+                            Link(
+                                "点击查看说明",
+                                destination: URL(
+                                    string: "https://www.bettergi.com/feats/macro/onem.html"
+                                )!)
+                            Button("前往设置") {
+                                appState.openAvatarMacroConfiguration()
+                            }
+                            .disabled(appState.macroSettings == nil)
+                        }
+                    }
+
+                    Divider()
+
+                    BGISettingLine(
+                        title: "默认战斗宏编号",
+                        subtitle: "当角色的 macroPriority 设置为0时，使用此默认宏编号（1~5）"
+                    ) {
+                        Stepper(
+                            "\(appState.macroSettings?.combatMacroPriority ?? 1)",
+                            value: Binding(
+                                get: {
+                                    appState.macroSettings?
+                                        .combatMacroPriority ?? 1
+                                },
+                                set: {
+                                    appState.saveMacroSettings(
+                                        combatMacroPriority: $0)
+                                }),
+                            in: 1...5)
+                        .frame(width: 180)
+                        .disabled(appState.macroSettings == nil)
+                    }
+
+                    Divider()
+
+                    BGISettingLine(
+                        title: "角色个性化宏编号设置",
+                        subtitle: "上方宏配置支持为每个角色单独设置宏编号。在角色宏配置中设置 macroPriority 字段（1-5），设置为0则使用上面的默认战斗宏编号。"
+                    ) {
+                        EmptyView()
+                    }
+                }
+            }
+
+            BGIOriginalCard(
                 icon: .symbol("keyboard"),
                 title: "长按 \(appState.macroSettings?.jumpKey.displayName ?? "空格")等于连续按下",
                 subtitle: "轻松解除冻结；水下存在需要长按空格的场景，不推荐长期启用。"

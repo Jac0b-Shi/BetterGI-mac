@@ -16,22 +16,26 @@ public sealed class MacAutoFightRuntimePlatform : IAutoFightRuntimePlatform
     private readonly Func<ISystemInfo> _systemInfoProvider;
     private readonly MacImageRegionOcrService _recognition;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly MacroSettingsCatalog _macroSettings;
     private AutoFightConfig _autoFightConfig;
 
     public MacAutoFightRuntimePlatform(RuntimeLayout layout, Func<ISystemInfo> systemInfoProvider,
-        MacImageRegionOcrService recognition, ILoggerFactory loggerFactory)
+        MacImageRegionOcrService recognition, ILoggerFactory loggerFactory,
+        MacroSettingsCatalog macroSettings)
     {
         _systemInfoProvider = systemInfoProvider ?? throw new ArgumentNullException(nameof(systemInfoProvider));
         _recognition = recognition;
         _loggerFactory = loggerFactory;
-        (_autoFightConfig, CombatMacroPriority) = LoadConfig(layout);
+        _macroSettings = macroSettings;
+        _autoFightConfig = LoadConfig(layout);
     }
 
     public ISystemInfo SystemInfo => _systemInfoProvider();
     public IOcrService OcrService => _recognition;
     public double DpiScale => TaskControlPlatform.Current.DpiScale;
     public AutoFightConfig AutoFightConfig => Volatile.Read(ref _autoFightConfig);
-    public int CombatMacroPriority { get; }
+    public int CombatMacroPriority =>
+        _macroSettings.Snapshot().CombatMacroPriority;
     public ILogger<T> GetLogger<T>() => _loggerFactory.CreateLogger<T>();
     public BgiYoloPredictor CreateYoloPredictor(BgiOnnxModel model) => _recognition.CreateYoloPredictor(model);
     public void UpdateConfig(AutoFightConfig config) =>
@@ -43,18 +47,17 @@ public sealed class MacAutoFightRuntimePlatform : IAutoFightRuntimePlatform
         return new ConfigScope(() => Interlocked.Exchange(ref _autoFightConfig, original));
     }
 
-    private static (AutoFightConfig Config, int CombatMacroPriority) LoadConfig(RuntimeLayout layout)
+    private static AutoFightConfig LoadConfig(RuntimeLayout layout)
     {
         var path = Path.Combine(layout.UserPath, "config.json");
-        if (!File.Exists(path)) return (new AutoFightConfig(), 0);
+        if (!File.Exists(path)) return new AutoFightConfig();
         var root = JsonNode.Parse(File.ReadAllText(path), documentOptions: new JsonDocumentOptions
         {
             AllowTrailingCommas = true,
             CommentHandling = JsonCommentHandling.Skip,
         }) as JsonObject ?? throw new InvalidDataException("User/config.json root must be an object.");
-        return (
-            root["autoFightConfig"]?.Deserialize<AutoFightConfig>(ConfigJson.Options) ?? new AutoFightConfig(),
-            root["macroConfig"]?["combatMacroPriority"]?.GetValue<int>() ?? 0);
+        return root["autoFightConfig"]?.Deserialize<AutoFightConfig>(
+            ConfigJson.Options) ?? new AutoFightConfig();
     }
 
     private sealed class ConfigScope(Action restore) : IDisposable

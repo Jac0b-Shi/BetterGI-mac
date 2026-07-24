@@ -380,7 +380,8 @@ GenshinRuntimePlatform.Configure(new MacGenshinRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, autoFishingRuntimePlatform,
     imageRegionOcrService, loggerFactory, autoSkipRuntimePlatform, "TemplateMatch"));
 var autoFightRuntimePlatform = new MacAutoFightRuntimePlatform(
-    layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
+    layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService,
+    loggerFactory, server.MacroSettings);
 AutoFightRuntimePlatform.Configure(autoFightRuntimePlatform);
 server.SoloTaskSettings.AttachAutoFightConfigUpdated(autoFightRuntimePlatform.UpdateConfig);
 var tpTaskPlatform = new MacTpTaskRuntimePlatform(

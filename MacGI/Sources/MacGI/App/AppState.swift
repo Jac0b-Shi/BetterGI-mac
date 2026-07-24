@@ -1241,6 +1241,9 @@ final class AppState: ObservableObject {
         runaroundMouseXInterval: Int? = nil,
         runaroundInterval: Int? = nil,
         enhanceWaitDelay: Int? = nil,
+        combatMacroEnabled: Bool? = nil,
+        combatMacroHotkeyMode: String? = nil,
+        combatMacroPriority: Int? = nil,
         oneKeyClaimRewardHotkeyMode: String? = nil,
         oneKeyClaimRewardScrollDownEnabled: Bool? = nil,
         oneKeyClaimRewardScrollDownAmount: Int? = nil
@@ -1262,6 +1265,15 @@ final class AppState: ObservableObject {
                 runaroundInterval ?? current.runaroundInterval,
             enhanceWaitDelay:
                 enhanceWaitDelay ?? current.enhanceWaitDelay,
+            combatMacroEnabled:
+                combatMacroEnabled ?? current.combatMacroEnabled,
+            combatMacroHotkeyMode:
+                combatMacroHotkeyMode
+                    ?? current.combatMacroHotkeyMode,
+            combatMacroHotkeyModeOptions:
+                current.combatMacroHotkeyModeOptions,
+            combatMacroPriority:
+                combatMacroPriority ?? current.combatMacroPriority,
             oneKeyClaimRewardHotkeyMode:
                 oneKeyClaimRewardHotkeyMode
                     ?? current.oneKeyClaimRewardHotkeyMode,
@@ -1294,6 +1306,26 @@ final class AppState: ObservableObject {
                     await self.loadMacroSettingsFromCore()
                 }
                 self.addLog(.error, "辅助操控设置保存失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    func openAvatarMacroConfiguration() {
+        guard let supervisor = betterGICoreSupervisor else {
+            addLog(.error, "打开角色宏配置失败：BetterGI Core 尚未就绪。")
+            return
+        }
+        Task { [weak self] in
+            do {
+                let path = try await supervisor.avatarMacroLocation()
+                guard NSWorkspace.shared.open(URL(fileURLWithPath: path)) else {
+                    throw BetterGICoreRPCError.socket(
+                        "系统无法打开角色宏配置文件。")
+                }
+            } catch {
+                self?.addLog(
+                    .error,
+                    "打开角色宏配置失败：\(error.localizedDescription)")
             }
         }
     }

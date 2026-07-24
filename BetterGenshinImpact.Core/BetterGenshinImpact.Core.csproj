@@ -77,6 +77,8 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/AutoFightParam.cs" Link="GameTask/AutoFight/AutoFightParam.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/AutoFightEndDetector.cs" Link="GameTask/AutoFight/AutoFightEndDetector.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/AutoFightTask.cs" Link="GameTask/AutoFight/AutoFightTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/OneKeyFightTask.cs" Link="GameTask/AutoFight/OneKeyFightTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/OneKeyFightRuntimePlatform.cs" Link="GameTask/AutoFight/OneKeyFightRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/AutoFightSeek.cs" Link="GameTask/AutoFight/AutoFightSeek.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/ExperienceDetector.cs" Link="GameTask/AutoFight/ExperienceDetector.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/AutoFightJsonTask.cs" Link="GameTask/AutoFight/AutoFightJsonTask.cs" />

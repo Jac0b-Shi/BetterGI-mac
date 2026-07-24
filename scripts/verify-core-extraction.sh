@@ -119,6 +119,26 @@ rg -q 'OneKeyClaimRewardTask drifted from the upstream hold-mode scroll chunking
   && rg -q 'One-key claim reward bypassed the runtime-start guard' \
     Test/BetterGenshinImpact.Core.Host.Fast.Verification/RuntimeSettingsSuite.cs \
   || fail "one-key claim-reward settings, scroll and lifecycle contracts are not verified"
+rg -q 'OneKeyFightRuntimePlatform.Configure' \
+  BetterGenshinImpact.Core.Host/Program.cs \
+  && rg -q 'new Core.Runtime.Windows.WindowsOneKeyFightRuntimePlatform' \
+    BetterGenshinImpact/App.xaml.cs \
+  && rg -q 'OneKeyFightTask.Instance.RunHotKey' \
+    BetterGenshinImpact.Core.Host/Program.cs \
+  && rg -q 'avatar_macro_default.json' \
+    BetterGenshinImpact.Core.Host/BetterGenshinImpact.Core.Host.csproj \
+  || fail "shared one-key fight task is not composed and published end to end"
+if rg -n '\b(TaskContext|Global|ConfigService)\b' \
+  BetterGenshinImpact/GameTask/AutoFight/OneKeyFightTask.cs; then
+  fail "shared OneKeyFightTask still owns Windows runtime dependencies"
+fi
+rg -q 'OneKeyFightTask did not consume the composed settings and avatar-macro path' \
+  Test/BetterGenshinImpact.Core.Host.Fast.Verification/RuntimeSettingsSuite.cs \
+  && rg -q 'macro.avatar.location did not return the Core-owned macro path' \
+    Test/BetterGenshinImpact.Core.Host.Fast.Verification/RuntimeSettingsSuite.cs \
+  && rg -q 'OneKeyFightHotkey' \
+    Test/BetterGenshinImpact.Core.Host.Fast.Verification/RuntimeSettingsSuite.cs \
+  || fail "one-key fight settings, macro-file and hold-edge contracts are not verified"
 rg -Fq 'DialogButtonClickMacro.Done(DialogButtonType.Confirm)' \
   BetterGenshinImpact/ViewModel/Pages/HotKeyPageViewModel.cs \
   && rg -q 'CreateDialogButtonAction' \

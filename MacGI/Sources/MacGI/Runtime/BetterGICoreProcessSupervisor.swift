@@ -79,6 +79,10 @@ struct BetterGIMacroSettings: Sendable, Equatable {
     let runaroundMouseXInterval: Int
     let runaroundInterval: Int
     let enhanceWaitDelay: Int
+    let combatMacroEnabled: Bool
+    let combatMacroHotkeyMode: String
+    let combatMacroHotkeyModeOptions: [String]
+    let combatMacroPriority: Int
     let oneKeyClaimRewardHotkeyMode: String
     let oneKeyClaimRewardHotkeyModeOptions: [String]
     let oneKeyClaimRewardHoldMode: String
@@ -700,6 +704,11 @@ actor BetterGICoreProcessSupervisor {
                         settings.runaroundMouseXInterval,
                     "runaroundInterval": settings.runaroundInterval,
                     "enhanceWaitDelay": settings.enhanceWaitDelay,
+                    "combatMacroEnabled": settings.combatMacroEnabled,
+                    "combatMacroHotkeyMode":
+                        settings.combatMacroHotkeyMode,
+                    "combatMacroPriority":
+                        settings.combatMacroPriority,
                     "oneKeyClaimRewardHotkeyMode":
                         settings.oneKeyClaimRewardHotkeyMode,
                     "oneKeyClaimRewardScrollDownEnabled":
@@ -708,6 +717,17 @@ actor BetterGICoreProcessSupervisor {
                         settings.oneKeyClaimRewardScrollDownAmount,
                 ],
             ]))
+    }
+
+    func avatarMacroLocation() throws -> String {
+        guard let result = try runningClient().request(
+            method: "macro.avatar.location") as? [String: Any],
+              let path = result["path"] as? String
+        else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid macro.avatar.location result.")
+        }
+        return path
     }
 
     func sendAuxiliaryControlEdge(
@@ -737,6 +757,14 @@ actor BetterGICoreProcessSupervisor {
                 result["runaroundMouseXInterval"] as? Int,
               let runaroundInterval = result["runaroundInterval"] as? Int,
               let enhanceWaitDelay = result["enhanceWaitDelay"] as? Int,
+              let combatMacroEnabled =
+                result["combatMacroEnabled"] as? Bool,
+              let combatMacroHotkeyMode =
+                result["combatMacroHotkeyMode"] as? String,
+              let combatMacroHotkeyModeOptions =
+                result["combatMacroHotkeyModeOptions"] as? [String],
+              let combatMacroPriority =
+                result["combatMacroPriority"] as? Int,
               let oneKeyClaimRewardHotkeyMode =
                 result["oneKeyClaimRewardHotkeyMode"] as? String,
               let oneKeyClaimRewardHotkeyModeOptions =
@@ -765,6 +793,11 @@ actor BetterGICoreProcessSupervisor {
             runaroundMouseXInterval: runaroundMouseXInterval,
             runaroundInterval: runaroundInterval,
             enhanceWaitDelay: enhanceWaitDelay,
+            combatMacroEnabled: combatMacroEnabled,
+            combatMacroHotkeyMode: combatMacroHotkeyMode,
+            combatMacroHotkeyModeOptions:
+                combatMacroHotkeyModeOptions,
+            combatMacroPriority: combatMacroPriority,
             oneKeyClaimRewardHotkeyMode: oneKeyClaimRewardHotkeyMode,
             oneKeyClaimRewardHotkeyModeOptions:
                 oneKeyClaimRewardHotkeyModeOptions,

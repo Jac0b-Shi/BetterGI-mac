@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.GameLoading;
 using BetterGenshinImpact.GameTask.MapMask;
 
@@ -418,6 +419,10 @@ public sealed class CoreRpcServer(
                 "macro.settings.save" => _macroSettings.Save(
                     request.Params?["settings"] as JObject
                     ?? throw new ArgumentException("settings is required.")),
+                "macro.avatar.location" => new
+                {
+                    path = OneKeyFightTask.GetAvatarMacroJsonPath()
+                },
                 "hotKey.settings.list" => _hotKeySettings.List(),
                 "hotKey.settings.save" => _hotKeySettings.Save(
                     request.Params?["binding"] as JObject
@@ -485,7 +490,8 @@ public sealed class CoreRpcServer(
                 "keyMouse.playback",
                 "notification.native",
                 "macro.hold-continuation",
-                "macro.turn-around"
+                "macro.turn-around",
+                "macro.one-key-fight"
             }
         };
     }

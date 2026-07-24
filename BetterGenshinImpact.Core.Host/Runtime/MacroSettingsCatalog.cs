@@ -1,4 +1,5 @@
 using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.QuickClaimReward;
 using Newtonsoft.Json.Linq;
 using System.Text.Json;
@@ -36,6 +37,13 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
                     settings, "runaroundMouseXInterval"),
                 RequiredRunaroundInterval(settings, "runaroundInterval"),
                 RequiredEnhanceWaitDelay(settings, "enhanceWaitDelay"),
+                RequiredBoolean(settings, "combatMacroEnabled"),
+                RequiredOneKeyFightMode(
+                    settings,
+                    "combatMacroHotkeyMode"),
+                RequiredOneKeyFightPriority(
+                    settings,
+                    "combatMacroPriority"),
                 RequiredOneKeyClaimRewardMode(
                     settings,
                     "oneKeyClaimRewardHotkeyMode"),
@@ -58,6 +66,10 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
                 next.RunaroundMouseXInterval;
             macro["runaroundInterval"] = next.RunaroundInterval;
             macro["enhanceWaitDelay"] = next.EnhanceWaitDelay;
+            macro["combatMacroEnabled"] = next.CombatMacroEnabled;
+            macro["combatMacroHotkeyMode"] =
+                next.CombatMacroHotkeyMode;
+            macro["combatMacroPriority"] = next.CombatMacroPriority;
             macro["oneKeyClaimRewardHotkeyMode"] =
                 next.OneKeyClaimRewardHotkeyMode;
             macro["oneKeyClaimRewardScrollDownEnabled"] =
@@ -100,6 +112,15 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
         runaroundMouseXInterval = settings.RunaroundMouseXInterval,
         runaroundInterval = settings.RunaroundInterval,
         enhanceWaitDelay = settings.EnhanceWaitDelay,
+        combatMacroEnabled = settings.CombatMacroEnabled,
+        combatMacroHotkeyMode = settings.CombatMacroHotkeyMode,
+        combatMacroHotkeyModeOptions = new[]
+        {
+            OneKeyFightTask.HoldOnMode,
+            OneKeyFightTask.HoldFinishMode,
+            OneKeyFightTask.TickMode,
+        },
+        combatMacroPriority = settings.CombatMacroPriority,
         oneKeyClaimRewardHotkeyMode =
             settings.OneKeyClaimRewardHotkeyMode,
         oneKeyClaimRewardHotkeyModeOptions = new[]
@@ -128,6 +149,10 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
             macro?["runaroundMouseXInterval"]?.GetValue<int>() ?? 500,
             macro?["runaroundInterval"]?.GetValue<int>() ?? 10,
             macro?["enhanceWaitDelay"]?.GetValue<int>() ?? 0,
+            macro?["combatMacroEnabled"]?.GetValue<bool>() ?? false,
+            macro?["combatMacroHotkeyMode"]?.GetValue<string>()
+                ?? OneKeyFightTask.HoldOnMode,
+            macro?["combatMacroPriority"]?.GetValue<int>() ?? 1,
             macro?["oneKeyClaimRewardHotkeyMode"]?.GetValue<string>()
                 ?? OneKeyClaimRewardTask.ClickOnceMode,
             macro?["oneKeyClaimRewardScrollDownEnabled"]?.GetValue<bool>()
@@ -217,6 +242,34 @@ public sealed class MacroSettingsCatalog(RuntimeLayout layout)
                 name);
     }
 
+    private static string RequiredOneKeyFightMode(
+        JObject settings,
+        string name)
+    {
+        var value = settings.Value<string>(name)
+            ?? throw new ArgumentException($"{name} is required.");
+        return value == OneKeyFightTask.HoldOnMode ||
+               value == OneKeyFightTask.HoldFinishMode ||
+               value == OneKeyFightTask.TickMode
+            ? value
+            : throw new ArgumentException(
+                $"Unsupported one-key fight mode: {value}",
+                name);
+    }
+
+    private static int RequiredOneKeyFightPriority(
+        JObject settings,
+        string name)
+    {
+        var value = settings.Value<int?>(name)
+            ?? throw new ArgumentException($"{name} is required.");
+        return value is >= 1 and <= 5
+            ? value
+            : throw new ArgumentOutOfRangeException(
+                name,
+                "Combat macro priority must be between 1 and 5.");
+    }
+
     private static int RequiredOneKeyClaimRewardScrollAmount(
         JObject settings,
         string name)
@@ -240,6 +293,9 @@ public sealed record MacroSettingsSnapshot(
     int RunaroundMouseXInterval,
     int RunaroundInterval,
     int EnhanceWaitDelay,
+    bool CombatMacroEnabled,
+    string CombatMacroHotkeyMode,
+    int CombatMacroPriority,
     string OneKeyClaimRewardHotkeyMode,
     bool OneKeyClaimRewardScrollDownEnabled,
     int OneKeyClaimRewardScrollDownAmount,
