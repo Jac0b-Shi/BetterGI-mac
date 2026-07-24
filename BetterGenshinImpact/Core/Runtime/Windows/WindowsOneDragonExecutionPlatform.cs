@@ -79,7 +79,11 @@ public sealed class WindowsOneDragonExecutionPlatform(
 
     public void SaveConfiguration(OneDragonFlowConfig config) => saveConfiguration();
 
-    public void ResumeMarkerConsumed() => resumeMarkerConsumed();
+    public void ResumeMarkerConsumed(OneDragonFlowConfig config)
+    {
+        saveConfiguration();
+        resumeMarkerConsumed();
+    }
 
     public void NotifyDragonStart(string message) =>
         Notify.Event(NotificationEvent.DragonStart).Success(message);

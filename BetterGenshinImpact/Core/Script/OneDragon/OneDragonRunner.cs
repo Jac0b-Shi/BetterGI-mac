@@ -85,7 +85,7 @@ public interface IOneDragonExecutionPlatform
         CancellationToken cancellationToken);
     Task CheckRewards(CancellationToken cancellationToken);
     void SaveConfiguration(OneDragonFlowConfig config);
-    void ResumeMarkerConsumed();
+    void ResumeMarkerConsumed(OneDragonFlowConfig config);
     void NotifyDragonStart(string message);
     void NotifyDragonEnd(string message);
     void ReportScriptGroupFailure(
@@ -115,12 +115,15 @@ public sealed class OneDragonRunner(
 
     public async Task<OneDragonRunResult> RunAsync(
         OneDragonFlowConfig config,
-        OneDragonPlan plan)
+        OneDragonPlan plan,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(plan);
 
         CancellationContext.Instance.Set();
+        using var cancellationRegistration = cancellationToken.Register(
+            CancellationContext.Instance.Cancel);
         try
         {
             var enabledSteps = plan.ExecutionSteps
@@ -144,7 +147,7 @@ public sealed class OneDragonRunner(
                 }
 
                 config.NextTaskId = string.Empty;
-                platform.ResumeMarkerConsumed();
+                platform.ResumeMarkerConsumed(config);
             }
 
             if (enabledSteps.Length == 0)

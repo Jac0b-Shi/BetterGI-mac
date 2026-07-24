@@ -45,7 +45,7 @@ public sealed class OneDragonRunnerSuite : IVerificationSuite
         context.Require(
             platform.Events.SequenceEqual(
             [
-                "resume",
+                "resume:",
                 "start",
                 "save",
                 "notify-start:一条龙启动",
@@ -96,6 +96,33 @@ public sealed class OneDragonRunnerSuite : IVerificationSuite
             !CancellationContext.Instance.IsCancellationRequested,
             "OneDragon cancellation path leaked its cancellation context.");
 
+        var externalCancellationConfig = new OneDragonFlowConfig();
+        var externalCancellationPlan = OneDragonPlan.FromOrderedSteps(
+        [
+            new OneDragonPlanStep("mail", "领取邮件", true, false),
+        ], null);
+        using var externalCancellation = new CancellationTokenSource();
+        var externalCancellationPlatform = new RecordingOneDragonPlatform
+        {
+            Started = () => externalCancellation.Cancel(),
+        };
+        var externalCancellationResult = await new OneDragonRunner(
+                externalCancellationPlatform,
+                OneDragonRunnerDelays.None)
+            .RunAsync(
+                externalCancellationConfig,
+                externalCancellationPlan,
+                externalCancellation.Token);
+
+        context.Require(
+            externalCancellationResult.State ==
+                OneDragonRunState.CancelledDuringStartup &&
+            externalCancellationPlatform.Events.SequenceEqual(["start"]),
+            "OneDragon external cancellation did not stop the shared runner during startup.");
+        context.Require(
+            !CancellationContext.Instance.IsCancellationRequested,
+            "OneDragon external cancellation leaked its cancellation context.");
+
         var disabledConfig = new OneDragonFlowConfig
         {
             NextTaskId = "disabled",
@@ -113,7 +140,7 @@ public sealed class OneDragonRunnerSuite : IVerificationSuite
         context.Require(
             disabledResult.State == OneDragonRunState.NoEnabledTasks &&
             disabledConfig.NextTaskId.Length == 0 &&
-            disabledPlatform.Events.SequenceEqual(["resume"]),
+            disabledPlatform.Events.SequenceEqual(["resume:"]),
             "OneDragon disabled plan did not consume its resume marker without starting tasks.");
     }
 
@@ -122,10 +149,12 @@ public sealed class OneDragonRunnerSuite : IVerificationSuite
         public ILogger Logger => NullLogger.Instance;
         public List<string> Events { get; } = [];
         public bool CancelAfterBuiltIn { get; init; }
+        public Action? Started { get; init; }
 
         public Task StartGameTask()
         {
             Events.Add("start");
+            Started?.Invoke();
             return Task.CompletedTask;
         }
 
@@ -157,7 +186,8 @@ public sealed class OneDragonRunnerSuite : IVerificationSuite
 
         public void SaveConfiguration(OneDragonFlowConfig config) => Events.Add("save");
 
-        public void ResumeMarkerConsumed() => Events.Add("resume");
+        public void ResumeMarkerConsumed(OneDragonFlowConfig config) =>
+            Events.Add($"resume:{config.NextTaskId}");
 
         public void NotifyDragonStart(string message) =>
             Events.Add($"notify-start:{message}");
