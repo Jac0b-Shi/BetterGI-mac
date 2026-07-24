@@ -64,6 +64,9 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Common/NewRetry.cs" Link="GameTask/Common/NewRetry.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ReturnMainUiTask.cs" Link="GameTask/Common/Job/ReturnMainUiTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimBattlePassRewardsTask.cs" Link="GameTask/Common/Job/ClaimBattlePassRewardsTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimMailRewardsTask.cs" Link="GameTask/Common/Job/ClaimMailRewardsTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/CheckRewardsTask.cs" Link="GameTask/Common/Job/CheckRewardsTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/GoToSereniteaPotTask.cs" Link="GameTask/Common/Job/GoToSereniteaPotTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/GoToCraftingBenchRuntimePlatform.cs" Link="GameTask/Common/Job/GoToCraftingBenchRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/GoToCraftingBenchTask.cs" Link="GameTask/Common/Job/GoToCraftingBenchTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/CraftMaterialRuntimePlatform.cs" Link="GameTask/Common/Job/CraftMaterialRuntimePlatform.cs" />

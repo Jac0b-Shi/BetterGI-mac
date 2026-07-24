@@ -432,6 +432,26 @@ var dispatcherRuntimePlatform = new MacDispatcherRuntimePlatform(
 DispatcherRuntimePlatform.Configure(dispatcherRuntimePlatform);
 server.AttachSoloTaskCoordinator(new SoloTaskCoordinator(
     dispatcherRuntimePlatform, server.SoloTaskSettings, shutdown.Token));
+var oneDragonExecutionPlatform = new MacOneDragonExecutionPlatform(
+    layout,
+    server.OneDragonCatalog,
+    dispatcherRuntimePlatform,
+    autoDomainRuntimePlatform,
+    autoBossRuntimePlatform,
+    autoBossPathExecutorFactory,
+    autoLeyLineOutcropRuntimePlatform,
+    autoStygianOnslaughtRuntimePlatform,
+    scriptGroupExecutionServices,
+    server.PlatformCallbacks,
+    sessionToken,
+    shutdown.Token,
+    loggerFactory.CreateLogger<MacOneDragonExecutionPlatform>());
+server.AttachOneDragonCoordinator(new OneDragonCoordinator(
+    server.OneDragonCatalog,
+    oneDragonExecutionPlatform,
+    server.PlatformCallbacks,
+    sessionToken,
+    shutdown.Token));
 DesktopRegionInputPlatform.Configure(semanticInputBackend);
 TaskRunnerPlatform.Configure(new MacTaskRunnerPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token,

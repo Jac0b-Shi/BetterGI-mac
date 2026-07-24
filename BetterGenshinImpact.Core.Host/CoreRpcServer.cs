@@ -26,6 +26,7 @@ public sealed class CoreRpcServer(
     private readonly ScriptProjectCatalog _scriptProjectCatalog = new(layout);
     private readonly ScriptRepositoryCatalog _scriptRepositoryCatalog = new(layout);
     private readonly PathingCatalog _pathingCatalog = new(layout);
+    private readonly OneDragonCatalog _oneDragonCatalog = new(layout);
     private readonly SoloTaskSettingsCatalog _soloTaskSettings = new(layout);
     private readonly TriggerSettingsCatalog _triggerSettings = new(layout);
     private readonly MacroSettingsCatalog _macroSettings = new(layout);
@@ -46,6 +47,7 @@ public sealed class CoreRpcServer(
     private Action? _platformAssetInitializer;
     private MacTriggerDispatcher? _triggerDispatcher;
     private SoloTaskCoordinator? _soloTasks;
+    private OneDragonCoordinator? _oneDragon;
     private KeyMouseScriptCoordinator? _keyMouseScripts;
     private AuxiliaryControlCoordinator? _auxiliaryControls;
     private HoldHotKeyCoordinator? _holdHotKeys;
@@ -56,6 +58,7 @@ public sealed class CoreRpcServer(
     private readonly SemaphoreSlim _runtimeMutationLock = new(1, 1);
     public PlatformCallbackChannel PlatformCallbacks => _platformCallbacks;
     public SoloTaskSettingsCatalog SoloTaskSettings => _soloTaskSettings;
+    public OneDragonCatalog OneDragonCatalog => _oneDragonCatalog;
     public TriggerSettingsCatalog TriggerSettings => _triggerSettings;
     public MacroSettingsCatalog MacroSettings => _macroSettings;
     public HotKeySettingsCatalog HotKeySettings => _hotKeySettings;
@@ -66,6 +69,9 @@ public sealed class CoreRpcServer(
         layout, _platformCallbacks, sessionToken, _shutdown.Token);
     private SoloTaskCoordinator SoloTasks => _soloTasks ?? throw new CapabilityUnavailableException(
         "Solo task coordinator is unavailable until Core composition completes.");
+    private OneDragonCoordinator OneDragon => _oneDragon
+        ?? throw new CapabilityUnavailableException(
+            "OneDragon coordinator is unavailable until Core composition completes.");
     private KeyMouseScriptCoordinator KeyMouseScripts => _keyMouseScripts
         ?? throw new CapabilityUnavailableException(
             "Key/mouse script coordinator is unavailable until Core composition completes.");
@@ -106,6 +112,14 @@ public sealed class CoreRpcServer(
         ArgumentNullException.ThrowIfNull(coordinator);
         if (Interlocked.CompareExchange(ref _soloTasks, coordinator, null) is not null)
             throw new InvalidOperationException("Solo task coordinator has already been attached.");
+    }
+
+    public void AttachOneDragonCoordinator(OneDragonCoordinator coordinator)
+    {
+        ArgumentNullException.ThrowIfNull(coordinator);
+        if (Interlocked.CompareExchange(ref _oneDragon, coordinator, null) is not null)
+            throw new InvalidOperationException(
+                "OneDragon coordinator has already been attached.");
     }
 
     public void AttachKeyMouseScriptCoordinator(KeyMouseScriptCoordinator coordinator)
@@ -439,6 +453,25 @@ public sealed class CoreRpcServer(
                     RequiredString(request.Params, "name"),
                     request.Params?["settings"] as JObject
                     ?? throw new ArgumentException("settings is required.")),
+                "oneDragon.list" => _oneDragonCatalog.List(),
+                "oneDragon.get" => _oneDragonCatalog.Get(
+                    RequiredString(request.Params, "name")),
+                "oneDragon.create" => _oneDragonCatalog.Create(
+                    RequiredString(request.Params, "name")),
+                "oneDragon.save" => _oneDragonCatalog.Save(
+                    RequiredString(request.Params, "name"),
+                    request.Params?["config"] as JObject
+                    ?? throw new ArgumentException("config is required.")),
+                "oneDragon.rename" => _oneDragonCatalog.Rename(
+                    RequiredString(request.Params, "name"),
+                    RequiredString(request.Params, "newName")),
+                "oneDragon.delete" => _oneDragonCatalog.Delete(
+                    RequiredString(request.Params, "name")),
+                "oneDragon.start" => OneDragon.Start(
+                    RequiredString(request.Params, "name")),
+                "oneDragon.stop" => OneDragon.Stop(
+                    RequiredString(request.Params, "taskId")),
+                "oneDragon.status" => OneDragon.Status(),
                 "keyMouse.list" => KeyMouseScripts.List(),
                 "keyMouse.rootLocation" => KeyMouseScripts.RootLocation(),
                 "keyMouse.saveRecording" => KeyMouseScripts.SaveRecording(
@@ -540,6 +573,8 @@ public sealed class CoreRpcServer(
                 "scheduler.run",
                 "scheduler.runGroups",
                 "scheduler.status",
+                "oneDragon.config",
+                "oneDragon.run",
                 "keyMouse.recording",
                 "keyMouse.playback",
                 "notification.native",
@@ -635,6 +670,8 @@ public sealed class CoreRpcServer(
                 await _scheduler.StopActiveAsync(cancellationToken);
             if (_soloTasks is not null)
                 await _soloTasks.StopActiveAsync(cancellationToken);
+            if (_oneDragon is not null)
+                await _oneDragon.StopActiveAsync(cancellationToken);
             if (_keyMouseScripts is not null)
                 await _keyMouseScripts.StopAsync();
             if (_auxiliaryControls is not null)
@@ -773,6 +810,8 @@ public sealed class CoreRpcServer(
                 await _scheduler.StopActiveAsync(cancellationToken);
             var soloStopped = _soloTasks is not null &&
                 await _soloTasks.StopActiveAsync(cancellationToken);
+            var oneDragonStopped = _oneDragon is not null &&
+                await _oneDragon.StopActiveAsync(cancellationToken);
             if (_keyMouseScripts is not null)
                 await _keyMouseScripts.StopAsync();
             return new
@@ -781,6 +820,7 @@ public sealed class CoreRpcServer(
                 state = "cancelled",
                 schedulerStopped,
                 soloStopped,
+                oneDragonStopped,
             };
         }
         if (descriptor.Action == "automation.suspend.toggle")

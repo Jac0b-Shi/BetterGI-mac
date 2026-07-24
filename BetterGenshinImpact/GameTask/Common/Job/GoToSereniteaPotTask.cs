@@ -414,8 +414,12 @@ public class GoToSereniteaPotTask
             await Delay(1000, ct);
 
             var getAare = CaptureToRectArea();
-            var count = OcrFactory.Paddle.OcrWithoutDetector(getAare.DeriveCrop(getAare.Width* 1801 / 1920,
-                getAare.Height* 609 / 1080,getAare.Width * 75 / 1920,getAare.Width * 46 / 1920).SrcMat);
+            var count = ImageRegionOcrPlatform.Current.OcrWithoutDetector(
+                getAare.DeriveCrop(
+                    getAare.Width * 1801 / 1920,
+                    getAare.Height * 609 / 1080,
+                    getAare.Width * 75 / 1920,
+                    getAare.Width * 46 / 1920).SrcMat);
             
             var match = System.Text.RegularExpressions.Regex.Match(count, @"(\d+)\s*[/17]\s*(8)");
             var shouldClick = true;

@@ -10,7 +10,7 @@ public sealed class MacGoToCraftingBenchRuntimePlatform(
 {
     private readonly RuntimeLayout _layout = layout ?? throw new ArgumentNullException(nameof(layout));
 
-    public string SelectedConfigName { get; } = LoadSelectedConfigName(layout);
+    public string SelectedConfigName => LoadSelectedConfigName(_layout);
     public IOcrService OcrService { get; } = ocrService ?? throw new ArgumentNullException(nameof(ocrService));
 
     public IReadOnlyList<CraftingBenchConfig> LoadConfigs()

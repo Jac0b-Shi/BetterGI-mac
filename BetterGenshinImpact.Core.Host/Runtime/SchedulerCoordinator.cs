@@ -24,7 +24,7 @@ public sealed class SchedulerCoordinator(
     {
         var path = ResolveGroup(groupName);
         var group = ScriptGroup.FromJson(File.ReadAllText(path));
-        ApplyNextProject(group);
+        ScriptGroupResumeState.ApplyAndConsume(layout, group);
         if (group.Projects.Count == 0)
             throw new InvalidDataException($"Script group '{groupName}' contains no projects.");
         return Start(group.Name, _ => RunGroupAsync(group));
@@ -41,7 +41,7 @@ public sealed class SchedulerCoordinator(
             {
                 var path = ResolveGroup(groupName);
                 var group = ScriptGroup.FromJson(File.ReadAllText(path));
-                ApplyNextProject(group);
+                ScriptGroupResumeState.ApplyAndConsume(layout, group);
                 if (group.Projects.Count == 0)
                     throw new InvalidDataException($"Script group '{groupName}' contains no projects.");
                 return group;
@@ -269,24 +269,4 @@ public sealed class SchedulerCoordinator(
         return path;
     }
 
-    private void ApplyNextProject(ScriptGroup group)
-    {
-        if (!File.Exists(layout.SchedulerStatePath)) return;
-        try
-        {
-            var state = JObject.Parse(File.ReadAllText(layout.SchedulerStatePath));
-            if (state.Value<string>("groupName") != group.Name) return;
-            var startIndex = group.Projects.ToList().FindIndex(project =>
-                project.Index == state.Value<int?>("index") &&
-                project.FolderName == state.Value<string>("folderName") &&
-                project.Name == state.Value<string>("projectName"));
-            if (startIndex < 0) return;
-            for (var index = 0; index < startIndex; index++) group.Projects[index].SkipFlag = true;
-            File.Delete(layout.SchedulerStatePath);
-        }
-        catch (Exception exception) when (exception is IOException or Newtonsoft.Json.JsonException)
-        {
-            throw new InvalidDataException("The saved scheduler start position is invalid.", exception);
-        }
-    }
 }

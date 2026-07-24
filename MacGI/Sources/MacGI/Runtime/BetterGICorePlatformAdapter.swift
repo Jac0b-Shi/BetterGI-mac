@@ -230,6 +230,22 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                 )
             }
             return ["acknowledged": true]
+        case "application.quit":
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                NSApp.terminate(nil)
+            }
+            return ["acknowledged": true]
+        case "system.shutdown":
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            process.arguments = [
+                "-e",
+                "delay 1",
+                "-e",
+                "tell application \"System Events\" to shut down",
+            ]
+            try process.run()
+            return ["acknowledged": true]
         case "application.restart":
             guard let parameters,
                   let taskProgressName = parameters["taskProgressName"] as? String,
@@ -401,6 +417,24 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                 appState.addLog(.error, "Core scheduler \(taskID) \(state): \(message)")
             } else {
                 appState.addLog(.info, "Core scheduler \(taskID) \(state)")
+            }
+            return ["acknowledged": true]
+        case "oneDragon.event":
+            guard let parameters,
+                  let taskID = parameters["taskId"] as? String,
+                  let state = parameters["state"] as? String,
+                  !taskID.isEmpty,
+                  ["running", "completed", "cancelled", "failed"].contains(state)
+            else {
+                throw BetterGICorePlatformAdapterError.invalidParameters(
+                    "oneDragon.event requires a taskId and supported state."
+                )
+            }
+            let error = parameters["error"] as? [String: Any]
+            if let message = error?["message"] as? String {
+                appState.addLog(.error, "Core one-dragon \(taskID) \(state): \(message)")
+            } else {
+                appState.addLog(.info, "Core one-dragon \(taskID) \(state)")
             }
             return ["acknowledged": true]
         case "pathing.current":

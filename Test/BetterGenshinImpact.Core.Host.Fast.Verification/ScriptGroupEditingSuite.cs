@@ -93,6 +93,16 @@ public sealed class ScriptGroupEditingSuite : IVerificationSuite
             _ = catalog.SetNextProject("Fixture Group", 2);
             context.Require(catalog.List().Single().Projects.Single(project => project.Index == 2).NextFlag,
                 "Next-run project marker was not exposed by the Core summary.");
+            var resumed = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(
+                await File.ReadAllTextAsync(
+                    Path.Combine(layout.ScriptGroupPath, "Fixture Group.json"),
+                    cancellationToken));
+            ScriptGroupResumeState.ApplyAndConsume(layout, resumed);
+            context.Require(
+                resumed.Projects.Single(project => project.Index == 1).SkipFlag == true &&
+                resumed.Projects.Single(project => project.Index == 2).SkipFlag != true &&
+                !File.Exists(layout.SchedulerStatePath),
+                "Shared script-group resume state did not skip preceding projects and consume the marker.");
         }
         finally
         {

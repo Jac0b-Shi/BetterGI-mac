@@ -19,6 +19,7 @@ public sealed class RuntimeLayout
     public string RootPath { get; }
     public string UserPath => Path.Combine(RootPath, "User");
     public string ScriptGroupPath => Path.Combine(UserPath, "ScriptGroup");
+    public string OneDragonPath => Path.Combine(UserPath, "OneDragon");
     public string KeyMouseScriptPath => Path.Combine(UserPath, "KeyMouseScript");
     public string RunPath => Path.Combine(RootPath, "Run");
     public string LogPath => Path.Combine(RootPath, "log");
