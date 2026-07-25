@@ -13,6 +13,7 @@ using BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
 using BetterGenshinImpact.GameTask.AutoStygianOnslaught;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
+using BetterGenshinImpact.GameTask.UseRedeemCode;
 using Newtonsoft.Json.Linq;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
@@ -30,7 +31,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         "AutoGeniusInvokation" or "AutoCook" or "AutoFishing" or "AutoWood" or
         "AutoMusicGame" or "AutoAlbum" or "AutoBoss" or "AutoFight" or
         "AutoDomain" or "AutoArtifactSalvage" or "AutoLeyLineOutcrop" or
-        "AutoStygianOnslaught";
+        "AutoStygianOnslaught" or "AutoRedeemCode";
 
     public void AttachAutoFightConfigUpdated(Action<AutoFightConfig> callback) =>
         _autoFightConfigUpdated = callback ?? throw new ArgumentNullException(nameof(callback));
@@ -143,6 +144,8 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
                 "AutoStygianOnslaught" => Describe(
                     LoadConfig<AutoStygianOnslaughtConfig>(root, "autoStygianOnslaughtConfig"),
                     LoadConfig<AutoArtifactSalvageConfig>(root, "autoArtifactSalvageConfig")),
+                "AutoRedeemCode" => Describe(
+                    LoadConfig<AutoRedeemCodeConfig>(root, "autoRedeemCodeConfig")),
                 _ => throw Unavailable(name),
             };
         }
@@ -163,8 +166,21 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             "AutoArtifactSalvage" => SaveAutoArtifactSalvage(settings),
             "AutoLeyLineOutcrop" => SaveAutoLeyLineOutcrop(settings),
             "AutoStygianOnslaught" => SaveAutoStygianOnslaught(settings),
+            "AutoRedeemCode" => SaveAutoRedeemCode(settings),
             _ => throw Unavailable(name),
         };
+    }
+
+    private object SaveAutoRedeemCode(JObject settings)
+    {
+        lock (_lock)
+        {
+            var root = LoadRoot();
+            var config = LoadConfig<AutoRedeemCodeConfig>(root, "autoRedeemCodeConfig");
+            config.ClipboardListenerEnabled = RequiredBool(settings, "clipboardListenerEnabled");
+            SaveConfig("autoRedeemCodeConfig", config);
+            return Describe(config);
+        }
     }
 
     private object SaveAutoGeniusInvokation(JObject settings)
@@ -604,6 +620,12 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         mustCanorusLevel = config.MustCanorusLevel,
         musicLevel = string.IsNullOrEmpty(config.MusicLevel) ? MusicLevels[0] : config.MusicLevel,
         musicLevelOptions = MusicLevels,
+    };
+
+    private static object Describe(AutoRedeemCodeConfig config) => new
+    {
+        name = "AutoRedeemCode",
+        clipboardListenerEnabled = config.ClipboardListenerEnabled,
     };
 
     private object Describe(AutoBossConfig config) => new

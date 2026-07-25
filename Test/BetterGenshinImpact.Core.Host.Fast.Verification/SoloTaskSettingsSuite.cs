@@ -27,6 +27,9 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                     "mustCanorusLevel": false,
                     "musicLevel": "大师"
                   },
+                  "autoRedeemCodeConfig": {
+                    "clipboardListenerEnabled": true
+                  },
                   "autoLeyLineOutcropConfig": {
                     "leyLineOutcropType": "启示之花",
                     "country": "蒙德",
@@ -99,8 +102,8 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
             }
             context.Require(
                 descriptors.Single(item => item.Value<string>("name") == "AutoRedeemCode")
-                    .Value<bool>("settingsAvailable") == false,
-                "AutoRedeemCode exposed a fake expandable settings surface.");
+                    .Value<bool>("settingsAvailable"),
+                "AutoRedeemCode did not expose its upstream clipboard-listener setting.");
             var descriptor = descriptors.Single(item =>
                 item.Value<string>("name") == "AutoGeniusInvokation");
             context.Require(descriptor.Value<bool>("available") &&
@@ -160,9 +163,18 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
             descriptor = descriptors.Single(item =>
                 item.Value<string>("name") == "AutoRedeemCode");
             context.Require(descriptor.Value<bool>("available") &&
-                            !descriptor.Value<bool>("settingsAvailable") &&
+                            descriptor.Value<bool>("settingsAvailable") &&
                             descriptor.Value<string>("inputKind") == "multilineText",
-                "AutoRedeemCode did not expose its Core-owned multiline input contract.");
+                "AutoRedeemCode did not expose its Core-owned input and settings contracts.");
+            var redeemSettings = JObject.FromObject(catalog.Get("AutoRedeemCode"));
+            _ = catalog.Save("AutoRedeemCode", JObject.FromObject(new
+            {
+                clipboardListenerEnabled = false,
+            }));
+            var redeemSaved = JObject.FromObject(catalog.Get("AutoRedeemCode"));
+            context.Require(redeemSettings.Value<bool>("clipboardListenerEnabled") &&
+                            !redeemSaved.Value<bool>("clipboardListenerEnabled"),
+                "AutoRedeemCode did not persist its upstream clipboard-listener setting.");
             _ = coordinator.Start("AutoRedeemCode", " CODE-A \n\nCODE-B\r\n");
             for (var retry = 0; retry < 20 && platform.Request is null; retry++)
                 await Task.Delay(10, cancellationToken);

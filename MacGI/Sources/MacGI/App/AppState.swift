@@ -9,6 +9,11 @@ struct CoreCatalogIssue: Equatable, Sendable {
     let message: String
 }
 
+struct RedeemCodeClipboardPrompt: Identifiable, Equatable {
+    let id = UUID()
+    let sourceText: String
+}
+
 enum AppStatus: String, CaseIterable, Identifiable {
     case idle
     case running
@@ -413,8 +418,12 @@ final class AppState: ObservableObject {
     @Published var features: [MacGIFeature] = []
     @Published var soloTasks: [BetterGICoreSoloTask] = []
     @Published var soloTaskInputDrafts: [String: String] = [:]
+    @Published var redeemCodeClipboardDraft = ""
+    @Published private(set) var redeemCodeClipboardPrompt: RedeemCodeClipboardPrompt?
     @Published private(set) var soloTaskStatus = BetterGICoreSoloTaskStatus(
         taskID: nil, name: nil, state: "idle", error: nil)
+    private var didHandleInitialApplicationActivation = false
+    private var dismissedRedeemCodeClipboardTexts: Set<String> = []
     @Published private(set) var keyMouseScripts: [BetterGIKeyMouseScript] = []
     @Published private(set) var keyMouseRecordingState = "idle"
     @Published private(set) var keyMousePlaybackStatus = BetterGIKeyMousePlaybackStatus(
@@ -430,6 +439,7 @@ final class AppState: ObservableObject {
     @Published private(set) var autoGeniusInvokationSettings:
         BetterGICoreAutoGeniusInvokationSettings?
     @Published private(set) var autoCookSettings: BetterGICoreAutoCookSettings?
+    @Published private(set) var autoRedeemCodeSettings: BetterGICoreAutoRedeemCodeSettings?
     @Published private(set) var autoFishingSettings: BetterGICoreAutoFishingSettings?
     @Published private(set) var autoWoodSettings: BetterGICoreAutoWoodSettings?
     @Published private(set) var autoMusicGameSettings: BetterGICoreAutoMusicGameSettings?
@@ -3623,6 +3633,7 @@ final class AppState: ObservableObject {
             soloTaskStatus = try await supervisor.soloTaskStatus()
             autoGeniusInvokationSettings = try await supervisor.autoGeniusInvokationSettings()
             autoCookSettings = try await supervisor.autoCookSettings()
+            autoRedeemCodeSettings = try await supervisor.autoRedeemCodeSettings()
             autoFishingSettings = try await supervisor.autoFishingSettings()
             autoWoodSettings = try await supervisor.autoWoodSettings()
             autoMusicGameSettings = try await supervisor.autoMusicGameSettings()
@@ -3636,6 +3647,7 @@ final class AppState: ObservableObject {
             soloTasks = []
             autoGeniusInvokationSettings = nil
             autoCookSettings = nil
+            autoRedeemCodeSettings = nil
             autoFishingSettings = nil
             autoWoodSettings = nil
             autoMusicGameSettings = nil
@@ -3740,6 +3752,65 @@ final class AppState: ObservableObject {
             do { self?.autoMusicGameSettings = try await supervisor.saveAutoMusicGameSettings(next) }
             catch { self?.addLog(.error, "AutoMusicGame settings save failed: \(error.localizedDescription)") }
         }
+    }
+
+    func saveAutoRedeemCodeSettings(clipboardListenerEnabled: Bool) {
+        guard let supervisor = betterGICoreSupervisor else { return }
+        let next = BetterGICoreAutoRedeemCodeSettings(
+            clipboardListenerEnabled: clipboardListenerEnabled)
+        Task { [weak self] in
+            do {
+                self?.autoRedeemCodeSettings =
+                    try await supervisor.saveAutoRedeemCodeSettings(next)
+            } catch {
+                self?.addLog(
+                    .error,
+                    "AutoRedeemCode settings save failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func applicationDidBecomeActive() {
+        guard didHandleInitialApplicationActivation else {
+            didHandleInitialApplicationActivation = true
+            return
+        }
+        guard autoRedeemCodeSettings?.clipboardListenerEnabled == true,
+              redeemCodeClipboardPrompt == nil,
+              let text = NSPasteboard.general.string(forType: .string),
+              !dismissedRedeemCodeClipboardTexts.contains(text) else {
+            return
+        }
+        let codes = RedeemCodeClipboardPolicy.extractCodes(from: text)
+        guard !codes.isEmpty else { return }
+        redeemCodeClipboardDraft = codes.joined(separator: "\n")
+        redeemCodeClipboardPrompt = RedeemCodeClipboardPrompt(sourceText: text)
+    }
+
+    func dismissRedeemCodeClipboardPrompt() {
+        if let sourceText = redeemCodeClipboardPrompt?.sourceText {
+            if dismissedRedeemCodeClipboardTexts.count > 10 {
+                dismissedRedeemCodeClipboardTexts.removeAll()
+            }
+            dismissedRedeemCodeClipboardTexts.insert(sourceText)
+        }
+        redeemCodeClipboardPrompt = nil
+        redeemCodeClipboardDraft = ""
+    }
+
+    func acceptRedeemCodeClipboardPrompt() {
+        let codes = redeemCodeClipboardDraft
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !codes.isEmpty else {
+            dismissRedeemCodeClipboardPrompt()
+            return
+        }
+        NSPasteboard.general.clearContents()
+        redeemCodeClipboardPrompt = nil
+        redeemCodeClipboardDraft = ""
+        toggleSoloTask("AutoRedeemCode", inputText: codes.joined(separator: "\n"))
     }
 
     func saveAutoBossSettings(

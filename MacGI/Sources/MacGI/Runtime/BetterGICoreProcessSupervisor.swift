@@ -276,6 +276,10 @@ struct BetterGICoreAutoCookSettings: Sendable, Equatable {
     let stopTaskWhenRecoverButtonDetected: Bool
 }
 
+struct BetterGICoreAutoRedeemCodeSettings: Sendable, Equatable {
+    let clipboardListenerEnabled: Bool
+}
+
 struct BetterGICoreAutoGeniusInvokationSettings: Sendable, Equatable {
     let strategyName: String
     let strategyOptions: [String]
@@ -2312,6 +2316,22 @@ actor BetterGICoreProcessSupervisor {
         ))
     }
 
+    func autoRedeemCodeSettings() throws -> BetterGICoreAutoRedeemCodeSettings {
+        try decodeAutoRedeemCodeSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "AutoRedeemCode"]
+        ))
+    }
+
+    func saveAutoRedeemCodeSettings(_ settings: BetterGICoreAutoRedeemCodeSettings) throws
+        -> BetterGICoreAutoRedeemCodeSettings {
+        try decodeAutoRedeemCodeSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "AutoRedeemCode", "settings": [
+                "clipboardListenerEnabled": settings.clipboardListenerEnabled,
+            ]]
+        ))
+    }
+
     func autoGeniusInvokationSettings() throws
         -> BetterGICoreAutoGeniusInvokationSettings {
         try decodeAutoGeniusInvokationSettings(requestSoloSettings(
@@ -2612,6 +2632,17 @@ actor BetterGICoreProcessSupervisor {
             checkIntervalMs: interval,
             stopTaskWhenRecoverButtonDetected: stopWhenDetected
         )
+    }
+
+    private func decodeAutoRedeemCodeSettings(_ value: Any) throws
+        -> BetterGICoreAutoRedeemCodeSettings {
+        guard let result = value as? [String: Any],
+              result["name"] as? String == "AutoRedeemCode",
+              let clipboardListenerEnabled = result["clipboardListenerEnabled"] as? Bool else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoRedeemCode settings.")
+        }
+        return BetterGICoreAutoRedeemCodeSettings(
+            clipboardListenerEnabled: clipboardListenerEnabled)
     }
 
     private func decodeAutoFishingSettings(_ value: Any) throws

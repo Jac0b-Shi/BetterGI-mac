@@ -59,6 +59,9 @@ final class GameFocusObserver: NSObject {
             object: nil)
 
         appState.refreshGameWindowFocus()
+        if NSApp.isActive {
+            appState.applicationDidBecomeActive()
+        }
     }
 
     func stop() {
@@ -74,6 +77,10 @@ final class GameFocusObserver: NSObject {
             as? NSRunningApplication else {
             scheduleDelayedRecheck()
             return
+        }
+
+        if application.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            appState?.applicationDidBecomeActive()
         }
 
         if application.processIdentifier == appState?.selectedWindow.ownerPID {

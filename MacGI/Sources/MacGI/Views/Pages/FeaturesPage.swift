@@ -248,7 +248,7 @@ struct SoloTasksPage: View {
         case "AutoDomain": autoDomainSettings
         case "AutoArtifactSalvage": autoArtifactSalvageSettings
         case "AutoFight": autoFightSettings
-        case "AutoRedeemCode": EmptyView()
+        case "AutoRedeemCode": autoRedeemCodeSettings
         default:
             BGISettingLine(title: "设置", subtitle: "Core 未返回该任务的设置模型") {
                 BGIStatusBadge(text: "不可用", tint: BGIColors.muted)
@@ -387,6 +387,27 @@ struct SoloTasksPage: View {
             BGISettingLine(title: "设置", subtitle: "正在从 BetterGI C# Core 读取") {
                 ProgressView().controlSize(.small)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var autoRedeemCodeSettings: some View {
+        if let settings = appState.autoRedeemCodeSettings {
+            BGISettingLine(
+                title: "获取剪切板上的兑换码",
+                subtitle: "在切换到软件界面时候，自动提取兑换码并提示"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.clipboardListenerEnabled },
+                    set: {
+                        appState.saveAutoRedeemCodeSettings(
+                            clipboardListenerEnabled: $0)
+                    }))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+        } else {
+            settingsLoading
         }
     }
 

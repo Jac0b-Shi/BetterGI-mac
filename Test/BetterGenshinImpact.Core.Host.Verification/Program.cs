@@ -3044,9 +3044,8 @@ try
             expectedSoloTaskNames.SetEquals(actualSoloTaskNames) &&
             soloItems.All(item => item.Value<bool>("available")),
         "solo.list did not expose the truthful Core capability catalog");
-    Require(soloItems.Where(item => item.Value<string>("name") != "AutoRedeemCode")
-                .All(item => item.Value<bool>("settingsAvailable")) &&
-            !redeemCodeDescriptor.Value<bool>("settingsAvailable") &&
+    Require(soloItems.All(item => item.Value<bool>("settingsAvailable")) &&
+            redeemCodeDescriptor.Value<bool>("settingsAvailable") &&
             redeemCodeDescriptor.Value<string>("inputKind") == "multilineText" &&
             !string.IsNullOrWhiteSpace(redeemCodeDescriptor.Value<string>("inputTitle")) &&
             !string.IsNullOrWhiteSpace(redeemCodeDescriptor.Value<string>("inputPlaceholder")),
