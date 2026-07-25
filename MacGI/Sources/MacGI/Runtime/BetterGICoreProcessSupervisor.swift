@@ -719,6 +719,23 @@ actor BetterGICoreProcessSupervisor {
         try runningClient().projectCommonSettings(groupName: groupName, projectIndex: projectIndex)
     }
 
+    func logParseSettings(groupName: String) throws -> BetterGILogParseSettings {
+        try runningClient().logParseSettings(groupName: groupName)
+    }
+
+    func generateLogParse(
+        groupName: String,
+        settings: BetterGILogParseSettings
+    ) throws -> BetterGILogParseGenerationResult {
+        try runningClient().generateLogParse(
+            groupName: groupName,
+            settings: settings)
+    }
+
+    func logParseCookieHelpPath() throws -> String {
+        try runningClient().logParseCookieHelpPath()
+    }
+
     func projectCustomSettings(groupName: String, projectIndex: Int) throws -> BetterGIProjectCustomSettings {
         try runningClient().projectCustomSettings(groupName: groupName, projectIndex: projectIndex)
     }

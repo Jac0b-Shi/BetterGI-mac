@@ -143,6 +143,34 @@ struct BetterGIProjectCommonSettings: Equatable, Sendable {
     let httpAllowedURLs: [String]
 }
 
+struct BetterGILogParseOption: Equatable, Sendable, Identifiable {
+    let value: String
+    let label: String
+    var id: String { value }
+}
+
+struct BetterGILogParseSettings: Equatable, Sendable {
+    let groupName: String
+    var rangeValue: String
+    var dayRangeValue: String
+    var mergerStatsSwitch: Bool
+    var faultStatsSwitch: Bool
+    var hoeingStatsSwitch: Bool
+    var generateFarmingPlanData: Bool
+    var hoeingDelay: String
+    var cookie: String
+    let rangeOptions: [BetterGILogParseOption]
+    let dayRangeOptions: [BetterGILogParseOption]
+}
+
+struct BetterGILogParseGenerationResult: Equatable, Sendable {
+    let filePath: String
+    let logFileCount: Int
+    let configGroupCount: Int
+    let hoeingStatsEnabled: Bool
+    let statusMessages: [String]
+}
+
 struct BetterGIAddCandidate: Equatable, Sendable, Identifiable {
     let id: String
     let name: String
@@ -512,6 +540,90 @@ final class BetterGICoreRPCClient: @unchecked Sendable {
                 projects: projects
             )
         }
+    }
+
+    func logParseSettings(groupName: String) throws -> BetterGILogParseSettings {
+        guard let item = try request(
+            method: "logParse.settings.get",
+            parameters: ["groupName": groupName]
+        ) as? [String: Any],
+              let returnedGroupName = item["groupName"] as? String,
+              let rangeValue = item["rangeValue"] as? String,
+              let dayRangeValue = item["dayRangeValue"] as? String,
+              let mergerStatsSwitch = item["mergerStatsSwitch"] as? Bool,
+              let faultStatsSwitch = item["faultStatsSwitch"] as? Bool,
+              let hoeingStatsSwitch = item["hoeingStatsSwitch"] as? Bool,
+              let generateFarmingPlanData =
+                  item["generateFarmingPlanData"] as? Bool,
+              let hoeingDelay = item["hoeingDelay"] as? String,
+              let cookie = item["cookie"] as? String,
+              let rangeItems = item["rangeOptions"] as? [[String: Any]],
+              let dayRangeItems = item["dayRangeOptions"] as? [[String: Any]]
+        else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid log-parse settings result.")
+        }
+        return BetterGILogParseSettings(
+            groupName: returnedGroupName,
+            rangeValue: rangeValue,
+            dayRangeValue: dayRangeValue,
+            mergerStatsSwitch: mergerStatsSwitch,
+            faultStatsSwitch: faultStatsSwitch,
+            hoeingStatsSwitch: hoeingStatsSwitch,
+            generateFarmingPlanData: generateFarmingPlanData,
+            hoeingDelay: hoeingDelay,
+            cookie: cookie,
+            rangeOptions: try Self.decodeLogParseOptions(rangeItems),
+            dayRangeOptions: try Self.decodeLogParseOptions(dayRangeItems))
+    }
+
+    func generateLogParse(
+        groupName: String,
+        settings: BetterGILogParseSettings
+    ) throws -> BetterGILogParseGenerationResult {
+        guard let item = try request(
+            method: "logParse.generate",
+            parameters: [
+                "groupName": groupName,
+                "values": [
+                    "rangeValue": settings.rangeValue,
+                    "dayRangeValue": settings.dayRangeValue,
+                    "mergerStatsSwitch": settings.mergerStatsSwitch,
+                    "faultStatsSwitch": settings.faultStatsSwitch,
+                    "hoeingStatsSwitch": settings.hoeingStatsSwitch,
+                    "generateFarmingPlanData":
+                        settings.generateFarmingPlanData,
+                    "hoeingDelay": settings.hoeingDelay,
+                    "cookie": settings.cookie,
+                ],
+            ]
+        ) as? [String: Any],
+              let filePath = item["filePath"] as? String,
+              let logFileCount = item["logFileCount"] as? Int,
+              let configGroupCount = item["configGroupCount"] as? Int,
+              let hoeingStatsEnabled = item["hoeingStatsEnabled"] as? Bool,
+              let statusMessages = item["statusMessages"] as? [String]
+        else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid log-parse generation result.")
+        }
+        return BetterGILogParseGenerationResult(
+            filePath: filePath,
+            logFileCount: logFileCount,
+            configGroupCount: configGroupCount,
+            hoeingStatsEnabled: hoeingStatsEnabled,
+            statusMessages: statusMessages)
+    }
+
+    func logParseCookieHelpPath() throws -> String {
+        guard let item = try request(method: "logParse.cookieHelp")
+            as? [String: Any],
+              let filePath = item["filePath"] as? String
+        else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid log-parse cookie help result.")
+        }
+        return filePath
     }
 
     func projectCommonSettings(groupName: String, projectIndex: Int) throws -> BetterGIProjectCommonSettings {
@@ -907,5 +1019,19 @@ final class BetterGICoreRPCClient: @unchecked Sendable {
 
     private func posixError(_ operation: String) -> BetterGICoreRPCError {
         BetterGICoreRPCError.socket("\(operation) failed: \(String(cString: strerror(errno)))")
+    }
+
+    private static func decodeLogParseOptions(
+        _ items: [[String: Any]]
+    ) throws -> [BetterGILogParseOption] {
+        try items.map { item in
+            guard let value = item["value"] as? String,
+                  let label = item["label"] as? String
+            else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid log-parse option.")
+            }
+            return BetterGILogParseOption(value: value, label: label)
+        }
     }
 }

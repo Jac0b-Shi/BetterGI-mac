@@ -22,4 +22,5 @@ return await VerificationRunner.RunAsync(args,
     new CaptureRingContractSuite(),
     new ScriptStartupSuite(),
     new ScriptFilePathSuite(),
+    new LogParseSuite(),
 ]);

@@ -623,6 +623,54 @@ final class AppState: ObservableObject {
         return try await supervisor.projectCommonSettings(groupName: group.name, projectIndex: projectIndex)
     }
 
+    func loadLogParseSettings() async throws -> BetterGILogParseSettings {
+        guard let supervisor = betterGICoreSupervisor,
+              let group = selectedSchedulerGroup
+        else {
+            throw BetterGICoreRPCError.socket(
+                "Core or selected script group is unavailable.")
+        }
+        return try await supervisor.logParseSettings(groupName: group.name)
+    }
+
+    func generateLogParse(
+        _ settings: BetterGILogParseSettings
+    ) async throws -> BetterGILogParseGenerationResult {
+        guard let supervisor = betterGICoreSupervisor,
+              let group = selectedSchedulerGroup,
+              group.name == settings.groupName
+        else {
+            throw BetterGICoreRPCError.socket(
+                "Core or selected script group changed while generating log analysis.")
+        }
+        let result = try await supervisor.generateLogParse(
+            groupName: group.name,
+            settings: settings)
+        for message in result.statusMessages {
+            addLog(.info, "日志分析：\(message)")
+        }
+        guard NSWorkspace.shared.open(URL(fileURLWithPath: result.filePath)) else {
+            throw BetterGICoreRPCError.socket(
+                "macOS 无法打开生成的日志分析文件。")
+        }
+        addLog(
+            .info,
+            "日志分析已生成：\(result.configGroupCount) 个配置组，"
+                + "\(result.logFileCount) 个日志文件。")
+        return result
+    }
+
+    func openLogParseCookieHelp() async throws {
+        guard let supervisor = betterGICoreSupervisor else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is unavailable.")
+        }
+        let path = try await supervisor.logParseCookieHelpPath()
+        guard NSWorkspace.shared.open(URL(fileURLWithPath: path)) else {
+            throw BetterGICoreRPCError.socket(
+                "macOS 无法打开锄地统计说明。")
+        }
+    }
+
     func saveProjectCommonSettings(_ settings: BetterGIProjectCommonSettings) async throws {
         guard let supervisor = betterGICoreSupervisor, let group = selectedSchedulerGroup else {
             throw BetterGICoreRPCError.socket("Core or selected script group is unavailable.")

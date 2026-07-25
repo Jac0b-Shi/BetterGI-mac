@@ -33,6 +33,7 @@ public sealed class CoreRpcServer(
     private readonly MacroSettingsCatalog _macroSettings = new(layout);
     private readonly HotKeySettingsCatalog _hotKeySettings = new(layout);
     private readonly KeyBindingSettingsCatalog _keyBindingSettings = new(layout);
+    private readonly LogParseCoordinator _logParse = new(layout);
     private NotificationSettingsCatalog? _notificationSettings;
     private readonly PlatformCallbackChannel _platformCallbacks = new();
     private SchedulerCoordinator? _scheduler;
@@ -352,6 +353,16 @@ public sealed class CoreRpcServer(
                     request.Id,
                     await NotificationSettings.TestAsync(
                         RequiredString(request.Params, "channel")));
+            if (request.Method == "logParse.generate")
+            {
+                return RpcResponse.Success(
+                    request.Id,
+                    await _logParse.GenerateAsync(
+                        RequiredString(request.Params, "groupName"),
+                        request.Params?["values"] as JObject
+                        ?? throw new ArgumentException("values is required."),
+                        _shutdown.Token));
+            }
             if (request.Method == "hotKey.invoke")
             {
                 return RpcResponse.Success(
@@ -536,6 +547,12 @@ public sealed class CoreRpcServer(
                 "notification.settings.save" => NotificationSettings.Save(
                     request.Params?["settings"] as JObject
                     ?? throw new ArgumentException("settings is required.")),
+                "logParse.settings.get" => _logParse.GetSettings(
+                    RequiredString(request.Params, "groupName")),
+                "logParse.cookieHelp" => new
+                {
+                    filePath = _logParse.WriteCookieHelp()
+                },
                 "macro.settings.get" => _macroSettings.Get(),
                 "macro.settings.save" => _macroSettings.Save(
                     request.Params?["settings"] as JObject
@@ -624,6 +641,7 @@ public sealed class CoreRpcServer(
                 "keyMouse.playback",
                 "notification.native",
                 "notification.channels",
+                "log-parse",
                 "macro.hold-continuation",
                 "macro.turn-around",
                 "macro.quick-serenitea-pot",

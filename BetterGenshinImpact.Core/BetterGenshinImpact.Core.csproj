@@ -458,6 +458,13 @@
     <Compile Include="../BetterGenshinImpact/GameTask/LogParse/ExecutionRecord.cs" Link="GameTask/LogParse/ExecutionRecord.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/LogParse/DailyExecutionRecord.cs" Link="GameTask/LogParse/DailyExecutionRecord.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/LogParse/ExecutionRecordStorage.cs" Link="GameTask/LogParse/ExecutionRecordStorage.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/LogParse/LogParse.cs" Link="GameTask/LogParse/LogParse.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/LogParse/LogParseConfig.cs" Link="GameTask/LogParse/LogParseConfig.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/LogParse/MergeConfigGroups.cs" Link="GameTask/LogParse/MergeConfigGroups.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/LogParse/MoraStatistics.cs" Link="GameTask/LogParse/MoraStatistics.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/LogParse/NoLoginException.cs" Link="GameTask/LogParse/NoLoginException.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/LogParse/TravelsDiaryDetailManager.cs" Link="GameTask/LogParse/TravelsDiaryDetailManager.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/LogParse/YsHttp.cs" Link="GameTask/LogParse/YsHttp.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recorder/Model/MacroEvent.cs" Link="Core/Recorder/Model/MacroEvent.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recorder/Model/KeyMouseScript.cs" Link="Core/Recorder/Model/KeyMouseScript.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recorder/Model/KeyMouseScriptInfo.cs" Link="Core/Recorder/Model/KeyMouseScriptInfo.cs" />

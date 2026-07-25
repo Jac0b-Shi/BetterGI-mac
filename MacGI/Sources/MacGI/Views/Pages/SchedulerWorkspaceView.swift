@@ -11,6 +11,7 @@ private enum SchedulerSheet: Identifiable {
     case continueRun
     case groupSettings
     case repository
+    case logParse
 
     var id: String {
         switch self {
@@ -24,6 +25,7 @@ private enum SchedulerSheet: Identifiable {
         case .continueRun: "continue-run"
         case .groupSettings: "group-settings"
         case .repository: "repository"
+        case .logParse: "log-parse"
         }
     }
 }
@@ -78,6 +80,7 @@ struct SchedulerWorkspaceView: View {
             case .continueRun: SchedulerContinueRunSheet()
             case .groupSettings: SchedulerGroupSettingsSheet()
             case .repository: ScriptRepositorySheet()
+            case .logParse: SchedulerLogParseSheet()
             }
         }
         .confirmationDialog("是否清空当前配置组的所有任务？", isPresented: $confirmingClear) {
@@ -192,8 +195,9 @@ struct SchedulerWorkspaceView: View {
                 Menu("更多功能") {
                     Button("清空", role: .destructive) { confirmingClear = true }
                     Button("日志分析") {
-                        appState.addLog(.info, "日志分析尚未接入。")
-                    }.disabled(true)
+                        sheet = .logParse
+                    }
+                    .disabled(appState.selectedSchedulerGroup == nil)
                     Button("打开脚本仓库") {
                         sheet = .repository
                     }
@@ -215,6 +219,157 @@ struct SchedulerWorkspaceView: View {
 
     private func typeDescription(_ type: String) -> String {
         ["Javascript": "JS脚本", "Pathing": "地图追踪", "KeyMouse": "键鼠脚本", "Shell": "Shell"][type] ?? type
+    }
+}
+
+private struct SchedulerLogParseSheet: View {
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.dismiss) private var dismiss
+    @State private var settings: BetterGILogParseSettings?
+    @State private var error: String?
+    @State private var status: String?
+    @State private var generating = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("日志分析").font(.title2).bold()
+            if let settings {
+                Form {
+                    LabeledContent("配置组") {
+                        Text(settings.groupName)
+                    }
+                    Picker(
+                        "分析范围",
+                        selection: valueBinding(\.rangeValue)
+                    ) {
+                        ForEach(settings.rangeOptions) { option in
+                            Text(option.label).tag(option.value)
+                        }
+                    }
+                    Picker(
+                        "日志天数",
+                        selection: valueBinding(\.dayRangeValue)
+                    ) {
+                        ForEach(settings.dayRangeOptions) { option in
+                            Text(option.label).tag(option.value)
+                        }
+                    }
+                    Toggle(
+                        "合并相邻同名配置组",
+                        isOn: valueBinding(\.mergerStatsSwitch))
+                    Toggle(
+                        "异常情况统计",
+                        isOn: valueBinding(\.faultStatsSwitch))
+                    Toggle(
+                        "统计锄地摩拉怪物数",
+                        isOn: valueBinding(\.hoeingStatsSwitch))
+                    Toggle(
+                        "生成锄地规划数据",
+                        isOn: valueBinding(\.generateFarmingPlanData))
+                    HStack {
+                        SecureField(
+                            "米游社 Cookie",
+                            text: valueBinding(\.cookie))
+                        Button {
+                            openCookieHelp()
+                        } label: {
+                            Image(systemName: "questionmark.circle")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("锄地统计说明")
+                    }
+                    LabeledContent("锄地延时（秒）") {
+                        TextField(
+                            "0",
+                            text: valueBinding(\.hoeingDelay))
+                            .frame(width: 100)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+                .formStyle(.grouped)
+            } else if error == nil {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            if generating {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("正在准备数据并生成日志分析...")
+                }
+                .foregroundStyle(BGIColors.mutedText)
+            } else if let status {
+                Text(status)
+                    .foregroundStyle(BGIColors.success)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let error {
+                Text(error)
+                    .foregroundStyle(BGIColors.danger)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                    .disabled(generating)
+                Button("生成") { generate() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(settings == nil || generating)
+            }
+        }
+        .padding(22)
+        .frame(width: 620, height: 650)
+        .task { await load() }
+    }
+
+    private func valueBinding<Value>(
+        _ keyPath: WritableKeyPath<BetterGILogParseSettings, Value>
+    ) -> Binding<Value> {
+        Binding(
+            get: {
+                guard let settings else {
+                    preconditionFailure("Log-parse settings are unavailable.")
+                }
+                return settings[keyPath: keyPath]
+            },
+            set: { settings?[keyPath: keyPath] = $0 })
+    }
+
+    private func load() async {
+        error = nil
+        do {
+            settings = try await appState.loadLogParseSettings()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func openCookieHelp() {
+        Task {
+            do {
+                try await appState.openLogParseCookieHelp()
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
+    }
+
+    private func generate() {
+        guard let settings else { return }
+        generating = true
+        error = nil
+        status = nil
+        Task {
+            do {
+                let result = try await appState.generateLogParse(settings)
+                status = "已生成 \(result.configGroupCount) 个配置组的日志分析。"
+            } catch {
+                self.error = error.localizedDescription
+            }
+            generating = false
+        }
     }
 }
 
