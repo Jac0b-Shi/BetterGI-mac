@@ -57,6 +57,8 @@ struct MacHotKeySignatureTests {
             keyboardEventSource: nil,
             virtualKey: keyCode,
             keyDown: false))
+        down.flags = []
+        up.flags = []
 
         #expect(
             MacHotKeySignature.from(type: .keyDown, event: down) ==
