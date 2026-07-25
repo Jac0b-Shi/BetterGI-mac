@@ -202,6 +202,14 @@ struct BetterGIScriptRepositoryUpdateResult: Equatable, Sendable {
     let indexPath: String
 }
 
+struct BetterGIScriptRepositoryBatchUpdateResult: Equatable, Sendable {
+    let attemptedCount: Int
+    let successCount: Int
+    let failureCount: Int
+    let failedPaths: [String]
+    let subscribedPaths: [String]
+}
+
 enum BetterGISchedulerCatalogMutation: Sendable {
     case add(type: String, candidateIDs: [String], shellCommand: String?)
     case remove(projectIndex: Int, sameFolder: Bool)
@@ -664,6 +672,33 @@ final class BetterGICoreRPCClient: @unchecked Sendable {
             channel: resultChannel,
             repositoryPath: repositoryPath,
             indexPath: indexPath
+        )
+    }
+
+    func updateSubscribedScripts(
+        channel: String,
+        url: String
+    ) throws -> BetterGIScriptRepositoryBatchUpdateResult {
+        guard let item = try request(
+            method: "repository.updateSubscribed",
+            parameters: ["channel": channel, "url": url]
+        ) as? [String: Any],
+              let attemptedCount = item["attemptedCount"] as? Int,
+              let successCount = item["successCount"] as? Int,
+              let failureCount = item["failureCount"] as? Int,
+              let failedPaths = item["failedPaths"] as? [String],
+              let subscribedPaths = item["subscribedPaths"] as? [String]
+        else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid repository.updateSubscribed result."
+            )
+        }
+        return BetterGIScriptRepositoryBatchUpdateResult(
+            attemptedCount: attemptedCount,
+            successCount: successCount,
+            failureCount: failureCount,
+            failedPaths: failedPaths,
+            subscribedPaths: subscribedPaths
         )
     }
 

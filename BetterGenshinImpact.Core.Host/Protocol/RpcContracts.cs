@@ -108,6 +108,13 @@ public sealed record ScriptRepositoryUpdateResult(
     [property: JsonProperty("repositoryPath")] string RepositoryPath,
     [property: JsonProperty("indexPath")] string IndexPath);
 
+public sealed record ScriptRepositoryBatchUpdateResult(
+    [property: JsonProperty("attemptedCount")] int AttemptedCount,
+    [property: JsonProperty("successCount")] int SuccessCount,
+    [property: JsonProperty("failureCount")] int FailureCount,
+    [property: JsonProperty("failedPaths")] IReadOnlyList<string> FailedPaths,
+    [property: JsonProperty("subscribedPaths")] IReadOnlyList<string> SubscribedPaths);
+
 public sealed record ScriptRepositoryImportResult(
     [property: JsonProperty("installedCount")] int InstalledCount,
     [property: JsonProperty("subscribedPaths")] IReadOnlyList<string> SubscribedPaths);

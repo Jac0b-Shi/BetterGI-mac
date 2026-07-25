@@ -647,6 +647,22 @@ final class AppState: ObservableObject {
         return result
     }
 
+    func updateSubscribedScripts(
+        channel: String,
+        url: String
+    ) async throws -> BetterGIScriptRepositoryBatchUpdateResult {
+        guard let supervisor = betterGICoreSupervisor else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is unavailable.")
+        }
+        let result = try await supervisor.updateSubscribedScripts(channel: channel, url: url)
+        await loadSchedulerGroupsFromCore()
+        addLog(
+            result.failureCount == 0 ? .info : .warn,
+            "订阅更新完成：成功 \(result.successCount) 项，失败 \(result.failureCount) 项。"
+        )
+        return result
+    }
+
     func resetScriptRepository() async throws {
         guard let supervisor = betterGICoreSupervisor else {
             throw BetterGICoreRPCError.socket("BetterGI Core is unavailable.")

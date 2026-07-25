@@ -132,6 +132,17 @@ struct ScriptRepositorySheet: View {
                         .disabled(!canOpenRepository)
 
                         Button {
+                            updateSubscriptions()
+                        } label: {
+                            Label("一键更新订阅", systemImage: "arrow.down.circle")
+                        }
+                        .disabled(
+                            isUpdating ||
+                            repositoryState?.subscribedPaths.isEmpty != false ||
+                            repositoryURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        )
+
+                        Button {
                             Task { await refreshState() }
                         } label: {
                             Image(systemName: "arrow.clockwise")
@@ -214,6 +225,34 @@ struct ScriptRepositorySheet: View {
             } catch {
                 self.error = error.localizedDescription
                 statusText = "脚本仓库重置失败。"
+            }
+            isUpdating = false
+        }
+    }
+
+    private func updateSubscriptions() {
+        isUpdating = true
+        error = nil
+        statusText = "正在更新仓库和全部订阅..."
+        Task {
+            do {
+                let result = try await appState.updateSubscribedScripts(
+                    channel: selectedChannel.name,
+                    url: repositoryURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+                if result.failureCount == 0 {
+                    statusText = result.attemptedCount == 0
+                        ? "没有可更新的订阅。"
+                        : "已更新 \(result.successCount) 项订阅。"
+                } else {
+                    statusText =
+                        "已更新 \(result.successCount) 项，\(result.failureCount) 项失败。"
+                    error = result.failedPaths.joined(separator: "\n")
+                }
+                await refreshState()
+            } catch {
+                self.error = error.localizedDescription
+                statusText = "一键更新订阅失败。"
             }
             isUpdating = false
         }

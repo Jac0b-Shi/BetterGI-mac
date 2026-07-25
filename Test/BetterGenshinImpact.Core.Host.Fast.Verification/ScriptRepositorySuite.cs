@@ -18,23 +18,39 @@ public sealed class ScriptRepositorySuite : IVerificationSuite
             var repository = Path.Combine(root, "Repos", "bettergi-scripts-list");
             var repositoryContent = Path.Combine(repository, "repo");
             var sourceScript = Path.Combine(repositoryContent, "js", "Fixture");
+            var sourcePathing = Path.Combine(repositoryContent, "pathing", "Fixture Routes");
             Directory.CreateDirectory(Path.Combine(sourceScript, "settings"));
+            Directory.CreateDirectory(sourcePathing);
             Directory.CreateDirectory(Path.Combine(repositoryContent, "packages"));
             await File.WriteAllTextAsync(Path.Combine(repository, "repo.json"), """
                 {
-                  "indexes": [{
-                    "name": "js",
-                    "type": "directory",
-                    "children": [{
-                      "name": "Fixture",
+                  "indexes": [
+                    {
+                      "name": "js",
                       "type": "directory",
-                      "version": "2.0.0",
-                      "author": "BetterGI",
-                      "description": "Repository fixture",
-                      "tags": ["fixture"],
-                      "children": []
-                    }]
-                  }]
+                      "children": [{
+                        "name": "Fixture",
+                        "type": "directory",
+                        "version": "2.0.0",
+                        "author": "BetterGI",
+                        "description": "Repository fixture",
+                        "tags": ["fixture"],
+                        "children": []
+                      }]
+                    },
+                    {
+                      "name": "pathing",
+                      "type": "directory",
+                      "children": [{
+                        "name": "Fixture Routes",
+                        "type": "directory",
+                        "children": [{
+                          "name": "route.json",
+                          "type": "file"
+                        }]
+                      }]
+                    }
+                  ]
                 }
                 """, cancellationToken);
             await File.WriteAllTextAsync(Path.Combine(sourceScript, "manifest.json"), """
@@ -53,6 +69,10 @@ public sealed class ScriptRepositorySuite : IVerificationSuite
             await File.WriteAllTextAsync(
                 Path.Combine(repositoryContent, "packages", "shared.js"),
                 "export default function helper() {}",
+                cancellationToken);
+            await File.WriteAllTextAsync(
+                Path.Combine(sourcePathing, "route.json"),
+                """{"info":{"name":"updated route"},"positions":[]}""",
                 cancellationToken);
             var webIndex = Path.Combine(root, "Assets", "Web", "ScriptRepo", "index.html");
             Directory.CreateDirectory(Path.GetDirectoryName(webIndex)!);
@@ -96,11 +116,41 @@ public sealed class ScriptRepositorySuite : IVerificationSuite
                     .Contains("packages/shared.js", StringComparison.Ordinal),
                 "Repository install did not replace the script payload.");
 
+            await File.WriteAllTextAsync(
+                Path.Combine(sourceScript, "main.js"),
+                "import helper from 'packages/shared.js'; helper(); // updated",
+                cancellationToken);
+            var subscriptionPath = Path.Combine(
+                layout.UserPath, "Subscriptions", "bettergi-scripts-list.json");
+            await File.WriteAllTextAsync(
+                subscriptionPath,
+                """["js/Fixture","js/Ghost","pathing"]""",
+                cancellationToken);
+            var batch = await catalog.UpdateSubscribedAsync(cancellationToken);
+            context.Require(
+                batch.AttemptedCount == 2 &&
+                batch.SuccessCount == 2 &&
+                batch.FailureCount == 0 &&
+                batch.SubscribedPaths.SequenceEqual(["js/Fixture", "pathing"]),
+                "One-click subscription update did not expand top-level paths or clean ghost entries.");
+            context.Require(
+                (await File.ReadAllTextAsync(
+                    Path.Combine(installedScript, "main.js"), cancellationToken))
+                    .Contains("// updated", StringComparison.Ordinal) &&
+                await File.ReadAllTextAsync(
+                    Path.Combine(installedScript, "settings", "user.json"), cancellationToken)
+                    == """{"keep":true}""",
+                "One-click subscription update did not replace code while preserving saved_files.");
+            context.Require(
+                File.Exists(Path.Combine(
+                    layout.UserPath, "AutoPathing", "Fixture Routes", "route.json")),
+                "One-click subscription update did not safely expand a top-level pathing subscription.");
+
             var state = catalog.GetState();
             context.Require(
                 state.Available &&
                 state.WebIndexPath == webIndex &&
-                state.SubscribedPaths.SequenceEqual(["js/Fixture"]),
+                state.SubscribedPaths.SequenceEqual(["js/Fixture", "pathing"]),
                 "Repository state did not expose the Web frontend and persisted subscription.");
         }
         finally

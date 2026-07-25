@@ -412,6 +412,11 @@ public sealed class CoreRpcServer(
                     RequiredString(request.Params, "channel"),
                     RequiredString(request.Params, "url"),
                     _shutdown.Token),
+                "repository.updateSubscribed" =>
+                    await _scriptRepositoryCatalog.UpdateRepositoryAndSubscribedAsync(
+                        RequiredString(request.Params, "channel"),
+                        RequiredString(request.Params, "url"),
+                        _shutdown.Token),
                 "repository.reset" => ResetScriptRepository(),
                 "repository.web.getRepoJson" => _scriptRepositoryCatalog.GetRepoJson(),
                 "repository.web.getSubscribedScriptPaths" => _scriptRepositoryCatalog.GetSubscribedPathsJson(),

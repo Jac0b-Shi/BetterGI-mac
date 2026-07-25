@@ -1436,6 +1436,13 @@ actor BetterGICoreProcessSupervisor {
         try runningClient().updateScriptRepository(channel: channel, url: url)
     }
 
+    func updateSubscribedScripts(
+        channel: String,
+        url: String
+    ) throws -> BetterGIScriptRepositoryBatchUpdateResult {
+        try runningClient().updateSubscribedScripts(channel: channel, url: url)
+    }
+
     func resetScriptRepository() throws {
         try runningClient().resetScriptRepository()
     }

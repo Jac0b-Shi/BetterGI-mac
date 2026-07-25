@@ -165,6 +165,65 @@ public sealed class ScriptRepositoryCatalog(RuntimeLayout layout)
         return new ScriptRepositoryImportResult(paths.Count, ReadSubscriptions());
     }
 
+    public async Task<ScriptRepositoryBatchUpdateResult> UpdateSubscribedAsync(
+        CancellationToken cancellationToken)
+    {
+        await _writeLock.WaitAsync(cancellationToken);
+        try
+        {
+            layout.EnsureCreated();
+            ValidateRepository(RepositoryRoot);
+
+            var subscriptions = ReadSubscriptions();
+            var validSubscriptions = subscriptions
+                .Where(RepositoryItemExists)
+                .ToArray();
+            if (validSubscriptions.Length != subscriptions.Count)
+                WriteSubscriptions(validSubscriptions);
+
+            var paths = ExpandTopLevelSubscriptions(validSubscriptions)
+                .Where(RepositoryItemExists)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            var failedPaths = new List<string>();
+            var successCount = 0;
+            foreach (var path in paths)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    _ = InstallCore(path, persistSubscription: false);
+                    successCount++;
+                }
+                catch
+                {
+                    failedPaths.Add(path);
+                }
+            }
+
+            return new ScriptRepositoryBatchUpdateResult(
+                paths.Length,
+                successCount,
+                failedPaths.Count,
+                failedPaths,
+                validSubscriptions);
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
+    public async Task<ScriptRepositoryBatchUpdateResult> UpdateRepositoryAndSubscribedAsync(
+        string channel,
+        string repositoryUrl,
+        CancellationToken cancellationToken)
+    {
+        _ = await UpdateAsync(channel, repositoryUrl, cancellationToken);
+        return await UpdateSubscribedAsync(cancellationToken);
+    }
+
     public bool ResetUpdateFlag(string path)
     {
         var normalizedPath = NormalizePath(path);
@@ -208,39 +267,50 @@ public sealed class ScriptRepositoryCatalog(RuntimeLayout layout)
         await _writeLock.WaitAsync(cancellationToken);
         try
         {
-            layout.EnsureCreated();
-            _ = FindNode((JArray?)ReadIndex()["indexes"] ?? [], normalizedPath);
-            var source = ResolveUnder(RepositoryContentRoot, normalizedPath);
-            if (!File.Exists(source) && !Directory.Exists(source))
-                throw new FileNotFoundException("Repository item does not exist.", source);
-
-            var destination = DestinationPath(normalizedPath);
-            var stagingRoot = Path.Combine(layout.UserPath, "Temp", "repository-install", Guid.NewGuid().ToString("N"));
-            var staged = Path.Combine(stagingRoot, "payload");
-            Directory.CreateDirectory(stagingRoot);
-            try
-            {
-                CopyItem(source, staged);
-                if (normalizedPath.StartsWith("js/", StringComparison.OrdinalIgnoreCase) && Directory.Exists(staged))
-                {
-                    PreserveSavedFiles(source, destination, staged);
-                    ResolvePackageDependencies(staged);
-                }
-                ReplaceItem(staged, destination, stagingRoot);
-            }
-            finally
-            {
-                if (Directory.Exists(stagingRoot))
-                    Directory.Delete(stagingRoot, true);
-            }
-
-            var subscriptions = AddSubscription(normalizedPath);
-            return new ScriptRepositoryInstallResult(normalizedPath, destination, subscriptions);
+            return InstallCore(normalizedPath, persistSubscription: true);
         }
         finally
         {
             _writeLock.Release();
         }
+    }
+
+    private ScriptRepositoryInstallResult InstallCore(
+        string normalizedPath,
+        bool persistSubscription)
+    {
+        layout.EnsureCreated();
+        _ = FindNode((JArray?)ReadIndex()["indexes"] ?? [], normalizedPath);
+        var source = ResolveUnder(RepositoryContentRoot, normalizedPath);
+        if (!File.Exists(source) && !Directory.Exists(source))
+            throw new FileNotFoundException("Repository item does not exist.", source);
+
+        var destination = DestinationPath(normalizedPath);
+        var stagingRoot = Path.Combine(
+            layout.UserPath, "Temp", "repository-install", Guid.NewGuid().ToString("N"));
+        var staged = Path.Combine(stagingRoot, "payload");
+        Directory.CreateDirectory(stagingRoot);
+        try
+        {
+            CopyItem(source, staged);
+            if (normalizedPath.StartsWith("js/", StringComparison.OrdinalIgnoreCase) &&
+                Directory.Exists(staged))
+            {
+                PreserveSavedFiles(source, destination, staged);
+                ResolvePackageDependencies(staged);
+            }
+            ReplaceItem(staged, destination, stagingRoot);
+        }
+        finally
+        {
+            if (Directory.Exists(stagingRoot))
+                Directory.Delete(stagingRoot, true);
+        }
+
+        var subscriptions = persistSubscription
+            ? AddSubscription(normalizedPath)
+            : ReadSubscriptions();
+        return new ScriptRepositoryInstallResult(normalizedPath, destination, subscriptions);
     }
 
     private JObject ReadIndex()
@@ -419,9 +489,51 @@ public sealed class ScriptRepositoryCatalog(RuntimeLayout layout)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
-        Directory.CreateDirectory(Path.GetDirectoryName(SubscriptionPath)!);
-        WriteAtomic(SubscriptionPath, JsonConvert.SerializeObject(paths, Formatting.Indented) + Environment.NewLine);
+        WriteSubscriptions(paths);
         return paths;
+    }
+
+    private void WriteSubscriptions(IEnumerable<string> paths)
+    {
+        var normalized = paths
+            .Select(NormalizePath)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        Directory.CreateDirectory(Path.GetDirectoryName(SubscriptionPath)!);
+        WriteAtomic(
+            SubscriptionPath,
+            JsonConvert.SerializeObject(normalized, Formatting.Indented) + Environment.NewLine);
+    }
+
+    private bool RepositoryItemExists(string normalizedPath)
+    {
+        var source = ResolveUnder(RepositoryContentRoot, normalizedPath);
+        return File.Exists(source) || Directory.Exists(source);
+    }
+
+    private IEnumerable<string> ExpandTopLevelSubscriptions(
+        IEnumerable<string> subscriptions)
+    {
+        foreach (var path in subscriptions)
+        {
+            var parts = path.Split('/');
+            if (parts.Length != 1)
+            {
+                yield return path;
+                continue;
+            }
+
+            var source = ResolveUnder(RepositoryContentRoot, path);
+            if (!Directory.Exists(source))
+                continue;
+            foreach (var child in Directory.EnumerateFileSystemEntries(source)
+                         .OrderBy(Path.GetFileName, StringComparer.Ordinal))
+            {
+                RejectSymbolicLink(child);
+                yield return NormalizePath($"{path}/{Path.GetFileName(child)}");
+            }
+        }
     }
 
     private string DestinationPath(string normalizedPath)
