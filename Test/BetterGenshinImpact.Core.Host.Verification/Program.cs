@@ -220,6 +220,7 @@ await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "config.json"), """
         "autoEnterGameEnabled": false
       },
       "quickTeleportConfig": { "enabled": true, "hotkeyTpEnabled": true },
+      "pathingConditionConfig": { "mapMatchingMethod": "SIFT" },
       "tpConfig": {
         "mapZoomEnabled": false,
         "reviveStatueOfTheSevenPointX": -575.6,

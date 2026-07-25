@@ -36,6 +36,10 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                     "screenshotUidCoverEnabled": true,
                     "rewardRecognitionScreenshotEnabled": true
                   },
+                  "pathingConditionConfig": {
+                    "mapMatchingMethod": "TemplateMatch",
+                    "preserved": { "value": 37 }
+                  },
                   "scriptConfig": {
                     "preserved": { "value": 91 },
                     "autoUpdateSubscribedScripts": false,
@@ -113,6 +117,7 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
             {
                 screenshotEnabled = true,
                 screenshotUidCoverEnabled = false,
+                mapMatchingMethod = "SIFT",
                 autoFetchDispatchCountry = "璃月",
                 serverTimeZoneOffsetHours = 1,
                 autoRestartEnabled = true,
@@ -142,6 +147,9 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 fishingSettings.Value<bool>("saveScreenshotOnKeyTick") &&
                 commonSettings.Value<bool>("screenshotEnabled") &&
                 commonSettings.Value<bool>("screenshotUidCoverEnabled") == false &&
+                commonSettings.Value<string>("mapMatchingMethod") == "SIFT" &&
+                ((JArray)commonSettings["mapMatchingMethodOptions"]!)
+                    .Values<string>().SequenceEqual(["SIFT", "TemplateMatch"]) &&
                 commonSettings.Value<string>("autoFetchDispatchCountry") == "璃月" &&
                 commonSettings.Value<int>("serverTimeZoneOffsetHours") == 1 &&
                 commonSettings.Value<bool>("autoRestartEnabled") &&
@@ -161,6 +169,10 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 updatedOtherConfig?.ServerTimeZoneOffset == TimeSpan.FromHours(1) &&
                 commonPersisted.SelectToken(
                     "commonConfig.rewardRecognitionScreenshotEnabled")?.Value<bool>() == true &&
+                commonPersisted.SelectToken(
+                    "pathingConditionConfig.mapMatchingMethod")?.Value<string>() == "SIFT" &&
+                commonPersisted.SelectToken(
+                    "pathingConditionConfig.preserved.value")?.Value<int>() == 37 &&
                 commonPersisted.SelectToken(
                     "otherConfig.preserved.value")?.Value<int>() == 73 &&
                 commonPersisted.SelectToken(

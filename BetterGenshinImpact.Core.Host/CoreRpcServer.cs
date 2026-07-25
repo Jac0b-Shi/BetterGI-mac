@@ -680,8 +680,14 @@ public sealed class CoreRpcServer(
             _commonSettings.GetOtherConfig().ServerTimeZoneOffset);
         if (parameters?.Value<bool?>("jsNotificationEnabled") is { } notificationsEnabled)
             _scriptHostServices?.SetJsNotificationEnabled(notificationsEnabled);
-        if (parameters?.Value<string>("mapMatchingMethod") is { Length: > 0 } mapMatchingMethod)
-            _scriptServicePlatform?.SetMapMatchingMethod(mapMatchingMethod);
+        var mapMatchingMethod = _commonSettings.GetMapMatchingMethod();
+        if (parameters?.Value<string>("mapMatchingMethod") is { Length: > 0 } requestedMethod &&
+            !string.Equals(requestedMethod, mapMatchingMethod, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "mapMatchingMethod must match the Core-owned persisted setting.");
+        }
+        _scriptServicePlatform?.SetMapMatchingMethod(mapMatchingMethod);
         if (parameters?.Value<string>("autoFetchDispatchAdventurersGuildCountry") is { Length: > 0 } country)
             _pathExecutorPlatform?.SetAutoFetchDispatchAdventurersGuildCountry(country);
         return new

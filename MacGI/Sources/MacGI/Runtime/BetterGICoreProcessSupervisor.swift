@@ -301,6 +301,8 @@ struct BetterGICoreAutoFishingSettings: Sendable, Equatable {
 struct BetterGICoreCommonSettings: Sendable, Equatable {
     let screenshotEnabled: Bool
     let screenshotUidCoverEnabled: Bool
+    let mapMatchingMethod: String
+    let mapMatchingMethodOptions: [String]
     let autoFetchDispatchCountry: String
     let autoFetchDispatchCountryOptions: [String]
     let serverTimeZoneOffsetHours: Int
@@ -644,15 +646,13 @@ actor BetterGICoreProcessSupervisor {
             progressHandler(.provisioning)
             var callbackAttached = false
             for _ in 0..<Self.startupPollLimit {
-                let initialized = try client.initialize(
-                    runtimeRoot: store.rootURL,
-                    mapMatchingMethod: "TemplateMatch"
-                )
+                let initialized = try client.initialize(runtimeRoot: store.rootURL)
                 if initialized["platformCallbackAttached"] as? Bool == true {
                     guard initialized["scriptHostServicesAttached"] as? Bool == true,
                           initialized["scriptServicePlatformAttached"] as? Bool == true,
                           initialized["platformAssetsInitialized"] as? Bool == true,
-                          initialized["mapMatchingMethod"] as? String == "TemplateMatch"
+                          ["SIFT", "TemplateMatch"].contains(
+                            initialized["mapMatchingMethod"] as? String ?? "")
                     else {
                         throw BetterGICoreRPCError.protocolViolation(
                             "Core did not attach the required script services."
@@ -887,6 +887,7 @@ actor BetterGICoreProcessSupervisor {
                 "settings": [
                     "screenshotEnabled": settings.screenshotEnabled,
                     "screenshotUidCoverEnabled": settings.screenshotUidCoverEnabled,
+                    "mapMatchingMethod": settings.mapMatchingMethod,
                     "autoFetchDispatchCountry": settings.autoFetchDispatchCountry,
                     "serverTimeZoneOffsetHours": settings.serverTimeZoneOffsetHours,
                     "autoRestartEnabled": settings.autoRestartEnabled,
@@ -1243,6 +1244,9 @@ actor BetterGICoreProcessSupervisor {
               let screenshotEnabled = result["screenshotEnabled"] as? Bool,
               let screenshotUidCoverEnabled =
                 result["screenshotUidCoverEnabled"] as? Bool,
+              let mapMatchingMethod = result["mapMatchingMethod"] as? String,
+              let mapMatchingMethodOptions =
+                result["mapMatchingMethodOptions"] as? [String],
               let autoFetchDispatchCountry =
                 result["autoFetchDispatchCountry"] as? String,
               let autoFetchDispatchCountryOptions =
@@ -1289,6 +1293,8 @@ actor BetterGICoreProcessSupervisor {
         return .init(
             screenshotEnabled: screenshotEnabled,
             screenshotUidCoverEnabled: screenshotUidCoverEnabled,
+            mapMatchingMethod: mapMatchingMethod,
+            mapMatchingMethodOptions: mapMatchingMethodOptions,
             autoFetchDispatchCountry: autoFetchDispatchCountry,
             autoFetchDispatchCountryOptions: autoFetchDispatchCountryOptions,
             serverTimeZoneOffsetHours: serverTimeZoneOffsetHours,

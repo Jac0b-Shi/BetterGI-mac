@@ -84,6 +84,31 @@ struct SettingsPage: View {
                         .labelsHidden()
                         .disabled(appState.commonSettings == nil)
                 }
+                if let settings = appState.commonSettings {
+                    BGISettingLine(
+                        title: "地图追踪优先使用的特征匹配方式",
+                        subtitle: "影响所有地图追踪功能，重启后生效"
+                    ) {
+                        Picker(
+                            "",
+                            selection: Binding(
+                                get: { settings.mapMatchingMethod },
+                                set: {
+                                    appState.saveCommonSettings(
+                                        mapMatchingMethod: $0)
+                                })
+                        ) {
+                            ForEach(
+                                settings.mapMatchingMethodOptions,
+                                id: \.self
+                            ) {
+                                Text($0).tag($0)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 150)
+                    }
+                }
                 BGISettingLine(title: "启动时显示 HUD", subtitle: "启动后自动显示右下角状态浮层。") {
                     Toggle("", isOn: $appState.showHUDOnStart)
                         .labelsHidden()

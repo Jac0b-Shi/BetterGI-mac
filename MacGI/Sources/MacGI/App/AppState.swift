@@ -3845,6 +3845,7 @@ final class AppState: ObservableObject {
     func saveCommonSettings(
         screenshotEnabled: Bool? = nil,
         screenshotUidCoverEnabled: Bool? = nil,
+        mapMatchingMethod: String? = nil,
         autoFetchDispatchCountry: String? = nil,
         serverTimeZoneOffsetHours: Int? = nil,
         autoRestartEnabled: Bool? = nil,
@@ -3871,6 +3872,9 @@ final class AppState: ObservableObject {
             screenshotEnabled: screenshotEnabled ?? current.screenshotEnabled,
             screenshotUidCoverEnabled:
                 screenshotUidCoverEnabled ?? current.screenshotUidCoverEnabled,
+            mapMatchingMethod:
+                mapMatchingMethod ?? current.mapMatchingMethod,
+            mapMatchingMethodOptions: current.mapMatchingMethodOptions,
             autoFetchDispatchCountry:
                 autoFetchDispatchCountry ?? current.autoFetchDispatchCountry,
             autoFetchDispatchCountryOptions:

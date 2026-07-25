@@ -10,6 +10,8 @@ public sealed class CommonSettingsCatalog(RuntimeLayout layout)
     private static readonly string[] AdventurersGuildCountries =
         ["无", "枫丹", "稻妻", "璃月", "蒙德"];
     private static readonly int[] ServerTimeZoneOffsets = [8, 1, -5];
+    private static readonly string[] MapMatchingMethods =
+        ["SIFT", "TemplateMatch"];
     private static readonly string[] ScriptRepositoryChannels =
         [.. ScriptRepositoryCatalog.RepositoryChannels.Keys, "自定义"];
     private readonly object _lock = new();
@@ -42,6 +44,10 @@ public sealed class CommonSettingsCatalog(RuntimeLayout layout)
             common["screenshotUidCoverEnabled"] =
                 RequiredBool(settings, "screenshotUidCoverEnabled");
             root["commonConfig"] = common;
+            var pathing = root["pathingConditionConfig"] as JsonObject ?? [];
+            pathing["mapMatchingMethod"] = RequiredOption(
+                settings, "mapMatchingMethod", MapMatchingMethods);
+            root["pathingConditionConfig"] = pathing;
             var other = root["otherConfig"] as JsonObject ?? [];
             other["autoFetchDispatchAdventurersGuildCountry"] =
                 RequiredOption(settings, "autoFetchDispatchCountry", AdventurersGuildCountries);
@@ -103,6 +109,12 @@ public sealed class CommonSettingsCatalog(RuntimeLayout layout)
     internal static bool ScreenshotEnabled(JsonObject root) =>
         root["commonConfig"]?["screenshotEnabled"]?.GetValue<bool>() ?? false;
 
+    public string GetMapMatchingMethod()
+    {
+        lock (_lock)
+            return ReadMapMatchingMethod(LoadRoot());
+    }
+
     private static object Describe(JsonObject root)
     {
         var other = LoadOtherConfig(root);
@@ -116,6 +128,8 @@ public sealed class CommonSettingsCatalog(RuntimeLayout layout)
             screenshotEnabled = ScreenshotEnabled(root),
             screenshotUidCoverEnabled =
                 root["commonConfig"]?["screenshotUidCoverEnabled"]?.GetValue<bool>() ?? true,
+            mapMatchingMethod = ReadMapMatchingMethod(root),
+            mapMatchingMethodOptions = MapMatchingMethods,
             autoFetchDispatchCountry = other.AutoFetchDispatchAdventurersGuildCountry,
             autoFetchDispatchCountryOptions = AdventurersGuildCountries,
             serverTimeZoneOffsetHours = (int)other.ServerTimeZoneOffset.TotalHours,
@@ -146,6 +160,15 @@ public sealed class CommonSettingsCatalog(RuntimeLayout layout)
             scriptRepositoryCustomUrl =
                 script?["customRepoUrl"]?.GetValue<string>() ?? "",
         };
+    }
+
+    private static string ReadMapMatchingMethod(JsonObject root)
+    {
+        var value = root["pathingConditionConfig"]?["mapMatchingMethod"]
+            ?.GetValue<string>();
+        return value is not null && MapMatchingMethods.Contains(value)
+            ? value
+            : "TemplateMatch";
     }
 
     private static bool RequiredBool(JObject settings, string name) =>

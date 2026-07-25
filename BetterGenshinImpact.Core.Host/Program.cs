@@ -320,9 +320,11 @@ var autoSkipRuntimePlatform = new MacAutoSkipRuntimePlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token, foregroundInputCoordinator,
     autoPickConfigProvider);
 AutoSkipRuntimePlatform.Configure(autoSkipRuntimePlatform);
+var mapMatchingMethod = server.CommonSettings.GetMapMatchingMethod();
 GenshinRuntimePlatform.Configure(new MacGenshinRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, autoFishingRuntimePlatform,
-    imageRegionOcrService, loggerFactory, autoSkipRuntimePlatform, "TemplateMatch"));
+    imageRegionOcrService, loggerFactory, autoSkipRuntimePlatform,
+    mapMatchingMethod));
 TaskParameterPlatform.Configure(new MacTaskParameterPlatform(
     autoFishingRuntimePlatform.GameCultureInfoName));
 server.AttachArtifactSalvagePreview(new ArtifactSalvagePreviewService(
@@ -398,6 +400,7 @@ var scriptServicePlatform = new MacScriptServicePlatform(
     layout, loggerFactory.CreateLogger("BetterGenshinImpact.Service.ScriptService"), scriptHostServices,
     server.PlatformCallbacks, sessionToken, shutdown.Token, captureRing, gameTaskManagerPlatform,
     foregroundInputCoordinator, () => triggerDispatcher.IsRunning);
+scriptServicePlatform.SetMapMatchingMethod(mapMatchingMethod);
 ScriptServicePlatform.Configure(scriptServicePlatform);
 FarmingStatsRuntimePlatform.Configure(new MacFarmingStatsRuntimePlatform(
     layout, loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.FarmingPlan.FarmingStatsRecorder")));

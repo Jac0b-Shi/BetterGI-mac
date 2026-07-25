@@ -478,15 +478,11 @@ final class BetterGICoreRPCClient: @unchecked Sendable {
         )
     }
 
-    func initialize(
-        runtimeRoot: URL,
-        mapMatchingMethod: String
-    ) throws -> [String: Any] {
+    func initialize(runtimeRoot: URL) throws -> [String: Any] {
         guard let result = try request(
             method: "core.initialize",
             parameters: [
                 "runtimeRoot": runtimeRoot.path,
-                "mapMatchingMethod": mapMatchingMethod,
             ]
         ) as? [String: Any] else {
             throw BetterGICoreRPCError.protocolViolation("Invalid core.initialize result.")
