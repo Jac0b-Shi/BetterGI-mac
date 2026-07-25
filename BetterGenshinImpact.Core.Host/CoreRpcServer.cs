@@ -867,6 +867,8 @@ public sealed class CoreRpcServer(
         }
         if (descriptor.Action.StartsWith("solo.toggle:", StringComparison.Ordinal))
             return SoloTasks.Toggle(descriptor.Action["solo.toggle:".Length..]);
+        if (descriptor.Action == "oneDragon.toggle")
+            return OneDragon.ToggleSelected();
         if (descriptor.Action is
             "macro.quickSereniteaPot" or
             "map.position.probe")

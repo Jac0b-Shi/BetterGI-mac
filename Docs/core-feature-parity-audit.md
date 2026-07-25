@@ -186,9 +186,10 @@ AppKit observes the configured physical keys. `KeyboardMonitor` bindings are
 accepted only while the runtime is active and the selected Wine game process
 is frontmost; `GlobalRegister` bindings remain available for system control.
 Generated BetterGI input is marked and excluded from hotkey observation. Core
-executes cancellation, shared `RunnerContext` suspension, trigger toggles and
-solo-task toggles, turn-around and dialog-button hold actions. Swift owns only
-runtime capture start/stop, overlay presentation and macOS key/mouse recording.
+executes cancellation, shared `RunnerContext` suspension, trigger toggles,
+solo-task toggles, the selected one-dragon configuration toggle, turn-around
+and dialog-button hold actions. Swift owns only runtime capture start/stop,
+overlay presentation and macOS key/mouse recording.
 The QuickTeleport hold binding is not dispatched as an action: Core reads its
 live-updated key through the existing physical key-state callback, matching the
 upstream trigger contract.

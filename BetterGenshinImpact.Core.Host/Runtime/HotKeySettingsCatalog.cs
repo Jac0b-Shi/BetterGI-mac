@@ -92,6 +92,9 @@ public sealed class HotKeySettingsCatalog(RuntimeLayout layout)
             "MapMaskEnabledHotkey", "实时任务", "地图遮罩开关",
             "mapMaskEnabledHotkey", "trigger.toggle:MapMask", "core", false, true),
         new(
+            "OnedragonHotkey", "独立任务", "启动/停止一条龙",
+            "onedragonHotkey", "oneDragon.toggle", "core", false, true),
+        new(
             "AutoGeniusInvokationHotkey", "独立任务", "启动/停止自动七圣召唤",
             "autoGeniusInvokationHotkey", "solo.toggle:AutoGeniusInvokation", "core", false, true),
         new(

@@ -741,7 +741,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             }));
             var hotKeys = JArray.FromObject(hotKeyCatalog.List());
             context.Require(
-                hotKeys.Count == 32 &&
+                hotKeys.Count == 33 &&
                 hotKeys.Single(item =>
                     item.Value<string>("id") == "TakeScreenshotHotkey")
                     .Value<string>("action") == "capture.screenshot" &&
@@ -754,6 +754,9 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 hotKeys.Single(item =>
                     item.Value<string>("id") == "RecBigMapPosHotkey")
                     .Value<string>("action") == "map.position.probe" &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "OnedragonHotkey")
+                    .Value<string>("action") == "oneDragon.toggle" &&
                 hotKeys.Single(item =>
                     item.Value<string>("id") == "AutoPickEnabledHotkey")
                     .Value<string>("hotKey") == "F6" &&

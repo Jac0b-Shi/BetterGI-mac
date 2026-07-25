@@ -59,6 +59,27 @@ public sealed class OneDragonCoordinator(
         }
     }
 
+    public object ToggleSelected()
+    {
+        lock (_sync)
+        {
+            var current = _status.Snapshot();
+            if (_execution is { IsCompleted: false } &&
+                !SchedulerStatusTracker.IsTerminal(current.State))
+            {
+                return Stop(current.TaskId
+                    ?? throw new InvalidOperationException(
+                        "Active OneDragon task omitted its id."));
+            }
+
+            var selected = catalog.List().FirstOrDefault(config => config.Selected)
+                ?? catalog.List().FirstOrDefault()
+                ?? throw new InvalidOperationException(
+                    "No OneDragon configuration is available.");
+            return Start(selected.Name);
+        }
+    }
+
     public object Status() => ToRpcStatus(_status.Snapshot());
 
     public async Task<bool> StopActiveAsync(CancellationToken cancellationToken)
