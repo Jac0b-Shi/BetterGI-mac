@@ -36,7 +36,7 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                     "rewardRecognitionScreenshotEnabled": true
                   },
                   "autoLeyLineOutcropConfig": {
-                    "leyLineOutcropType": "启示之花",
+                    "leyLineOutcropType": "蓝花（经验书）",
                     "country": "蒙德",
                     "isGoToSynthesizer": true,
                     "fightConfig": {
@@ -218,9 +218,14 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 "AutoRedeemCode input was not normalized into the typed dispatcher request.");
 
             var initial = JObject.FromObject(catalog.Get("AutoLeyLineOutcrop"));
+            var normalizedLeyLineConfig = JObject.Parse(await File.ReadAllTextAsync(
+                Path.Combine(layout.UserPath, "config.json"), cancellationToken));
             context.Require(initial.Value<string>("leyLineOutcropType") == "启示之花" &&
-                            initial["countryOptions"]?.Values<string>().Contains("挪德卡莱") == true,
-                "AutoLeyLineOutcrop settings did not expose the upstream options.");
+                            initial["countryOptions"]?.Values<string>().Contains("挪德卡莱") == true &&
+                            normalizedLeyLineConfig.SelectToken(
+                                "autoLeyLineOutcropConfig.leyLineOutcropType")?.Value<string>()
+                                == "启示之花",
+                "AutoLeyLineOutcrop settings did not normalize legacy types or expose upstream options.");
 
             _ = catalog.Save("AutoLeyLineOutcrop", JObject.FromObject(new
             {

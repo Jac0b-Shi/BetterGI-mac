@@ -192,6 +192,7 @@ struct FeaturesPage: View {
 
 struct SoloTasksPage: View {
     @EnvironmentObject private var appState: AppState
+    @State private var confirmingScanDropsAfterReward = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -213,6 +214,19 @@ struct SoloTasksPage: View {
                     }
                 }
             }
+        }
+        .alert("风险提示", isPresented: $confirmingScanDropsAfterReward) {
+            Button("不接受，保持关闭", role: .cancel) {
+                confirmingScanDropsAfterReward = false
+            }
+            Button("接受风险并开启") {
+                appState.saveAutoLeyLineOutcropSettings(
+                    scanDropsAfterRewardEnabled: true)
+            }
+        } message: {
+            Text(
+                "开启“领取奖励后扫描掉落物光柱”后，角色会在领奖完成后主动移动拾取。部分地脉花点位或特定配队下，可能因为移动范围较大而卡住。\n\n如果你愿意接受这个风险，请继续开启；否则将保持关闭。"
+            )
         }
     }
 
@@ -704,12 +718,23 @@ struct SoloTasksPage: View {
                     value: Binding(get: { settings.qinDoublePickUp },
                         set: { appState.saveAutoLeyLineOutcropSettings(qinDoublePickUp: $0) }))
             }
-            leyLineToggle("领取奖励后扫描掉落物光柱", "短时间扫描周围掉落物并靠近拾取",
+            leyLineToggle(
+                "领取奖励后扫描掉落物光柱",
+                "在地脉花领奖完成后，短时间扫描周围掉落物光柱并靠近拾取；不依赖万叶或琴。部分点位或特定配队下可能因移动范围较大而卡住，请按需开启。",
                 value: Binding(get: { settings.scanDropsAfterRewardEnabled },
-                    set: { appState.saveAutoLeyLineOutcropSettings(
-                        scanDropsAfterRewardEnabled: $0) }))
+                    set: {
+                        if $0 {
+                            confirmingScanDropsAfterReward = true
+                        } else {
+                            appState.saveAutoLeyLineOutcropSettings(
+                                scanDropsAfterRewardEnabled: false)
+                        }
+                    }))
             if settings.scanDropsAfterRewardEnabled {
-                BGISettingLine(title: "领奖后扫描时长（秒）", subtitle: "0 表示不扫描") {
+                BGISettingLine(
+                    title: "领奖后扫描时长（秒）",
+                    subtitle: "控制领奖后扫描掉落物光柱的最长时长。设为 0 表示不扫描。"
+                ) {
                     Stepper(value: Binding(
                         get: { settings.scanDropsAfterRewardSeconds },
                         set: { appState.saveAutoLeyLineOutcropSettings(

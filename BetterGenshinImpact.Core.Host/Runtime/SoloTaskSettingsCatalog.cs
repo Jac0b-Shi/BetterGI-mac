@@ -91,8 +91,16 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
     {
         lock (_lock)
         {
-            return LoadConfig<AutoLeyLineOutcropConfig>(
-                LoadRoot(), "autoLeyLineOutcropConfig");
+            var root = LoadRoot();
+            var config = LoadConfig<AutoLeyLineOutcropConfig>(
+                root, "autoLeyLineOutcropConfig");
+            if (NormalizeLeyLineOutcropType(config))
+            {
+                root["autoLeyLineOutcropConfig"] =
+                    JsonSerializer.SerializeToNode(config, ConfigJson.Options);
+                SaveRoot(root);
+            }
+            return config;
         }
     }
 
@@ -142,8 +150,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
                     LoadConfig<AutoArtifactSalvageConfig>(root, "autoArtifactSalvageConfig")),
                 "AutoArtifactSalvage" => Describe(
                     LoadConfig<AutoArtifactSalvageConfig>(root, "autoArtifactSalvageConfig")),
-                "AutoLeyLineOutcrop" => Describe(
-                    LoadConfig<AutoLeyLineOutcropConfig>(root, "autoLeyLineOutcropConfig")),
+                "AutoLeyLineOutcrop" => DescribeAutoLeyLineOutcrop(root),
                 "AutoStygianOnslaught" => Describe(
                     LoadConfig<AutoStygianOnslaughtConfig>(root, "autoStygianOnslaughtConfig"),
                     LoadConfig<AutoArtifactSalvageConfig>(root, "autoArtifactSalvageConfig")),
@@ -745,6 +752,33 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
     private static readonly string[] LeyLineOutcropTypes = ["启示之花", "藏金之花"];
     private static readonly string[] LeyLineOutcropCountries =
         ["蒙德", "璃月", "稻妻", "须弥", "枫丹", "纳塔", "挪德卡莱"];
+
+    private object DescribeAutoLeyLineOutcrop(JsonObject root)
+    {
+        var config = LoadConfig<AutoLeyLineOutcropConfig>(
+            root, "autoLeyLineOutcropConfig");
+        if (NormalizeLeyLineOutcropType(config))
+        {
+            root["autoLeyLineOutcropConfig"] =
+                JsonSerializer.SerializeToNode(config, ConfigJson.Options);
+            SaveRoot(root);
+        }
+        return Describe(config);
+    }
+
+    private static bool NormalizeLeyLineOutcropType(AutoLeyLineOutcropConfig config)
+    {
+        var normalized = config.LeyLineOutcropType switch
+        {
+            "蓝花（经验书）" => "启示之花",
+            "黄花（摩拉）" => "藏金之花",
+            var value when LeyLineOutcropTypes.Contains(value, StringComparer.Ordinal) => value,
+            _ => LeyLineOutcropTypes[0],
+        };
+        if (config.LeyLineOutcropType == normalized) return false;
+        config.LeyLineOutcropType = normalized;
+        return true;
+    }
 
     private object Describe(AutoLeyLineOutcropConfig config)
     {
