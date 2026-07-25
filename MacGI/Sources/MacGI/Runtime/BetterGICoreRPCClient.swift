@@ -480,14 +480,12 @@ final class BetterGICoreRPCClient: @unchecked Sendable {
 
     func initialize(
         runtimeRoot: URL,
-        serverTimeZoneOffsetHours: Double,
         mapMatchingMethod: String
     ) throws -> [String: Any] {
         guard let result = try request(
             method: "core.initialize",
             parameters: [
                 "runtimeRoot": runtimeRoot.path,
-                "serverTimeZoneOffsetHours": serverTimeZoneOffsetHours,
                 "mapMatchingMethod": mapMatchingMethod,
             ]
         ) as? [String: Any] else {

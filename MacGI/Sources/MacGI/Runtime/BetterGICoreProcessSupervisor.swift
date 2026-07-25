@@ -301,6 +301,23 @@ struct BetterGICoreAutoFishingSettings: Sendable, Equatable {
 struct BetterGICoreCommonSettings: Sendable, Equatable {
     let screenshotEnabled: Bool
     let screenshotUidCoverEnabled: Bool
+    let autoFetchDispatchCountry: String
+    let autoFetchDispatchCountryOptions: [String]
+    let serverTimeZoneOffsetHours: Int
+    let serverTimeZoneOffsetOptions: [Int]
+    let autoRestartEnabled: Bool
+    let autoRestartFailureCount: Int
+    let autoRestartGameTogether: Bool
+    let fightFailureExceptional: Bool
+    let pathingFailureExceptional: Bool
+    let farmingPlanEnabled: Bool
+    let farmingDailyEliteCap: Int
+    let farmingDailyMobCap: Int
+    let miyousheDataEnabled: Bool
+    let miyousheDailyEliteCap: Int
+    let miyousheDailyMobCap: Int
+    let miyousheCookie: String
+    let miyousheLogSyncCookie: Bool
 }
 
 struct BetterGICoreAutoWoodSettings: Sendable, Equatable {
@@ -595,7 +612,6 @@ actor BetterGICoreProcessSupervisor {
             for _ in 0..<Self.startupPollLimit {
                 let initialized = try client.initialize(
                     runtimeRoot: store.rootURL,
-                    serverTimeZoneOffsetHours: 8,
                     mapMatchingMethod: "TemplateMatch"
                 )
                 if initialized["platformCallbackAttached"] as? Bool == true {
@@ -837,6 +853,21 @@ actor BetterGICoreProcessSupervisor {
                 "settings": [
                     "screenshotEnabled": settings.screenshotEnabled,
                     "screenshotUidCoverEnabled": settings.screenshotUidCoverEnabled,
+                    "autoFetchDispatchCountry": settings.autoFetchDispatchCountry,
+                    "serverTimeZoneOffsetHours": settings.serverTimeZoneOffsetHours,
+                    "autoRestartEnabled": settings.autoRestartEnabled,
+                    "autoRestartFailureCount": settings.autoRestartFailureCount,
+                    "autoRestartGameTogether": settings.autoRestartGameTogether,
+                    "fightFailureExceptional": settings.fightFailureExceptional,
+                    "pathingFailureExceptional": settings.pathingFailureExceptional,
+                    "farmingPlanEnabled": settings.farmingPlanEnabled,
+                    "farmingDailyEliteCap": settings.farmingDailyEliteCap,
+                    "farmingDailyMobCap": settings.farmingDailyMobCap,
+                    "miyousheDataEnabled": settings.miyousheDataEnabled,
+                    "miyousheDailyEliteCap": settings.miyousheDailyEliteCap,
+                    "miyousheDailyMobCap": settings.miyousheDailyMobCap,
+                    "miyousheCookie": settings.miyousheCookie,
+                    "miyousheLogSyncCookie": settings.miyousheLogSyncCookie,
                 ],
             ]))
     }
@@ -1169,13 +1200,58 @@ actor BetterGICoreProcessSupervisor {
         guard let result = value as? [String: Any],
               let screenshotEnabled = result["screenshotEnabled"] as? Bool,
               let screenshotUidCoverEnabled =
-                result["screenshotUidCoverEnabled"] as? Bool
+                result["screenshotUidCoverEnabled"] as? Bool,
+              let autoFetchDispatchCountry =
+                result["autoFetchDispatchCountry"] as? String,
+              let autoFetchDispatchCountryOptions =
+                result["autoFetchDispatchCountryOptions"] as? [String],
+              let serverTimeZoneOffsetHours =
+                result["serverTimeZoneOffsetHours"] as? Int,
+              let serverTimeZoneOffsetOptions =
+                result["serverTimeZoneOffsetOptions"] as? [Int],
+              let autoRestartEnabled = result["autoRestartEnabled"] as? Bool,
+              let autoRestartFailureCount =
+                result["autoRestartFailureCount"] as? Int,
+              let autoRestartGameTogether =
+                result["autoRestartGameTogether"] as? Bool,
+              let fightFailureExceptional =
+                result["fightFailureExceptional"] as? Bool,
+              let pathingFailureExceptional =
+                result["pathingFailureExceptional"] as? Bool,
+              let farmingPlanEnabled = result["farmingPlanEnabled"] as? Bool,
+              let farmingDailyEliteCap =
+                result["farmingDailyEliteCap"] as? Int,
+              let farmingDailyMobCap = result["farmingDailyMobCap"] as? Int,
+              let miyousheDataEnabled = result["miyousheDataEnabled"] as? Bool,
+              let miyousheDailyEliteCap =
+                result["miyousheDailyEliteCap"] as? Int,
+              let miyousheDailyMobCap = result["miyousheDailyMobCap"] as? Int,
+              let miyousheCookie = result["miyousheCookie"] as? String,
+              let miyousheLogSyncCookie =
+                result["miyousheLogSyncCookie"] as? Bool
         else {
             throw BetterGICoreRPCError.protocolViolation("Invalid common settings.")
         }
         return .init(
             screenshotEnabled: screenshotEnabled,
-            screenshotUidCoverEnabled: screenshotUidCoverEnabled)
+            screenshotUidCoverEnabled: screenshotUidCoverEnabled,
+            autoFetchDispatchCountry: autoFetchDispatchCountry,
+            autoFetchDispatchCountryOptions: autoFetchDispatchCountryOptions,
+            serverTimeZoneOffsetHours: serverTimeZoneOffsetHours,
+            serverTimeZoneOffsetOptions: serverTimeZoneOffsetOptions,
+            autoRestartEnabled: autoRestartEnabled,
+            autoRestartFailureCount: autoRestartFailureCount,
+            autoRestartGameTogether: autoRestartGameTogether,
+            fightFailureExceptional: fightFailureExceptional,
+            pathingFailureExceptional: pathingFailureExceptional,
+            farmingPlanEnabled: farmingPlanEnabled,
+            farmingDailyEliteCap: farmingDailyEliteCap,
+            farmingDailyMobCap: farmingDailyMobCap,
+            miyousheDataEnabled: miyousheDataEnabled,
+            miyousheDailyEliteCap: miyousheDailyEliteCap,
+            miyousheDailyMobCap: miyousheDailyMobCap,
+            miyousheCookie: miyousheCookie,
+            miyousheLogSyncCookie: miyousheLogSyncCookie)
     }
 
     private func parseHotKeyBindings(_ value: Any) throws

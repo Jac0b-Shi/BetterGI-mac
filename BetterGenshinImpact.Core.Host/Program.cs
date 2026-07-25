@@ -97,6 +97,8 @@ using var loggerFactory = LoggerFactory.Create(builder => builder.AddSimpleConso
     options.TimestampFormat = "HH:mm:ss.fff ";
 }));
 var scriptHostServices = new MacScriptHostServices(loggerFactory);
+scriptHostServices.SetServerTimeZoneOffset(
+    server.CommonSettings.GetOtherConfig().ServerTimeZoneOffset);
 ScriptHostServices.Configure(scriptHostServices);
 ServerTimeHelper.Initialize(new ServerTimeProvider(TimeProvider.System, () => scriptHostServices.ServerTimeZoneOffset));
 server.AttachScriptHostServices(scriptHostServices);
@@ -360,6 +362,15 @@ ExitAndReloginPlatform.Configure(new MacExitAndReloginPlatform());
 var pathExecutorPlatform = new MacPathExecutorPlatform(
     layout, imageRegionOcrService,
     server.PlatformCallbacks, sessionToken, shutdown.Token);
+var initialOtherConfig = server.CommonSettings.GetOtherConfig();
+pathExecutorPlatform.SetAutoFetchDispatchAdventurersGuildCountry(
+    initialOtherConfig.AutoFetchDispatchAdventurersGuildCountry);
+server.CommonSettings.AttachOtherConfigUpdated(otherConfig =>
+{
+    scriptHostServices.SetServerTimeZoneOffset(otherConfig.ServerTimeZoneOffset);
+    pathExecutorPlatform.SetAutoFetchDispatchAdventurersGuildCountry(
+        otherConfig.AutoFetchDispatchAdventurersGuildCountry);
+});
 PathExecutorPlatform.Configure(pathExecutorPlatform);
 PathExecutorAutoSkipPlatform.Configure(new PathExecutorAutoSkipSessionFactory());
 server.AttachPathExecutorPlatform(pathExecutorPlatform);

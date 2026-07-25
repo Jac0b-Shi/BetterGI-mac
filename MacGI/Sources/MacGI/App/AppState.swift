@@ -3760,14 +3760,61 @@ final class AppState: ObservableObject {
 
     func saveCommonSettings(
         screenshotEnabled: Bool? = nil,
-        screenshotUidCoverEnabled: Bool? = nil
+        screenshotUidCoverEnabled: Bool? = nil,
+        autoFetchDispatchCountry: String? = nil,
+        serverTimeZoneOffsetHours: Int? = nil,
+        autoRestartEnabled: Bool? = nil,
+        autoRestartFailureCount: Int? = nil,
+        autoRestartGameTogether: Bool? = nil,
+        fightFailureExceptional: Bool? = nil,
+        pathingFailureExceptional: Bool? = nil,
+        farmingPlanEnabled: Bool? = nil,
+        farmingDailyEliteCap: Int? = nil,
+        farmingDailyMobCap: Int? = nil,
+        miyousheDataEnabled: Bool? = nil,
+        miyousheDailyEliteCap: Int? = nil,
+        miyousheDailyMobCap: Int? = nil,
+        miyousheCookie: String? = nil,
+        miyousheLogSyncCookie: Bool? = nil
     ) {
         guard let supervisor = betterGICoreSupervisor,
               let current = commonSettings else { return }
         let next = BetterGICoreCommonSettings(
             screenshotEnabled: screenshotEnabled ?? current.screenshotEnabled,
             screenshotUidCoverEnabled:
-                screenshotUidCoverEnabled ?? current.screenshotUidCoverEnabled)
+                screenshotUidCoverEnabled ?? current.screenshotUidCoverEnabled,
+            autoFetchDispatchCountry:
+                autoFetchDispatchCountry ?? current.autoFetchDispatchCountry,
+            autoFetchDispatchCountryOptions:
+                current.autoFetchDispatchCountryOptions,
+            serverTimeZoneOffsetHours:
+                serverTimeZoneOffsetHours ?? current.serverTimeZoneOffsetHours,
+            serverTimeZoneOffsetOptions: current.serverTimeZoneOffsetOptions,
+            autoRestartEnabled:
+                autoRestartEnabled ?? current.autoRestartEnabled,
+            autoRestartFailureCount:
+                autoRestartFailureCount ?? current.autoRestartFailureCount,
+            autoRestartGameTogether:
+                autoRestartGameTogether ?? current.autoRestartGameTogether,
+            fightFailureExceptional:
+                fightFailureExceptional ?? current.fightFailureExceptional,
+            pathingFailureExceptional:
+                pathingFailureExceptional ?? current.pathingFailureExceptional,
+            farmingPlanEnabled:
+                farmingPlanEnabled ?? current.farmingPlanEnabled,
+            farmingDailyEliteCap:
+                farmingDailyEliteCap ?? current.farmingDailyEliteCap,
+            farmingDailyMobCap:
+                farmingDailyMobCap ?? current.farmingDailyMobCap,
+            miyousheDataEnabled:
+                miyousheDataEnabled ?? current.miyousheDataEnabled,
+            miyousheDailyEliteCap:
+                miyousheDailyEliteCap ?? current.miyousheDailyEliteCap,
+            miyousheDailyMobCap:
+                miyousheDailyMobCap ?? current.miyousheDailyMobCap,
+            miyousheCookie: miyousheCookie ?? current.miyousheCookie,
+            miyousheLogSyncCookie:
+                miyousheLogSyncCookie ?? current.miyousheLogSyncCookie)
         Task { [weak self] in
             do {
                 let saved = try await supervisor.saveCommonSettings(next)

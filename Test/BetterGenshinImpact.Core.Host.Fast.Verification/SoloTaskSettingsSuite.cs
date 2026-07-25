@@ -1,4 +1,5 @@
 using BetterGenshinImpact.Core.Host.Runtime;
+using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script.Dependence;
 using BetterGenshinImpact.Verification.Framework;
 using Newtonsoft.Json.Linq;
@@ -34,6 +35,32 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                     "screenshotEnabled": false,
                     "screenshotUidCoverEnabled": true,
                     "rewardRecognitionScreenshotEnabled": true
+                  },
+                  "otherConfig": {
+                    "preserved": { "value": 73 },
+                    "autoFetchDispatchAdventurersGuildCountry": "无",
+                    "serverTimeZoneOffset": "08:00:00",
+                    "autoRestartConfig": {
+                      "enabled": false,
+                      "failureCount": 5,
+                      "restartGameTogether": false,
+                      "isFightFailureExceptional": false,
+                      "isPathingFailureExceptional": false
+                    },
+                    "farmingPlanConfig": {
+                      "enabled": false,
+                      "dailyEliteCap": 400,
+                      "dailyMobCap": 2000,
+                      "miyousheDataConfig": {
+                        "enabled": false,
+                        "dailyEliteCap": 400,
+                        "dailyMobCap": 2000
+                      }
+                    },
+                    "miyousheConfig": {
+                      "cookie": "",
+                      "logSyncCookie": true
+                    }
                   },
                   "autoLeyLineOutcropConfig": {
                     "leyLineOutcropType": "蓝花（经验书）",
@@ -72,10 +99,28 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 fishingSettings.Value<bool>("screenshotEnabled") == false &&
                 fishingSettings.Value<bool>("saveScreenshotOnKeyTick") == false,
                 "AutoFishing exposed key-tick screenshots while the upstream global gate was off.");
+            OtherConfig? updatedOtherConfig = null;
+            commonSettingsCatalog.AttachOtherConfigUpdated(
+                value => updatedOtherConfig = value);
             _ = commonSettingsCatalog.Save(JObject.FromObject(new
             {
                 screenshotEnabled = true,
                 screenshotUidCoverEnabled = false,
+                autoFetchDispatchCountry = "璃月",
+                serverTimeZoneOffsetHours = 1,
+                autoRestartEnabled = true,
+                autoRestartFailureCount = 7,
+                autoRestartGameTogether = true,
+                fightFailureExceptional = true,
+                pathingFailureExceptional = true,
+                farmingPlanEnabled = true,
+                farmingDailyEliteCap = 410,
+                farmingDailyMobCap = 2010,
+                miyousheDataEnabled = true,
+                miyousheDailyEliteCap = 420,
+                miyousheDailyMobCap = 2020,
+                miyousheCookie = "test-cookie",
+                miyousheLogSyncCookie = false,
             }));
             fishingSettings = JObject.FromObject(catalog.Get("AutoFishing"));
             var commonSettings = JObject.FromObject(commonSettingsCatalog.Get());
@@ -86,9 +131,20 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 fishingSettings.Value<bool>("saveScreenshotOnKeyTick") &&
                 commonSettings.Value<bool>("screenshotEnabled") &&
                 commonSettings.Value<bool>("screenshotUidCoverEnabled") == false &&
+                commonSettings.Value<string>("autoFetchDispatchCountry") == "璃月" &&
+                commonSettings.Value<int>("serverTimeZoneOffsetHours") == 1 &&
+                commonSettings.Value<bool>("autoRestartEnabled") &&
+                commonSettings.Value<int>("autoRestartFailureCount") == 7 &&
+                commonSettings.Value<bool>("farmingPlanEnabled") &&
+                commonSettings.Value<bool>("miyousheDataEnabled") &&
+                commonSettings.Value<string>("miyousheCookie") == "test-cookie" &&
+                updatedOtherConfig?.AutoFetchDispatchAdventurersGuildCountry == "璃月" &&
+                updatedOtherConfig?.ServerTimeZoneOffset == TimeSpan.FromHours(1) &&
                 commonPersisted.SelectToken(
-                    "commonConfig.rewardRecognitionScreenshotEnabled")?.Value<bool>() == true,
-                "Common screenshot settings did not preserve or apply the upstream gate.");
+                    "commonConfig.rewardRecognitionScreenshotEnabled")?.Value<bool>() == true &&
+                commonPersisted.SelectToken(
+                    "otherConfig.preserved.value")?.Value<int>() == 73,
+                "Common settings did not preserve unknown values, persist unattended settings or publish the live update.");
             var tcgFolder = Path.Combine(layout.UserPath, "AutoGeniusInvokation");
             Directory.CreateDirectory(tcgFolder);
             const string tcgStrategy = "角色定义:\n角色1=莫娜\n角色2=砂糖\n角色3=琴\n";

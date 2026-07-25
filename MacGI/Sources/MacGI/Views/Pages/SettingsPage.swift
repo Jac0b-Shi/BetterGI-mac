@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsPage: View {
     @EnvironmentObject private var appState: AppState
+    @State private var miyousheCookieDraft = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -95,6 +96,188 @@ struct SettingsPage: View {
                     }
                 }
             }
+
+            if let settings = appState.commonSettings {
+                BGISettingGroup(
+                    icon: "clock.arrow.circlepath",
+                    title: "无人值守",
+                    subtitle: "调度器连续运行、服务器时间与任务恢复策略。"
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { settings.autoRestartEnabled },
+                        set: { appState.saveCommonSettings(autoRestartEnabled: $0) }))
+                        .labelsHidden()
+                } content: {
+                    BGISettingLine(
+                        title: "自动领取派遣城市",
+                        subtitle: "路径追踪打开大地图前检测并领取探索派遣。"
+                    ) {
+                        Picker("", selection: Binding(
+                            get: { settings.autoFetchDispatchCountry },
+                            set: { appState.saveCommonSettings(autoFetchDispatchCountry: $0) })) {
+                            ForEach(settings.autoFetchDispatchCountryOptions, id: \.self) {
+                                Text($0).tag($0)
+                            }
+                        }
+                        .frame(width: 150)
+                    }
+                    BGISettingLine(
+                        title: "服务器时区",
+                        subtitle: "用于每日重置时间和脚本服务器时间。"
+                    ) {
+                        Picker("", selection: Binding(
+                            get: { settings.serverTimeZoneOffsetHours },
+                            set: { appState.saveCommonSettings(serverTimeZoneOffsetHours: $0) })) {
+                            ForEach(settings.serverTimeZoneOffsetOptions, id: \.self) { offset in
+                                Text(serverTimeZoneTitle(offset)).tag(offset)
+                            }
+                        }
+                        .frame(width: 160)
+                    }
+                    BGISettingLine(
+                        title: "连续异常次数",
+                        subtitle: "调度器达到该次数后自动重启 BetterGI。"
+                    ) {
+                        Stepper(
+                            "\(settings.autoRestartFailureCount)",
+                            value: Binding(
+                                get: { settings.autoRestartFailureCount },
+                                set: {
+                                    appState.saveCommonSettings(
+                                        autoRestartFailureCount: $0)
+                                }),
+                            in: 1...100)
+                    }
+                    BGISettingLine(
+                        title: "同时重启游戏",
+                        subtitle: "仅在联动启动与自动进入游戏均启用时生效。"
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { settings.autoRestartGameTogether },
+                            set: {
+                                appState.saveCommonSettings(
+                                    autoRestartGameTogether: $0)
+                            }))
+                            .labelsHidden()
+                    }
+                    BGISettingLine(
+                        title: "战斗失败算异常",
+                        subtitle: "锄地脚本实际战斗成功次数不足时判定任务失败。"
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { settings.fightFailureExceptional },
+                            set: {
+                                appState.saveCommonSettings(
+                                    fightFailureExceptional: $0)
+                            }))
+                            .labelsHidden()
+                    }
+                    BGISettingLine(
+                        title: "路径未走完算异常",
+                        subtitle: "路径追踪未完整执行时判定任务失败。"
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { settings.pathingFailureExceptional },
+                            set: {
+                                appState.saveCommonSettings(
+                                    pathingFailureExceptional: $0)
+                            }))
+                            .labelsHidden()
+                    }
+                }
+
+                BGISettingGroup(
+                    icon: "chart.bar.doc.horizontal",
+                    title: "锄地规划",
+                    subtitle: "按每日统计与上限跳过后续锄地任务。"
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { settings.farmingPlanEnabled },
+                        set: { appState.saveCommonSettings(farmingPlanEnabled: $0) }))
+                        .labelsHidden()
+                } content: {
+                    BGISettingLine(
+                        title: "本地统计上限",
+                        subtitle: "每日精英与小怪数量上限。"
+                    ) {
+                        Stepper(
+                            "精英 \(settings.farmingDailyEliteCap)",
+                            value: Binding(
+                                get: { settings.farmingDailyEliteCap },
+                                set: { appState.saveCommonSettings(farmingDailyEliteCap: $0) }),
+                            in: 0...10000)
+                        Stepper(
+                            "小怪 \(settings.farmingDailyMobCap)",
+                            value: Binding(
+                                get: { settings.farmingDailyMobCap },
+                                set: { appState.saveCommonSettings(farmingDailyMobCap: $0) }),
+                            in: 0...50000)
+                    }
+                    BGISettingLine(
+                        title: "结合米游社数据",
+                        subtitle: "使用旅行札记校正统计，数据通常存在数小时延迟。"
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { settings.miyousheDataEnabled },
+                            set: { appState.saveCommonSettings(miyousheDataEnabled: $0) }))
+                            .labelsHidden()
+                    }
+                    BGISettingLine(
+                        title: "米游社统计上限",
+                        subtitle: "存在旅行札记数据时使用这组每日上限。"
+                    ) {
+                        Stepper(
+                            "精英 \(settings.miyousheDailyEliteCap)",
+                            value: Binding(
+                                get: { settings.miyousheDailyEliteCap },
+                                set: { appState.saveCommonSettings(miyousheDailyEliteCap: $0) }),
+                            in: 0...10000)
+                        Stepper(
+                            "小怪 \(settings.miyousheDailyMobCap)",
+                            value: Binding(
+                                get: { settings.miyousheDailyMobCap },
+                                set: { appState.saveCommonSettings(miyousheDailyMobCap: $0) }),
+                            in: 0...50000)
+                    }
+                    BGISettingLine(
+                        title: "米游社 Cookie",
+                        subtitle: "仅保存在本机，用于获取旅行札记。"
+                    ) {
+                        SecureField("Cookie", text: $miyousheCookieDraft)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(minWidth: 240, maxWidth: 420)
+                        Button("保存") {
+                            appState.saveCommonSettings(
+                                miyousheCookie: miyousheCookieDraft)
+                        }
+                        .disabled(miyousheCookieDraft == settings.miyousheCookie)
+                    }
+                    BGISettingLine(
+                        title: "同步日志分析 Cookie",
+                        subtitle: "与调度器日志分析配置共用 Cookie。"
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { settings.miyousheLogSyncCookie },
+                            set: { appState.saveCommonSettings(miyousheLogSyncCookie: $0) }))
+                            .labelsHidden()
+                    }
+                }
+            }
+        }
+        .onAppear {
+            miyousheCookieDraft = appState.commonSettings?.miyousheCookie ?? ""
+        }
+        .onChange(of: appState.commonSettings?.miyousheCookie) { _, value in
+            miyousheCookieDraft = value ?? ""
+        }
+    }
+
+    private func serverTimeZoneTitle(_ offset: Int) -> String {
+        switch offset {
+        case 8: "其他 UTC+08"
+        case 1: "欧服 UTC+01"
+        case -5: "美服 UTC-05"
+        default: "UTC\(offset >= 0 ? "+" : "")\(offset)"
         }
     }
 }

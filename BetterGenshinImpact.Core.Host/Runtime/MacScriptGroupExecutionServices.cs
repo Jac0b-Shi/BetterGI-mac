@@ -13,8 +13,8 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 
 public sealed class MacScriptGroupExecutionServices : IScriptGroupExecutionServices
 {
+    private readonly RuntimeLayout _layout;
     private readonly PathingPartyConfig _defaultPartyConfig;
-    private readonly PathingFailurePolicy _failurePolicy;
     private readonly IAutoPickRuntimeState _autoPickRuntimeState;
     private readonly IInputBackend _inputBackend;
     private readonly Func<ISystemInfo> _getSystemInfo;
@@ -31,6 +31,7 @@ public sealed class MacScriptGroupExecutionServices : IScriptGroupExecutionServi
         IPaddleAutoPickTextRecognizer paddleRecognizer,
         IYapAutoPickTextRecognizer yapRecognizer)
     {
+        _layout = layout;
         _autoPickRuntimeState = autoPickRuntimeState;
         _inputBackend = inputBackend;
         _getSystemInfo = getSystemInfo ?? throw new ArgumentNullException(nameof(getSystemInfo));
@@ -46,10 +47,6 @@ public sealed class MacScriptGroupExecutionServices : IScriptGroupExecutionServi
             UseGadgetIntervalMs = condition.UseGadgetIntervalMs,
             AutoEatEnabled = condition.AutoEatEnabled
         };
-        var restart = root?["otherConfig"]?["autoRestartConfig"]
-            ?.Deserialize<OtherConfig.AutoRestart>(ConfigJson.Options) ?? new OtherConfig.AutoRestart();
-        _failurePolicy = new PathingFailurePolicy(
-            restart.Enabled, restart.IsPathingFailureExceptional, restart.IsFightFailureExceptional);
     }
 
     public PathingPartyConfig DefaultPartyConfig => CreateDefaultPartyConfig();
@@ -74,7 +71,19 @@ public sealed class MacScriptGroupExecutionServices : IScriptGroupExecutionServi
         GameTaskManager.TriggerDictionary["AutoPick"].IsEnabled = true;
     }
 
-    public PathingFailurePolicy PathingFailurePolicy => _failurePolicy;
+    public PathingFailurePolicy PathingFailurePolicy
+    {
+        get
+        {
+            var restart = LoadRoot(_layout)?["otherConfig"]?["autoRestartConfig"]
+                ?.Deserialize<OtherConfig.AutoRestart>(ConfigJson.Options)
+                ?? new OtherConfig.AutoRestart();
+            return new PathingFailurePolicy(
+                restart.Enabled,
+                restart.IsPathingFailureExceptional,
+                restart.IsFightFailureExceptional);
+        }
+    }
 
     public void RecordFarmingSession(FarmingSession session, FarmingRouteInfo route) =>
         FarmingStatsRecorder.RecordFarmingSession(session, route);

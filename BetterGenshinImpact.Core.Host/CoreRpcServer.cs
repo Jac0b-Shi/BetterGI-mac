@@ -65,6 +65,7 @@ public sealed class CoreRpcServer(
     public TriggerSettingsCatalog TriggerSettings => _triggerSettings;
     public MacroSettingsCatalog MacroSettings => _macroSettings;
     public HotKeySettingsCatalog HotKeySettings => _hotKeySettings;
+    public CommonSettingsCatalog CommonSettings => _commonSettings;
     public KeyBindingSettingsCatalog KeyBindingSettings =>
         _keyBindingSettings;
 
@@ -671,8 +672,8 @@ public sealed class CoreRpcServer(
         }
         if (_platformCallbacks.IsAttached)
             _mapMaskRuntimePlatform?.Initialize();
-        if (parameters?.Value<double?>("serverTimeZoneOffsetHours") is { } offsetHours)
-            _scriptHostServices?.SetServerTimeZoneOffset(TimeSpan.FromHours(offsetHours));
+        _scriptHostServices?.SetServerTimeZoneOffset(
+            _commonSettings.GetOtherConfig().ServerTimeZoneOffset);
         if (parameters?.Value<bool?>("jsNotificationEnabled") is { } notificationsEnabled)
             _scriptHostServices?.SetJsNotificationEnabled(notificationsEnabled);
         if (parameters?.Value<string>("mapMatchingMethod") is { Length: > 0 } mapMatchingMethod)

@@ -34,7 +34,6 @@ public sealed class MacScriptServicePlatform(
     Func<bool> isTriggerDispatcherRunning) : IScriptServicePlatform
 {
     private string _mapMatchingMethod = "TemplateMatch";
-    private readonly JsonObject? _configRoot = LoadConfigRoot(layout);
 
     public ILogger Logger { get; } = logger;
     public string AutoPathingRoot => Path.Combine(layout.UserPath, "AutoPathing");
@@ -144,11 +143,11 @@ public sealed class MacScriptServicePlatform(
     }
 
     private OtherConfig LoadOtherConfig() =>
-        _configRoot?["otherConfig"]?.Deserialize<OtherConfig>(ConfigJson.Options)
+        LoadConfigRoot(layout)?["otherConfig"]?.Deserialize<OtherConfig>(ConfigJson.Options)
         ?? new OtherConfig();
 
     private GenshinStartConfig LoadGenshinStartConfig() =>
-        _configRoot?["genshinStartConfig"]?.Deserialize<GenshinStartConfig>(ConfigJson.Options)
+        LoadConfigRoot(layout)?["genshinStartConfig"]?.Deserialize<GenshinStartConfig>(ConfigJson.Options)
         ?? new GenshinStartConfig();
 
     private static JsonObject? LoadConfigRoot(RuntimeLayout layout)

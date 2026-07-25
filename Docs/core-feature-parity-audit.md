@@ -119,6 +119,16 @@ failure logging. The macOS platform reads `otherConfig.farmingPlanConfig` and
 `otherConfig.miyousheConfig` from the Core-owned `User/config.json`; it does not
 replace unavailable synchronization with a successful no-op.
 
+The macOS common-settings contract exposes the upstream unattended fields used
+by production execution: server time zone, expedition-reward country,
+scheduler restart policy, pathing/fight failure policy, farming caps, HoYoLab
+correction caps and Cookie sharing. Core preserves unknown configuration
+members, publishes saved time-zone and country changes to the live runtime, and
+the scheduler/pathing/farming platforms reload mutable policy rather than
+holding a startup-only snapshot. The upstream focus-restoration switch is not
+exposed because macOS intentionally pauses foreground input after focus loss
+instead of forcing the game back to the foreground.
+
 ### Notifications
 
 Core owns `notificationConfig.jsNotificationEnabled` and maps the upstream

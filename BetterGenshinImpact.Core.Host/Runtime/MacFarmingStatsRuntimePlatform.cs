@@ -11,16 +11,14 @@ public sealed class MacFarmingStatsRuntimePlatform(
     RuntimeLayout layout,
     ILogger logger) : IFarmingStatsRuntimePlatform
 {
-    private readonly OtherConfig _otherConfig = LoadConfig(layout);
-
     public string LogDirectory { get; } = Path.Combine(layout.RootPath, "log", "FarmingPlan");
-    public OtherConfig.FarmingPlan Config => _otherConfig.FarmingPlanConfig;
+    public OtherConfig.FarmingPlan Config => LoadConfig(layout).FarmingPlanConfig;
     public ILogger Logger { get; } = logger;
     public DateTimeOffset ServerTimeNow => ScriptHostServices.ServerTimeNow;
 
     public Task UpdateMiyousheDataAsync(CancellationToken cancellationToken) =>
         FarmingStatsMiyousheUpdater.UpdateAsync(
-            _otherConfig,
+            LoadConfig(layout),
             Logger,
             cancellationToken);
 
