@@ -1640,6 +1640,10 @@ actor BetterGICoreProcessSupervisor {
         return try client.listScriptProjects()
     }
 
+    func scriptProjectCode(folderName: String) throws -> BetterGIScriptProjectCode {
+        try runningClient().scriptProjectCode(folderName: folderName)
+    }
+
     func scriptProjectRootLocation() throws -> String {
         try runningClient().scriptProjectRootLocation()
     }

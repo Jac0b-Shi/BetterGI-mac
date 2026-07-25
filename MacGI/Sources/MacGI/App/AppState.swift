@@ -2256,6 +2256,15 @@ final class AppState: ObservableObject {
         }
     }
 
+    func loadScriptProjectCode(
+        folderName: String
+    ) async throws -> BetterGIScriptProjectCode {
+        guard let supervisor = betterGICoreSupervisor else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is unavailable.")
+        }
+        return try await supervisor.scriptProjectCode(folderName: folderName)
+    }
+
     func reloadPathingEntriesFromCore() {
         Task { [weak self] in
             await self?.loadPathingEntriesFromCore()

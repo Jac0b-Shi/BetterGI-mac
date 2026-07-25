@@ -331,6 +331,13 @@ struct BetterGIScriptProjectSummary: Equatable, Sendable, Identifiable {
     var id: String { folderName }
 }
 
+struct BetterGIScriptProjectCode: Equatable, Sendable {
+    let folderName: String
+    let name: String
+    let description: String
+    let code: String
+}
+
 /// Blocking request/response transport. Call it from a worker task, never the main actor.
 final class BetterGICoreRPCClient: @unchecked Sendable {
     static let protocolVersion = 1
@@ -677,6 +684,26 @@ final class BetterGICoreRPCClient: @unchecked Sendable {
             else { throw BetterGICoreRPCError.protocolViolation("Invalid script-project summary.") }
             return BetterGIScriptProjectSummary(folderName: folderName, name: name, version: version)
         }
+    }
+
+    func scriptProjectCode(folderName: String) throws -> BetterGIScriptProjectCode {
+        guard let result = try request(
+            method: "catalog.getScriptProjectCode",
+            parameters: ["folderName": folderName]) as? [String: Any],
+              let resultFolderName = result["folderName"] as? String,
+              let name = result["name"] as? String,
+              let description = result["description"] as? String,
+              let code = result["code"] as? String,
+              resultFolderName == folderName
+        else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid script-project code result.")
+        }
+        return .init(
+            folderName: resultFolderName,
+            name: name,
+            description: description,
+            code: code)
     }
 
     func scriptProjectRootLocation() throws -> String {

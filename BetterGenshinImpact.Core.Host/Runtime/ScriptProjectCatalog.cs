@@ -21,6 +21,23 @@ public sealed class ScriptProjectCatalog(RuntimeLayout layout)
 
     public ScriptProjectDocument Get(string folderName) => Read(ValidateFolderName(folderName));
 
+    public ScriptProjectCodeDocument GetCode(string folderName)
+    {
+        folderName = ValidateFolderName(folderName);
+        var directory = Path.Combine(Root, folderName);
+        var manifest = ReadManifest(directory, folderName);
+        var mainPath = Path.GetFullPath(Path.Combine(directory, manifest.Main));
+        var rootPath = Path.GetFullPath(directory) + Path.DirectorySeparatorChar;
+        if (!mainPath.StartsWith(rootPath, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                $"Script project main file escapes its project directory: {folderName}");
+        var code = File.ReadAllText(mainPath);
+        if (string.IsNullOrEmpty(code))
+            throw new InvalidDataException($"Script project main file is empty: {folderName}");
+        return new ScriptProjectCodeDocument(
+            folderName, manifest.Name, manifest.ShortDescription, code);
+    }
+
     public object GetRootLocation()
     {
         layout.EnsureCreated();

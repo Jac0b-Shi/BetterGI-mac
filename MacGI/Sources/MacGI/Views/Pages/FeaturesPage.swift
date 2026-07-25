@@ -1057,6 +1057,7 @@ private struct AutoArtifactSalvageSettingsEditor: View {
     let settings: BetterGICoreAutoArtifactSalvageSettings
     @State private var javaScript: String
     @State private var artifactSetFilter: String
+    @State private var showingScriptImport = false
 
     init(settings: BetterGICoreAutoArtifactSalvageSettings) {
         self.settings = settings
@@ -1066,11 +1067,31 @@ private struct AutoArtifactSalvageSettingsEditor: View {
 
     var body: some View {
         BGISettingLine(title: "JavaScript", subtitle: "只要满足脚本条件的五星圣遗物都会被选中") {
-            Button("保存脚本") {
-                appState.saveAutoArtifactSalvageSettings(
-                    javaScript: javaScript, artifactSetFilter: artifactSetFilter)
+            HStack(spacing: 8) {
+                Button {
+                    showingScriptImport = true
+                } label: {
+                    Label("从脚本仓库复制", systemImage: "doc.on.doc")
+                }
+                Button("保存脚本") {
+                    appState.saveAutoArtifactSalvageSettings(
+                        javaScript: javaScript, artifactSetFilter: artifactSetFilter)
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
+        }
+        .sheet(isPresented: $showingScriptImport) {
+            ArtifactScriptImportSheet(
+                projects: appState.scriptProjects,
+                loadCode: { folderName in
+                    try await appState.loadScriptProjectCode(folderName: folderName)
+                },
+                onImport: { code in
+                    javaScript = code
+                    appState.saveAutoArtifactSalvageSettings(
+                        javaScript: code,
+                        artifactSetFilter: artifactSetFilter)
+                })
         }
         TextEditor(text: $javaScript)
             .font(.system(.body, design: .monospaced))
@@ -1114,6 +1135,121 @@ private struct AutoArtifactSalvageSettingsEditor: View {
                 }
             }
             .labelsHidden().frame(width: 100)
+        }
+    }
+}
+
+private struct ArtifactScriptImportSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let projects: [BetterGIScriptProjectSummary]
+    let loadCode: (String) async throws -> BetterGIScriptProjectCode
+    let onImport: (String) -> Void
+
+    @State private var selectedFolderName: String?
+    @State private var document: BetterGIScriptProjectCode?
+    @State private var loading = false
+    @State private var errorMessage = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("请选择需要复制的JS脚本")
+                .font(.title2.bold())
+            Divider()
+            HStack(alignment: .top, spacing: 14) {
+                List(projects) { project in
+                    Button {
+                        selectedFolderName = project.folderName
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(project.name)
+                                .foregroundStyle(BGIColors.primaryText)
+                            Text("\(project.folderName) · \(project.version)")
+                                .font(.caption)
+                                .foregroundStyle(BGIColors.secondaryText)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 3)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(
+                        selectedFolderName == project.folderName
+                            ? BGIColors.accent.opacity(0.16)
+                            : Color.clear)
+                }
+                .frame(width: 260)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    if loading {
+                        ProgressView("读取脚本")
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if let document {
+                        Text(document.name).font(.headline)
+                        if !document.description.isEmpty {
+                            Text(document.description)
+                                .font(.caption)
+                                .foregroundStyle(BGIColors.secondaryText)
+                        }
+                        ScrollView {
+                            Text(document.code)
+                                .font(.body.monospaced())
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(10)
+                        }
+                        .background(BGIColors.cardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    } else if !errorMessage.isEmpty {
+                        Text(errorMessage)
+                            .foregroundStyle(BGIColors.danger)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        Text(projects.isEmpty ? "没有已安装的 JS 脚本" : "选择脚本以预览")
+                            .foregroundStyle(BGIColors.secondaryText)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            Divider()
+            HStack {
+                Spacer()
+                Button("取消", role: .cancel) { dismiss() }
+                Button("覆盖现有 JavaScript") {
+                    guard let document else { return }
+                    onImport(document.code)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(document == nil || loading)
+            }
+        }
+        .padding(18)
+        .frame(minWidth: 760, minHeight: 520)
+        .task {
+            selectedFolderName = projects.first?.folderName
+        }
+        .task(id: selectedFolderName) {
+            guard let selectedFolderName else {
+                document = nil
+                return
+            }
+            loading = true
+            document = nil
+            errorMessage = ""
+            do {
+                let loaded = try await loadCode(selectedFolderName)
+                guard !Task.isCancelled,
+                      self.selectedFolderName == selectedFolderName else { return }
+                document = loaded
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled,
+                      self.selectedFolderName == selectedFolderName else { return }
+                errorMessage = error.localizedDescription
+            }
+            loading = false
         }
     }
 }

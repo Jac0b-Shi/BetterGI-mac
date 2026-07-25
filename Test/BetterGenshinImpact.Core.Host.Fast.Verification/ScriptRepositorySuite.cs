@@ -115,6 +115,11 @@ public sealed class ScriptRepositorySuite : IVerificationSuite
                 (await File.ReadAllTextAsync(Path.Combine(installedScript, "main.js"), cancellationToken))
                     .Contains("packages/shared.js", StringComparison.Ordinal),
                 "Repository install did not replace the script payload.");
+            var installedProject = new ScriptProjectCatalog(layout).GetCode("Fixture");
+            context.Require(
+                installedProject.Name == "Fixture" &&
+                installedProject.Code.Contains("packages/shared.js", StringComparison.Ordinal),
+                "Installed script code was not available through the Core-owned project catalog.");
 
             await File.WriteAllTextAsync(
                 Path.Combine(sourceScript, "main.js"),

@@ -105,6 +105,12 @@ public sealed record ScriptProjectSummary(
     [property: JsonProperty("name")] string Name,
     [property: JsonProperty("version")] string Version);
 
+public sealed record ScriptProjectCodeDocument(
+    [property: JsonProperty("folderName")] string FolderName,
+    [property: JsonProperty("name")] string Name,
+    [property: JsonProperty("description")] string Description,
+    [property: JsonProperty("code")] string Code);
+
 public sealed record ScriptRepositoryState(
     [property: JsonProperty("available")] bool Available,
     [property: JsonProperty("repositoryPath")] string RepositoryPath,
