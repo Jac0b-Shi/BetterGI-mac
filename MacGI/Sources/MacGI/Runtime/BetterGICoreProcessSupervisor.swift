@@ -1684,6 +1684,51 @@ actor BetterGICoreProcessSupervisor {
         return taskID
     }
 
+    func schedulerProgress() throws -> [BetterGISchedulerProgressSummary] {
+        guard let values = try runningClient().request(
+            method: "scheduler.listProgress"
+        ) as? [[String: Any]] else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid scheduler.listProgress result."
+            )
+        }
+        return try values.map { value in
+            guard let name = value["name"] as? String,
+                  let displayName = value["displayName"] as? String,
+                  let scriptGroupNames = value["scriptGroupNames"] as? [String],
+                  let loop = value["loop"] as? Bool,
+                  let loopCount = value["loopCount"] as? Int,
+                  let startTime = value["startTime"] as? String
+            else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid scheduler progress summary."
+                )
+            }
+            return BetterGISchedulerProgressSummary(
+                name: name,
+                displayName: displayName,
+                scriptGroupNames: scriptGroupNames,
+                currentScriptGroupName: value["currentScriptGroupName"] as? String,
+                currentProjectName: value["currentProjectName"] as? String,
+                loop: loop,
+                loopCount: loopCount,
+                startTime: startTime
+            )
+        }
+    }
+
+    func continueSchedulerProgress(name: String) throws -> String {
+        guard let result = try runningClient().request(
+            method: "scheduler.continueProgress",
+            parameters: ["name": name]
+        ) as? [String: Any], let taskID = result["taskId"] as? String else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid scheduler.continueProgress result."
+            )
+        }
+        return taskID
+    }
+
     func schedulerStatus() throws -> BetterGICoreSchedulerStatus {
         guard let result = try runningClient().request(method: "scheduler.status")
             as? [String: Any],

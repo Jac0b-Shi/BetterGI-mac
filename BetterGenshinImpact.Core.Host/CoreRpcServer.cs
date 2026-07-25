@@ -532,6 +532,9 @@ public sealed class CoreRpcServer(
                 "scheduler.runGroups" => Scheduler.RunGroups(
                     RequiredStrings(request.Params, "groupNames"),
                     request.Params?.Value<bool?>("loop") ?? false),
+                "scheduler.listProgress" => Scheduler.ListProgress(),
+                "scheduler.continueProgress" => Scheduler.ContinueProgress(
+                    RequiredString(request.Params, "name")),
                 "scheduler.status" => Scheduler.Status(),
                 "scheduler.pause" => Scheduler.Pause(RequiredString(request.Params, "taskId")),
                 "scheduler.resume" => Scheduler.Resume(RequiredString(request.Params, "taskId")),
@@ -588,6 +591,7 @@ public sealed class CoreRpcServer(
                 "runtime.geometry-refresh",
                 "scheduler.run",
                 "scheduler.runGroups",
+                "scheduler.progress",
                 "scheduler.status",
                 "oneDragon.config",
                 "oneDragon.run",

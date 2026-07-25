@@ -8,6 +8,7 @@ private enum SchedulerSheet: Identifiable {
     case renameGroup(String)
     case copyGroup(String)
     case continuousRun
+    case continueRun
     case groupSettings
     case repository
 
@@ -20,6 +21,7 @@ private enum SchedulerSheet: Identifiable {
         case .renameGroup(let name): "rename-group-\(name)"
         case .copyGroup(let name): "copy-group-\(name)"
         case .continuousRun: "continuous-run"
+        case .continueRun: "continue-run"
         case .groupSettings: "group-settings"
         case .repository: "repository"
         }
@@ -73,6 +75,7 @@ struct SchedulerWorkspaceView: View {
             case .renameGroup(let name): SchedulerGroupNameSheet(mode: .rename(name))
             case .copyGroup(let name): SchedulerGroupNameSheet(mode: .copy(name))
             case .continuousRun: SchedulerContinuousRunSheet()
+            case .continueRun: SchedulerContinueRunSheet()
             case .groupSettings: SchedulerGroupSettingsSheet()
             case .repository: ScriptRepositorySheet()
             }
@@ -182,6 +185,10 @@ struct SchedulerWorkspaceView: View {
                     sheet = .continuousRun
                 }
                 .disabled(appState.currentSchedulerProjectID != nil)
+                Button("继续执行", systemImage: "clock.arrow.circlepath") {
+                    sheet = .continueRun
+                }
+                .disabled(appState.currentSchedulerProjectID != nil)
                 Menu("更多功能") {
                     Button("清空", role: .destructive) { confirmingClear = true }
                     Button("日志分析") {
@@ -208,6 +215,83 @@ struct SchedulerWorkspaceView: View {
 
     private func typeDescription(_ type: String) -> String {
         ["Javascript": "JS脚本", "Pathing": "地图追踪", "KeyMouse": "键鼠脚本", "Shell": "Shell"][type] ?? type
+    }
+}
+
+private struct SchedulerContinueRunSheet: View {
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.dismiss) private var dismiss
+    @State private var progressItems: [BetterGISchedulerProgressSummary] = []
+    @State private var selectedName: String?
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("继续执行").font(.title2).bold()
+            if progressItems.isEmpty, error == nil {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(progressItems) { progress in
+                    Button {
+                        selectedName = progress.name
+                    } label: {
+                        HStack {
+                            Image(systemName:
+                                selectedName == progress.name
+                                    ? "checkmark.circle.fill"
+                                    : "circle")
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(progress.displayName)
+                                    .lineLimit(2)
+                                Text(progress.scriptGroupNames.joined(separator: "、"))
+                                    .font(BGIFonts.caption)
+                                    .foregroundStyle(BGIColors.mutedText)
+                            }
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            if let error {
+                Text(error)
+                    .foregroundStyle(BGIColors.danger)
+                    .textSelection(.enabled)
+            }
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                Button("确认执行") {
+                    guard let selectedName,
+                          let progress = progressItems.first(where: {
+                              $0.name == selectedName
+                          })
+                    else { return }
+                    appState.continueSchedulerProgress(
+                        name: selectedName,
+                        displayName: progress.displayName
+                    )
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(selectedName == nil)
+            }
+        }
+        .padding(20)
+        .frame(width: 640, height: 520)
+        .task {
+            do {
+                progressItems = try await appState.loadSchedulerProgress()
+                selectedName = progressItems.first?.name
+                if progressItems.isEmpty {
+                    error = "没有可继续执行的进度记录。"
+                }
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
     }
 }
 

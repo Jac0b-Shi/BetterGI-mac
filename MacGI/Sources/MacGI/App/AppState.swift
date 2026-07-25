@@ -2904,6 +2904,63 @@ final class AppState: ObservableObject {
         runSchedulerGroups(names: names, continuous: true, loop: loop)
     }
 
+    func loadSchedulerProgress() async throws -> [BetterGISchedulerProgressSummary] {
+        guard let supervisor = betterGICoreSupervisor else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is unavailable.")
+        }
+        return try await supervisor.schedulerProgress()
+    }
+
+    func continueSchedulerProgress(name: String, displayName: String) {
+        guard currentSchedulerProjectID == nil, oneDragonStatus.taskID == nil else {
+            addLog(.error, "Cannot continue scheduler progress: another task is active.")
+            return
+        }
+        guard let supervisor = betterGICoreSupervisor, coreStatus == .ok else {
+            schedulerExecutionStatus = "Core unavailable"
+            addLog(.error, "Cannot continue scheduler progress: BetterGI Core is not ready.")
+            return
+        }
+        guard runtimeLifecycle == .running else {
+            schedulerExecutionStatus = "Runtime stopped"
+            addLog(.error, "Cannot continue scheduler progress: start the runtime first.")
+            return
+        }
+        guard isWindowValid, !selectedWindow.isSynthetic else {
+            schedulerExecutionStatus = "Window unavailable"
+            addLog(.error, "Cannot continue scheduler progress: no real game window is selected.")
+            return
+        }
+        guard !safetyGate.emergencyStop else {
+            schedulerExecutionStatus = "Emergency stop"
+            addLog(.error, "Cannot continue scheduler progress: emergency stop is enabled.")
+            return
+        }
+
+        schedulerExecutionTask?.cancel()
+        schedulerExecutionStatus = "Starting"
+        schedulerExecutionError = nil
+        schedulerExecutionTask = Task { [weak self] in
+            do {
+                let taskID = try await supervisor.continueSchedulerProgress(name: name)
+                guard !Task.isCancelled, let self else { return }
+                self.handleCoreSchedulerRunAccepted(
+                    taskID: taskID,
+                    groupName: displayName
+                )
+            } catch {
+                self?.schedulerExecutionStatus = "Failed"
+                self?.schedulerExecutionError = error.localizedDescription
+                self?.currentSchedulerProjectID = nil
+                self?.appStatus = .error
+                self?.addLog(
+                    .error,
+                    "Core scheduler continue failed: \(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
     private func runSchedulerGroups(
         names: [String],
         continuous: Bool,

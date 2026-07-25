@@ -310,6 +310,19 @@ struct BetterGIScriptGroupSummary: Equatable, Sendable, Identifiable {
     var id: String { "\(index)|\(name)" }
 }
 
+struct BetterGISchedulerProgressSummary: Equatable, Sendable, Identifiable {
+    let name: String
+    let displayName: String
+    let scriptGroupNames: [String]
+    let currentScriptGroupName: String?
+    let currentProjectName: String?
+    let loop: Bool
+    let loopCount: Int
+    let startTime: String
+
+    var id: String { name }
+}
+
 struct BetterGIScriptProjectSummary: Equatable, Sendable, Identifiable {
     let folderName: String
     let name: String

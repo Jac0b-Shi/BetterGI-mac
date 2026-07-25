@@ -402,6 +402,16 @@ rg -q '"scheduler.runGroups" => Scheduler.RunGroups' \
   && rg -q '"loop": loop' \
     MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \
   || fail "upstream --startGroups no longer delegates one ordered task to the Core scheduler"
+rg -q '"scheduler.continueProgress" => Scheduler.ContinueProgress' \
+  BetterGenshinImpact.Core.Host/CoreRpcServer.cs \
+  && rg -q 'TaskProgressManager.GenerNextProjectInfo' \
+    BetterGenshinImpact.Core.Host/Runtime/SchedulerCoordinator.cs \
+  && rg -q 'method: "scheduler.continueProgress"' \
+    MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \
+  || fail "scheduler progress continuation is not owned by the upstream Core task-progress chain"
+if rg -n 'task_progress|GenerNextProjectInfo' MacGI/Sources/MacGI; then
+  fail "Swift parses or computes upstream scheduler progress"
+fi
 
 if rg -n 'manifestJSON|JSONSerialization.*manifest' MacGI/Sources/MacGI; then
   fail "Swift parses BetterGI script manifests instead of consuming Core display DTOs"

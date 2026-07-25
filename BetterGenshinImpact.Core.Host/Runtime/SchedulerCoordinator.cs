@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Host.Protocol;
 using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.Core.Script.Group;
@@ -48,7 +49,51 @@ public sealed class SchedulerCoordinator(
             })
             .ToArray();
         var displayName = string.Join(",", groups.Select(group => group.Name));
-        return Start(displayName, cancellationToken => RunGroupsAsync(groups, loop, cancellationToken));
+        var taskProgress = new TaskProgress
+        {
+            ScriptGroupNames = groups.Select(group => group.Name).ToList(),
+            Loop = loop
+        };
+        return Start(
+            displayName,
+            cancellationToken => RunGroupsAsync(groups, taskProgress, cancellationToken));
+    }
+
+    public IReadOnlyList<SchedulerProgressSummary> ListProgress()
+        => TaskProgressManager.LoadAllTaskProgress()
+            .Select(CreateProgressSummary)
+            .ToArray();
+
+    public object ContinueProgress(string name)
+    {
+        var progressItems = TaskProgressManager.LoadAllTaskProgress();
+        var taskProgress = string.Equals(name, "latest", StringComparison.Ordinal)
+            ? progressItems.FirstOrDefault()
+            : progressItems.FirstOrDefault(item =>
+                string.Equals(item.Name, name, StringComparison.Ordinal));
+        if (taskProgress == null)
+            throw new FileNotFoundException($"Scheduler progress does not exist: {name}");
+
+        var groups = taskProgress.ScriptGroupNames
+            .Select(groupName =>
+            {
+                var path = ResolveGroup(groupName);
+                return ScriptGroup.FromJson(File.ReadAllText(path));
+            })
+            .ToList();
+        if (groups.Count == 0)
+            throw new InvalidDataException(
+                $"Scheduler progress '{taskProgress.Name}' contains no script groups.");
+
+        TaskProgressManager.GenerNextProjectInfo(taskProgress, groups);
+        if (taskProgress.Next == null)
+            throw new InvalidDataException(
+                $"Scheduler progress '{taskProgress.Name}' has no resumable next project.");
+
+        var displayName = string.Join(",", groups.Select(group => group.Name));
+        return Start(
+            displayName,
+            cancellationToken => RunGroupsAsync(groups, taskProgress, cancellationToken));
     }
 
     public object RunProject(ScriptGroupProject project, string displayName)
@@ -178,16 +223,11 @@ public sealed class SchedulerCoordinator(
 
     private static async Task RunGroupsAsync(
         IReadOnlyList<ScriptGroup> groups,
-        bool loop,
+        TaskProgress taskProgress,
         CancellationToken cancellationToken)
     {
         RunnerContext.Instance.Reset();
         RunnerContext.Instance.IsContinuousRunGroup = true;
-        var taskProgress = new TaskProgress
-        {
-            ScriptGroupNames = groups.Select(group => group.Name).ToList(),
-            Loop = loop
-        };
         RunnerContext.Instance.taskProgress = taskProgress;
         try
         {
@@ -198,6 +238,14 @@ public sealed class SchedulerCoordinator(
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var group = groups[index];
+                    if (taskProgress.Next != null &&
+                        !string.Equals(
+                            group.Name,
+                            taskProgress.Next.GroupName,
+                            StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
                     taskProgress.CurrentScriptGroupName = group.Name;
                     TaskProgressManager.SaveTaskProgress(taskProgress);
                     await service.RunMulti(group.Projects, group.Name, taskProgress);
@@ -206,7 +254,7 @@ public sealed class SchedulerCoordinator(
                 }
 
                 taskProgress.LoopCount++;
-                if (!loop)
+                if (!taskProgress.Loop)
                 {
                     if (taskProgress.ConsecutiveFailureCount == 0)
                     {
@@ -239,6 +287,29 @@ public sealed class SchedulerCoordinator(
         RunnerContext.Instance.taskProgress = taskProgress;
         TaskProgressManager.SaveTaskProgress(taskProgress);
         await new ScriptService().RunMulti(group.Projects, group.Name, taskProgress);
+    }
+
+    internal static SchedulerProgressSummary CreateProgressSummary(
+        TaskProgress taskProgress)
+    {
+        var displayName = $"{taskProgress.Name}_{taskProgress.CurrentScriptGroupName}_";
+        if (taskProgress.Loop)
+            displayName += $"循环({taskProgress.LoopCount})_";
+        if (taskProgress.CurrentScriptGroupProjectInfo != null)
+        {
+            displayName +=
+                $"{taskProgress.CurrentScriptGroupProjectInfo.Index}_" +
+                taskProgress.CurrentScriptGroupProjectInfo.Name;
+        }
+        return new SchedulerProgressSummary(
+            taskProgress.Name,
+            displayName,
+            taskProgress.ScriptGroupNames,
+            taskProgress.CurrentScriptGroupName,
+            taskProgress.CurrentScriptGroupProjectInfo?.Name,
+            taskProgress.Loop,
+            taskProgress.LoopCount,
+            taskProgress.StartTime);
     }
 
     private async Task EmitAsync(string taskId, string state, object? error)

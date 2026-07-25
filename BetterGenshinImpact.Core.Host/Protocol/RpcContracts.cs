@@ -66,6 +66,16 @@ public sealed record ScriptGroupAddCandidate(
     [property: JsonProperty("folderName")] string FolderName,
     [property: JsonProperty("type")] string Type);
 
+public sealed record SchedulerProgressSummary(
+    [property: JsonProperty("name")] string Name,
+    [property: JsonProperty("displayName")] string DisplayName,
+    [property: JsonProperty("scriptGroupNames")] IReadOnlyList<string> ScriptGroupNames,
+    [property: JsonProperty("currentScriptGroupName")] string? CurrentScriptGroupName,
+    [property: JsonProperty("currentProjectName")] string? CurrentProjectName,
+    [property: JsonProperty("loop")] bool Loop,
+    [property: JsonProperty("loopCount")] int LoopCount,
+    [property: JsonProperty("startTime")] DateTime StartTime);
+
 public sealed record PathingCatalogEntry(
     [property: JsonProperty("id")] string Id,
     [property: JsonProperty("parentId")] string? ParentId,
