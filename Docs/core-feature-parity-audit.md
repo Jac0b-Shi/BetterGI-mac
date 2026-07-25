@@ -41,6 +41,14 @@ priority, exclusivity and whether an expander may be shown.
 | AutoArtifactSalvage | complete | complete |
 | AutoRedeemCode | complete | multiline launch input is owned by the task action, not a settings document; the descriptor therefore does not expose an expander |
 
+The shared JavaScript `Dispatcher` reaches the same macOS task implementations.
+In particular, `AutoWood` reads its current round count and daily cap from the
+Core-owned solo-task settings catalog, matching the independent-task entry
+instead of falling back to a second set of platform defaults. Parameterized
+`RunAutoDomainTask` calls preserve the script-owned `AutoDomainParam` and run
+the same shared `AutoDomainTask` with Core-owned configuration and the macOS
+runtime adapter.
+
 The upstream Grid icon collection and model-accuracy entries are developer
 tools rather than normal automation tasks and are intentionally absent from the
 production macOS task catalog. One-dragon execution remains a separate workflow
@@ -191,8 +199,9 @@ hotkeys forward both press and release edges, and release remains deliverable
 after focus loss so Core can cancel an input blocked at the foreground safety
 gate. All generated input carries an injection marker so recording and
 monitoring cannot feed back on BetterGI-generated events. Other upstream macro
-actions remain absent from the page rather than appearing as clickable
-placeholders.
+actions are not represented by placeholders. The only upstream Macro Settings
+entry not rendered is Quick Forge, which upstream itself labels as under
+development; macOS does not expose it as a clickable production action.
 
 ### Hotkeys
 

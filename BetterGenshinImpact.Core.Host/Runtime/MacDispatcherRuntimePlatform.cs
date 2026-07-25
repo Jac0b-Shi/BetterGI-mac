@@ -57,8 +57,8 @@ public sealed class MacDispatcherRuntimePlatform(
     ILoggerFactory loggerFactory) : IDispatcherRuntimePlatform
 {
     public CancellationToken GlobalCancellationToken { get; } = globalCancellationToken;
-    public int AutoWoodRoundNum => 0;
-    public int AutoWoodDailyMaxCount => 2000;
+    public int AutoWoodRoundNum => settings.AutoWoodRoundNum;
+    public int AutoWoodDailyMaxCount => settings.AutoWoodDailyMaxCount;
     public string AutoBossStrategyName =>
         LoadUserConfig<AutoBossConfig>(layout, "autoBossConfig").StrategyName;
     public DispatcherAutoEatSettings AutoEatSettings
@@ -258,6 +258,17 @@ public sealed class MacDispatcherRuntimePlatform(
     public async Task<object?> RunParameterizedTask(string name, object parameter,
         CancellationToken cancellationToken)
     {
+        if (name == "AutoDomain" && parameter is AutoDomainParam autoDomainParam)
+        {
+            var config = LoadUserConfig<AutoDomainConfig>(
+                layout, "autoDomainConfig");
+            var pickConfig = LoadUserConfig<AutoPickConfig>(
+                layout, "autoPickConfig");
+            return await new AutoDomainTask(
+                    autoDomainParam, config, pickConfig.PickKey,
+                    autoDomainRuntimePlatform)
+                .Start(cancellationToken);
+        }
         if (name == "AutoFight" && parameter is AutoFightParam autoFightParam)
         {
             var factory = BetterGenshinImpact.GameTask.AutoFight.Factory.CombatTaskFactoryProvider
