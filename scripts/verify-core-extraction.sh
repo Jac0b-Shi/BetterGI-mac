@@ -764,6 +764,11 @@ rg -q 'MapMask did not preserve its upstream main-UI behavior while adding stabl
 rg -q 'category is GameUiCategory\.Unknown or GameUiCategory\.BigMap' \
   BetterGenshinImpact/GameTask/MapMask/MapMaskTrigger.cs \
   || fail "MapMask does not declare both upstream main and big-map UI categories"
+rg -q 'ColorConversionCode = ColorConversionCodes\.BGR2HLS' \
+  BetterGenshinImpact/GameTask/QuickTeleport/QuickTeleportTrigger.cs \
+  && rg -q 'ColorConversionCode = ColorConversionCodes\.BGR2HLS' \
+    BetterGenshinImpact/GameTask/AutoTrackPath/TpTask.cs \
+  || fail "Quick teleport and pathing teleport do not share the HLS candidate-text filter"
 rg -q 'macOS trigger dispatcher did not restart after a prior loop failure' \
   Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
   || fail "macOS trigger dispatcher does not verify restart after loop failure"

@@ -15,7 +15,7 @@ configuration.
 | AutoSkip | complete | complete for applicable macOS controls | Dialogue skipping, fixed delay, process-audio VAD wait, option priority, custom priority text, submit, popup, daily reward, expedition and hangout settings are Core-owned, atomically persisted and hot-updated on the live trigger. Background activation and PiP remain intentionally absent because macOS pauses input when the game loses focus. |
 | AutoFish | complete | complete | Upstream exposes the realtime half-auto enable switch and directs full automation to the independent task. |
 | AutoEat | complete | complete | Enable state, check interval and eat interval use the upstream config. |
-| QuickTeleport | complete | complete | Enable state, list click delay, panel wait delay and hotkey mode use the upstream config. |
+| QuickTeleport | complete | complete | Enable state, list click delay, panel wait delay and hotkey mode use the upstream config. Candidate text uses the shared HLS filter on Windows and macOS. |
 | MapMask | complete | complete | The realtime page owns only the upstream mini-map-mask switch. Provider, language and label selection belong to the big-map HUD picker. Core persists the current upstream per-data-source hidden-point state; the HUD exposes visible/total counts, hide-all/show-all actions and per-marker right-click visibility. A dedicated AppKit panel receives events only inside marker and detail-popup bounds so the rest of the game map remains draggable. Point-detail text, image and guide links come from the shared `IMaskMapPointService` for the active data source; Swift only renders the returned DTO and opens validated HTTP(S) links. |
 | SkillCd | complete | complete | Custom role fallback rules, trigger-on-skill, hide-at-zero, position, gap, scale and four colors are Core-owned and hot-updated. The macOS HUD renders the same ready/normal color and scale semantics independently from the recognition-debug overlay switch. |
 
@@ -40,6 +40,8 @@ priority, exclusivity and whether an expander may be shown.
 | AutoCook | complete | complete |
 | AutoArtifactSalvage | complete | complete |
 | AutoRedeemCode | complete | multiline launch input is owned by the task action, not a settings document; the descriptor therefore does not expose an expander |
+| GetGridIcons | complete | complete; shown only while the upstream global screenshot switch is enabled |
+| GridIconsAccuracyTest | complete | shares the upstream GetGridIcons configuration and card |
 
 The shared JavaScript `Dispatcher` reaches the same macOS task implementations.
 In particular, `AutoWood` reads its current round count and daily cap from the
@@ -49,10 +51,10 @@ instead of falling back to a second set of platform defaults. Parameterized
 the same shared `AutoDomainTask` with Core-owned configuration and the macOS
 runtime adapter.
 
-The upstream Grid icon collection and model-accuracy entries are developer
-tools rather than normal automation tasks and are intentionally absent from the
-production macOS task catalog. One-dragon execution remains a separate workflow
-surface and must not be represented as an independent task card. The shared
+The upstream Grid icon collection and model-accuracy entries retain their
+developer-only screenshot gate, settings, output directory and two-action card.
+One-dragon execution remains a separate workflow surface and must not be
+represented as an independent task card. The shared
 `OneDragonPlan` now owns old/new configuration compatibility, explicit order,
 duplicate task names, enabled state and resume-marker fallback; the Windows
 ViewModel consumes that same plan for display and execution-window selection.
@@ -86,6 +88,10 @@ mining             nahida_collect    pick_around
 pick_up_collect    pyro_collect      set_time
 stop_flying        up_down_grab_leaf use_gadget
 ```
+
+Quick teleport and `TpTask` map-option recognition use the same HLS candidate
+text filter. The static gate covers both shared source paths so macOS pathing
+cannot silently drift back to the former capture-mode-specific branch.
 
 This is a local runtime-data gate because CI does not contain the user's
 downloaded route library:
