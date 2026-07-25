@@ -454,6 +454,7 @@
     <Compile Include="../BetterGenshinImpact/GameTask/FarmingPlan/FarmingRecord.cs" Link="GameTask/FarmingPlan/FarmingRecord.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/FarmingPlan/DailyFarmingData.cs" Link="GameTask/FarmingPlan/DailyFarmingData.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/FarmingPlan/FarmingStatsRecorder.cs" Link="GameTask/FarmingPlan/FarmingStatsRecorder.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/FarmingPlan/FarmingStatsMiyousheUpdater.cs" Link="GameTask/FarmingPlan/FarmingStatsMiyousheUpdater.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/FarmingPlan/FarmingStatsRuntimePlatform.cs" Link="GameTask/FarmingPlan/FarmingStatsRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/LogParse/ExecutionRecord.cs" Link="GameTask/LogParse/ExecutionRecord.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/LogParse/DailyExecutionRecord.cs" Link="GameTask/LogParse/DailyExecutionRecord.cs" />

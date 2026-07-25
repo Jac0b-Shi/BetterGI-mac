@@ -109,6 +109,16 @@ negative-time filtering, 20 ms mouse-move merging, JSON serialization and
 shared `KeyMouseMacroPlayer` playback. List, save, rename, delete, play, stop
 and status operations are exposed through authenticated RPC.
 
+### Farming statistics
+
+The shared `FarmingStatsRecorder` owns the upstream 04:00 boundary, route
+records, local counters, cap checks and JSON format. Windows and macOS both call
+the shared `FarmingStatsMiyousheUpdater` for HoYoLab travel-diary correction,
+including the same cookie gate, action classification, refresh timestamps and
+failure logging. The macOS platform reads `otherConfig.farmingPlanConfig` and
+`otherConfig.miyousheConfig` from the Core-owned `User/config.json`; it does not
+replace unavailable synchronization with a successful no-op.
+
 ### Notifications
 
 Core owns `notificationConfig.jsNotificationEnabled` and maps the upstream
