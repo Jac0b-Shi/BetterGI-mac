@@ -482,6 +482,8 @@ public sealed class CoreRpcServer(
                         request.Params?.Value<bool?>("commandLineRun") ?? false,
                         _shutdown.Token),
                 "repository.reset" => ResetScriptRepository(),
+                "repository.clipboard.inspect" => _scriptRepositoryCatalog.InspectImportUri(
+                    RequiredString(request.Params, "text")),
                 "repository.web.getRepoJson" => _scriptRepositoryCatalog.GetRepoJson(),
                 "repository.web.getSubscribedScriptPaths" => _scriptRepositoryCatalog.GetSubscribedPathsJson(),
                 "repository.web.importUri" => await _scriptRepositoryCatalog.ImportUriAsync(

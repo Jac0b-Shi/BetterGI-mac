@@ -264,6 +264,11 @@ struct BetterGIScriptRepositoryBatchUpdateResult: Equatable, Sendable {
     let subscribedPaths: [String]
 }
 
+struct BetterGIScriptRepositoryImportPreview: Equatable, Sendable {
+    let recognized: Bool
+    let paths: [String]
+}
+
 enum BetterGISchedulerCatalogMutation: Sendable {
     case add(type: String, candidateIDs: [String], shellCommand: String?)
     case remove(projectIndex: Int, sameFolder: Bool)
@@ -932,6 +937,21 @@ final class BetterGICoreRPCClient: @unchecked Sendable {
         else {
             throw BetterGICoreRPCError.protocolViolation("Invalid script repository reset result.")
         }
+    }
+
+    func inspectScriptRepositoryClipboard(
+        _ text: String
+    ) throws -> BetterGIScriptRepositoryImportPreview {
+        guard let item = try request(
+            method: "repository.clipboard.inspect",
+            parameters: ["text": text]
+        ) as? [String: Any],
+              let recognized = item["recognized"] as? Bool,
+              let paths = item["paths"] as? [String] else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid repository clipboard inspection result.")
+        }
+        return .init(recognized: recognized, paths: paths)
     }
 
     func scriptRepositoryWebString(method: String, parameters: [String: Any]? = nil) throws -> String {

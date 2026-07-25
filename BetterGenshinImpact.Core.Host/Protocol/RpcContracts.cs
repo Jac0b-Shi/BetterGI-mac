@@ -136,6 +136,10 @@ public sealed record ScriptRepositoryImportResult(
     [property: JsonProperty("installedCount")] int InstalledCount,
     [property: JsonProperty("subscribedPaths")] IReadOnlyList<string> SubscribedPaths);
 
+public sealed record ScriptRepositoryImportPreview(
+    [property: JsonProperty("recognized")] bool Recognized,
+    [property: JsonProperty("paths")] IReadOnlyList<string> Paths);
+
 public sealed record ScriptRepositoryInstallResult(
     [property: JsonProperty("path")] string Path,
     [property: JsonProperty("destinationPath")] string DestinationPath,

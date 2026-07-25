@@ -1857,6 +1857,12 @@ actor BetterGICoreProcessSupervisor {
         try runningClient().resetScriptRepository()
     }
 
+    func inspectScriptRepositoryClipboard(
+        _ text: String
+    ) throws -> BetterGIScriptRepositoryImportPreview {
+        try runningClient().inspectScriptRepositoryClipboard(text)
+    }
+
     func scriptRepositoryRepoJSON() throws -> String {
         try runningClient().scriptRepositoryWebString(method: "repository.web.getRepoJson")
     }

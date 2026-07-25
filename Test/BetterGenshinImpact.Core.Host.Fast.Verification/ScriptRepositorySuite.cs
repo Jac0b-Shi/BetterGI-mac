@@ -117,8 +117,18 @@ public sealed class ScriptRepositorySuite : IVerificationSuite
 
             var payload = Uri.EscapeDataString(Convert.ToBase64String(
                 Encoding.UTF8.GetBytes("""["js/Fixture"]""")));
+            var importUri = $"bettergi://script?import={payload}";
+            var ignoredClipboard = catalog.InspectImportUri(
+                "https://example.com/not-a-subscription");
+            var clipboardPreview = catalog.InspectImportUri(importUri);
+            context.Require(
+                !ignoredClipboard.Recognized &&
+                ignoredClipboard.Paths.Count == 0 &&
+                clipboardPreview.Recognized &&
+                clipboardPreview.Paths.SequenceEqual(["js/Fixture"]),
+                "Clipboard subscription inspection did not preserve the upstream URI gate.");
             var result = await catalog.ImportUriAsync(
-                $"bettergi://script?import={payload}",
+                importUri,
                 cancellationToken);
             context.Require(result.InstalledCount == 1 && result.SubscribedPaths.SequenceEqual(["js/Fixture"]),
                 "Repository Web import did not persist the selected subscription.");

@@ -166,10 +166,23 @@ public sealed class ScriptRepositoryCatalog(RuntimeLayout layout)
         string uri,
         CancellationToken cancellationToken)
     {
-        var paths = DecodeImportUri(uri);
+        var preview = InspectImportUri(uri);
+        if (!preview.Recognized)
+            throw new ArgumentException("Invalid BetterGI script import URI.", nameof(uri));
+        var paths = preview.Paths;
         foreach (var path in paths)
             await InstallAsync(path, cancellationToken);
         return new ScriptRepositoryImportResult(paths.Count, ReadSubscriptions());
+    }
+
+    public ScriptRepositoryImportPreview InspectImportUri(string value)
+    {
+        var trimmed = value.Trim();
+        if (!trimmed.StartsWith(
+                "bettergi://script?import=",
+                StringComparison.OrdinalIgnoreCase))
+            return new ScriptRepositoryImportPreview(false, []);
+        return new ScriptRepositoryImportPreview(true, DecodeImportUri(trimmed));
     }
 
     public async Task<ScriptRepositoryBatchUpdateResult> UpdateSubscribedAsync(

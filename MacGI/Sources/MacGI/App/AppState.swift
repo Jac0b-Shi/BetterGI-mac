@@ -14,6 +14,12 @@ struct RedeemCodeClipboardPrompt: Identifiable, Equatable {
     let sourceText: String
 }
 
+struct ScriptSubscriptionClipboardPrompt: Identifiable, Equatable {
+    let id = UUID()
+    let sourceText: String
+    let paths: [String]
+}
+
 enum AppStatus: String, CaseIterable, Identifiable {
     case idle
     case running
@@ -424,6 +430,8 @@ final class AppState: ObservableObject {
     @Published var features: [MacGIFeature] = []
     @Published var soloTasks: [BetterGICoreSoloTask] = []
     @Published var soloTaskInputDrafts: [String: String] = [:]
+    @Published private(set) var scriptSubscriptionClipboardPrompt:
+        ScriptSubscriptionClipboardPrompt?
     @Published var redeemCodeClipboardDraft = ""
     @Published private(set) var redeemCodeClipboardPrompt: RedeemCodeClipboardPrompt?
     @Published private(set) var soloTaskStatus = BetterGICoreSoloTaskStatus(
@@ -4147,9 +4155,68 @@ final class AppState: ObservableObject {
             didHandleInitialApplicationActivation = true
             return
         }
-        guard autoRedeemCodeSettings?.clipboardListenerEnabled == true,
+        guard scriptSubscriptionClipboardPrompt == nil,
               redeemCodeClipboardPrompt == nil,
               let text = NSPasteboard.general.string(forType: .string),
+              !text.isEmpty,
+              text.count <= 1_000 else {
+            return
+        }
+        guard let supervisor = betterGICoreSupervisor else {
+            presentRedeemCodeClipboardPrompt(text)
+            return
+        }
+        Task { [weak self] in
+            do {
+                let preview = try await supervisor
+                    .inspectScriptRepositoryClipboard(text)
+                guard let self,
+                      self.scriptSubscriptionClipboardPrompt == nil,
+                      self.redeemCodeClipboardPrompt == nil else {
+                    return
+                }
+                if preview.recognized {
+                    self.scriptSubscriptionClipboardPrompt = .init(
+                        sourceText: text,
+                        paths: preview.paths)
+                } else {
+                    self.presentRedeemCodeClipboardPrompt(text)
+                }
+            } catch {
+                self?.presentRedeemCodeClipboardPrompt(text)
+            }
+        }
+    }
+
+    func dismissScriptSubscriptionClipboardPrompt() {
+        clearClipboardIfMatching(scriptSubscriptionClipboardPrompt?.sourceText)
+        scriptSubscriptionClipboardPrompt = nil
+    }
+
+    func acceptScriptSubscriptionClipboardPrompt() {
+        guard let prompt = scriptSubscriptionClipboardPrompt,
+              let supervisor = betterGICoreSupervisor else {
+            dismissScriptSubscriptionClipboardPrompt()
+            return
+        }
+        clearClipboardIfMatching(prompt.sourceText)
+        scriptSubscriptionClipboardPrompt = nil
+        Task { [weak self] in
+            do {
+                let count = try await supervisor
+                    .importScriptRepositoryURI(prompt.sourceText)
+                await self?.loadSchedulerGroupsFromCore()
+                self?.addLog(.info, "已从剪贴板订阅并安装 \(count) 个脚本项目。")
+            } catch {
+                self?.addLog(
+                    .error,
+                    "剪贴板脚本订阅导入失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func presentRedeemCodeClipboardPrompt(_ text: String) {
+        guard autoRedeemCodeSettings?.clipboardListenerEnabled == true,
               !dismissedRedeemCodeClipboardTexts.contains(text) else {
             return
         }
@@ -4157,6 +4224,14 @@ final class AppState: ObservableObject {
         guard !codes.isEmpty else { return }
         redeemCodeClipboardDraft = codes.joined(separator: "\n")
         redeemCodeClipboardPrompt = RedeemCodeClipboardPrompt(sourceText: text)
+    }
+
+    private func clearClipboardIfMatching(_ sourceText: String?) {
+        guard let sourceText,
+              NSPasteboard.general.string(forType: .string) == sourceText else {
+            return
+        }
+        NSPasteboard.general.clearContents()
     }
 
     func dismissRedeemCodeClipboardPrompt() {

@@ -76,8 +76,12 @@ renders the generic editor and sends its text unchanged, while Core trims and
 validates lines before creating `DispatcherRedeemCodeTaskRequest`. macOS
 clipboard writes and cleanup use authenticated platform callbacks, preserving
 the upstream in-game Paste-button flow without moving code parsing into Swift.
-The upstream automatic clipboard-listener setting remains unavailable until its
-Core workflow is composed; no inert toggle is shown.
+The upstream activation-time clipboard workflow first asks Core to inspect
+`bettergi://script?import=` subscription links, confirms the decoded repository
+paths before installation, and then falls through to the redemption-code
+extractor for ordinary clipboard text. Repository parsing, installation and
+subscription persistence remain Core-owned; Swift only reads and clears the
+macOS pasteboard around the user confirmation.
 
 ## First-step completion gate
 
