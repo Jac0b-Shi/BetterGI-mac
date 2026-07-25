@@ -1,7 +1,10 @@
 using BetterGenshinImpact.Core.Host.Runtime;
+using BetterGenshinImpact.Core.Host.Protocol;
 using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.Verification.Framework;
+using Newtonsoft.Json.Linq;
+using System.Net.Sockets;
 
 namespace BetterGenshinImpact.Core.Host.Fast.Verification;
 
@@ -61,5 +64,84 @@ public sealed class RuntimeCancellationSuite : IVerificationSuite
         context.Require(
             cleanupCount == 1 && !dispatcher.IsRunning,
             "Runtime stop did not close the platform-owned HTML masks.");
+
+        await VerifyInFlightPlatformCallbackCancellation(context, cancellationToken);
+    }
+
+    private static async Task VerifyInFlightPlatformCallbackCancellation(
+        VerificationContext context,
+        CancellationToken cancellationToken)
+    {
+        var socketPath = $"/tmp/bgi-callback-{Guid.NewGuid():N}.sock";
+        using var listener = new Socket(
+            AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        try
+        {
+            listener.Bind(new UnixDomainSocketEndPoint(socketPath));
+            listener.Listen(1);
+
+            using var swiftSocket = new Socket(
+                AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            var connectTask = swiftSocket.ConnectAsync(
+                new UnixDomainSocketEndPoint(socketPath), cancellationToken);
+            using var coreSocket = await listener.AcceptAsync(cancellationToken);
+            await connectTask;
+
+            await using var coreConnection = new FramedJsonConnection(coreSocket);
+            await using var swiftConnection = new FramedJsonConnection(swiftSocket);
+            var callbacks = new PlatformCallbackChannel();
+            var attached = callbacks.AttachAsync(
+                coreConnection, CancellationToken.None);
+
+            using var operationCancellation = new CancellationTokenSource();
+            var firstInvoke = callbacks.InvokeAsync(
+                "capture.request", null, "verification",
+                operationCancellation.Token);
+            var firstRequest = await swiftConnection.ReadRequestAsync(cancellationToken)
+                ?? throw new EndOfStreamException(
+                    "Core did not send the first platform callback.");
+            operationCancellation.Cancel();
+            await swiftConnection.WriteResponseAsync(
+                RpcResponse.Success(firstRequest.Id, new { acknowledged = true }),
+                cancellationToken);
+
+            try
+            {
+                await firstInvoke;
+                throw new InvalidDataException(
+                    "Cancelled platform callback completed successfully.");
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            context.Require(
+                callbacks.IsAttached,
+                "Cancelling an in-flight platform callback detached the shared channel.");
+
+            var secondInvoke = callbacks.InvokeAsync(
+                "htmlMask.closeAll", null, "verification", cancellationToken);
+            var secondRequest = await swiftConnection.ReadRequestAsync(cancellationToken)
+                ?? throw new EndOfStreamException(
+                    "Core did not send the second platform callback.");
+            await swiftConnection.WriteResponseAsync(
+                RpcResponse.Success(secondRequest.Id, JObject.FromObject(new
+                {
+                    acknowledged = true,
+                })),
+                cancellationToken);
+            var secondResult = await secondInvoke;
+            context.Require(
+                secondResult?.Value<bool>("acknowledged") == true,
+                "Platform callback channel could not be reused after cancellation.");
+
+            callbacks.Detach(coreConnection);
+            await attached;
+        }
+        finally
+        {
+            try { File.Delete(socketPath); }
+            catch { }
+        }
     }
 }

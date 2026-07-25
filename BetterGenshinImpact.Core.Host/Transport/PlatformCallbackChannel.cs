@@ -46,16 +46,27 @@ public sealed class PlatformCallbackChannel
             var id = "platform-" + Guid.NewGuid().ToString("N");
             try
             {
-                await connection.WriteRequestAsync(new RpcRequest(id, method, parameters, sessionToken), cancellationToken);
-                var response = await connection.ReadResponseAsync(cancellationToken)
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Once a request is on the shared callback stream, its response must be
+                // drained before cancellation can be observed or the framing is lost.
+                await connection.WriteRequestAsync(
+                    new RpcRequest(id, method, parameters, sessionToken),
+                    CancellationToken.None);
+                var response = await connection.ReadResponseAsync(CancellationToken.None)
                     ?? throw new EndOfStreamException("Swift disconnected before acknowledging the platform callback.");
                 if (!string.Equals(response.Id, id, StringComparison.Ordinal))
                     throw new InvalidDataException($"Platform callback response id '{response.Id}' does not match '{id}'.");
+                cancellationToken.ThrowIfCancellationRequested();
                 if (response.Error is not null)
                     throw new PlatformCallbackException(response.Error.Code, response.Error.Message);
                 return response.Result is null ? null : JToken.FromObject(response.Result);
             }
             catch (PlatformCallbackException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 throw;
             }
