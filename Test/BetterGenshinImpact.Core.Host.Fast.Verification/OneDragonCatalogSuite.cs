@@ -19,7 +19,9 @@ public sealed class OneDragonCatalogSuite : IVerificationSuite
         try
         {
             var layout = new RuntimeLayout(root);
-            var catalog = new OneDragonCatalog(layout);
+            var catalog = new OneDragonCatalog(
+                layout,
+                domainNameProvider: () => ["仲夏庭园", "铭记之谷"]);
 
             var initial = catalog.List();
             context.Require(
@@ -42,6 +44,20 @@ public sealed class OneDragonCatalogSuite : IVerificationSuite
                     "领取尘歌壶奖励",
                 ]),
                 "OneDragon catalog did not expose the upstream built-in task options.");
+            var options = catalog.Get("默认配置").Options;
+            context.Require(
+                options.CraftingBenchCountries.SequenceEqual(
+                    ["枫丹", "稻妻", "璃月", "蒙德"]) &&
+                options.AdventurersGuildCountries.FirstOrDefault() == "挪德卡莱" &&
+                options.DomainNames.SequenceEqual(["", "仲夏庭园", "铭记之谷"]) &&
+                options.SundayRewardOptions.SequenceEqual(["", "1", "2", "3"]) &&
+                options.BossNames.Count > 0 &&
+                options.FightStrategies.Contains("根据队伍自动选择") &&
+                options.LeyLineTypes.SequenceEqual(["", "启示之花", "藏金之花"]) &&
+                options.SereniteaPotTpTypes.SequenceEqual(["地图传送", "尘歌壶道具"]) &&
+                options.CompletionActions.SequenceEqual(
+                    ["无", "关闭游戏", "关闭软件", "关闭游戏和软件", "关机"]),
+                "OneDragon catalog did not expose upstream-constrained setting options.");
             var summaryPayload = JArray.FromObject(initial);
             var documentPayload = JObject.FromObject(catalog.Get("默认配置"));
             context.Require(

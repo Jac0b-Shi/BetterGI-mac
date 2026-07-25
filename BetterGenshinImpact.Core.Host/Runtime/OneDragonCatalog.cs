@@ -1,5 +1,7 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script.OneDragon;
+using BetterGenshinImpact.GameTask.AutoBoss;
+using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Text;
@@ -24,9 +26,31 @@ public sealed record OneDragonConfigDocument(
     [property: JsonProperty("name")] string Name,
     [property: JsonProperty("config")] JObject Config,
     [property: JsonProperty("tasks")] IReadOnlyList<OneDragonTaskSummary> Tasks,
-    [property: JsonProperty("builtInTaskNames")] IReadOnlyList<string> BuiltInTaskNames);
+    [property: JsonProperty("builtInTaskNames")] IReadOnlyList<string> BuiltInTaskNames,
+    [property: JsonProperty("options")] OneDragonConfigOptions Options);
 
-public sealed class OneDragonCatalog(RuntimeLayout layout)
+public sealed record OneDragonConfigOptions(
+    [property: JsonProperty("craftingBenchCountries")]
+    IReadOnlyList<string> CraftingBenchCountries,
+    [property: JsonProperty("adventurersGuildCountries")]
+    IReadOnlyList<string> AdventurersGuildCountries,
+    [property: JsonProperty("domainNames")] IReadOnlyList<string> DomainNames,
+    [property: JsonProperty("sundayRewardOptions")]
+    IReadOnlyList<string> SundayRewardOptions,
+    [property: JsonProperty("bossNames")] IReadOnlyList<string> BossNames,
+    [property: JsonProperty("fightStrategies")] IReadOnlyList<string> FightStrategies,
+    [property: JsonProperty("leyLineTypes")] IReadOnlyList<string> LeyLineTypes,
+    [property: JsonProperty("leyLineCountries")] IReadOnlyList<string> LeyLineCountries,
+    [property: JsonProperty("secretTreasureObjects")]
+    IReadOnlyList<string> SecretTreasureObjects,
+    [property: JsonProperty("sereniteaPotTpTypes")]
+    IReadOnlyList<string> SereniteaPotTpTypes,
+    [property: JsonProperty("completionActions")]
+    IReadOnlyList<string> CompletionActions);
+
+public sealed class OneDragonCatalog(
+    RuntimeLayout layout,
+    Func<IReadOnlyList<string>>? domainNameProvider = null)
 {
     private static readonly string[] DefaultTaskNames =
     [
@@ -218,17 +242,18 @@ public sealed class OneDragonCatalog(RuntimeLayout layout)
     private OneDragonConfigDocument ReadDocument(string path) =>
         ToDocument(ReadRawDocument(path));
 
-    private static OneDragonConfigDocument ToDocument(OneDragonFlowConfig config)
+    private OneDragonConfigDocument ToDocument(OneDragonFlowConfig config)
     {
         var plan = OneDragonPlan.FromConfig(config);
         return new OneDragonConfigDocument(
             config.Name,
             JObject.FromObject(config),
             ToTaskSummaries(plan.OrderedSteps),
-            DefaultTaskNames);
+            DefaultTaskNames,
+            BuildOptions());
     }
 
-    private static OneDragonConfigDocument ToDocument(JObject document)
+    private OneDragonConfigDocument ToDocument(JObject document)
     {
         var config = DeserializeConfig(
             document,
@@ -239,7 +264,42 @@ public sealed class OneDragonCatalog(RuntimeLayout layout)
             config.Name,
             (JObject)document.DeepClone(),
             ToTaskSummaries(plan.OrderedSteps),
-            DefaultTaskNames);
+            DefaultTaskNames,
+            BuildOptions());
+    }
+
+    private OneDragonConfigOptions BuildOptions()
+    {
+        var autoFightFolder = Path.Combine(layout.UserPath, "AutoFight");
+        Directory.CreateDirectory(autoFightFolder);
+        string[] fightStrategies =
+        [
+            "根据队伍自动选择",
+            .. Directory.EnumerateFiles(
+                    autoFightFolder,
+                    "*.*",
+                    SearchOption.AllDirectories)
+                .Where(path =>
+                    path.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) ||
+                    path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                .Select(path => Path.ChangeExtension(
+                    Path.GetRelativePath(autoFightFolder, path),
+                    null))
+                .Order(StringComparer.Ordinal),
+        ];
+        return new OneDragonConfigOptions(
+            ["枫丹", "稻妻", "璃月", "蒙德"],
+            ["挪德卡莱", "枫丹", "稻妻", "璃月", "蒙德"],
+            ["", .. (domainNameProvider?.Invoke() ?? MapLazyAssets.Get().DomainNameList)],
+            ["", "1", "2", "3"],
+            ["", .. AutoBossData.SupportedBossNames],
+            fightStrategies,
+            ["", "启示之花", "藏金之花"],
+            ["", "蒙德", "璃月", "稻妻", "须弥", "枫丹", "纳塔", "挪德卡莱"],
+            ["布匹", "须臾树脂", "大英雄的经验", "流浪者的经验",
+                "精锻用魔矿", "摩拉", "祝圣精华", "祝圣油膏"],
+            ["地图传送", "尘歌壶道具"],
+            ["无", "关闭游戏", "关闭软件", "关闭游戏和软件", "关机"]);
     }
 
     private static IReadOnlyList<OneDragonTaskSummary> ToTaskSummaries(

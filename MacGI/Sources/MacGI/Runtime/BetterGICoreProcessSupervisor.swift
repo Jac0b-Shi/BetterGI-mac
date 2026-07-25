@@ -506,6 +506,34 @@ struct BetterGIOneDragonConfigDocument: Sendable, Equatable {
     var config: [String: BetterGIJSONValue]
     var tasks: [BetterGIOneDragonTask]
     let builtInTaskNames: [String]
+    let options: BetterGIOneDragonConfigOptions
+}
+
+struct BetterGIOneDragonConfigOptions: Sendable, Equatable {
+    let craftingBenchCountries: [String]
+    let adventurersGuildCountries: [String]
+    let domainNames: [String]
+    let sundayRewardOptions: [String]
+    let bossNames: [String]
+    let fightStrategies: [String]
+    let leyLineTypes: [String]
+    let leyLineCountries: [String]
+    let secretTreasureObjects: [String]
+    let sereniteaPotTpTypes: [String]
+    let completionActions: [String]
+
+    static let empty = BetterGIOneDragonConfigOptions(
+        craftingBenchCountries: [],
+        adventurersGuildCountries: [],
+        domainNames: [],
+        sundayRewardOptions: [],
+        bossNames: [],
+        fightStrategies: [],
+        leyLineTypes: [],
+        leyLineCountries: [],
+        secretTreasureObjects: [],
+        sereniteaPotTpTypes: [],
+        completionActions: [])
 }
 
 struct BetterGIOneDragonStatus: Sendable, Equatable {
@@ -2065,7 +2093,25 @@ actor BetterGICoreProcessSupervisor {
               let name = result["name"] as? String,
               let rawConfig = result["config"] as? [String: Any],
               let rawTasks = result["tasks"] as? [[String: Any]],
-              let builtInTaskNames = result["builtInTaskNames"] as? [String] else {
+              let builtInTaskNames = result["builtInTaskNames"] as? [String],
+              let rawOptions = result["options"] as? [String: Any],
+              let craftingBenchCountries =
+                  rawOptions["craftingBenchCountries"] as? [String],
+              let adventurersGuildCountries =
+                  rawOptions["adventurersGuildCountries"] as? [String],
+              let domainNames = rawOptions["domainNames"] as? [String],
+              let sundayRewardOptions =
+                  rawOptions["sundayRewardOptions"] as? [String],
+              let bossNames = rawOptions["bossNames"] as? [String],
+              let fightStrategies = rawOptions["fightStrategies"] as? [String],
+              let leyLineTypes = rawOptions["leyLineTypes"] as? [String],
+              let leyLineCountries = rawOptions["leyLineCountries"] as? [String],
+              let secretTreasureObjects =
+                  rawOptions["secretTreasureObjects"] as? [String],
+              let sereniteaPotTpTypes =
+                  rawOptions["sereniteaPotTpTypes"] as? [String],
+              let completionActions =
+                  rawOptions["completionActions"] as? [String] else {
             throw BetterGICoreRPCError.protocolViolation(
                 "Invalid OneDragon config document.")
         }
@@ -2087,7 +2133,19 @@ actor BetterGICoreProcessSupervisor {
             name: name,
             config: try rawConfig.mapValues(BetterGIJSONValue.init(any:)),
             tasks: tasks,
-            builtInTaskNames: builtInTaskNames)
+            builtInTaskNames: builtInTaskNames,
+            options: BetterGIOneDragonConfigOptions(
+                craftingBenchCountries: craftingBenchCountries,
+                adventurersGuildCountries: adventurersGuildCountries,
+                domainNames: domainNames,
+                sundayRewardOptions: sundayRewardOptions,
+                bossNames: bossNames,
+                fightStrategies: fightStrategies,
+                leyLineTypes: leyLineTypes,
+                leyLineCountries: leyLineCountries,
+                secretTreasureObjects: secretTreasureObjects,
+                sereniteaPotTpTypes: sereniteaPotTpTypes,
+                completionActions: completionActions))
     }
 
     private func decodeOneDragonStatus(_ value: Any?)

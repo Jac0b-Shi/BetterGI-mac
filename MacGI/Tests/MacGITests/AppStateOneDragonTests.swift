@@ -50,7 +50,8 @@ struct AppStateOneDragonTests {
                     isEnabled: true,
                     isResumeStep: false),
             ],
-            builtInTaskNames: ["领取邮件", "自动秘境"])
+            builtInTaskNames: ["领取邮件", "自动秘境"],
+            options: .empty)
 
         appState.removeOneDragonTask(id: "task-1")
         appState.addOneDragonTask("领取邮件")

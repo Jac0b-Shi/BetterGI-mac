@@ -268,12 +268,18 @@ struct OneDragonWorkspaceView: View {
     private var resinAndRewards: some View {
         BGISectionCard("合成树脂与奖励", subtitle: "合成台、冒险家协会和好感队伍。", symbolName: "moon.stars") {
             VStack(alignment: .leading, spacing: 10) {
-                textField("合成台国家", key: "CraftingBenchCountry")
+                optionPicker(
+                    "合成台国家",
+                    key: "CraftingBenchCountry",
+                    options: oneDragonOptions.craftingBenchCountries)
                 Stepper(
                     "保留原粹树脂：\(appState.oneDragonIntValue("MinResinToKeep"))",
                     value: intBinding("MinResinToKeep"),
                     in: 0 ... 200)
-                textField("冒险家协会国家", key: "AdventurersGuildCountry")
+                optionPicker(
+                    "冒险家协会国家",
+                    key: "AdventurersGuildCountry",
+                    options: oneDragonOptions.adventurersGuildCountries)
                 textField("领取每日奖励的好感队伍", key: "DailyRewardPartyName")
             }
         }
@@ -283,18 +289,38 @@ struct OneDragonWorkspaceView: View {
         BGISectionCard("自动秘境", subtitle: "默认配置与按星期覆盖配置。", symbolName: "building.columns") {
             VStack(alignment: .leading, spacing: 10) {
                 textField("默认队伍", key: "PartyName")
-                textField("默认秘境", key: "DomainName")
+                optionPicker(
+                    "默认秘境",
+                    key: "DomainName",
+                    options: oneDragonOptions.domainNames,
+                    emptyLabel: "留空")
                 Toggle("按星期使用不同配置", isOn: boolBinding("WeeklyDomainEnabled"))
-                textField("普通周日奖励选项", key: "SundayEverySelectedValue")
-                textField("每周秘境周日奖励选项", key: "SundayWeeklySelectedValue")
+                optionPicker(
+                    "普通周日奖励选项",
+                    key: "SundayEverySelectedValue",
+                    options: oneDragonOptions.sundayRewardOptions,
+                    emptyLabel: "留空")
+                optionPicker(
+                    "每周秘境周日奖励选项",
+                    key: "SundayWeeklySelectedValue",
+                    options: oneDragonOptions.sundayRewardOptions,
+                    emptyLabel: "留空")
                 if appState.oneDragonBoolValue("WeeklyDomainEnabled") {
                     Divider()
                     ForEach(days) { day in
                         DisclosureGroup(day.title) {
                             VStack(alignment: .leading, spacing: 8) {
                                 textField("队伍", key: "\(day.domainPrefix)PartyName")
-                                textField("秘境", key: "\(day.domainPrefix)DomainName")
-                                textField("周日奖励选项", key: "\(day.domainPrefix)SelectedValue")
+                                optionPicker(
+                                    "秘境",
+                                    key: "\(day.domainPrefix)DomainName",
+                                    options: oneDragonOptions.domainNames,
+                                    emptyLabel: "使用默认秘境")
+                                optionPicker(
+                                    "周日奖励选项",
+                                    key: "\(day.domainPrefix)SelectedValue",
+                                    options: oneDragonOptions.sundayRewardOptions,
+                                    emptyLabel: "使用全局选项")
                             }
                             .padding(.vertical, 6)
                         }
@@ -417,8 +443,15 @@ struct OneDragonWorkspaceView: View {
     private var bossSettings: some View {
         BGISectionCard("自动首领讨伐", subtitle: "首领、战斗策略、队伍与树脂使用。", symbolName: "shield.lefthalf.filled") {
             VStack(alignment: .leading, spacing: 10) {
-                textField("首领名称", key: "AutoBossName")
-                textField("战斗策略", key: "AutoBossStrategyName")
+                optionPicker(
+                    "首领名称",
+                    key: "AutoBossName",
+                    options: oneDragonOptions.bossNames,
+                    emptyLabel: "未选择")
+                optionPicker(
+                    "战斗策略",
+                    key: "AutoBossStrategyName",
+                    options: oneDragonOptions.fightStrategies)
                 textField("队伍名称", key: "AutoBossTeamName")
                 Toggle("指定运行次数", isOn: boolBinding("AutoBossSpecifyRunCount"))
                 if appState.oneDragonBoolValue("AutoBossSpecifyRunCount") {
@@ -464,8 +497,16 @@ struct OneDragonWorkspaceView: View {
                             Toggle(
                                 "当天运行",
                                 isOn: boolBinding("LeyLineRun\(day.id)"))
-                            textField("地脉类型", key: "\(day.leyLinePrefix)Type")
-                            textField("国家", key: "\(day.leyLinePrefix)Country")
+                            optionPicker(
+                                "地脉类型",
+                                key: "\(day.leyLinePrefix)Type",
+                                options: oneDragonOptions.leyLineTypes,
+                                emptyLabel: "使用独立任务配置")
+                            optionPicker(
+                                "国家",
+                                key: "\(day.leyLinePrefix)Country",
+                                options: oneDragonOptions.leyLineCountries,
+                                emptyLabel: "使用独立任务配置")
                         }
                         .padding(.vertical, 6)
                     }
@@ -477,24 +518,26 @@ struct OneDragonWorkspaceView: View {
     private var sereniteaSettings: some View {
         BGISectionCard("尘歌壶", subtitle: "传送方式与洞天购买选择。", symbolName: "house") {
             VStack(alignment: .leading, spacing: 10) {
-                Picker("传送方式", selection: stringBinding("SereniteaPotTpType", default: "地图传送")) {
-                    Text("地图传送").tag("地图传送")
-                    Text("尘歌壶道具").tag("尘歌壶道具")
+                optionPicker(
+                    "传送方式",
+                    key: "SereniteaPotTpType",
+                    options: oneDragonOptions.sereniteaPotTpTypes,
+                    default: "地图传送")
+                Text("洞天购买商品")
+                    .font(BGIFonts.caption)
+                    .foregroundStyle(BGIColors.secondaryText)
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 140), spacing: 8)],
+                    alignment: .leading,
+                    spacing: 8
+                ) {
+                    ForEach(oneDragonOptions.secretTreasureObjects, id: \.self) { item in
+                        Toggle(
+                            item,
+                            isOn: secretTreasureBinding(item))
+                            .toggleStyle(.checkbox)
+                    }
                 }
-                TextField(
-                    "购买物品，以逗号分隔",
-                    text: Binding(
-                        get: {
-                            appState.oneDragonStringsValue(
-                                "SecretTreasureObjects").joined(separator: ",")
-                        },
-                        set: { value in
-                            appState.setOneDragonConfigValue(
-                                "SecretTreasureObjects",
-                                .strings(value.split(separator: ",").map {
-                                    $0.trimmingCharacters(in: .whitespacesAndNewlines)
-                                }.filter { !$0.isEmpty }))
-                        }))
             }
         }
     }
@@ -505,13 +548,20 @@ struct OneDragonWorkspaceView: View {
                 "操作",
                 selection: stringBinding("CompletionAction")
             ) {
-                Text("无").tag("")
-                Text("关闭游戏").tag("关闭游戏")
-                Text("关闭软件").tag("关闭软件")
-                Text("关闭游戏和软件").tag("关闭游戏和软件")
-                Text("关机").tag("关机")
+                ForEach(
+                    optionsPreservingCurrentValue(
+                        oneDragonOptions.completionActions,
+                        key: "CompletionAction"),
+                    id: \.self
+                ) { option in
+                    Text(option.isEmpty ? "未设置（等同无）" : option).tag(option)
+                }
             }
         }
+    }
+
+    private var oneDragonOptions: BetterGIOneDragonConfigOptions {
+        appState.oneDragonDocument?.options ?? .empty
     }
 
     private func textField(_ title: String, key: String) -> some View {
@@ -520,6 +570,66 @@ struct OneDragonWorkspaceView: View {
                 .frame(width: 180, alignment: .leading)
             TextField("", text: stringBinding(key))
         }
+    }
+
+    private func optionPicker(
+        _ title: String,
+        key: String,
+        options: [String],
+        default defaultValue: String = "",
+        emptyLabel: String = "留空"
+    ) -> some View {
+        HStack {
+            Text(title)
+                .frame(width: 180, alignment: .leading)
+            Picker(
+                "",
+                selection: stringBinding(key, default: defaultValue)
+            ) {
+                ForEach(
+                    optionsPreservingCurrentValue(
+                        options,
+                        key: key,
+                        default: defaultValue),
+                    id: \.self
+                ) { option in
+                    Text(option.isEmpty ? emptyLabel : option).tag(option)
+                }
+            }
+            .labelsHidden()
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func optionsPreservingCurrentValue(
+        _ options: [String],
+        key: String,
+        default defaultValue: String = ""
+    ) -> [String] {
+        let current = appState.oneDragonStringValue(key, default: defaultValue)
+        guard !options.contains(current) else { return options }
+        return [current] + options
+    }
+
+    private func secretTreasureBinding(_ item: String) -> Binding<Bool> {
+        Binding(
+            get: {
+                appState.oneDragonStringsValue("SecretTreasureObjects")
+                    .contains(item)
+            },
+            set: { selected in
+                var values = appState.oneDragonStringsValue("SecretTreasureObjects")
+                if selected {
+                    if !values.contains(item) {
+                        values.append(item)
+                    }
+                } else {
+                    values.removeAll { $0 == item }
+                }
+                appState.setOneDragonConfigValue(
+                    "SecretTreasureObjects",
+                    .strings(values))
+            })
     }
 
     private func stringBinding(
