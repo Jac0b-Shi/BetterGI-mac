@@ -530,7 +530,8 @@ public sealed class CoreRpcServer(
                 "runtime.status" => RuntimeStatus(),
                 "scheduler.run" => Scheduler.Run(RequiredString(request.Params, "groupName")),
                 "scheduler.runGroups" => Scheduler.RunGroups(
-                    RequiredStrings(request.Params, "groupNames")),
+                    RequiredStrings(request.Params, "groupNames"),
+                    request.Params?.Value<bool?>("loop") ?? false),
                 "scheduler.status" => Scheduler.Status(),
                 "scheduler.pause" => Scheduler.Pause(RequiredString(request.Params, "taskId")),
                 "scheduler.resume" => Scheduler.Resume(RequiredString(request.Params, "taskId")),

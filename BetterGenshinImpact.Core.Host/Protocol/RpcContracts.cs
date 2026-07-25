@@ -33,6 +33,7 @@ public sealed record ScriptGroupSummary(
     [property: JsonProperty("name")] string Name,
     [property: JsonProperty("path")] string Path,
     [property: JsonProperty("index")] int Index,
+    [property: JsonProperty("hideOnRepeat")] bool HideOnRepeat,
     [property: JsonProperty("projects")] IReadOnlyList<ScriptGroupProjectSummary> Projects);
 
 public sealed record ScriptGroupProjectSummary(

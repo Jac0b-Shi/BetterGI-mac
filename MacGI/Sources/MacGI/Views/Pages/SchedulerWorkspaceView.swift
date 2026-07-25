@@ -7,6 +7,7 @@ private enum SchedulerSheet: Identifiable {
     case createGroup
     case renameGroup(String)
     case copyGroup(String)
+    case continuousRun
     case groupSettings
     case repository
 
@@ -18,6 +19,7 @@ private enum SchedulerSheet: Identifiable {
         case .createGroup: "create-group"
         case .renameGroup(let name): "rename-group-\(name)"
         case .copyGroup(let name): "copy-group-\(name)"
+        case .continuousRun: "continuous-run"
         case .groupSettings: "group-settings"
         case .repository: "repository"
         }
@@ -70,6 +72,7 @@ struct SchedulerWorkspaceView: View {
             case .createGroup: SchedulerGroupNameSheet(mode: .create)
             case .renameGroup(let name): SchedulerGroupNameSheet(mode: .rename(name))
             case .copyGroup(let name): SchedulerGroupNameSheet(mode: .copy(name))
+            case .continuousRun: SchedulerContinuousRunSheet()
             case .groupSettings: SchedulerGroupSettingsSheet()
             case .repository: ScriptRepositorySheet()
             }
@@ -175,6 +178,10 @@ struct SchedulerWorkspaceView: View {
         BGISectionCard("任务操作", subtitle: appState.schedulerRunReadiness, symbolName: "square.grid.3x3") {
             HStack(spacing: 10) {
                 Menu("添加", systemImage: "plus") { addMenuItems() }
+                Button("连续执行", systemImage: "forward.end.fill") {
+                    sheet = .continuousRun
+                }
+                .disabled(appState.currentSchedulerProjectID != nil)
                 Menu("更多功能") {
                     Button("清空", role: .destructive) { confirmingClear = true }
                     Button("日志分析") {
@@ -201,6 +208,71 @@ struct SchedulerWorkspaceView: View {
 
     private func typeDescription(_ type: String) -> String {
         ["Javascript": "JS脚本", "Pathing": "地图追踪", "KeyMouse": "键鼠脚本", "Shell": "Shell"][type] ?? type
+    }
+}
+
+private struct SchedulerContinuousRunSheet: View {
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedNames: Set<String> = []
+    @State private var loop = false
+
+    private var groups: [BetterGIScriptGroupSummary] {
+        appState.schedulerGroups.filter { !$0.hideOnRepeat }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("连续执行").font(.title2).bold()
+            Toggle("循环", isOn: $loop)
+            HStack {
+                Button("全选") {
+                    selectedNames = Set(groups.map(\.name))
+                }
+                Button("清除") {
+                    selectedNames.removeAll()
+                }
+                Spacer()
+            }
+            List(groups) { group in
+                Toggle(
+                    group.name,
+                    isOn: Binding(
+                        get: { selectedNames.contains(group.name) },
+                        set: { selected in
+                            if selected {
+                                selectedNames.insert(group.name)
+                            } else {
+                                selectedNames.remove(group.name)
+                            }
+                        }
+                    )
+                )
+                .toggleStyle(.checkbox)
+            }
+            if groups.isEmpty {
+                Text("没有可用于连续执行的配置组。")
+                    .foregroundStyle(BGIColors.mutedText)
+            }
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                Button("确认执行") {
+                    let orderedNames = groups
+                        .map(\.name)
+                        .filter(selectedNames.contains)
+                    appState.runContinuousSchedulerGroups(
+                        names: orderedNames,
+                        loop: loop
+                    )
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(selectedNames.isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 520, height: 520)
     }
 }
 

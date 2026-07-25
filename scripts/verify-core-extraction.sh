@@ -393,9 +393,13 @@ rg -q '"scheduler.runGroups" => Scheduler.RunGroups' \
   BetterGenshinImpact.Core.Host/CoreRpcServer.cs \
   && rg -q 'TaskProgressManager.SaveTaskProgress' \
     BetterGenshinImpact.Core.Host/Runtime/SchedulerCoordinator.cs \
-  && rg -q 'runSchedulerGroups\(names: names\)' \
+  && rg -q 'startSchedulerGroups\(names: available, continuous: true, loop: false\)' \
+    MacGI/Sources/MacGI/App/AppState.swift \
+  && rg -q 'runSchedulerGroups\(names: names, loop: loop\)' \
     MacGI/Sources/MacGI/App/AppState.swift \
   && rg -q 'method: "scheduler.runGroups"' \
+    MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \
+  && rg -q '"loop": loop' \
     MacGI/Sources/MacGI/Runtime/BetterGICoreProcessSupervisor.swift \
   || fail "upstream --startGroups no longer delegates one ordered task to the Core scheduler"
 

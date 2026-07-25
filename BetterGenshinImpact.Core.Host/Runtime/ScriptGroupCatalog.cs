@@ -471,6 +471,7 @@ public sealed class ScriptGroupCatalog(RuntimeLayout layout)
             name,
             Path.GetRelativePath(layout.RootPath, path),
             group.Index,
+            group.Config.PathingConfig.HideOnRepeat,
             group.Projects.Select(project => new ScriptGroupProjectSummary(
                 project.Index,
                 project.Name,

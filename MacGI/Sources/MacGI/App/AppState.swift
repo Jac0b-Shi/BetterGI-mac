@@ -2010,7 +2010,7 @@ final class AppState: ObservableObject {
             return
         }
         selectedSchedulerGroupName = available[0]
-        startSchedulerGroups(names: available, continuous: true)
+        startSchedulerGroups(names: available, continuous: true, loop: false)
     }
 
     func stopRuntime() {
@@ -2888,6 +2888,27 @@ final class AppState: ObservableObject {
     }
 
     func runSchedulerGroups() {
+        guard selectedSchedulerGroup != nil else {
+            schedulerExecutionStatus = "Group unavailable"
+            addLog(.error, "Cannot run scheduler: no script group is selected.")
+            return
+        }
+        runSchedulerGroups(
+            names: [selectedSchedulerGroupName],
+            continuous: false,
+            loop: false
+        )
+    }
+
+    func runContinuousSchedulerGroups(names: [String], loop: Bool) {
+        runSchedulerGroups(names: names, continuous: true, loop: loop)
+    }
+
+    private func runSchedulerGroups(
+        names: [String],
+        continuous: Bool,
+        loop: Bool
+    ) {
         guard currentSchedulerProjectID == nil, oneDragonStatus.taskID == nil else {
             addLog(.error, "Cannot run scheduler: another scheduler task is already active.")
             return
@@ -2902,9 +2923,15 @@ final class AppState: ObservableObject {
             addLog(.error, "Cannot run scheduler: start the BetterGI runtime first.")
             return
         }
-        guard selectedSchedulerGroup != nil else {
+        guard !names.isEmpty else {
             schedulerExecutionStatus = "Group unavailable"
-            addLog(.error, "Cannot run scheduler: no script group is selected.")
+            addLog(.error, "Cannot run scheduler: no script groups were selected.")
+            return
+        }
+        let availableNames = Set(schedulerGroups.map(\.name))
+        guard names.allSatisfy(availableNames.contains) else {
+            schedulerExecutionStatus = "Group unavailable"
+            addLog(.error, "Cannot run scheduler: a selected script group is unavailable.")
             return
         }
         guard isWindowValid, !selectedWindow.isSynthetic else {
@@ -2917,10 +2944,10 @@ final class AppState: ObservableObject {
             addLog(.error, "Cannot run scheduler: emergency stop is enabled.")
             return
         }
-        startSchedulerGroups(names: [selectedSchedulerGroupName], continuous: false)
+        startSchedulerGroups(names: names, continuous: continuous, loop: loop)
     }
 
-    private func startSchedulerGroups(names: [String], continuous: Bool) {
+    private func startSchedulerGroups(names: [String], continuous: Bool, loop: Bool) {
         guard let supervisor = betterGICoreSupervisor, !names.isEmpty else { return }
         schedulerExecutionTask?.cancel()
         let displayName = names.joined(separator: ",")
@@ -2929,7 +2956,7 @@ final class AppState: ObservableObject {
         schedulerExecutionTask = Task { [weak self] in
             do {
                 let taskID = continuous
-                    ? try await supervisor.runSchedulerGroups(names: names)
+                    ? try await supervisor.runSchedulerGroups(names: names, loop: loop)
                     : try await supervisor.runSchedulerGroup(name: names[0])
                 guard !Task.isCancelled else { return }
                 guard let self else { return }

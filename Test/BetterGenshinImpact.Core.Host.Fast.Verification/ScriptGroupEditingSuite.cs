@@ -103,12 +103,14 @@ public sealed class ScriptGroupEditingSuite : IVerificationSuite
 
             _ = catalog.SaveGroupConfig("Fixture Group", JObject.FromObject(new
             {
-                pathingConfig = new { partyName = "Updated" }, enableShellConfig = true
+                pathingConfig = new { partyName = "Updated", hideOnRepeat = true },
+                enableShellConfig = true
             }));
             var config = catalog.GetGroupConfig("Fixture Group");
             context.Require(config["pathingConfig"]?.Value<string>("partyName") == "Updated" &&
                             config["pathingConfig"]?.Value<int>("distance") == 45 &&
-                            config.Value<bool>("enableShellConfig"),
+                            config.Value<bool>("enableShellConfig") &&
+                            catalog.List().Single().HideOnRepeat,
                 "Group settings patch did not preserve unedited upstream fields.");
             var fightStrategies =
                 config["pathingOptions"]?["fightStrategies"] as JArray ?? [];

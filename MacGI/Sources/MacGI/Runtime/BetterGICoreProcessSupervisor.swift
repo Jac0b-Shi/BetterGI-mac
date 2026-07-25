@@ -1667,7 +1667,7 @@ actor BetterGICoreProcessSupervisor {
         return taskID
     }
 
-    func runSchedulerGroups(names: [String]) throws -> String {
+    func runSchedulerGroups(names: [String], loop: Bool = false) throws -> String {
         guard !names.isEmpty else {
             throw BetterGICoreRPCError.protocolViolation(
                 "scheduler.runGroups requires at least one group name.")
@@ -1676,7 +1676,8 @@ actor BetterGICoreProcessSupervisor {
             throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
         }
         guard let result = try client.request(
-            method: "scheduler.runGroups", parameters: ["groupNames": names]
+            method: "scheduler.runGroups",
+            parameters: ["groupNames": names, "loop": loop]
         ) as? [String: Any], let taskID = result["taskId"] as? String else {
             throw BetterGICoreRPCError.protocolViolation("Invalid scheduler.runGroups result.")
         }

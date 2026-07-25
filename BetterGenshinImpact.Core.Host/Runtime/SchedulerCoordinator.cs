@@ -30,7 +30,7 @@ public sealed class SchedulerCoordinator(
         return Start(group.Name, _ => RunGroupAsync(group));
     }
 
-    public object RunGroups(IReadOnlyList<string> groupNames)
+    public object RunGroups(IReadOnlyList<string> groupNames, bool loop = false)
     {
         ArgumentNullException.ThrowIfNull(groupNames);
         if (groupNames.Count == 0)
@@ -48,7 +48,7 @@ public sealed class SchedulerCoordinator(
             })
             .ToArray();
         var displayName = string.Join(",", groups.Select(group => group.Name));
-        return Start(displayName, cancellationToken => RunGroupsAsync(groups, cancellationToken));
+        return Start(displayName, cancellationToken => RunGroupsAsync(groups, loop, cancellationToken));
     }
 
     public object RunProject(ScriptGroupProject project, string displayName)
@@ -178,6 +178,7 @@ public sealed class SchedulerCoordinator(
 
     private static async Task RunGroupsAsync(
         IReadOnlyList<ScriptGroup> groups,
+        bool loop,
         CancellationToken cancellationToken)
     {
         RunnerContext.Instance.Reset();
@@ -185,28 +186,41 @@ public sealed class SchedulerCoordinator(
         var taskProgress = new TaskProgress
         {
             ScriptGroupNames = groups.Select(group => group.Name).ToList(),
-            Loop = false
+            Loop = loop
         };
         RunnerContext.Instance.taskProgress = taskProgress;
         try
         {
             var service = new ScriptService();
-            for (var index = 0; index < groups.Count; index++)
+            do
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                var group = groups[index];
-                taskProgress.CurrentScriptGroupName = group.Name;
-                TaskProgressManager.SaveTaskProgress(taskProgress);
-                await service.RunMulti(group.Projects, group.Name, taskProgress);
-                cancellationToken.ThrowIfCancellationRequested();
-                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                for (var index = 0; index < groups.Count; index++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var group = groups[index];
+                    taskProgress.CurrentScriptGroupName = group.Name;
+                    TaskProgressManager.SaveTaskProgress(taskProgress);
+                    await service.RunMulti(group.Projects, group.Name, taskProgress);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                }
+
+                taskProgress.LoopCount++;
+                if (!loop)
+                {
+                    if (taskProgress.ConsecutiveFailureCount == 0)
+                    {
+                        taskProgress.EndTime = DateTime.Now;
+                        TaskProgressManager.SaveTaskProgress(taskProgress);
+                    }
+                    break;
+                }
+
+                taskProgress.LastScriptGroupName = null;
+                taskProgress.LastSuccessScriptGroupProjectInfo = null;
+                taskProgress.Next = null;
             }
-            taskProgress.LoopCount++;
-            if (taskProgress.ConsecutiveFailureCount == 0)
-            {
-                taskProgress.EndTime = DateTime.Now;
-                TaskProgressManager.SaveTaskProgress(taskProgress);
-            }
+            while (true);
         }
         finally
         {

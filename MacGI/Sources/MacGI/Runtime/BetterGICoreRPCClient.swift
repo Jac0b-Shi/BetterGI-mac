@@ -304,6 +304,7 @@ struct BetterGIScriptGroupSummary: Equatable, Sendable, Identifiable {
     let name: String
     let path: String
     let index: Int
+    let hideOnRepeat: Bool
     let projects: [BetterGIScriptGroupProjectSummary]
 
     var id: String { "\(index)|\(name)" }
@@ -430,6 +431,7 @@ final class BetterGICoreRPCClient: @unchecked Sendable {
             guard let name = item["name"] as? String,
                   let path = item["path"] as? String,
                   let index = item["index"] as? Int,
+                  let hideOnRepeat = item["hideOnRepeat"] as? Bool,
                   let projectItems = item["projects"] as? [[String: Any]]
             else {
                 throw BetterGICoreRPCError.protocolViolation("Invalid script-group summary.")
@@ -457,7 +459,13 @@ final class BetterGICoreRPCClient: @unchecked Sendable {
                     nextFlag: nextFlag
                 )
             }
-            return BetterGIScriptGroupSummary(name: name, path: path, index: index, projects: projects)
+            return BetterGIScriptGroupSummary(
+                name: name,
+                path: path,
+                index: index,
+                hideOnRepeat: hideOnRepeat,
+                projects: projects
+            )
         }
     }
 
