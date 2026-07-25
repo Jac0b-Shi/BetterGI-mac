@@ -560,11 +560,14 @@ for descriptor in \
   'Descriptor("AutoDomain", "自动秘境",' \
   '"AutoArtifactSalvage", "自动分解圣遗物",' \
   '"AutoMusicGame", "自动千音雅集",' \
-  '"AutoAlbum", "自动千音雅集（整个专辑）",' \
   '"AutoCook", "自动烹饪",'; do
   rg -Fq "${descriptor}" BetterGenshinImpact.Core.Host/Runtime/SoloTaskCoordinator.cs \
     || fail "composed independent-task settings are missing from the truthful catalog: ${descriptor}"
 done
+rg -Fq 'name = "AutoAlbum",' BetterGenshinImpact.Core.Host/Runtime/SoloTaskCoordinator.cs \
+  && rg -Fq 'title = "【专辑】 全自动完成整个专辑",' \
+    BetterGenshinImpact.Core.Host/Runtime/SoloTaskCoordinator.cs \
+  || fail "AutoAlbum is not exposed as the upstream AutoMusicGame in-card action"
 rg -q '"AutoRedeemCode", "自动使用兑换码",' \
   BetterGenshinImpact.Core.Host/Runtime/SoloTaskCoordinator.cs \
   || fail "AutoRedeemCode input task is missing from the truthful Core catalog"

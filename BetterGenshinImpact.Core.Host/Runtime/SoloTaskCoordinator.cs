@@ -33,10 +33,23 @@ public sealed class SoloTaskCoordinator(
         Descriptor("AutoLeyLineOutcrop", "自动地脉花", "自动定位并刷取地脉花", true),
         Descriptor(
             "AutoMusicGame", "自动千音雅集",
-            "可以自动演奏单个，也可以全自动完成整个专辑", true),
-        Descriptor(
-            "AutoAlbum", "自动千音雅集（整个专辑）",
-            "可以自动演奏单个，也可以全自动完成整个专辑", true),
+            "可以自动演奏单个，也可以全自动完成整个专辑", true,
+            headerAction: false,
+            actions:
+            [
+                new
+                {
+                    name = "AutoMusicGame",
+                    title = "【乐曲】 演奏单个乐曲",
+                    description = "进入演奏界面使用，下落模式必须选择垂落模式",
+                },
+                new
+                {
+                    name = "AutoAlbum",
+                    title = "【专辑】 全自动完成整个专辑",
+                    description = "进入专辑界面使用，自动演奏未完成乐曲",
+                },
+            ]),
         Descriptor(
             "AutoCook", "自动烹饪",
             "在手动烹饪界面运行，自动识别并点击结束烹饪", true),
@@ -220,13 +233,16 @@ public sealed class SoloTaskCoordinator(
     private object Descriptor(
         string name, string displayName, string description, bool available,
         string? inputKind = null, string? inputTitle = null,
-        string? inputPlaceholder = null) => new
+        string? inputPlaceholder = null, bool headerAction = true,
+        object[]? actions = null) => new
     {
         name,
         displayName,
         description,
         available,
         settingsAvailable = settings.IsAvailable(name),
+        headerAction,
+        actions = actions ?? [],
         inputKind,
         inputTitle,
         inputPlaceholder,

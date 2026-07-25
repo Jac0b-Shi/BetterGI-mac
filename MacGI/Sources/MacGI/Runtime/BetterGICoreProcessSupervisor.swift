@@ -256,9 +256,18 @@ struct BetterGICoreSoloTask: Sendable, Equatable, Identifiable {
     let available: Bool
     let unavailableReason: String?
     let settingsAvailable: Bool
+    let headerAction: Bool
+    let actions: [BetterGICoreSoloTaskAction]
     let inputKind: String?
     let inputTitle: String?
     let inputPlaceholder: String?
+    var id: String { name }
+}
+
+struct BetterGICoreSoloTaskAction: Sendable, Equatable, Identifiable {
+    let name: String
+    let title: String
+    let description: String
     var id: String { name }
 }
 
@@ -2268,14 +2277,28 @@ actor BetterGICoreProcessSupervisor {
             guard let name = item["name"] as? String,
                   let displayName = item["displayName"] as? String,
                   let description = item["description"] as? String,
-                  let available = item["available"] as? Bool else {
+                  let available = item["available"] as? Bool,
+                  let headerAction = item["headerAction"] as? Bool,
+                  let rawActions = item["actions"] as? [[String: Any]] else {
                 throw BetterGICoreRPCError.protocolViolation("Invalid solo task descriptor.")
+            }
+            let actions = try rawActions.map { action in
+                guard let name = action["name"] as? String,
+                      let title = action["title"] as? String,
+                      let description = action["description"] as? String else {
+                    throw BetterGICoreRPCError.protocolViolation(
+                        "Invalid solo task action descriptor.")
+                }
+                return BetterGICoreSoloTaskAction(
+                    name: name, title: title, description: description)
             }
             return BetterGICoreSoloTask(
                 name: name, displayName: displayName, description: description,
                 available: available,
                 unavailableReason: item["unavailableReason"] as? String,
                 settingsAvailable: item["settingsAvailable"] as? Bool ?? false,
+                headerAction: headerAction,
+                actions: actions,
                 inputKind: item["inputKind"] as? String,
                 inputTitle: item["inputTitle"] as? String,
                 inputPlaceholder: item["inputPlaceholder"] as? String

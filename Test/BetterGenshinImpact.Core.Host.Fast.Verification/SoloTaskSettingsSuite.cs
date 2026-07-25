@@ -86,7 +86,6 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 ["AutoFishing"] = "不要携带跟宠！在出现钓鱼F按钮的位置启动本任务",
                 ["AutoLeyLineOutcrop"] = "自动定位并刷取地脉花",
                 ["AutoMusicGame"] = "可以自动演奏单个，也可以全自动完成整个专辑",
-                ["AutoAlbum"] = "可以自动演奏单个，也可以全自动完成整个专辑",
                 ["AutoCook"] = "在手动烹饪界面运行，自动识别并点击结束烹饪",
                 ["AutoArtifactSalvage"] = "指定匹配表达式逐一筛选分解，支持5星圣遗物",
                 ["AutoRedeemCode"] = "自动使用输入的兑换码",
@@ -135,10 +134,21 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
             platform.Reset();
             descriptors = JArray.FromObject(coordinator.List());
             descriptor = descriptors.Single(item =>
-                item.Value<string>("name") == "AutoAlbum");
+                item.Value<string>("name") == "AutoMusicGame");
+            var musicActions = descriptor["actions"]?.OfType<JObject>().ToArray();
             context.Require(descriptor.Value<bool>("available") &&
-                            descriptor.Value<bool>("settingsAvailable"),
-                "AutoAlbum was not exposed as a composed configurable solo task.");
+                            descriptor.Value<bool>("settingsAvailable") &&
+                            descriptor.Value<bool>("headerAction") == false &&
+                            musicActions is { Length: 2 } &&
+                            musicActions[0].Value<string>("name") == "AutoMusicGame" &&
+                            musicActions[0].Value<string>("title") == "【乐曲】 演奏单个乐曲" &&
+                            musicActions[0].Value<string>("description") ==
+                                "进入演奏界面使用，下落模式必须选择垂落模式" &&
+                            musicActions[1].Value<string>("name") == "AutoAlbum" &&
+                            musicActions[1].Value<string>("title") == "【专辑】 全自动完成整个专辑" &&
+                            musicActions[1].Value<string>("description") ==
+                                "进入专辑界面使用，自动演奏未完成乐曲",
+                "AutoMusicGame did not expose the two upstream in-card actions.");
             _ = coordinator.Start("AutoAlbum");
             for (var retry = 0; retry < 20 && platform.Request is null; retry++)
                 await Task.Delay(10, cancellationToken);

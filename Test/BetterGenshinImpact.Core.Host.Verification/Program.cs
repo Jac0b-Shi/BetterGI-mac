@@ -3031,7 +3031,7 @@ try
     [
         "AutoGeniusInvokation", "AutoWood", "AutoFight", "AutoDomain",
         "AutoBoss", "AutoStygianOnslaught", "AutoFishing",
-        "AutoLeyLineOutcrop", "AutoMusicGame", "AutoAlbum", "AutoCook",
+        "AutoLeyLineOutcrop", "AutoMusicGame", "AutoCook",
         "AutoArtifactSalvage", "AutoRedeemCode",
     ], StringComparer.Ordinal);
     var actualSoloTaskNames = soloItems

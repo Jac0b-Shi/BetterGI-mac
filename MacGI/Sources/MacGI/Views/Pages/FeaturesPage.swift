@@ -229,6 +229,11 @@ struct SoloTasksPage: View {
                     .font(.body.monospaced())
                     .frame(width: 360, height: 120)
                     .overlay(Rectangle().stroke(BGIColors.border, lineWidth: 1))
+                }
+        }
+        ForEach(task.actions) { action in
+            BGISettingLine(title: action.title, subtitle: action.description) {
+                soloTaskActionButton(name: action.name)
             }
         }
         switch task.name {
@@ -236,7 +241,7 @@ struct SoloTasksPage: View {
         case "AutoFishing": autoFishingSettings
         case "AutoCook": autoCookSettings
         case "AutoWood": autoWoodSettings
-        case "AutoMusicGame", "AutoAlbum": autoMusicGameSettings
+        case "AutoMusicGame": autoMusicGameSettings
         case "AutoBoss": autoBossSettings
         case "AutoLeyLineOutcrop": autoLeyLineOutcropSettings
         case "AutoStygianOnslaught": autoStygianOnslaughtSettings
@@ -323,24 +328,30 @@ struct SoloTasksPage: View {
 
     @ViewBuilder
     private func taskAction(_ task: BetterGICoreSoloTask) -> some View {
-        if task.available {
-            Button {
-                appState.toggleSoloTask(
-                    task.name,
+        if task.headerAction {
+            if task.available {
+                soloTaskActionButton(
+                    name: task.name,
                     inputText: task.inputKind == nil
                         ? nil
                         : appState.soloTaskInputDrafts[task.name, default: ""])
-            } label: {
-                Image(systemName: isRunning(task.name) ? "stop.fill" : "play.fill")
+            } else {
+                Text("Core 暂未开放")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(appState.soloTaskStatus.state == "stopping")
-            .help(isRunning(task.name) ? "停止" : "启动")
-        } else {
-            Text("Core 暂未开放")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
+    }
+
+    private func soloTaskActionButton(name: String, inputText: String? = nil) -> some View {
+        Button {
+            appState.toggleSoloTask(name, inputText: inputText)
+        } label: {
+            Image(systemName: isRunning(name) ? "stop.fill" : "play.fill")
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(appState.soloTaskStatus.state == "stopping")
+        .help(isRunning(name) ? "停止" : "启动")
     }
 
     @ViewBuilder
