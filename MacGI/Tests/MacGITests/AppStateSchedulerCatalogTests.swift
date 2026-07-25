@@ -20,6 +20,29 @@ struct AppStateSchedulerCatalogTests {
         ]) == ["每日", "--dry-run"])
     }
 
+    @Test("Launch arguments accept one upstream TaskProgress name")
+    func launchArgumentsAcceptTaskProgressName() {
+        #expect(AppState.taskProgressName(from: [
+            "betterGI-mac", "--TaskProgress", "progress-20260725",
+        ]) == "progress-20260725")
+        #expect(AppState.taskProgressName(from: [
+            "betterGI-mac", "--taskprogress", " latest ",
+        ]) == "latest")
+        #expect(AppState.taskProgressName(from: [
+            "betterGI-mac", "--TaskProgress", "latest",
+            "--dry-run", "--disable-hud-focus-hiding",
+        ]) == "latest")
+        #expect(AppState.taskProgressName(from: [
+            "betterGI-mac", "--TaskProgress",
+        ]) == nil)
+        #expect(AppState.taskProgressName(from: [
+            "betterGI-mac", "--TaskProgress", "one", "two",
+        ]) == nil)
+        #expect(AppState.taskProgressName(from: [
+            "betterGI-mac", "--TaskProgress", " ",
+        ]) == nil)
+    }
+
     @Test("Script settings preserve every JSON value kind")
     func scriptSettingsPreserveEveryJSONValueKind() throws {
         let source = Data(

@@ -359,6 +359,7 @@ final class AppState: ObservableObject {
     private var coreStartupInFlight = false
     private var autoStartRuntimePending: Bool
     private var autoStartSchedulerGroupNames: [String]
+    private var autoContinueSchedulerProgressName: String?
     private var runtimeLaunchReady = false
     private var runtimeGeometryPixelSize: CGSize?
     private var pendingRuntimeGeometryPixelSize: CGSize?
@@ -503,8 +504,11 @@ final class AppState: ObservableObject {
             ? false
             : storedFocusHiding
         autoStartSchedulerGroupNames = Self.startGroupNames(from: launchArguments)
+        autoContinueSchedulerProgressName =
+            Self.taskProgressName(from: launchArguments)
         autoStartRuntimePending = launchArguments.contains("--start-runtime")
             || !autoStartSchedulerGroupNames.isEmpty
+            || autoContinueSchedulerProgressName != nil
         addLog(.info, "betterGI-mac Swift UI initialized")
         if dryRunLaunchEnabled {
             addLog(.info, "Dry-Run enabled by --dry-run; real input is disabled")
@@ -1945,6 +1949,7 @@ final class AppState: ObservableObject {
                 self.appStatus = .running
                 self.refreshAuxiliaryControlMonitor()
                 self.addLog(.info, "BetterGI runtime started with a verified ScreenCaptureKit frame.")
+                self.attemptAutoContinueSchedulerProgress()
                 self.attemptAutoStartSchedulerGroups()
             } catch {
                 try? await supervisor.stopRuntime()
@@ -2058,9 +2063,30 @@ final class AppState: ObservableObject {
               !selectedWindow.isSynthetic,
               runtimeLifecycle == .stopped else { return }
         autoStartRuntimePending = false
-        let source = autoStartSchedulerGroupNames.isEmpty ? "--start-runtime" : "--startGroups"
+        let source = if autoContinueSchedulerProgressName != nil {
+            "--TaskProgress"
+        } else if !autoStartSchedulerGroupNames.isEmpty {
+            "--startGroups"
+        } else {
+            "--start-runtime"
+        }
         addLog(.info, "\(source) accepted; starting BetterGI runtime when Core is ready.")
         startRuntime()
+    }
+
+    private func attemptAutoContinueSchedulerProgress() {
+        guard let name = autoContinueSchedulerProgressName,
+              coreStatus == .ok,
+              runtimeLifecycle == .running,
+              currentSchedulerProjectID == nil,
+              oneDragonStatus.taskID == nil,
+              isWindowValid,
+              !selectedWindow.isSynthetic,
+              !safetyGate.emergencyStop else { return }
+
+        autoContinueSchedulerProgressName = nil
+        addLog(.info, "--TaskProgress accepted; continuing scheduler progress \(name).")
+        continueSchedulerProgress(name: name, displayName: name)
     }
 
     private func attemptAutoStartSchedulerGroups() {
@@ -2162,6 +2188,7 @@ final class AppState: ObservableObject {
             }
             schedulerCatalogStatus = "Core loaded \(schedulerGroups.count)"
             addLog(.info, "Scheduler catalog loaded \(schedulerGroups.count) group(s) through BetterGI Core")
+            attemptAutoContinueSchedulerProgress()
             attemptAutoStartSchedulerGroups()
         } catch {
             setCoreCatalogUnavailable(error)
@@ -3127,6 +3154,18 @@ final class AppState: ObservableObject {
         else { return [] }
         return arguments.dropFirst(2)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+    }
+
+    nonisolated static func taskProgressName(from arguments: [String]) -> String? {
+        guard arguments.count >= 3,
+              arguments[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                .caseInsensitiveCompare("--TaskProgress") == .orderedSame,
+              arguments.dropFirst(3).allSatisfy({
+                  $0 == "--dry-run" || $0 == "--disable-hud-focus-hiding"
+              })
+        else { return nil }
+        let name = arguments[2].trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? nil : name
     }
 
     func handleCoreSchedulerRunAccepted(taskID: String, groupName: String) {

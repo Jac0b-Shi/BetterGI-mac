@@ -105,6 +105,12 @@ continuous-group flag, two-second group interval, one task lifecycle and the
 upstream `TaskProgress` document. Normal UI execution of one selected group
 continues to use `scheduler.run`.
 
+When the consecutive-failure policy requests an application restart, macOS
+waits for the old app and Core processes to exit before opening the same bundle
+with `--TaskProgress <name>`. The new process starts capture through the normal
+permission and window gates, then resumes the persisted progress through
+`scheduler.continueProgress`; it does not merely relaunch into an idle UI.
+
 ## Supporting workflows
 
 ### Key/mouse recording and playback

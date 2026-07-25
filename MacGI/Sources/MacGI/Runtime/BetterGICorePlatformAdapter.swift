@@ -266,11 +266,34 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                     "application.restart requires an installed macOS app bundle."
                 )
             }
+            let preservedFlags = ProcessInfo.processInfo.arguments.filter {
+                $0 == "--dry-run" || $0 == "--disable-hud-focus-hiding"
+            }
             let relaunch = Process()
-            relaunch.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            relaunch.executableURL = URL(fileURLWithPath: "/bin/zsh")
             relaunch.arguments = [
-                "-n", bundleURL.path, "--args", "--TaskProgress", taskProgressName,
+                "-c",
+                """
+                parent_pid=$1
+                bundle_path=$2
+                shift 2
+                while kill -0 "$parent_pid" 2>/dev/null; do
+                    sleep 0.1
+                done
+                while /usr/bin/pgrep -f \
+                    "BetterGenshinImpact.Core.Host.*--parent-pid $parent_pid" \
+                    >/dev/null 2>&1; do
+                    sleep 0.1
+                done
+                exec /usr/bin/open -n "$bundle_path" --args "$@"
+                """,
+                "bettergi-relaunch",
+                String(ProcessInfo.processInfo.processIdentifier),
+                bundleURL.path,
+                "--TaskProgress",
+                taskProgressName,
             ]
+            relaunch.arguments?.append(contentsOf: preservedFlags)
             try relaunch.run()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                 NSApp.terminate(nil)
