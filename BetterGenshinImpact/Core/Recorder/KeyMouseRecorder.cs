@@ -1,13 +1,12 @@
-﻿using BetterGenshinImpact.Core.Recorder.Model;
+using BetterGenshinImpact.Core.Recorder.Model;
+using BetterGenshinImpact.Core.Monitor;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Map;
 using Gma.System.MouseKeyHook;
-using SharpDX.DirectInput;
 using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
-using Vanara.PInvoke;
 
 namespace BetterGenshinImpact.Core.Recorder;
 
@@ -15,7 +14,7 @@ public class KeyMouseRecorder
 {
     public List<MacroEvent> MacroEvents { get; } = [];
 
-    public uint StartTime { get; set; } = Kernel32.GetTickCount();
+    public DateTime StartTime { get; set; } = DateTime.UtcNow;
 
     public DateTime LastOrientationDetection { get; set; } = DateTime.UtcNow;
 
@@ -40,27 +39,27 @@ public class KeyMouseRecorder
             MergedEventTimeMax);
     }
 
-    public void KeyDown(KeyEventArgs e, uint time)
+    public void KeyDown(KeyEventArgs e, DateTime time)
     {
         MacroEvents.Add(new MacroEvent
         {
             Type = MacroEventType.KeyDown,
             KeyCode = e.KeyValue,
-            Time = time - StartTime
+            Time = (time - StartTime).TotalMilliseconds
         });
     }
 
-    public void KeyUp(KeyEventArgs e, uint time)
+    public void KeyUp(KeyEventArgs e, DateTime time)
     {
         MacroEvents.Add(new MacroEvent
         {
             Type = MacroEventType.KeyUp,
             KeyCode = e.KeyValue,
-            Time = time - StartTime
+            Time = (time - StartTime).TotalMilliseconds
         });
     }
 
-    public void MouseDown(MouseEventExtArgs e)
+    public void MouseDown(MouseEventExtArgs e, DateTime time)
     {
         MacroEvents.Add(new MacroEvent
         {
@@ -68,11 +67,11 @@ public class KeyMouseRecorder
             MouseX = e.X,
             MouseY = e.Y,
             MouseButton = e.Button.ToString(),
-            Time = e.Timestamp - StartTime
+            Time = (time - StartTime).TotalMilliseconds
         });
     }
 
-    public void MouseUp(MouseEventExtArgs e)
+    public void MouseUp(MouseEventExtArgs e, DateTime time)
     {
         MacroEvents.Add(new MacroEvent
         {
@@ -80,32 +79,32 @@ public class KeyMouseRecorder
             MouseX = e.X,
             MouseY = e.Y,
             MouseButton = e.Button.ToString(),
-            Time = e.Timestamp - StartTime
+            Time = (time - StartTime).TotalMilliseconds
         });
     }
 
-    public void MouseMoveTo(MouseEventExtArgs e)
+    public void MouseMoveTo(MouseEventExtArgs e, DateTime time)
     {
         MacroEvents.Add(new MacroEvent
         {
             Type = MacroEventType.MouseMoveTo,
             MouseX = e.X,
             MouseY = e.Y,
-            Time = e.Timestamp - StartTime
+            Time = (time - StartTime).TotalMilliseconds
         });
     }
     
-    public void MouseWheel(MouseEventExtArgs e)
+    public void MouseWheel(MouseEventExtArgs e, DateTime time)
     {
         MacroEvents.Add(new MacroEvent
         {
             Type = MacroEventType.MouseWheel,
             MouseY = e.Delta, // 120 的倍率
-            Time = e.Timestamp - StartTime
+            Time = (time - StartTime).TotalMilliseconds
         });
     }
 
-    public void MouseMoveBy(MouseState state, uint time)
+    public void MouseMoveBy(RelativeMouseMoveEventArgs e)
     {
         
         int? cao = null;
@@ -122,9 +121,9 @@ public class KeyMouseRecorder
         MacroEvents.Add(new MacroEvent
         {
             Type = MacroEventType.MouseMoveBy,
-            MouseX = state.X,
-            MouseY = state.Y,
-            Time = time - 5 - StartTime,
+            MouseX = e.DeltaX,
+            MouseY = e.DeltaY,
+            Time = (e.Timestamp - StartTime).TotalMilliseconds,
             CameraOrientation = cao,
         });
     }

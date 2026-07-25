@@ -1,4 +1,6 @@
 using BetterGenshinImpact.View.Windows;
+using BetterGenshinImpact.Helpers;
+using BetterGenshinImpact.Service.Instance;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -12,6 +14,9 @@ namespace BetterGenshinImpact.GameTask;
 
 public class SystemControl
 {
+    private const string ChildSessionGenshinStartArgs =
+        "-popupwindow -screen-width 1920 -screen-height 1080";
+
     public static nint FindGenshinImpactHandle()
     {
         var processNames = TaskContext.Instance().GetGenshinGameProcessNameList();
@@ -28,7 +33,13 @@ public class SystemControl
 
         var cfg = TaskContext.Instance().Config.GenshinStartConfig;
         var workdir = Path.GetDirectoryName(path) ?? "";
-        var arg = cfg.GenshinStartArgs;
+        var arg = cfg.GenshinStartArgs.Trim();
+        if (CommandLineOptions.Instance.InstanceType == BetterGiInstanceType.ChildSession)
+        {
+            arg = string.IsNullOrEmpty(arg)
+                ? ChildSessionGenshinStartArgs
+                : $"{arg} {ChildSessionGenshinStartArgs}";
+        }
 
         if (cfg.StartGameWithCmd)
         {
