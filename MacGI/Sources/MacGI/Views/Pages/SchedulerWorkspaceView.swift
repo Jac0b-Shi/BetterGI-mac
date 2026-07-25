@@ -361,6 +361,34 @@ private struct SchedulerGroupSettingsSheet: View {
         autoSkip: true,
         autoFight: true,
         autoRun: true,
+        defaultAtkBoostingDishName: "",
+        defaultAdventurersDishName: "",
+        defaultDefBoostingDishName: "",
+        fightStrategyName: "根据队伍自动选择",
+        fightActionSchedulerByCd: "",
+        fightFinishDetectEnabled: true,
+        fightFastCheckEnabled: false,
+        fightFastCheckParams: "",
+        fightRotateFindEnemyEnabled: false,
+        fightRotaryFactor: 12,
+        fightCheckBeforeBurst: false,
+        fightIsFirstCheck: false,
+        fightCheckEndDelay: "0.4;钟离,1.4;",
+        fightBeforeDetectDelay: "0.4",
+        fightGuardianAvatar: "",
+        fightGuardianCombatSkip: false,
+        fightBurstEnabled: false,
+        fightGuardianAvatarHold: false,
+        fightPickDropsAfterFightEnabled: false,
+        fightPickDropsAfterFightSeconds: 15,
+        fightKazuhaPickupEnabled: true,
+        fightQinDoublePickUp: false,
+        fightExpBasedPickupEnabled: false,
+        fightBattleThresholdForLoot: nil,
+        fightOnlyPickEliteDropsMode: "Closed",
+        fightKazuhaPartyName: "",
+        fightTimeout: 120,
+        fightSwimmingEnabled: true,
         partyName: "",
         visitStatue: false,
         mainAvatar: "",
@@ -395,6 +423,8 @@ private struct SchedulerGroupSettingsSheet: View {
         avatarIndexOptions: ["", "1", "2", "3", "4"],
         hurryOnAvatarOptions: ["", "自动"],
         travelModeOptions: ["精准靠近", "连续赶路"],
+        fightStrategyOptions: ["根据队伍自动选择"],
+        onlyPickEliteDropsModeOptions: [],
         recoverTimingOptions: [],
         completionSkipPolicyOptions: [],
         completionReferencePointOptions: [],
@@ -410,6 +440,8 @@ private struct SchedulerGroupSettingsSheet: View {
             HStack { Text("配置组设置").font(.title2).bold(); Spacer() }.padding(); Divider()
             ScrollView { VStack(alignment: .leading, spacing: 12) {
                 pathingSettings
+                fightSettings
+                foodSettings
                 travelSettings
                 cycleSettings
                 completionSettings
@@ -436,7 +468,9 @@ private struct SchedulerGroupSettingsSheet: View {
                 Toggle("启用地图追踪行走配置", isOn: $values.enabled)
                 Toggle("自动拾取", isOn: $values.autoPick)
                 Toggle("自动吃药", isOn: $values.autoEat)
+                Toggle("自动进入剧情", isOn: $values.autoSkip)
                 Toggle("自动战斗", isOn: $values.autoFight)
+                Toggle("自动冲刺", isOn: $values.autoRun)
                 TextField("切换到队伍的名称", text: $values.partyName)
                 Toggle("切换队伍前前往七天神像", isOn: $values.visitStatue)
                 optionPicker(
@@ -460,6 +494,149 @@ private struct SchedulerGroupSettingsSheet: View {
                     options: values.recoverTimingOptions)
                 TextField("不在某时执行", text: $values.skipDuring)
                 Toggle("不在连续任务中显示", isOn: $values.hideOnRepeat)
+            }
+            .padding(8)
+        }
+    }
+
+    private var fightSettings: some View {
+        GroupBox("自动战斗配置") {
+            VStack(alignment: .leading, spacing: 10) {
+                optionPicker(
+                    "战斗策略",
+                    selection: $values.fightStrategyName,
+                    options: values.fightStrategyOptions)
+                TextField(
+                    "根据技能 CD 优化出招人员",
+                    text: $values.fightActionSchedulerByCd)
+
+                DisclosureGroup("自动检测战斗结束") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle(
+                            "启用战斗结束检测",
+                            isOn: $values.fightFinishDetectEnabled)
+                        Toggle(
+                            "更快检查结束战斗",
+                            isOn: $values.fightFastCheckEnabled)
+                        if values.fightFastCheckEnabled {
+                            TextField(
+                                "检查参数，例如 5;白术;钟离;",
+                                text: $values.fightFastCheckParams)
+                        }
+                        Toggle(
+                            "旋转寻找敌人位置",
+                            isOn: $values.fightRotateFindEnemyEnabled)
+                        if values.fightRotateFindEnemyEnabled {
+                            Stepper(
+                                "旋转速度：\(values.fightRotaryFactor)",
+                                value: $values.fightRotaryFactor,
+                                in: 1...13)
+                            Toggle(
+                                "释放元素爆发前检查",
+                                isOn: $values.fightCheckBeforeBurst)
+                            Toggle(
+                                "开战时尝试面向敌人",
+                                isOn: $values.fightIsFirstCheck)
+                        }
+                        TextField(
+                            "检查战斗结束延时",
+                            text: $values.fightCheckEndDelay)
+                        TextField(
+                            "按键触发后检查延时",
+                            text: $values.fightBeforeDetectDelay)
+                    }
+                    .padding(.top, 8)
+                }
+
+                DisclosureGroup("盾奶位角色优先释放技能") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        optionPicker(
+                            "盾奶位角色位置",
+                            selection: $values.fightGuardianAvatar,
+                            options: values.avatarIndexOptions)
+                        if !values.fightGuardianAvatar.isEmpty {
+                            Toggle(
+                                "禁用该角色的 E 战斗策略",
+                                isOn: $values.fightGuardianCombatSkip)
+                            Toggle(
+                                "自动释放 Q 爆发",
+                                isOn: $values.fightBurstEnabled)
+                            Toggle(
+                                "盾奶位 E 长按",
+                                isOn: $values.fightGuardianAvatarHold)
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+
+                DisclosureGroup("战后拾取") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle(
+                            "扫描掉落物光柱",
+                            isOn: $values.fightPickDropsAfterFightEnabled)
+                        if values.fightPickDropsAfterFightEnabled {
+                            Stepper(
+                                "扫描时长：\(values.fightPickDropsAfterFightSeconds) 秒",
+                                value: $values.fightPickDropsAfterFightSeconds,
+                                in: 0...300)
+                        }
+                        Toggle(
+                            "聚集材料动作",
+                            isOn: $values.fightKazuhaPickupEnabled)
+                        if values.fightKazuhaPickupEnabled {
+                            Toggle(
+                                "琴二次拾取",
+                                isOn: $values.fightQinDoublePickUp)
+                            Toggle(
+                                "基于经验值判断拾取",
+                                isOn: $values.fightExpBasedPickupEnabled)
+                            TextField(
+                                "万叶拾取队伍名",
+                                text: $values.fightKazuhaPartyName)
+                        }
+                        TextField(
+                            "拾取战斗人次阈值（留空禁用）",
+                            text: Binding(
+                                get: {
+                                    values.fightBattleThresholdForLoot.map(String.init)
+                                        ?? ""
+                                },
+                                set: {
+                                    values.fightBattleThresholdForLoot = Int($0)
+                                }))
+                        namedOptionPicker(
+                            "只拾取精英掉落模式",
+                            selection: $values.fightOnlyPickEliteDropsMode,
+                            options: values.onlyPickEliteDropsModeOptions)
+                    }
+                    .padding(.top, 8)
+                }
+
+                Stepper(
+                    "自动战斗超时：\(values.fightTimeout) 秒",
+                    value: $values.fightTimeout,
+                    in: 1...3600)
+                Toggle(
+                    "游泳检测",
+                    isOn: $values.fightSwimmingEnabled)
+            }
+            .padding(8)
+            .disabled(!values.autoFight)
+        }
+    }
+
+    private var foodSettings: some View {
+        GroupBox("自动吃食物配置") {
+            VStack(alignment: .leading, spacing: 10) {
+                TextField(
+                    "默认攻击类料理名称",
+                    text: $values.defaultAtkBoostingDishName)
+                TextField(
+                    "默认冒险类料理名称",
+                    text: $values.defaultAdventurersDishName)
+                TextField(
+                    "默认防御类料理名称",
+                    text: $values.defaultDefBoostingDishName)
             }
             .padding(8)
         }

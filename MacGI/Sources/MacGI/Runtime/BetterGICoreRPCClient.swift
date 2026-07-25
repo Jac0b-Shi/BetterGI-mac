@@ -226,6 +226,34 @@ struct BetterGIGroupConfigSettings: Equatable, Sendable {
     var autoSkip: Bool
     var autoFight: Bool
     var autoRun: Bool
+    var defaultAtkBoostingDishName: String
+    var defaultAdventurersDishName: String
+    var defaultDefBoostingDishName: String
+    var fightStrategyName: String
+    var fightActionSchedulerByCd: String
+    var fightFinishDetectEnabled: Bool
+    var fightFastCheckEnabled: Bool
+    var fightFastCheckParams: String
+    var fightRotateFindEnemyEnabled: Bool
+    var fightRotaryFactor: Int
+    var fightCheckBeforeBurst: Bool
+    var fightIsFirstCheck: Bool
+    var fightCheckEndDelay: String
+    var fightBeforeDetectDelay: String
+    var fightGuardianAvatar: String
+    var fightGuardianCombatSkip: Bool
+    var fightBurstEnabled: Bool
+    var fightGuardianAvatarHold: Bool
+    var fightPickDropsAfterFightEnabled: Bool
+    var fightPickDropsAfterFightSeconds: Int
+    var fightKazuhaPickupEnabled: Bool
+    var fightQinDoublePickUp: Bool
+    var fightExpBasedPickupEnabled: Bool
+    var fightBattleThresholdForLoot: Int?
+    var fightOnlyPickEliteDropsMode: String
+    var fightKazuhaPartyName: String
+    var fightTimeout: Int
+    var fightSwimmingEnabled: Bool
     var partyName: String
     var visitStatue: Bool
     var mainAvatar: String
@@ -260,6 +288,8 @@ struct BetterGIGroupConfigSettings: Equatable, Sendable {
     let avatarIndexOptions: [String]
     let hurryOnAvatarOptions: [String]
     let travelModeOptions: [String]
+    let fightStrategyOptions: [String]
+    let onlyPickEliteDropsModeOptions: [BetterGICoreNamedOption]
     let recoverTimingOptions: [BetterGICoreNamedOption]
     let completionSkipPolicyOptions: [BetterGICoreNamedOption]
     let completionReferencePointOptions: [BetterGICoreNamedOption]

@@ -1226,6 +1226,10 @@ actor BetterGICoreProcessSupervisor {
             method: "catalog.getScriptGroupConfig", parameters: ["name": groupName]) as? [String: Any]
         else { throw BetterGICoreRPCError.protocolViolation("Invalid group config.") }
         let pathing = result["pathingConfig"] as? [String: Any] ?? [:]
+        let autoEat = pathing["autoEatConfig"] as? [String: Any] ?? [:]
+        let autoFight = pathing["autoFightConfig"] as? [String: Any] ?? [:]
+        let finishDetect =
+            autoFight["finishDetectConfig"] as? [String: Any] ?? [:]
         let taskCycle = pathing["taskCycleConfig"] as? [String: Any] ?? [:]
         let completion = pathing["taskCompletionSkipRuleConfig"] as? [String: Any] ?? [:]
         let priority = pathing["preExecutionPriorityConfig"] as? [String: Any] ?? [:]
@@ -1255,6 +1259,57 @@ actor BetterGICoreProcessSupervisor {
             enabled: pathing["enabled"] as? Bool ?? true, autoPick: pathing["autoPickEnabled"] as? Bool ?? true,
             autoEat: pathing["autoEatEnabled"] as? Bool ?? false, autoSkip: pathing["autoSkipEnabled"] as? Bool ?? true,
             autoFight: pathing["autoFightEnabled"] as? Bool ?? true, autoRun: pathing["autoRunEnabled"] as? Bool ?? true,
+            defaultAtkBoostingDishName:
+                autoEat["defaultAtkBoostingDishName"] as? String ?? "",
+            defaultAdventurersDishName:
+                autoEat["defaultAdventurersDishName"] as? String ?? "",
+            defaultDefBoostingDishName:
+                autoEat["defaultDefBoostingDishName"] as? String ?? "",
+            fightStrategyName:
+                autoFight["strategyName"] as? String ?? "根据队伍自动选择",
+            fightActionSchedulerByCd:
+                autoFight["actionSchedulerByCd"] as? String ?? "",
+            fightFinishDetectEnabled:
+                autoFight["fightFinishDetectEnabled"] as? Bool ?? true,
+            fightFastCheckEnabled:
+                finishDetect["fastCheckEnabled"] as? Bool ?? false,
+            fightFastCheckParams:
+                finishDetect["fastCheckParams"] as? String ?? "",
+            fightRotateFindEnemyEnabled:
+                finishDetect["rotateFindEnemyEnabled"] as? Bool ?? false,
+            fightRotaryFactor: finishDetect["rotaryFactor"] as? Int ?? 12,
+            fightCheckBeforeBurst:
+                finishDetect["checkBeforeBurst"] as? Bool ?? false,
+            fightIsFirstCheck: finishDetect["isFirstCheck"] as? Bool ?? false,
+            fightCheckEndDelay:
+                finishDetect["checkEndDelay"] as? String ?? "0.4;钟离,1.4;",
+            fightBeforeDetectDelay:
+                finishDetect["beforeDetectDelay"] as? String ?? "0.4",
+            fightGuardianAvatar: autoFight["guardianAvatar"] as? String ?? "",
+            fightGuardianCombatSkip:
+                autoFight["guardianCombatSkip"] as? Bool ?? false,
+            fightBurstEnabled: autoFight["burstEnabled"] as? Bool ?? false,
+            fightGuardianAvatarHold:
+                autoFight["guardianAvatarHold"] as? Bool ?? false,
+            fightPickDropsAfterFightEnabled:
+                autoFight["pickDropsAfterFightEnabled"] as? Bool ?? false,
+            fightPickDropsAfterFightSeconds:
+                autoFight["pickDropsAfterFightSeconds"] as? Int ?? 15,
+            fightKazuhaPickupEnabled:
+                autoFight["kazuhaPickupEnabled"] as? Bool ?? true,
+            fightQinDoublePickUp:
+                autoFight["qinDoublePickUp"] as? Bool ?? false,
+            fightExpBasedPickupEnabled:
+                autoFight["expBasedPickupEnabled"] as? Bool ?? false,
+            fightBattleThresholdForLoot:
+                autoFight["battleThresholdForLoot"] as? Int,
+            fightOnlyPickEliteDropsMode:
+                autoFight["onlyPickEliteDropsMode"] as? String ?? "Closed",
+            fightKazuhaPartyName:
+                autoFight["kazuhaPartyName"] as? String ?? "",
+            fightTimeout: autoFight["timeout"] as? Int ?? 120,
+            fightSwimmingEnabled:
+                autoFight["swimmingEnabled"] as? Bool ?? true,
             partyName: pathing["partyName"] as? String ?? "", visitStatue: pathing["isVisitStatueBeforeSwitchParty"] as? Bool ?? false,
             mainAvatar: pathing["mainAvatarIndex"] as? String ?? "", guardianAvatar: pathing["guardianAvatarIndex"] as? String ?? "",
             guardianInterval: pathing["guardianElementalSkillSecondInterval"] as? String ?? "",
@@ -1293,6 +1348,9 @@ actor BetterGICoreProcessSupervisor {
             avatarIndexOptions: options["avatarIndexes"] as? [String] ?? [],
             hurryOnAvatarOptions: options["hurryOnAvatars"] as? [String] ?? [],
             travelModeOptions: options["travelModes"] as? [String] ?? [],
+            fightStrategyOptions: options["fightStrategies"] as? [String] ?? [],
+            onlyPickEliteDropsModeOptions: try decodeOptions(
+                "onlyPickEliteDropsModes"),
             recoverTimingOptions: try decodeOptions("recoverTimings"),
             completionSkipPolicyOptions: try decodeOptions(
                 "completionSkipPolicies"),
@@ -1304,53 +1362,114 @@ actor BetterGICoreProcessSupervisor {
     }
 
     func saveGroupConfig(groupName: String, settings: BetterGIGroupConfigSettings) throws {
-        try catalogMutation("catalog.saveScriptGroupConfig", groupName: groupName, parameters: ["config": [
-            "pathingConfig": [
-                "enabled": settings.enabled, "autoPickEnabled": settings.autoPick, "autoEatEnabled": settings.autoEat,
-                "autoSkipEnabled": settings.autoSkip, "autoFightEnabled": settings.autoFight, "autoRunEnabled": settings.autoRun,
-                "partyName": settings.partyName, "isVisitStatueBeforeSwitchParty": settings.visitStatue,
-                "mainAvatarIndex": settings.mainAvatar, "guardianAvatarIndex": settings.guardianAvatar,
-                "guardianElementalSkillSecondInterval": settings.guardianInterval,
-                "guardianElementalSkillLongPress": settings.guardianLongPress,
-                "useGadgetIntervalMs": settings.gadgetInterval,
-                "recoverTiming": [
-                    "AnyWaypoint": 0, "OnlyTeleport": 1, "Never": 2,
-                ][settings.recoverTiming] ?? 0,
-                "skipDuring": settings.skipDuring,
-                "hideOnRepeat": settings.hideOnRepeat,
-                "hurryOnAvatar": settings.hurryOnAvatar,
-                "travelMode": settings.travelMode,
-                "distance": settings.distance,
-                "approachStopDistance": min(
-                    settings.approachStopDistance, settings.distance),
-                "switchToWalkEnabled": settings.switchToWalkEnabled,
-                "mwkJumpFlyEnabled": settings.mwkJumpFlyEnabled,
-                "mwkJumpFlyIntervalSeconds": settings.mwkJumpFlyIntervalSeconds,
-                "taskCycleConfig": [
-                    "enable": settings.taskCycleEnabled,
-                    "boundaryTime": settings.taskCycleBoundaryTime,
-                    "isBoundaryTimeBasedOnServerTime": settings.taskCycleUsesServerTime,
-                    "cycle": settings.taskCycle,
-                    "index": settings.taskCycleIndex,
-                ],
-                "taskCompletionSkipRuleConfig": [
-                    "enable": settings.completionSkipEnabled,
-                    "skipPolicy": settings.completionSkipPolicy,
-                    "boundaryTime": settings.completionBoundaryTime,
-                    "isBoundaryTimeBasedOnServerTime": settings.completionUsesServerTime,
-                    "lastRunGapSeconds": settings.completionLastRunGapSeconds,
-                    "referencePoint": settings.completionReferencePoint,
-                ],
-                "preExecutionPriorityConfig": [
-                    "enabled": settings.priorityEnabled,
-                    "groupNames": settings.priorityGroupNames,
-                    "maxRetryCount": settings.priorityMaxRetryCount,
-                ],
-            ],
+        let autoEatConfig: [String: Any] = [
+            "defaultAtkBoostingDishName": settings.defaultAtkBoostingDishName,
+            "defaultAdventurersDishName": settings.defaultAdventurersDishName,
+            "defaultDefBoostingDishName": settings.defaultDefBoostingDishName,
+        ]
+        let finishDetectConfig: [String: Any] = [
+            "fastCheckEnabled": settings.fightFastCheckEnabled,
+            "fastCheckParams": settings.fightFastCheckParams,
+            "rotateFindEnemyEnabled": settings.fightRotateFindEnemyEnabled,
+            "rotaryFactor": settings.fightRotaryFactor,
+            "checkBeforeBurst": settings.fightCheckBeforeBurst,
+            "isFirstCheck": settings.fightIsFirstCheck,
+            "checkEndDelay": settings.fightCheckEndDelay,
+            "beforeDetectDelay": settings.fightBeforeDetectDelay,
+        ]
+        let autoFightConfig: [String: Any] = [
+            "strategyName": settings.fightStrategyName,
+            "actionSchedulerByCd": settings.fightActionSchedulerByCd,
+            "fightFinishDetectEnabled": settings.fightFinishDetectEnabled,
+            "finishDetectConfig": finishDetectConfig,
+            "guardianAvatar": settings.fightGuardianAvatar,
+            "guardianCombatSkip": settings.fightGuardianCombatSkip,
+            "burstEnabled": settings.fightBurstEnabled,
+            "guardianAvatarHold": settings.fightGuardianAvatarHold,
+            "pickDropsAfterFightEnabled":
+                settings.fightPickDropsAfterFightEnabled,
+            "pickDropsAfterFightSeconds":
+                settings.fightPickDropsAfterFightSeconds,
+            "kazuhaPickupEnabled": settings.fightKazuhaPickupEnabled,
+            "qinDoublePickUp": settings.fightQinDoublePickUp,
+            "expBasedPickupEnabled": settings.fightExpBasedPickupEnabled,
+            "battleThresholdForLoot":
+                settings.fightBattleThresholdForLoot ?? NSNull(),
+            "onlyPickEliteDropsMode": settings.fightOnlyPickEliteDropsMode,
+            "kazuhaPartyName": settings.fightKazuhaPartyName,
+            "timeout": settings.fightTimeout,
+            "swimmingEnabled": settings.fightSwimmingEnabled,
+        ]
+        let taskCycleConfig: [String: Any] = [
+            "enable": settings.taskCycleEnabled,
+            "boundaryTime": settings.taskCycleBoundaryTime,
+            "isBoundaryTimeBasedOnServerTime": settings.taskCycleUsesServerTime,
+            "cycle": settings.taskCycle,
+            "index": settings.taskCycleIndex,
+        ]
+        let completionConfig: [String: Any] = [
+            "enable": settings.completionSkipEnabled,
+            "skipPolicy": settings.completionSkipPolicy,
+            "boundaryTime": settings.completionBoundaryTime,
+            "isBoundaryTimeBasedOnServerTime":
+                settings.completionUsesServerTime,
+            "lastRunGapSeconds": settings.completionLastRunGapSeconds,
+            "referencePoint": settings.completionReferencePoint,
+        ]
+        let priorityConfig: [String: Any] = [
+            "enabled": settings.priorityEnabled,
+            "groupNames": settings.priorityGroupNames,
+            "maxRetryCount": settings.priorityMaxRetryCount,
+        ]
+        let recoverTiming = [
+            "AnyWaypoint": 0, "OnlyTeleport": 1, "Never": 2,
+        ][settings.recoverTiming] ?? 0
+        let pathingConfig: [String: Any] = [
+            "enabled": settings.enabled,
+            "autoPickEnabled": settings.autoPick,
+            "autoEatEnabled": settings.autoEat,
+            "autoSkipEnabled": settings.autoSkip,
+            "autoFightEnabled": settings.autoFight,
+            "autoRunEnabled": settings.autoRun,
+            "autoEatConfig": autoEatConfig,
+            "autoFightConfig": autoFightConfig,
+            "partyName": settings.partyName,
+            "isVisitStatueBeforeSwitchParty": settings.visitStatue,
+            "mainAvatarIndex": settings.mainAvatar,
+            "guardianAvatarIndex": settings.guardianAvatar,
+            "guardianElementalSkillSecondInterval": settings.guardianInterval,
+            "guardianElementalSkillLongPress": settings.guardianLongPress,
+            "useGadgetIntervalMs": settings.gadgetInterval,
+            "recoverTiming": recoverTiming,
+            "skipDuring": settings.skipDuring,
+            "hideOnRepeat": settings.hideOnRepeat,
+            "hurryOnAvatar": settings.hurryOnAvatar,
+            "travelMode": settings.travelMode,
+            "distance": settings.distance,
+            "approachStopDistance": min(
+                settings.approachStopDistance, settings.distance),
+            "switchToWalkEnabled": settings.switchToWalkEnabled,
+            "mwkJumpFlyEnabled": settings.mwkJumpFlyEnabled,
+            "mwkJumpFlyIntervalSeconds": settings.mwkJumpFlyIntervalSeconds,
+            "taskCycleConfig": taskCycleConfig,
+            "taskCompletionSkipRuleConfig": completionConfig,
+            "preExecutionPriorityConfig": priorityConfig,
+        ]
+        let shellConfig: [String: Any] = [
+            "disable": settings.shellDisable,
+            "timeout": settings.shellTimeout,
+            "noWindow": settings.shellNoWindow,
+            "output": settings.shellOutput,
+        ]
+        let config: [String: Any] = [
+            "pathingConfig": pathingConfig,
             "enableShellConfig": settings.enableShellConfig,
-            "shellConfig": ["disable": settings.shellDisable, "timeout": settings.shellTimeout,
-                            "noWindow": settings.shellNoWindow, "output": settings.shellOutput]
-        ]])
+            "shellConfig": shellConfig,
+        ]
+        try catalogMutation(
+            "catalog.saveScriptGroupConfig",
+            groupName: groupName,
+            parameters: ["config": config])
     }
 
     func mutateSchedulerCatalog(groupName: String, mutation: BetterGISchedulerCatalogMutation) throws {
