@@ -2340,6 +2340,17 @@ actor BetterGICoreProcessSupervisor {
         return Set(savedIDs)
     }
 
+    func setAllMapMaskPointsHidden(_ hidden: Bool) throws {
+        guard case .running = state, let client,
+              let value = try client.request(
+                method: "mapMask.points.setAllHidden",
+                parameters: ["hidden": hidden]) as? [String: Any],
+              value["hidden"] as? Bool == hidden else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid MapMask visibility result.")
+        }
+    }
+
     private func requestTriggerSettings(
         method: String, name: String, settings: [String: Any]? = nil
     ) throws -> [String: Any] {

@@ -122,6 +122,28 @@ public sealed class MacMapMaskRuntimePlatform : IMapMaskRuntimePlatform
         };
     }
 
+    public object SetAllPointsHidden(bool hidden)
+    {
+        string[] pointIds;
+        lock (_stateLock)
+        {
+            pointIds = _snapshot.Points
+                .Select(point => point.Id)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        var dataSourceKey = MapMaskStateStorage.GetDataSourceKey(Config);
+        MapMaskStateStorage.Update(dataSourceKey, state =>
+            state.HiddenMapPointKeys = hidden
+                ? pointIds.Select(pointId => MapMaskStateStorage.GetPointKey(Config, pointId))
+                    .OrderBy(key => key, StringComparer.Ordinal)
+                    .ToList()
+                : []);
+        ReloadPoints();
+        return new { hidden };
+    }
+
     public async Task<object> SavePointSelectionAsync(
         IReadOnlyCollection<string> selectedIds,
         CancellationToken cancellationToken)

@@ -95,6 +95,10 @@ Core workflow is composed; no inert toggle is shown.
 The upstream `SIFT` / `TemplateMatch` map-matching preference is persisted by
 Core and exposed in the macOS common settings UI with the same restart-required
 semantics. Swift no longer supplies a hard-coded method during `core.initialize`.
+The big-map HUD also consumes the upstream per-data-source hidden-point storage:
+Core owns hide-all/show-all persistence and republishes the resulting point
+state, while Swift only displays the visible/total count and sends explicit
+commands. Per-point marker interaction remains an AppKit hit-testing gap.
 
 The CI gate intentionally does not replace the last row with a synthetic fixture: hosted runners do not contain the user's `User` tree or a running game. A real window, Core startup, provisioning, capture and catalog discovery are now recorded, but the overall first-step status remains **partial** until the three remaining game-dependent projects complete through explicitly authorized real input.
 

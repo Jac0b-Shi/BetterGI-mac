@@ -131,10 +131,29 @@ struct MapMaskPickerView: View {
                 TextField("搜索当前区域下的标点分类", text: $searchText)
                     .textFieldStyle(.roundedBorder)
 
-                Text("\(appState.mapMaskSelectedLabelIDs.count) 已选")
+                Text("\(visiblePointCount)/\(mapPointCount)")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .fixedSize()
+                    .help("当前显示/全部标点")
+
+                Button {
+                    appState.setAllMapMaskPointsHidden(true)
+                } label: {
+                    Image(systemName: "eye.slash")
+                }
+                .buttonStyle(.borderless)
+                .disabled(mapPointCount == 0)
+                .help("全部隐藏")
+
+                Button {
+                    appState.setAllMapMaskPointsHidden(false)
+                } label: {
+                    Image(systemName: "eye")
+                }
+                .buttonStyle(.borderless)
+                .disabled(hiddenPointCount == 0)
+                .help("全部显示")
 
                 Button(action: appState.closeMapMaskPicker) {
                     Image(systemName: "xmark")
@@ -247,6 +266,18 @@ struct MapMaskPickerView: View {
         appState.mapMaskLabelCategories
             .flatMap(\.children)
             .filter { appState.mapMaskSelectedLabelIDs.contains($0.id) }
+    }
+
+    private var mapPointCount: Int {
+        appState.coreOverlayStore.state.mapPoints.count
+    }
+
+    private var visiblePointCount: Int {
+        appState.coreOverlayStore.state.mapPoints.count { !$0.isHidden }
+    }
+
+    private var hiddenPointCount: Int {
+        mapPointCount - visiblePointCount
     }
 
     private func providerName(_ value: String) -> String {

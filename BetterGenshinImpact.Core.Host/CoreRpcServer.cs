@@ -339,6 +339,13 @@ public sealed class CoreRpcServer(
                     await MapMaskRuntimePlatform.SavePointSelectionAsync(
                         selectedIds.Select(id => id!).ToArray(), _shutdown.Token));
             }
+            if (request.Method == "mapMask.points.setAllHidden")
+            {
+                return RpcResponse.Success(
+                    request.Id,
+                    MapMaskRuntimePlatform.SetAllPointsHidden(
+                        RequiredBoolean(request.Params, "hidden")));
+            }
             if (request.Method == "keyMouse.stop")
                 return RpcResponse.Success(request.Id, await KeyMouseScripts.StopAsync());
             if (request.Method == "macro.keyEdge")

@@ -16,7 +16,7 @@ configuration.
 | AutoFish | complete | complete | Upstream exposes the realtime half-auto enable switch and directs full automation to the independent task. |
 | AutoEat | complete | complete | Enable state, check interval and eat interval use the upstream config. |
 | QuickTeleport | complete | complete | Enable state, list click delay, panel wait delay and hotkey mode use the upstream config. |
-| MapMask | complete | complete | The realtime page owns only the upstream mini-map-mask switch. Provider, language and point selection belong to the big-map HUD picker. |
+| MapMask | complete | partial | The realtime page owns only the upstream mini-map-mask switch. Provider, language and label selection belong to the big-map HUD picker. Core also persists the current upstream per-data-source hidden-point state and the HUD exposes visible/total counts plus hide-all/show-all actions. Per-point right-click visibility and the upstream point-detail popup still require an AppKit hit-testing path. |
 | SkillCd | complete | complete | Custom role fallback rules, trigger-on-skill, hide-at-zero, position, gap, scale and four colors are Core-owned and hot-updated. The macOS HUD renders the same ready/normal color and scale semantics independently from the recognition-debug overlay switch. |
 
 The production initial-trigger registry contains exactly these eight entries.
