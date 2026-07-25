@@ -294,11 +294,26 @@ public sealed class ScriptGroupCatalog(RuntimeLayout layout)
             avatarIndexes = group.Config.PathingConfig.AvatarIndexList,
             hurryOnAvatars = group.Config.PathingConfig.HurryOnAvatarList,
             travelModes = group.Config.PathingConfig.TravelModeList,
+            fightStrategies = FightStrategyOptions(),
             recoverTimings = new[]
             {
                 new { value = nameof(RecoverTiming.AnyWaypoint), displayName = "任何路径点" },
                 new { value = nameof(RecoverTiming.OnlyTeleport), displayName = "只在传送点" },
                 new { value = nameof(RecoverTiming.Never), displayName = "不回复" },
+            },
+            onlyPickEliteDropsModes = new[]
+            {
+                new { value = "Closed", displayName = "关闭功能" },
+                new
+                {
+                    value = "AllowAutoPickupForNonElite",
+                    displayName = "非精英允许自动拾取",
+                },
+                new
+                {
+                    value = "DisableAutoPickupForNonElite",
+                    displayName = "非精英关闭自动拾取",
+                },
             },
             completionSkipPolicies = new[]
             {
@@ -313,6 +328,23 @@ public sealed class ScriptGroupCatalog(RuntimeLayout layout)
             },
         });
         return result;
+    }
+
+    private string[] FightStrategyOptions()
+    {
+        var folder = Path.Combine(layout.UserPath, "AutoFight");
+        Directory.CreateDirectory(folder);
+        return
+        [
+            "根据队伍自动选择",
+            .. Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
+                .Where(path =>
+                    path.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) ||
+                    path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                .Select(path => Path.ChangeExtension(
+                    Path.GetRelativePath(folder, path), null))
+                .Order(StringComparer.Ordinal),
+        ];
     }
 
     public ScriptGroupSummary SaveGroupConfig(string name, JObject config)

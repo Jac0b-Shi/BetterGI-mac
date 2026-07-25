@@ -18,6 +18,12 @@ public sealed class ScriptGroupEditingSuite : IVerificationSuite
             Global.StartUpPath = root;
             var layout = new RuntimeLayout(root);
             layout.EnsureCreated();
+            var fightStrategyFolder = Path.Combine(layout.UserPath, "AutoFight");
+            Directory.CreateDirectory(fightStrategyFolder);
+            await File.WriteAllTextAsync(
+                Path.Combine(fightStrategyFolder, "Farming.txt"),
+                "钟离 e",
+                cancellationToken);
             var script = Path.Combine(layout.UserPath, "JsScript", "Fixture");
             Directory.CreateDirectory(script);
             await File.WriteAllTextAsync(Path.Combine(script, "main.js"), "log.info('fixture');", cancellationToken);
@@ -44,7 +50,27 @@ public sealed class ScriptGroupEditingSuite : IVerificationSuite
                 {
                   "index": 1,
                   "name": "Fixture Group",
-                  "config": {"pathingConfig":{"enabled":true,"partyName":"Original","distance":45},"shellConfig":{"timeout":60},"enableShellConfig":false},
+                  "config": {
+                    "pathingConfig": {
+                      "enabled": true,
+                      "partyName": "Original",
+                      "distance": 45,
+                      "autoEatConfig": {
+                        "defaultAtkBoostingDishName": "仙跳墙"
+                      },
+                      "autoFightConfig": {
+                        "strategyName": "Farming",
+                        "onlyPickEliteDropsMode": "DisableAutoPickupForNonElite",
+                        "battleThresholdForLoot": 3,
+                        "kazuhaPartyName": "拾取队",
+                        "finishDetectConfig": {
+                          "fastCheckEnabled": true
+                        }
+                      }
+                    },
+                    "shellConfig": {"timeout":60},
+                    "enableShellConfig":false
+                  },
                   "projects": [{
                     "index":1,"name":"Fixture Script","folderName":"Fixture","type":"Javascript","status":"Enabled","schedule":"Daily","runNum":2,
                     "allowJsNotification":true,"allowJsHTTPHash":"","jsScriptSettingsObject":{"legacy":"keep"}
@@ -84,6 +110,25 @@ public sealed class ScriptGroupEditingSuite : IVerificationSuite
                             config["pathingConfig"]?.Value<int>("distance") == 45 &&
                             config.Value<bool>("enableShellConfig"),
                 "Group settings patch did not preserve unedited upstream fields.");
+            var fightStrategies =
+                config["pathingOptions"]?["fightStrategies"] as JArray ?? [];
+            var onlyPickEliteDropsModes =
+                config["pathingOptions"]?["onlyPickEliteDropsModes"] as JArray ?? [];
+            context.Require(
+                config["pathingConfig"]?["autoEatConfig"]?
+                    .Value<string>("defaultAtkBoostingDishName") == "仙跳墙" &&
+                config["pathingConfig"]?["autoFightConfig"]?
+                    .Value<string>("onlyPickEliteDropsMode") ==
+                        "DisableAutoPickupForNonElite" &&
+                config["pathingConfig"]?["autoFightConfig"]?
+                    .Value<int>("battleThresholdForLoot") == 3 &&
+                config["pathingConfig"]?["autoFightConfig"]?
+                    ["finishDetectConfig"]?.Value<bool>("fastCheckEnabled") == true &&
+                fightStrategies.Values<string>().Contains("Farming") &&
+                onlyPickEliteDropsModes.OfType<JObject>().Any(option =>
+                        option.Value<string>("value") ==
+                            "DisableAutoPickupForNonElite"),
+                "Group settings omitted upstream AutoFight, AutoEat or option semantics.");
 
             _ = catalog.AddProjects("Fixture Group", "Shell", [], "printf fixture");
             _ = catalog.Reverse("Fixture Group");
