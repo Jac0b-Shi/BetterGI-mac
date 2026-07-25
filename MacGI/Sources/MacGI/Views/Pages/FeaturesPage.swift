@@ -582,7 +582,22 @@ struct SoloTasksPage: View {
                     ForEach(settings.domainOptions, id: \.self) { Text($0).tag($0) }
                 }.labelsHidden().frame(width: 220)
             }
-            BGISettingLine(title: "指定每种树脂刷取次数", subtitle: "关闭时优先使用浓缩树脂，然后使用原粹树脂") {
+            BGISettingLine(
+                title: "刷取至树脂耗尽",
+                subtitle: "优先使用浓缩树脂，然后使用原粹树脂，其余树脂不使用"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { !settings.specifyResinUse },
+                    set: {
+                        appState.saveAutoDomainSettings(
+                            specifyResinUse: !$0)
+                    }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(
+                title: "指定每种树脂刷取次数",
+                subtitle: "开启后会根据配置的次数使用对应的树脂"
+            ) {
                 Toggle("", isOn: Binding(
                     get: { settings.specifyResinUse },
                     set: { appState.saveAutoDomainSettings(specifyResinUse: $0) }))
