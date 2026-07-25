@@ -266,7 +266,7 @@ struct JSScriptPage: View {
                 Spacer()
             }
 
-            BGISectionCard("脚本列表", subtitle: "上游页面按目录、名称、版本展示，并提供执行、打开目录、刷新、删除。", symbolName: "doc.text") {
+            BGISectionCard("脚本列表", subtitle: "按目录、名称和版本展示，并提供执行、打开目录、刷新与删除。", symbolName: "doc.text") {
                 BGIDataTable(
                     headers: ["目录", "名称", "版本"],
                     rows: appState.scriptProjects.map { [$0.folderName, $0.name, $0.version] }
@@ -276,7 +276,7 @@ struct JSScriptPage: View {
             BGIOriginalCard(icon: .symbol("play.rectangle"), title: "脚本执行链路", subtitle: appState.schedulerExecutionStatus) {
                 Button("运行所选配置组") { appState.runSchedulerGroups() }
             } content: {
-                BGISettingLine(title: "最近结果", subtitle: "通过 BetterGI C# Core 执行已安装脚本。") {
+                BGISettingLine(title: "最近结果", subtitle: "执行已安装脚本后的状态。") {
                     Text(appState.currentSchedulerProjectID ?? "无")
                         .foregroundStyle(BGIColors.mutedText)
                 }
@@ -900,7 +900,7 @@ struct HotkeyPage: View {
             if appState.hotKeyBindings.isEmpty {
                 BGISectionCard(
                     "快捷键尚未就绪",
-                    subtitle: "BetterGI Core 启动后会加载可用的快捷键。",
+                    subtitle: "程序启动后会加载可用的快捷键。",
                     symbolName: "keyboard"
                 ) {
                     EmptyView()
@@ -1056,7 +1056,7 @@ struct KeyBindingPage: View {
             } else {
                 BGISectionCard(
                     "按键绑定尚未就绪",
-                    subtitle: "BetterGI Core 启动后会加载游戏键位。",
+                    subtitle: "程序启动后会加载游戏键位。",
                     symbolName: "keyboard"
                 ) {
                     EmptyView()
@@ -1276,7 +1276,7 @@ struct NotificationPage: View {
 
     private var eventSelectionSummary: String {
         guard let events = appState.notificationSettings?.events else {
-            return "BetterGI Core 启动后加载事件列表"
+            return "程序启动后加载事件列表"
         }
         let selectedCount = events.filter(\.selected).count
         return selectedCount == 0

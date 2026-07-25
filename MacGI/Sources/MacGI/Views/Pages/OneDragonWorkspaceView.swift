@@ -300,8 +300,118 @@ struct OneDragonWorkspaceView: View {
                         }
                     }
                 }
+                Divider()
+                domainRewardSettings
             }
         }
+    }
+
+    @ViewBuilder
+    private var domainRewardSettings: some View {
+        if let settings = appState.autoDomainSettings {
+            DisclosureGroup("领奖树脂与圣遗物分解") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Toggle(
+                        "按配置数量使用树脂",
+                        isOn: Binding(
+                            get: { settings.specifyResinUse },
+                            set: { appState.saveAutoDomainSettings(specifyResinUse: $0) }))
+                    if settings.specifyResinUse {
+                        domainResinCount(
+                            "原粹树脂刷取次数",
+                            value: Binding(
+                                get: { settings.originalResinUseCount },
+                                set: {
+                                    appState.saveAutoDomainSettings(
+                                        originalResinUseCount: $0)
+                                }))
+                        domainResinCount(
+                            "浓缩树脂刷取次数",
+                            value: Binding(
+                                get: { settings.condensedResinUseCount },
+                                set: {
+                                    appState.saveAutoDomainSettings(
+                                        condensedResinUseCount: $0)
+                                }))
+                        domainResinCount(
+                            "须臾树脂刷取次数",
+                            value: Binding(
+                                get: { settings.transientResinUseCount },
+                                set: {
+                                    appState.saveAutoDomainSettings(
+                                        transientResinUseCount: $0)
+                                }))
+                        domainResinCount(
+                            "脆弱树脂刷取次数",
+                            value: Binding(
+                                get: { settings.fragileResinUseCount },
+                                set: {
+                                    appState.saveAutoDomainSettings(
+                                        fragileResinUseCount: $0)
+                                }))
+                    } else {
+                        Text("先使用浓缩树脂，再使用原粹树脂，其余树脂不使用。")
+                            .font(BGIFonts.caption)
+                            .foregroundStyle(BGIColors.secondaryText)
+                    }
+                    HStack(spacing: 12) {
+                        Toggle(
+                            "结束后自动分解圣遗物",
+                            isOn: Binding(
+                                get: { settings.autoArtifactSalvage },
+                                set: {
+                                    appState.saveAutoDomainSettings(
+                                        autoArtifactSalvage: $0)
+                                }))
+                        Spacer()
+                        Picker(
+                            "最高星级",
+                            selection: Binding(
+                                get: { settings.maxArtifactStar },
+                                set: {
+                                    appState.saveAutoDomainSettings(
+                                        maxArtifactStar: $0)
+                                })
+                        ) {
+                            ForEach(settings.maxArtifactStarOptions, id: \.self) {
+                                Text($0).tag($0)
+                            }
+                        }
+                        .frame(width: 150)
+                        .disabled(!settings.autoArtifactSalvage)
+                    }
+                    Toggle(
+                        "启用奖励识别",
+                        isOn: Binding(
+                            get: { settings.rewardRecognitionEnabled },
+                            set: {
+                                appState.saveAutoDomainSettings(
+                                    rewardRecognitionEnabled: $0)
+                            }))
+                    Text("每轮领取后识别奖励名称与数量，任务结束时打印汇总。")
+                        .font(BGIFonts.caption)
+                        .foregroundStyle(BGIColors.secondaryText)
+                }
+                .padding(.top, 8)
+            }
+        } else {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("正在读取秘境领奖设置")
+                    .font(BGIFonts.caption)
+                    .foregroundStyle(BGIColors.secondaryText)
+            }
+        }
+    }
+
+    private func domainResinCount(
+        _ title: String,
+        value: Binding<Int>
+    ) -> some View {
+        Stepper(
+            "\(title)：\(value.wrappedValue)",
+            value: value,
+            in: 0 ... 999)
     }
 
     private var bossSettings: some View {

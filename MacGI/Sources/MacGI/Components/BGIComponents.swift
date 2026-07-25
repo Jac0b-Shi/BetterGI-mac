@@ -437,7 +437,7 @@ struct BGIHeaderBar: View {
             BGIBundledImage(resource: "bettergi-logo", fileExtension: "png")
                 .frame(width: 22, height: 22)
                 .clipShape(Circle())
-            Text("betterGI-mac · 更好的原神 · Swift Prototype")
+            Text("BetterGI · 更好的原神")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(BGIColors.primaryText)
             Spacer()

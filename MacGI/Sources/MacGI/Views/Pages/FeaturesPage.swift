@@ -297,7 +297,7 @@ struct SoloTasksPage: View {
         case "AutoFight": autoFightSettings
         case "AutoRedeemCode": autoRedeemCodeSettings
         default:
-            BGISettingLine(title: "设置", subtitle: "Core 未返回该任务的设置模型") {
+            BGISettingLine(title: "设置", subtitle: "该任务的设置暂不可用") {
                 BGIStatusBadge(text: "不可用", tint: BGIColors.muted)
             }
         }
@@ -384,7 +384,7 @@ struct SoloTasksPage: View {
                         ? nil
                         : appState.soloTaskInputDrafts[task.name, default: ""])
             } else {
-                Text("Core 暂未开放")
+                Text("暂不可用")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -432,7 +432,7 @@ struct SoloTasksPage: View {
                 .labelsHidden()
             }
         } else {
-            BGISettingLine(title: "设置", subtitle: "正在从 BetterGI C# Core 读取") {
+            BGISettingLine(title: "设置", subtitle: "正在读取") {
                 ProgressView().controlSize(.small)
             }
         }
@@ -742,7 +742,7 @@ struct SoloTasksPage: View {
                 value: Binding(get: { settings.seekEnemyEnabled },
                     set: { appState.saveAutoLeyLineOutcropSettings(seekEnemyEnabled: $0) }))
             if settings.seekEnemyEnabled {
-                BGISettingLine(title: "旋转寻找敌人速度", subtitle: "上游建议单次旋转约 360 度") {
+                BGISettingLine(title: "旋转寻找敌人速度", subtitle: "建议单次旋转约 360 度") {
                     Slider(value: Binding(
                         get: { Double(settings.seekEnemyRotaryFactor) },
                         set: { appState.saveAutoLeyLineOutcropSettings(
@@ -956,7 +956,7 @@ struct SoloTasksPage: View {
                 value: Binding(get: { settings.rotateFindEnemyEnabled },
                     set: { appState.saveAutoFightSettings(rotateFindEnemyEnabled: $0) }))
             if settings.rotateFindEnemyEnabled {
-                BGISettingLine(title: "旋转速度", subtitle: "上游范围 1-13，建议单次约 360°") {
+                BGISettingLine(title: "旋转速度", subtitle: "范围 1-13，建议单次约 360°") {
                     HStack(spacing: 10) {
                         Slider(value: Binding(
                             get: { Double(settings.rotaryFactor) },
@@ -1065,7 +1065,7 @@ struct SoloTasksPage: View {
     }
 
     private var settingsLoading: some View {
-        BGISettingLine(title: "设置", subtitle: "正在从 BetterGI C# Core 读取") {
+        BGISettingLine(title: "设置", subtitle: "正在读取") {
             ProgressView().controlSize(.small)
         }
     }
