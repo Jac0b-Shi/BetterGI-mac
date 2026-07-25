@@ -334,7 +334,7 @@ struct SoloTasksPage: View {
         if let settings = appState.autoFishingSettings {
             BGISettingLine(
                 title: "上钩等待超时时间",
-                subtitle: "超过这个时间将自动提竿，并重新识别鱼饵进行抛竿"
+                subtitle: "超过这个时间将自动提竿，并重新识别并选择鱼饵进行抛竿"
             ) {
                 Stepper(value: Binding(
                     get: { settings.autoThrowRodTimeOut },
@@ -343,7 +343,7 @@ struct SoloTasksPage: View {
                     Text("\(settings.autoThrowRodTimeOut) 秒").frame(minWidth: 60)
                 }
             }
-            BGISettingLine(title: "整个任务超时时间", subtitle: "超过这个时间将强制结束任务；0 表示不限制") {
+            BGISettingLine(title: "整个任务超时时间", subtitle: "超过这个时间将强制结束任务") {
                 Stepper(value: Binding(
                     get: { settings.wholeProcessTimeoutSeconds },
                     set: { appState.saveAutoFishingSettings(wholeProcessTimeoutSeconds: $0) }),
@@ -351,7 +351,10 @@ struct SoloTasksPage: View {
                     Text("\(settings.wholeProcessTimeoutSeconds) 秒").frame(minWidth: 72)
                 }
             }
-            BGISettingLine(title: "昼夜策略", subtitle: "选择全天、白天、夜晚，或不调整游戏时间") {
+            BGISettingLine(
+                title: "昼夜策略",
+                subtitle: "钓全天的鱼、还是只钓白天或夜晚的鱼、亦或不调整时间"
+            ) {
                 Picker("", selection: Binding(
                     get: { settings.fishingTimePolicy },
                     set: { appState.saveAutoFishingSettings(fishingTimePolicy: $0) })) {
@@ -468,25 +471,34 @@ struct SoloTasksPage: View {
                     set: { appState.saveAutoWoodSettings(useWonderlandRefresh: $0) }))
                     .toggleStyle(.switch).labelsHidden()
             }
-            BGISettingLine(title: "循环次数", subtitle: "输入 0 则为无限循环直到手动终止") {
+            BGISettingLine(title: "循环次数", subtitle: "循环伐木多少次，输入 0 则为无限循环直到手动终止") {
                 TextField("", value: Binding(
                     get: { settings.roundNum },
                     set: { appState.saveAutoWoodSettings(roundNum: $0) }), format: .number)
                     .frame(width: 90).multilineTextAlignment(.trailing)
             }
-            BGISettingLine(title: "启用OCR伐木数量限制（需1080P以上分辨率）", subtitle: "达到上限后自动停止伐木") {
+            BGISettingLine(
+                title: "启用OCR伐木数量限制（需1080P以上分辨率）",
+                subtitle: "伐木后OCR识别并累计木材数，达到上限后自动停止伐木"
+            ) {
                 Toggle("", isOn: Binding(
                     get: { settings.woodCountOcrEnabled },
                     set: { appState.saveAutoWoodSettings(woodCountOcrEnabled: $0) }))
                     .toggleStyle(.switch).labelsHidden()
             }
-            BGISettingLine(title: "伐木数量上限", subtitle: "原神每日每种木材最多2000，输入 0 等同不设上限") {
+            BGISettingLine(
+                title: "伐木数量上限（原神每日每种木材最多2000）",
+                subtitle: "启用伐木数量限制后生效，达到配置上限后自动停止伐木"
+            ) {
                 TextField("", value: Binding(
                     get: { settings.dailyMaxCount },
                     set: { appState.saveAutoWoodSettings(dailyMaxCount: $0) }), format: .number)
                     .frame(width: 90).multilineTextAlignment(.trailing)
             }
-            BGISettingLine(title: "使用小道具后的额外延迟（毫秒）", subtitle: "用于观察使用小道具后获得木材的提示") {
+            BGISettingLine(
+                title: "使用小道具后的额外延迟（毫秒）",
+                subtitle: "如果希望看到使用小道具后获得木材的提示，可以调整这个值"
+            ) {
                 TextField("", value: Binding(
                     get: { settings.afterZSleepDelay },
                     set: { appState.saveAutoWoodSettings(afterZSleepDelay: $0) }), format: .number)
@@ -500,14 +512,17 @@ struct SoloTasksPage: View {
         if let settings = appState.autoMusicGameSettings {
             BGISettingLine(
                 title: "【专辑】 自动演奏未达成【大音天籁】的乐曲",
-                subtitle: "关闭时奖励已领取就跳过；开启时达成大音天籁才跳过"
+                subtitle: "关闭时，奖励已经领取就会跳过乐曲。开启时，达成了【大音天籁】才会跳过乐曲"
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.mustCanorusLevel },
                     set: { appState.saveAutoMusicGameSettings(mustCanorusLevel: $0) }))
                     .toggleStyle(.switch).labelsHidden()
             }
-            BGISettingLine(title: "【专辑】 自动演奏的目标难度", subtitle: "传说或大师可获取全部奖励；所有会演奏全部难度") {
+            BGISettingLine(
+                title: "【专辑】 自动演奏的目标难度选择",
+                subtitle: "设置为【传说】，【大师】即可获取所有奖励，设置【所有】则会对乐曲的所有难度进行自动演奏"
+            ) {
                 Picker("", selection: Binding(
                     get: { settings.musicLevel },
                     set: { appState.saveAutoMusicGameSettings(musicLevel: $0) })) {
@@ -542,7 +557,10 @@ struct SoloTasksPage: View {
                     set: { appState.saveAutoBossSettings(teamName: $0) }))
                     .frame(width: 200)
             }
-            BGISettingLine(title: "指定讨伐次数", subtitle: "关闭时刷取至原粹树脂耗尽") {
+            BGISettingLine(
+                title: "指定讨伐次数",
+                subtitle: "关闭时刷取至原粹树脂耗尽，开启后按成功领取奖励次数停止"
+            ) {
                 Toggle("", isOn: Binding(
                     get: { settings.specifyRunCount },
                     set: { appState.saveAutoBossSettings(specifyRunCount: $0) }))
@@ -569,19 +587,28 @@ struct SoloTasksPage: View {
                         .toggleStyle(.switch).labelsHidden()
                 }
             }
-            BGISettingLine(title: "每轮讨伐后返回七天神像", subtitle: "每次领奖后先回血，再重新前往首领") {
+            BGISettingLine(
+                title: "每轮讨伐后返回七天神像",
+                subtitle: "开启后每次领奖后先回血，再重新前往首领"
+            ) {
                 Toggle("", isOn: Binding(
                     get: { settings.returnToStatueAfterEachRound },
                     set: { appState.saveAutoBossSettings(returnToStatueAfterEachRound: $0) }))
                     .toggleStyle(.switch).labelsHidden()
             }
-            BGISettingLine(title: "启用奖励识别", subtitle: "每轮领取后识别奖励名称与数量，任务结束打印汇总") {
+            BGISettingLine(
+                title: "启用奖励识别",
+                subtitle: "每轮领取后识别奖励名称与数量（图标匹配+OCR双路），任务结束打印汇总"
+            ) {
                 Toggle("", isOn: Binding(
                     get: { settings.rewardRecognitionEnabled },
                     set: { appState.saveAutoBossSettings(rewardRecognitionEnabled: $0) }))
                     .toggleStyle(.switch).labelsHidden()
             }
-            BGISettingLine(title: "角色死亡后重试次数", subtitle: "复活后重新讨伐当前首领") {
+            BGISettingLine(
+                title: "角色死亡后重试次数",
+                subtitle: "战斗中存在角色死亡时，复活后重新讨伐当前首领"
+            ) {
                 Stepper(value: Binding(
                     get: { settings.reviveRetryCount },
                     set: { appState.saveAutoBossSettings(reviveRetryCount: $0) }), in: 0...99) {
@@ -601,7 +628,7 @@ struct SoloTasksPage: View {
                     ForEach(settings.strategyOptions, id: \.self) { Text($0).tag($0) }
                 }.labelsHidden().frame(width: 220)
             }
-            BGISettingLine(title: "自动切换到指定队伍", subtitle: "注意队伍名称是游戏内手动设置的名称") {
+            BGISettingLine(title: "自动切换到指定队伍", subtitle: "注意队伍名称是游戏内你手动设置的名称") {
                 TextField("队伍名称", text: Binding(
                     get: { settings.partyName },
                     set: { appState.saveAutoDomainSettings(partyName: $0) }))
@@ -650,7 +677,7 @@ struct SoloTasksPage: View {
                     get: { settings.fragileResinUseCount },
                     set: { appState.saveAutoDomainSettings(fragileResinUseCount: $0) }))
             }
-            BGISettingLine(title: "结束后自动分解圣遗物", subtitle: "选择需要快速分解圣遗物的最高星级") {
+            BGISettingLine(title: "结束后自动分解圣遗物", subtitle: "需要快速分解圣遗物的最高星级") {
                 HStack(spacing: 12) {
                     Picker("", selection: Binding(
                         get: { settings.maxArtifactStar },
@@ -663,43 +690,58 @@ struct SoloTasksPage: View {
                         .toggleStyle(.switch).labelsHidden()
                 }
             }
-            BGISettingLine(title: "战斗完成后等待时间（秒）", subtitle: "寻找石化古树前等待角色技能完全结束") {
+            BGISettingLine(
+                title: "战斗完成后等待时间（秒）",
+                subtitle: "战斗结束后，寻找石化古树前的延迟时间，等一些角色技能完全结束"
+            ) {
                 TextField("", value: Binding(
                     get: { settings.fightEndDelay },
                     set: { appState.saveAutoDomainSettings(fightEndDelay: $0) }), format: .number)
                     .frame(width: 90).multilineTextAlignment(.trailing)
             }
-            BGISettingLine(title: "寻找古树时使用小步伐行走", subtitle: "仅用于识别较慢的计算机") {
+            BGISettingLine(
+                title: "寻找古树时使用小步伐行走（正常用户请不要启用）",
+                subtitle: "如果电脑性能较差，寻找古树时间过久，可以尝试使用这个功能"
+            ) {
                 Toggle("", isOn: Binding(
                     get: { settings.shortMovement },
                     set: { appState.saveAutoDomainSettings(shortMovement: $0) }))
                     .toggleStyle(.switch).labelsHidden()
             }
-            BGISettingLine(title: "步行前往开启秘境和领取奖励", subtitle: "用于 F 点击不到的情况") {
+            BGISettingLine(
+                title: "步行前往开启秘境和领取奖励",
+                subtitle: "如果电脑性能较差，开启秘境或者领取奖励的F点击不到，可以尝试此功能"
+            ) {
                 Toggle("", isOn: Binding(
                     get: { settings.walkToF },
                     set: { appState.saveAutoDomainSettings(walkToF: $0) }))
                     .toggleStyle(.switch).labelsHidden()
             }
-            BGISettingLine(title: "寻找古树时左右移动次数", subtitle: "正常用户不建议修改") {
+            BGISettingLine(
+                title: "寻找古树时确认位置左右移动的次数（正常用户不要修改）",
+                subtitle: "小步伐行走的时候左右确认位置的次数"
+            ) {
                 TextField("", value: Binding(
                     get: { settings.leftRightMoveTimes },
                     set: { appState.saveAutoDomainSettings(leftRightMoveTimes: $0) }), format: .number)
                     .frame(width: 90).multilineTextAlignment(.trailing)
             }
-            BGISettingLine(title: "自动吃药", subtitle: "装备便携营养袋后，红血时自动按 Z 键吃药") {
+            BGISettingLine(title: "自动吃药", subtitle: "请先装备 “便携营养袋” ，在红血时候后自动按Z键吃药") {
                 Toggle("", isOn: Binding(
                     get: { settings.autoEat },
                     set: { appState.saveAutoDomainSettings(autoEat: $0) }))
                     .toggleStyle(.switch).labelsHidden()
             }
-            BGISettingLine(title: "启用奖励识别", subtitle: "每轮领取后识别奖励名称与数量，任务结束打印汇总") {
+            BGISettingLine(
+                title: "启用奖励识别",
+                subtitle: "每轮领取后识别奖励名称与数量（图标匹配+OCR双路），任务结束打印汇总"
+            ) {
                 Toggle("", isOn: Binding(
                     get: { settings.rewardRecognitionEnabled },
                     set: { appState.saveAutoDomainSettings(rewardRecognitionEnabled: $0) }))
                     .toggleStyle(.switch).labelsHidden()
             }
-            BGISettingLine(title: "角色死亡后重试次数", subtitle: "秘境战斗中发生角色死亡时重试") {
+            BGISettingLine(title: "角色死亡后重试次数", subtitle: "秘境战斗中，发生角色死亡重试的次数") {
                 TextField("", value: Binding(
                     get: { settings.reviveRetryCount },
                     set: { appState.saveAutoDomainSettings(reviveRetryCount: $0) }), format: .number)
@@ -711,21 +753,24 @@ struct SoloTasksPage: View {
     @ViewBuilder
     private var autoLeyLineOutcropSettings: some View {
         if let settings = appState.autoLeyLineOutcropSettings {
-            BGISettingLine(title: "地脉花类型", subtitle: "启示之花（经验书）或藏金之花（摩拉）") {
+            BGISettingLine(
+                title: "地脉花类型",
+                subtitle: "选择刷取的地脉花，启示之花（经验书）或藏金之花（摩拉）。"
+            ) {
                 Picker("", selection: Binding(
                     get: { settings.leyLineOutcropType },
                     set: { appState.saveAutoLeyLineOutcropSettings(leyLineOutcropType: $0) })) {
                     ForEach(settings.leyLineOutcropTypeOptions, id: \.self) { Text($0).tag($0) }
                 }.labelsHidden().frame(width: 150)
             }
-            BGISettingLine(title: "国家", subtitle: "按国家选择刷取对应的地脉花") {
+            BGISettingLine(title: "国家", subtitle: "按国家选择刷取对应的地脉花。") {
                 Picker("", selection: Binding(
                     get: { settings.country },
                     set: { appState.saveAutoLeyLineOutcropSettings(country: $0) })) {
                     ForEach(settings.countryOptions, id: \.self) { Text($0).tag($0) }
                 }.labelsHidden().frame(width: 130)
             }
-            BGISettingLine(title: "选择战斗策略", subtitle: "用于地脉花战斗") {
+            BGISettingLine(title: "选择战斗策略", subtitle: "用于战斗") {
                 Picker("", selection: Binding(
                     get: { settings.strategyName },
                     set: { appState.saveAutoLeyLineOutcropSettings(strategyName: $0) })) {
@@ -734,11 +779,13 @@ struct SoloTasksPage: View {
                 }.labelsHidden().frame(width: 220)
             }
             CoreTextSettingLine(
-                title: "根据技能 CD 优化出招人员",
-                subtitle: "填写角色名或角色名与 CD，多个配置以分号分隔",
+                title: "根据技能CD优化出招人员",
+                subtitle: "根据填入人或人和cd，来决定当此人元素战技cd未结束时，跳过此人出招，来优化战斗流程，可填入人名或人名数字（用逗号分隔），多种用分号分隔，例如:白术;钟离,12;，如果人名，则用内置cd检查（或填入数字也小于0），如果是人名和数字，则把数字当做出招cd(秒)。",
                 value: settings.actionSchedulerByCd,
                 onSave: { appState.saveAutoLeyLineOutcropSettings(actionSchedulerByCd: $0) })
-            leyLineToggle("旋转寻找敌人位置", "战斗时按设置间隔靠近或旋转寻找敌人",
+            leyLineToggle(
+                "旋转寻找敌人位置",
+                "(实验性功能) 战斗时按下方设置的间隔尝试靠近或旋转寻找敌人。",
                 value: Binding(get: { settings.seekEnemyEnabled },
                     set: { appState.saveAutoLeyLineOutcropSettings(seekEnemyEnabled: $0) }))
             if settings.seekEnemyEnabled {
@@ -749,7 +796,10 @@ struct SoloTasksPage: View {
                             seekEnemyRotaryFactor: Int($0.rounded())) }), in: 1...13, step: 1)
                         .frame(width: 180)
                 }
-                BGISettingLine(title: "寻敌间隔（秒）", subtitle: "最小 1 秒") {
+                BGISettingLine(
+                    title: "寻敌间隔（秒）",
+                    subtitle: "仅在已启用“旋转寻找敌人位置”后生效，最小 1 秒。"
+                ) {
                     Stepper(value: Binding(
                         get: { settings.seekEnemyIntervalSeconds },
                         set: { appState.saveAutoLeyLineOutcropSettings(
@@ -758,7 +808,7 @@ struct SoloTasksPage: View {
                     }
                 }
             }
-            leyLineToggle("聚集材料动作", "战斗结束后使用万叶或琴长 E 聚集材料",
+            leyLineToggle("聚集材料动作", "战斗结束后，如存在(万叶/琴)，则执行长E聚集材料动作",
                 value: Binding(get: { settings.kazuhaPickupEnabled },
                     set: { appState.saveAutoLeyLineOutcropSettings(kazuhaPickupEnabled: $0) }))
             if settings.kazuhaPickupEnabled {
@@ -791,41 +841,45 @@ struct SoloTasksPage: View {
                     }
                 }
             }
-            leyLineToggle("树脂耗尽模式", "按当前树脂与库存自动计算可刷次数",
+            leyLineToggle("树脂耗尽模式", "按当前树脂与库存自动计算可刷次数，结束后自动停止。",
                 value: Binding(get: { settings.isResinExhaustionMode },
                     set: { appState.saveAutoLeyLineOutcropSettings(
                         isResinExhaustionMode: $0) }))
-            leyLineToggle("刷取次数取小值", "与手动次数取最小值，避免超过树脂可用次数",
+            leyLineToggle("刷取次数取小值", "与手动次数取最小值，避免超过树脂可用次数。",
                 value: Binding(get: { settings.openModeCountMin },
                     set: { appState.saveAutoLeyLineOutcropSettings(openModeCountMin: $0) }))
-            BGISettingLine(title: "刷取次数", subtitle: "树脂耗尽模式关闭或统计失败时使用") {
+            BGISettingLine(title: "刷取次数", subtitle: "树脂耗尽模式关闭或统计失败时使用的固定次数。") {
                 Stepper(value: Binding(get: { settings.count },
                     set: { appState.saveAutoLeyLineOutcropSettings(count: $0) }), in: 1...999) {
                     Text("\(settings.count)").frame(minWidth: 36)
                 }
             }
-            leyLineToggle("使用须臾树脂", "原粹与浓缩耗尽后允许继续刷取",
+            leyLineToggle("使用须臾树脂", "原粹与浓缩耗尽后，允许使用须臾树脂继续刷取。",
                 value: Binding(get: { settings.useTransientResin },
                     set: { appState.saveAutoLeyLineOutcropSettings(useTransientResin: $0) }))
-            leyLineToggle("使用脆弱树脂", "原粹与浓缩耗尽后允许继续刷取",
+            leyLineToggle("使用脆弱树脂", "原粹与浓缩耗尽后，允许使用脆弱树脂继续刷取。",
                 value: Binding(get: { settings.useFragileResin },
                     set: { appState.saveAutoLeyLineOutcropSettings(useFragileResin: $0) }))
-            CoreTextSettingLine(title: "战斗队伍名称", subtitle: "留空则不切换；配置好感队时必须填写",
+            CoreTextSettingLine(
+                title: "战斗队伍名称",
+                subtitle: "进入战斗前切换到该队伍，留空则不切换。 如果配置了好感队则必须填写。",
                 value: settings.team,
                 onSave: { appState.saveAutoLeyLineOutcropSettings(team: $0) })
-            CoreTextSettingLine(title: "好感队名称", subtitle: "领取奖励前切换；留空则不切换",
+            CoreTextSettingLine(
+                title: "好感队名称",
+                subtitle: "领取奖励前切换到该队伍，留空则不切换。",
                 value: settings.friendshipTeam,
                 onSave: { appState.saveAutoLeyLineOutcropSettings(friendshipTeam: $0) })
-            BGISettingLine(title: "战斗超时时间（秒）", subtitle: "到达指定时间后自动停止战斗") {
+            BGISettingLine(title: "战斗超时时间（秒）", subtitle: "到达指定时间后，自动停止战斗。") {
                 Stepper(value: Binding(get: { settings.timeout },
                     set: { appState.saveAutoLeyLineOutcropSettings(timeout: $0) }), in: 1...9999) {
                     Text("\(settings.timeout)").frame(minWidth: 48)
                 }
             }
-            leyLineToggle("不使用冒险之证寻路", "改用内置路线定位地脉花",
+            leyLineToggle("不使用冒险之证寻路", "勾选后改用内置路线，不通过冒险之证定位地脉花。",
                 value: Binding(get: { settings.useAdventurerHandbook },
                     set: { appState.saveAutoLeyLineOutcropSettings(useAdventurerHandbook: $0) }))
-            leyLineToggle("发送通知", "任务完成或失败时通过通知系统发送提醒",
+            leyLineToggle("发送通知", "任务完成或失败时通过通知系统发送提醒。",
                 value: Binding(get: { settings.isNotification },
                     set: { appState.saveAutoLeyLineOutcropSettings(isNotification: $0) }))
         } else { settingsLoading }
@@ -933,26 +987,30 @@ struct SoloTasksPage: View {
                 }.labelsHidden().frame(width: 220)
             }
             CoreTextSettingLine(
-                title: "根据技能 CD 优化出招人员",
-                subtitle: "填写角色名或角色名与 CD，多种使用分号分隔",
+                title: "根据技能CD优化出招人员",
+                subtitle: "根据填入人或人和cd，来决定当此人元素战技cd未结束时，跳过此人出招，来优化战斗流程，可填入人名或人名数字（用逗号分隔），多种用分号分隔，例如:白术;钟离,12;，如果人名，则用内置cd检查（或填入数字也小于0），如果是人名和数字，则把数字当做出招cd(秒)。",
                 value: settings.actionSchedulerByCd,
                 onSave: { appState.saveAutoFightSettings(actionSchedulerByCd: $0) })
 
             fightSectionTitle("自动检测战斗结束")
-            fightToggleLine("启用战斗结束检测", "检测到战斗结束时停止自动战斗",
+            fightToggleLine("自动检测战斗结束", "检测到战斗已经结束的情况下，停止自动战斗功能",
                 value: Binding(get: { settings.fightFinishDetectEnabled },
                     set: { appState.saveAutoFightSettings(fightFinishDetectEnabled: $0) }))
-            fightToggleLine("更快检查结束战斗", "按时间或指定角色完成一轮操作后检查",
+            fightToggleLine(
+                "更快检查结束战斗",
+                "快速检查战斗结束，在一轮脚本中，可以每隔一定秒数（默认为5）或指定角色操作后，去检查（在每个角色完成该轮脚本时）。",
                 value: Binding(get: { settings.fastCheckEnabled },
                     set: { appState.saveAutoFightSettings(fastCheckEnabled: $0) }))
             if settings.fastCheckEnabled {
                 CoreTextSettingLine(
                     title: "更快检查结束战斗参数",
-                    subtitle: "例如：5;白术;钟离;",
+                    subtitle: "快速检查战斗结束的参数，可填入数字和人名，多种用分号分隔，例如:5;白术;钟离;，如果是数字（小于等于0则不会根据时间去检查，单位为秒），则指定检查间隔，如果是人名，则该角色执行一轮操作后进行检查。同时每轮结束后检查不变。",
                     value: settings.fastCheckParams,
                     onSave: { appState.saveAutoFightSettings(fastCheckParams: $0) })
             }
-            fightToggleLine("旋转寻找敌人位置", "打开队伍界面检测前先判断是否需要靠近或旋转",
+            fightToggleLine(
+                "旋转寻找敌人位置",
+                "(建议配合1秒左右“更快检测结束战斗”) 打开队伍界面检测战斗结束前，先检测敌人，判断是否需靠近敌或旋转寻找敌人。(Q前检查：释放Q技能前检测是否结束战斗。尝试面敌：开战寻敌，战斗尝试面向敌人)",
                 value: Binding(get: { settings.rotateFindEnemyEnabled },
                     set: { appState.saveAutoFightSettings(rotateFindEnemyEnabled: $0) }))
             if settings.rotateFindEnemyEnabled {
@@ -974,17 +1032,17 @@ struct SoloTasksPage: View {
             }
             CoreTextSettingLine(
                 title: "检查战斗结束的延时",
-                subtitle: "可为默认秒数或角色与秒数组合",
+                subtitle: "检查战斗结束的延时，不同角色招式结束后的延时不一定相同，默认为1.5秒。也可以指定特定角色之后延时多少秒检查，未指定角色名，则默认为该值。格式如：2.5;白术,1.5;钟离,1.0;",
                 value: settings.checkEndDelay,
                 onSave: { appState.saveAutoFightSettings(checkEndDelay: $0) })
             CoreTextSettingLine(
                 title: "按键触发后检查延时",
-                subtitle: "按下切换队伍后检查屏幕色块前的延时",
+                subtitle: "按下切换队伍后去检查屏幕色块的延时，默认为0.45秒。若频繁误判可以适当提高这个值，比如到0.75。确保这个延时不会真的把队伍配置界面切出来。",
                 value: settings.beforeDetectDelay,
                 onSave: { appState.saveAutoFightSettings(beforeDetectDelay: $0) })
 
             fightSectionTitle("盾奶位角色优先释放技能")
-            BGISettingLine(title: "盾奶位角色在队伍中的位置", subtitle: "空选关闭实时盾奶技能检测") {
+            BGISettingLine(title: "盾奶位角色在队伍中的位置", subtitle: "实时检测盾奶位战技CD") {
                 Picker("", selection: Binding(
                     get: { settings.guardianAvatar },
                     set: { appState.saveAutoFightSettings(guardianAvatar: $0) })) {
@@ -994,7 +1052,7 @@ struct SoloTasksPage: View {
                 }.labelsHidden().frame(width: 90)
             }
             if !settings.guardianAvatar.isEmpty {
-                fightToggleLine("禁用该角色的 E 战斗策略", "自动释放盾奶位 E 技能",
+                fightToggleLine("禁用该角色的战斗策略", "自动释放E或Q战技",
                     value: Binding(get: { settings.guardianCombatSkip },
                         set: { appState.saveAutoFightSettings(guardianCombatSkip: $0) }))
                 fightToggleLine("自动释放 Q 爆发", "盾奶位可用时自动释放元素爆发",
@@ -1006,11 +1064,13 @@ struct SoloTasksPage: View {
             }
 
             fightSectionTitle("战后拾取")
-            fightToggleLine("扫描掉落物光柱", "战斗结束后旋转视角寻找掉落物并靠近",
+            fightToggleLine(
+                "扫描掉落物光柱",
+                "战斗结束后旋转视角寻找掉落物光柱并靠近（仅在无万叶时备用）",
                 value: Binding(get: { settings.pickDropsAfterFightEnabled },
                     set: { appState.saveAutoFightSettings(pickDropsAfterFightEnabled: $0) }))
             if settings.pickDropsAfterFightEnabled {
-                BGISettingLine(title: "扫描掉落物光柱时长", subtitle: "单位为秒；0 表示不扫描") {
+                BGISettingLine(title: "扫描掉落物光柱时长", subtitle: "单位为秒。0表示不扫描掉落物光柱。") {
                     Stepper(value: Binding(
                         get: { settings.pickDropsAfterFightSeconds },
                         set: { appState.saveAutoFightSettings(pickDropsAfterFightSeconds: $0) }),
@@ -1019,25 +1079,27 @@ struct SoloTasksPage: View {
                     }
                 }
             }
-            fightToggleLine("聚集材料动作", "战斗结束后使用万叶或琴长 E 聚集材料",
+            fightToggleLine("聚集材料动作", "战斗结束后，如存在(万叶/琴)，则执行长E聚集材料动作",
                 value: Binding(get: { settings.kazuhaPickupEnabled },
                     set: { appState.saveAutoFightSettings(kazuhaPickupEnabled: $0) }))
             if settings.kazuhaPickupEnabled {
                 fightToggleLine("琴二次拾取", "首次拾取为空时再次执行拾取",
                     value: Binding(get: { settings.qinDoublePickUp },
                         set: { appState.saveAutoFightSettings(qinDoublePickUp: $0) }))
-                fightToggleLine("基于经验值判断拾取", "未检测到精英怪经验值时跳过拾取",
+                fightToggleLine(
+                    "基于经验值判断拾取(经验值57/58/60，不含传奇120等数字)",
+                    "战斗中检测精英怪死亡经验值图标，未检测到时跳过拾取，避免无价值战斗后浪费时间",
                     value: Binding(get: { settings.expBasedPickupEnabled },
                         set: { appState.saveAutoFightSettings(expBasedPickupEnabled: $0) }))
             }
-            BGISettingLine(title: "自动战斗超时（秒）", subtitle: "到达指定时间后自动停止战斗") {
+            BGISettingLine(title: "自动战斗超时(秒)", subtitle: "到达指定时间后，自动停止战斗") {
                 Stepper(value: Binding(
                     get: { settings.timeout },
                     set: { appState.saveAutoFightSettings(timeout: $0) }), in: 1...3600) {
                     Text("\(settings.timeout)").frame(minWidth: 48)
                 }
             }
-            fightToggleLine("游泳检测", "自动战斗中检测游泳，先回战斗节点，失败则去七天神像",
+            fightToggleLine("游泳检测(自动战斗过程中)", "先回战斗节点，失败则去七天神像",
                 value: Binding(get: { settings.swimmingEnabled },
                     set: { appState.saveAutoFightSettings(swimmingEnabled: $0) }))
         } else { settingsLoading }
@@ -1113,7 +1175,7 @@ private struct AutoArtifactSalvageSettingsEditor: View {
         .sheet(isPresented: $showingRecognitionPreview) {
             ArtifactSalvageRecognitionSheet(javaScript: javaScript)
         }
-        BGISettingLine(title: "JavaScript", subtitle: "只要满足脚本条件的五星圣遗物都会被选中") {
+        BGISettingLine(title: "JavaScript -", subtitle: "只要满足的圣遗物都会被选中") {
             HStack(spacing: 8) {
                 Button {
                     showingScriptImport = true
@@ -1148,7 +1210,7 @@ private struct AutoArtifactSalvageSettingsEditor: View {
             .clipShape(RoundedRectangle(cornerRadius: 6))
         BGISettingLine(
             title: "按套装筛选",
-            subtitle: "一般填写套装内生之花名，可填入多个名称；留空则不用"
+            subtitle: "利用游戏自带的筛选功能先行筛选 一般填写套装内生之花名，可填入多个名称；留空则不用"
         ) {
             TextField("套装名称", text: $artifactSetFilter)
                 .frame(width: 260)
