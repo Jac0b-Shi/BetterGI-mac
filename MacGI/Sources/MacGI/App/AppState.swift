@@ -2265,6 +2265,15 @@ final class AppState: ObservableObject {
         return try await supervisor.scriptProjectCode(folderName: folderName)
     }
 
+    func captureArtifactSalvagePreview(
+        javaScript: String
+    ) async throws -> BetterGICoreArtifactSalvagePreview {
+        guard let supervisor = betterGICoreSupervisor else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is unavailable.")
+        }
+        return try await supervisor.artifactSalvagePreview(javaScript: javaScript)
+    }
+
     func reloadPathingEntriesFromCore() {
         Task { [weak self] in
             await self?.loadPathingEntriesFromCore()

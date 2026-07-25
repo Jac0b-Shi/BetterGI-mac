@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct FeaturesPage: View {
@@ -1058,6 +1059,7 @@ private struct AutoArtifactSalvageSettingsEditor: View {
     @State private var javaScript: String
     @State private var artifactSetFilter: String
     @State private var showingScriptImport = false
+    @State private var showingRecognitionPreview = false
 
     init(settings: BetterGICoreAutoArtifactSalvageSettings) {
         self.settings = settings
@@ -1066,6 +1068,19 @@ private struct AutoArtifactSalvageSettingsEditor: View {
     }
 
     var body: some View {
+        BGISettingLine(
+            title: "测试识别效果",
+            subtitle: "请先将游戏界面切换至圣遗物分解界面"
+        ) {
+            Button {
+                showingRecognitionPreview = true
+            } label: {
+                Label("打开测试窗口", systemImage: "viewfinder")
+            }
+        }
+        .sheet(isPresented: $showingRecognitionPreview) {
+            ArtifactSalvageRecognitionSheet(javaScript: javaScript)
+        }
         BGISettingLine(title: "JavaScript", subtitle: "只要满足脚本条件的五星圣遗物都会被选中") {
             HStack(spacing: 8) {
                 Button {
@@ -1136,6 +1151,113 @@ private struct AutoArtifactSalvageSettingsEditor: View {
             }
             .labelsHidden().frame(width: 100)
         }
+    }
+}
+
+private struct ArtifactSalvageRecognitionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appState: AppState
+    let javaScript: String
+
+    @State private var preview: BetterGICoreArtifactSalvagePreview?
+    @State private var loading = false
+    @State private var errorMessage = ""
+    @State private var captureGeneration = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("圣遗物分解").font(.title2.bold())
+                Spacer()
+                if let preview {
+                    BGIStatusBadge(
+                        text: preview.isMatch ? "匹配" : "不匹配",
+                        tint: preview.isMatch ? BGIColors.success : BGIColors.muted)
+                }
+            }
+            Divider()
+            if loading {
+                ProgressView("正在截图并识别")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let preview {
+                HStack(alignment: .top, spacing: 14) {
+                    previewImage(preview)
+                        .frame(minWidth: 360, maxWidth: 520, maxHeight: .infinity)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            recognitionSection("识别文字", preview.recognizedText)
+                            recognitionSection("模型结构", preview.structuredResult)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            } else {
+                Text(errorMessage.isEmpty ? "等待识别" : errorMessage)
+                    .foregroundStyle(
+                        errorMessage.isEmpty
+                            ? BGIColors.secondaryText
+                            : BGIColors.danger)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            Divider()
+            HStack {
+                Spacer()
+                Button("关闭", role: .cancel) { dismiss() }
+                Button {
+                    captureGeneration += 1
+                } label: {
+                    Label("重新识别", systemImage: "arrow.clockwise")
+                }
+                .disabled(loading)
+            }
+        }
+        .padding(18)
+        .frame(minWidth: 900, minHeight: 600)
+        .task(id: captureGeneration) {
+            await capture()
+        }
+    }
+
+    @ViewBuilder
+    private func previewImage(
+        _ preview: BetterGICoreArtifactSalvagePreview
+    ) -> some View {
+        if let data = Data(base64Encoded: preview.imagePngBase64),
+           let image = NSImage(data: data) {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+        } else {
+            Text("识别截图无法解码")
+                .foregroundStyle(BGIColors.danger)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func recognitionSection(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.headline)
+            Text(value)
+                .font(.body.monospaced())
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(BGIColors.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+    }
+
+    private func capture() async {
+        loading = true
+        preview = nil
+        errorMessage = ""
+        do {
+            preview = try await appState.captureArtifactSalvagePreview(
+                javaScript: javaScript)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        loading = false
     }
 }
 

@@ -54,6 +54,7 @@ public sealed class CoreRpcServer(
     private HoldHotKeyCoordinator? _holdHotKeys;
     private OneShotHotKeyCoordinator? _oneShotHotKeys;
     private IGameScreenshotAction? _gameScreenshotAction;
+    private ArtifactSalvagePreviewService? _artifactSalvagePreview;
     private IPathRecorderAction? _pathRecorder;
     private int _platformAssetsInitialized;
     private readonly SemaphoreSlim _runtimeMutationLock = new(1, 1);
@@ -79,6 +80,10 @@ public sealed class CoreRpcServer(
     private NotificationSettingsCatalog NotificationSettings => _notificationSettings
         ?? throw new CapabilityUnavailableException(
             "Notification settings are unavailable until Core composition completes.");
+    private ArtifactSalvagePreviewService ArtifactSalvagePreview =>
+        _artifactSalvagePreview
+        ?? throw new CapabilityUnavailableException(
+            "Artifact salvage preview is unavailable until Core composition completes.");
 
     public void AttachScriptHostServices(MacScriptHostServices services)
     {
@@ -92,6 +97,15 @@ public sealed class CoreRpcServer(
         ArgumentNullException.ThrowIfNull(platform);
         if (Interlocked.CompareExchange(ref _scriptServicePlatform, platform, null) is not null)
             throw new InvalidOperationException("Script service platform has already been attached.");
+    }
+
+    public void AttachArtifactSalvagePreview(ArtifactSalvagePreviewService preview)
+    {
+        ArgumentNullException.ThrowIfNull(preview);
+        if (Interlocked.CompareExchange(
+                ref _artifactSalvagePreview, preview, null) is not null)
+            throw new InvalidOperationException(
+                "Artifact salvage preview has already been attached.");
     }
 
     public void AttachPlatformAssetInitializer(Action initializer)
@@ -473,6 +487,10 @@ public sealed class CoreRpcServer(
                     RequiredString(request.Params, "name"),
                     request.Params?["settings"] as JObject
                     ?? throw new ArgumentException("settings is required.")),
+                "solo.artifactSalvage.preview" =>
+                    await ArtifactSalvagePreview.CaptureAsync(
+                        RequiredString(request.Params, "javaScript"),
+                        _shutdown.Token),
                 "oneDragon.list" => _oneDragonCatalog.List(),
                 "oneDragon.get" => _oneDragonCatalog.Get(
                     RequiredString(request.Params, "name")),

@@ -9,6 +9,7 @@ using BetterGenshinImpact.GameTask.Shell;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoTrackPath;
 using BetterGenshinImpact.GameTask.AutoFight;
+using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
 using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.AutoMusicGame;
 using BetterGenshinImpact.GameTask.AutoWood;
@@ -322,6 +323,10 @@ GenshinRuntimePlatform.Configure(new MacGenshinRuntimePlatform(
     imageRegionOcrService, loggerFactory, autoSkipRuntimePlatform, "TemplateMatch"));
 TaskParameterPlatform.Configure(new MacTaskParameterPlatform(
     autoFishingRuntimePlatform.GameCultureInfoName));
+server.AttachArtifactSalvagePreview(new ArtifactSalvagePreviewService(
+    imageRegionOcrService,
+    () => gameTaskManagerPlatform.SystemInfo,
+    loggerFactory.CreateLogger<AutoArtifactSalvageTask>()));
 GoToCraftingBenchRuntimePlatform.Configure(
     new MacGoToCraftingBenchRuntimePlatform(layout, imageRegionOcrService));
 CraftMaterialRuntimePlatform.Configure(new MacCraftMaterialRuntimePlatform(

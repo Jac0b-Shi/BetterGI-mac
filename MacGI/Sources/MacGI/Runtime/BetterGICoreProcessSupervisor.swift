@@ -411,6 +411,13 @@ struct BetterGICoreAutoArtifactSalvageSettings: Sendable, Equatable {
     let recognitionFailurePolicyOptions: [BetterGICoreNamedOption]
 }
 
+struct BetterGICoreArtifactSalvagePreview: Sendable, Equatable {
+    let imagePngBase64: String
+    let recognizedText: String
+    let structuredResult: String
+    let isMatch: Bool
+}
+
 struct BetterGICoreAutoFightSettings: Sendable, Equatable {
     let strategyName: String
     let strategyOptions: [String]
@@ -2636,6 +2643,27 @@ actor BetterGICoreProcessSupervisor {
                 "recognitionFailurePolicy": settings.recognitionFailurePolicy,
             ]]
         ))
+    }
+
+    func artifactSalvagePreview(
+        javaScript: String
+    ) throws -> BetterGICoreArtifactSalvagePreview {
+        guard let result = try runningClient().request(
+            method: "solo.artifactSalvage.preview",
+            parameters: ["javaScript": javaScript]) as? [String: Any],
+              let imagePngBase64 = result["imagePngBase64"] as? String,
+              let recognizedText = result["recognizedText"] as? String,
+              let structuredResult = result["structuredResult"] as? String,
+              let isMatch = result["isMatch"] as? Bool
+        else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid artifact salvage preview.")
+        }
+        return .init(
+            imagePngBase64: imagePngBase64,
+            recognizedText: recognizedText,
+            structuredResult: structuredResult,
+            isMatch: isMatch)
     }
 
     private func requestSoloSettings(method: String, parameters: [String: Any]) throws -> Any {
