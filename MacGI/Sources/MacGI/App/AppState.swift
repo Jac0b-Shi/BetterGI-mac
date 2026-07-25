@@ -360,6 +360,8 @@ final class AppState: ObservableObject {
     private var autoStartRuntimePending: Bool
     private var autoStartSchedulerGroupNames: [String]
     private var autoContinueSchedulerProgressName: String?
+    private var scriptRepositoryAutoUpdateTask: Task<Void, Never>?
+    private var waitForScriptRepositoryAutoUpdate = false
     private var runtimeLaunchReady = false
     private var runtimeGeometryPixelSize: CGSize?
     private var pendingRuntimeGeometryPixelSize: CGSize?
@@ -371,6 +373,8 @@ final class AppState: ObservableObject {
     private var keyMousePlaybackPollTask: Task<Void, Never>?
     private var notificationSettingsSaveRevision = 0
     private var notificationSettingsSaveTask: Task<Void, Never>?
+    private var commonSettingsSaveRevision = 0
+    private var commonSettingsSaveTask: Task<Void, Never>?
     private var notificationChannelSaveRevisions: [String: Int] = [:]
     private var notificationChannelSaveTasks: [String: Task<Void, Never>] = [:]
     private var macroSettingsSaveRevision = 0
@@ -1856,6 +1860,7 @@ final class AppState: ObservableObject {
             addLog(.info, "BetterGI Core \(handshake.runtimeVersion) connected (\(handshake.architecture))")
             await loadTriggerStatesFromCore()
             await loadCommonSettingsFromCore()
+            startScriptRepositoryAutoUpdateIfNeeded()
             await loadSoloTasksFromCore()
             await loadSchedulerGroupsFromCore()
             await synchronizeSchedulerStatusFromCore()
@@ -1949,6 +1954,7 @@ final class AppState: ObservableObject {
                 self.appStatus = .running
                 self.refreshAuxiliaryControlMonitor()
                 self.addLog(.info, "BetterGI runtime started with a verified ScreenCaptureKit frame.")
+                await self.waitForCommandLineScriptRepositoryUpdateIfNeeded()
                 self.attemptAutoContinueSchedulerProgress()
                 self.attemptAutoStartSchedulerGroups()
             } catch {
@@ -2072,6 +2078,45 @@ final class AppState: ObservableObject {
         }
         addLog(.info, "\(source) accepted; starting BetterGI runtime when Core is ready.")
         startRuntime()
+    }
+
+    private func startScriptRepositoryAutoUpdateIfNeeded() {
+        guard scriptRepositoryAutoUpdateTask == nil,
+              let supervisor = betterGICoreSupervisor,
+              let settings = commonSettings,
+              settings.autoUpdateSubscribedScripts else { return }
+
+        let hasCommandLineTask = autoContinueSchedulerProgressName != nil ||
+            !autoStartSchedulerGroupNames.isEmpty
+        waitForScriptRepositoryAutoUpdate =
+            hasCommandLineTask && settings.autoUpdateBeforeCommandLineRun
+        let commandLineRun = waitForScriptRepositoryAutoUpdate
+        scriptRepositoryAutoUpdateTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let result = try await supervisor.autoUpdateSubscribedScripts(
+                    commandLineRun: commandLineRun)
+                await self.loadSchedulerGroupsFromCore()
+                if result.attemptedCount == 0 {
+                    self.addLog(.debug, "自动更新订阅脚本：没有需要更新的订阅。")
+                } else {
+                    self.addLog(
+                        result.failureCount == 0 ? .info : .warn,
+                        "自动更新订阅脚本完成：成功 \(result.successCount) 项，失败 \(result.failureCount) 项。")
+                }
+            } catch {
+                self.addLog(.warn,
+                    "自动更新订阅脚本失败，将继续使用本地脚本：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func waitForCommandLineScriptRepositoryUpdateIfNeeded() async {
+        guard waitForScriptRepositoryAutoUpdate,
+              let task = scriptRepositoryAutoUpdateTask else { return }
+        addLog(.info, "命令行任务正在等待订阅脚本更新完成。")
+        await task.value
+        waitForScriptRepositoryAutoUpdate = false
     }
 
     private func attemptAutoContinueSchedulerProgress() {
@@ -3814,7 +3859,11 @@ final class AppState: ObservableObject {
         miyousheDailyEliteCap: Int? = nil,
         miyousheDailyMobCap: Int? = nil,
         miyousheCookie: String? = nil,
-        miyousheLogSyncCookie: Bool? = nil
+        miyousheLogSyncCookie: Bool? = nil,
+        autoUpdateSubscribedScripts: Bool? = nil,
+        autoUpdateBeforeCommandLineRun: Bool? = nil,
+        scriptRepositoryChannel: String? = nil,
+        scriptRepositoryCustomURL: String? = nil
     ) {
         guard let supervisor = betterGICoreSupervisor,
               let current = commonSettings else { return }
@@ -3853,16 +3902,41 @@ final class AppState: ObservableObject {
                 miyousheDailyMobCap ?? current.miyousheDailyMobCap,
             miyousheCookie: miyousheCookie ?? current.miyousheCookie,
             miyousheLogSyncCookie:
-                miyousheLogSyncCookie ?? current.miyousheLogSyncCookie)
-        Task { [weak self] in
+                miyousheLogSyncCookie ?? current.miyousheLogSyncCookie,
+            autoUpdateSubscribedScripts:
+                autoUpdateSubscribedScripts ??
+                current.autoUpdateSubscribedScripts,
+            autoUpdateBeforeCommandLineRun:
+                autoUpdateBeforeCommandLineRun ??
+                current.autoUpdateBeforeCommandLineRun,
+            scriptRepositoryChannel:
+                scriptRepositoryChannel ?? current.scriptRepositoryChannel,
+            scriptRepositoryChannelOptions:
+                current.scriptRepositoryChannelOptions,
+            scriptRepositoryChannelURLs:
+                current.scriptRepositoryChannelURLs,
+            scriptRepositoryCustomURL:
+                scriptRepositoryCustomURL ??
+                current.scriptRepositoryCustomURL)
+        commonSettingsSaveRevision += 1
+        let revision = commonSettingsSaveRevision
+        let precedingSave = commonSettingsSaveTask
+        commonSettings = next
+        overlayUidCoverEnabled = next.screenshotUidCoverEnabled
+        commonSettingsSaveTask = Task { [weak self] in
+            await precedingSave?.value
+            guard let self else { return }
             do {
                 let saved = try await supervisor.saveCommonSettings(next)
-                self?.commonSettings = saved
-                self?.overlayUidCoverEnabled = saved.screenshotUidCoverEnabled
-                self?.autoFishingSettings = try await supervisor.autoFishingSettings()
+                guard revision == self.commonSettingsSaveRevision else { return }
+                self.commonSettings = saved
+                self.overlayUidCoverEnabled = saved.screenshotUidCoverEnabled
+                self.autoFishingSettings = try await supervisor.autoFishingSettings()
             } catch {
-                self?.addLog(.error,
+                guard revision == self.commonSettingsSaveRevision else { return }
+                self.addLog(.error,
                     "BetterGI Core common settings save failed: \(error.localizedDescription)")
+                await self.loadCommonSettingsFromCore()
             }
         }
     }

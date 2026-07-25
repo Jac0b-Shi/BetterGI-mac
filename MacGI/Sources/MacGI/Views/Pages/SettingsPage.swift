@@ -99,6 +99,33 @@ struct SettingsPage: View {
 
             if let settings = appState.commonSettings {
                 BGISettingGroup(
+                    icon: "arrow.triangle.2.circlepath",
+                    title: "启动时自动更新已订阅的脚本",
+                    subtitle: "启动时自动同步脚本仓库并更新所有已订阅的脚本。"
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { settings.autoUpdateSubscribedScripts },
+                        set: {
+                            appState.saveCommonSettings(
+                                autoUpdateSubscribedScripts: $0)
+                        }))
+                        .labelsHidden()
+                } content: {
+                    BGISettingLine(
+                        title: "命令行启动时也自动更新",
+                        subtitle: "通过命令行参数启动配置组或任务进度时，先等待脚本更新完成再执行。"
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { settings.autoUpdateBeforeCommandLineRun },
+                            set: {
+                                appState.saveCommonSettings(
+                                    autoUpdateBeforeCommandLineRun: $0)
+                            }))
+                            .labelsHidden()
+                    }
+                }
+
+                BGISettingGroup(
                     icon: "clock.arrow.circlepath",
                     title: "无人值守",
                     subtitle: "调度器连续运行、服务器时间与任务恢复策略。"

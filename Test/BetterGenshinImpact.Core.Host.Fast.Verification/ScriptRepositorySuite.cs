@@ -90,6 +90,24 @@ public sealed class ScriptRepositorySuite : IVerificationSuite
                 cancellationToken);
 
             var catalog = new ScriptRepositoryCatalog(layout);
+            await File.WriteAllTextAsync(
+                Path.Combine(layout.UserPath, "config.json"),
+                """
+                {
+                  "scriptConfig": {
+                    "autoUpdateSubscribedScripts": false,
+                    "autoUpdateBeforeCommandLineRun": false,
+                    "selectedChannelName": "CNB",
+                    "customRepoUrl": ""
+                  }
+                }
+                """,
+                cancellationToken);
+            var automatic = await catalog.AutoUpdateSubscribedAsync(
+                commandLineRun: false, cancellationToken);
+            context.Require(
+                automatic.AttemptedCount == 0,
+                "Disabled subscription auto-update attempted repository work.");
             context.Require(
                 catalog.GetRepoJson().Contains("\"Fixture\"", StringComparison.Ordinal),
                 "Repository Web bridge did not return the upstream index.");
@@ -131,6 +149,24 @@ public sealed class ScriptRepositorySuite : IVerificationSuite
                 subscriptionPath,
                 """["js/Fixture","js/Ghost","pathing"]""",
                 cancellationToken);
+            await File.WriteAllTextAsync(
+                Path.Combine(layout.UserPath, "config.json"),
+                """
+                {
+                  "scriptConfig": {
+                    "autoUpdateSubscribedScripts": true,
+                    "autoUpdateBeforeCommandLineRun": false,
+                    "selectedChannelName": "GitHub",
+                    "customRepoUrl": ""
+                  }
+                }
+                """,
+                cancellationToken);
+            automatic = await catalog.AutoUpdateSubscribedAsync(
+                commandLineRun: true, cancellationToken);
+            context.Require(
+                automatic.AttemptedCount == 0,
+                "Command-line subscription update ignored its dedicated wait gate.");
             var batch = await catalog.UpdateSubscribedAsync(cancellationToken);
             context.Require(
                 batch.AttemptedCount == 2 &&

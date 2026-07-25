@@ -29,6 +29,13 @@ public sealed class ScriptRepositoryCatalog(RuntimeLayout layout)
             ["combat"] = "AutoFight",
             ["tcg"] = "AutoGeniusInvokation"
         };
+    public static readonly IReadOnlyDictionary<string, string> RepositoryChannels =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["CNB"] = "https://cnb.cool/bettergi/bettergi-scripts-list",
+            ["GitCode"] = "https://gitcode.com/huiyadanli/bettergi-scripts-list",
+            ["GitHub"] = "https://github.com/babalae/bettergi-scripts-list",
+        };
 
     private static readonly Regex PackageReferenceRegex = new(
         """(?:import\s+(?:[\w\s{},*]*?from\s+)?|export\s+(?:[\w\s{},*]*?from\s+)?|require\s*\(\s*)['"]([^'"\n]+)['"]""",
@@ -224,6 +231,27 @@ public sealed class ScriptRepositoryCatalog(RuntimeLayout layout)
         return await UpdateSubscribedAsync(cancellationToken);
     }
 
+    public async Task<ScriptRepositoryBatchUpdateResult> AutoUpdateSubscribedAsync(
+        bool commandLineRun,
+        CancellationToken cancellationToken)
+    {
+        var preferences = ReadAutoUpdatePreferences();
+        if (!preferences.AutoUpdateSubscribedScripts ||
+            commandLineRun && !preferences.AutoUpdateBeforeCommandLineRun)
+            return EmptyBatchResult();
+
+        var subscriptions = ReadSubscriptions();
+        if (subscriptions.Count == 0)
+            return EmptyBatchResult();
+
+        var repositoryUrl = ResolveRepositoryUrl(preferences);
+        if (repositoryUrl is null)
+            return EmptyBatchResult();
+
+        return await UpdateRepositoryAndSubscribedAsync(
+            preferences.Channel, repositoryUrl, cancellationToken);
+    }
+
     public bool ResetUpdateFlag(string path)
     {
         var normalizedPath = NormalizePath(path);
@@ -312,6 +340,52 @@ public sealed class ScriptRepositoryCatalog(RuntimeLayout layout)
             : ReadSubscriptions();
         return new ScriptRepositoryInstallResult(normalizedPath, destination, subscriptions);
     }
+
+    private AutoUpdatePreferences ReadAutoUpdatePreferences()
+    {
+        var configPath = Path.Combine(layout.UserPath, "config.json");
+        if (!File.Exists(configPath))
+            return new(false, false, "CNB", "");
+
+        var root = JObject.Parse(File.ReadAllText(configPath, Encoding.UTF8));
+        var script = root["scriptConfig"] as JObject;
+        var channel = script?.Value<string>("selectedChannelName");
+        if (string.IsNullOrWhiteSpace(channel) ||
+            channel != "自定义" && !RepositoryChannels.ContainsKey(channel))
+            channel = "CNB";
+        return new AutoUpdatePreferences(
+            script?.Value<bool?>("autoUpdateSubscribedScripts") ?? false,
+            script?.Value<bool?>("autoUpdateBeforeCommandLineRun") ?? false,
+            channel,
+            script?.Value<string>("customRepoUrl") ?? "");
+    }
+
+    private static string? ResolveRepositoryUrl(AutoUpdatePreferences preferences)
+    {
+        if (preferences.Channel == "自定义")
+        {
+            var value = preferences.CustomUrl.Trim();
+            if (value.Length == 0 ||
+                value == "https://example.com/custom-repo" ||
+                !Uri.TryCreate(value, UriKind.Absolute, out var customUri) ||
+                customUri.Scheme is not ("https" or "http"))
+                return null;
+            return customUri.AbsoluteUri;
+        }
+
+        return RepositoryChannels.TryGetValue(preferences.Channel, out var url)
+            ? url
+            : RepositoryChannels["CNB"];
+    }
+
+    private ScriptRepositoryBatchUpdateResult EmptyBatchResult() =>
+        new(0, 0, 0, [], ReadSubscriptions());
+
+    private sealed record AutoUpdatePreferences(
+        bool AutoUpdateSubscribedScripts,
+        bool AutoUpdateBeforeCommandLineRun,
+        string Channel,
+        string CustomUrl);
 
     private JObject ReadIndex()
     {

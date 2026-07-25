@@ -318,6 +318,12 @@ struct BetterGICoreCommonSettings: Sendable, Equatable {
     let miyousheDailyMobCap: Int
     let miyousheCookie: String
     let miyousheLogSyncCookie: Bool
+    let autoUpdateSubscribedScripts: Bool
+    let autoUpdateBeforeCommandLineRun: Bool
+    let scriptRepositoryChannel: String
+    let scriptRepositoryChannelOptions: [String]
+    let scriptRepositoryChannelURLs: [String: String]
+    let scriptRepositoryCustomURL: String
 }
 
 struct BetterGICoreAutoWoodSettings: Sendable, Equatable {
@@ -868,6 +874,14 @@ actor BetterGICoreProcessSupervisor {
                     "miyousheDailyMobCap": settings.miyousheDailyMobCap,
                     "miyousheCookie": settings.miyousheCookie,
                     "miyousheLogSyncCookie": settings.miyousheLogSyncCookie,
+                    "autoUpdateSubscribedScripts":
+                        settings.autoUpdateSubscribedScripts,
+                    "autoUpdateBeforeCommandLineRun":
+                        settings.autoUpdateBeforeCommandLineRun,
+                    "scriptRepositoryChannel":
+                        settings.scriptRepositoryChannel,
+                    "scriptRepositoryCustomUrl":
+                        settings.scriptRepositoryCustomURL,
                 ],
             ]))
     }
@@ -1228,7 +1242,19 @@ actor BetterGICoreProcessSupervisor {
               let miyousheDailyMobCap = result["miyousheDailyMobCap"] as? Int,
               let miyousheCookie = result["miyousheCookie"] as? String,
               let miyousheLogSyncCookie =
-                result["miyousheLogSyncCookie"] as? Bool
+                result["miyousheLogSyncCookie"] as? Bool,
+              let autoUpdateSubscribedScripts =
+                result["autoUpdateSubscribedScripts"] as? Bool,
+              let autoUpdateBeforeCommandLineRun =
+                result["autoUpdateBeforeCommandLineRun"] as? Bool,
+              let scriptRepositoryChannel =
+                result["scriptRepositoryChannel"] as? String,
+              let scriptRepositoryChannelOptions =
+                result["scriptRepositoryChannelOptions"] as? [String],
+              let scriptRepositoryChannelURLs =
+                result["scriptRepositoryChannelUrls"] as? [String: String],
+              let scriptRepositoryCustomURL =
+                result["scriptRepositoryCustomUrl"] as? String
         else {
             throw BetterGICoreRPCError.protocolViolation("Invalid common settings.")
         }
@@ -1251,7 +1277,13 @@ actor BetterGICoreProcessSupervisor {
             miyousheDailyEliteCap: miyousheDailyEliteCap,
             miyousheDailyMobCap: miyousheDailyMobCap,
             miyousheCookie: miyousheCookie,
-            miyousheLogSyncCookie: miyousheLogSyncCookie)
+            miyousheLogSyncCookie: miyousheLogSyncCookie,
+            autoUpdateSubscribedScripts: autoUpdateSubscribedScripts,
+            autoUpdateBeforeCommandLineRun: autoUpdateBeforeCommandLineRun,
+            scriptRepositoryChannel: scriptRepositoryChannel,
+            scriptRepositoryChannelOptions: scriptRepositoryChannelOptions,
+            scriptRepositoryChannelURLs: scriptRepositoryChannelURLs,
+            scriptRepositoryCustomURL: scriptRepositoryCustomURL)
     }
 
     private func parseHotKeyBindings(_ value: Any) throws
@@ -1764,6 +1796,13 @@ actor BetterGICoreProcessSupervisor {
         url: String
     ) throws -> BetterGIScriptRepositoryBatchUpdateResult {
         try runningClient().updateSubscribedScripts(channel: channel, url: url)
+    }
+
+    func autoUpdateSubscribedScripts(
+        commandLineRun: Bool
+    ) throws -> BetterGIScriptRepositoryBatchUpdateResult {
+        try runningClient().autoUpdateSubscribedScripts(
+            commandLineRun: commandLineRun)
     }
 
     func resetScriptRepository() throws {

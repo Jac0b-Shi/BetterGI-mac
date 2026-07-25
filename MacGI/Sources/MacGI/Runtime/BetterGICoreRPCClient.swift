@@ -892,10 +892,25 @@ final class BetterGICoreRPCClient: @unchecked Sendable {
         channel: String,
         url: String
     ) throws -> BetterGIScriptRepositoryBatchUpdateResult {
-        guard let item = try request(
+        try parseScriptRepositoryBatchUpdateResult(request(
             method: "repository.updateSubscribed",
             parameters: ["channel": channel, "url": url]
-        ) as? [String: Any],
+        ))
+    }
+
+    func autoUpdateSubscribedScripts(
+        commandLineRun: Bool
+    ) throws -> BetterGIScriptRepositoryBatchUpdateResult {
+        try parseScriptRepositoryBatchUpdateResult(request(
+            method: "repository.autoUpdateSubscribed",
+            parameters: ["commandLineRun": commandLineRun]
+        ))
+    }
+
+    private func parseScriptRepositoryBatchUpdateResult(
+        _ value: Any
+    ) throws -> BetterGIScriptRepositoryBatchUpdateResult {
+        guard let item = value as? [String: Any],
               let attemptedCount = item["attemptedCount"] as? Int,
               let successCount = item["successCount"] as? Int,
               let failureCount = item["failureCount"] as? Int,

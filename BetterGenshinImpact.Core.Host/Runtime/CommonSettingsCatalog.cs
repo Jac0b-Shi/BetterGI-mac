@@ -10,6 +10,8 @@ public sealed class CommonSettingsCatalog(RuntimeLayout layout)
     private static readonly string[] AdventurersGuildCountries =
         ["无", "枫丹", "稻妻", "璃月", "蒙德"];
     private static readonly int[] ServerTimeZoneOffsets = [8, 1, -5];
+    private static readonly string[] ScriptRepositoryChannels =
+        [.. ScriptRepositoryCatalog.RepositoryChannels.Keys, "自定义"];
     private readonly object _lock = new();
     private Action<OtherConfig>? _otherConfigUpdated;
 
@@ -79,6 +81,18 @@ public sealed class CommonSettingsCatalog(RuntimeLayout layout)
             miyoushe["logSyncCookie"] = RequiredBool(settings, "miyousheLogSyncCookie");
             other["miyousheConfig"] = miyoushe;
             root["otherConfig"] = other;
+
+            var script = root["scriptConfig"] as JsonObject ?? [];
+            script["autoUpdateSubscribedScripts"] =
+                RequiredBool(settings, "autoUpdateSubscribedScripts");
+            script["autoUpdateBeforeCommandLineRun"] =
+                RequiredBool(settings, "autoUpdateBeforeCommandLineRun");
+            script["selectedChannelName"] = RequiredOption(
+                settings, "scriptRepositoryChannel", ScriptRepositoryChannels);
+            script["customRepoUrl"] =
+                RequiredString(settings, "scriptRepositoryCustomUrl");
+            root["scriptConfig"] = script;
+
             SaveRoot(root);
             var savedOtherConfig = LoadOtherConfig(root);
             _otherConfigUpdated?.Invoke(savedOtherConfig);
@@ -92,6 +106,11 @@ public sealed class CommonSettingsCatalog(RuntimeLayout layout)
     private static object Describe(JsonObject root)
     {
         var other = LoadOtherConfig(root);
+        var script = root["scriptConfig"];
+        var scriptRepositoryChannel =
+            script?["selectedChannelName"]?.GetValue<string>() ?? "CNB";
+        if (!ScriptRepositoryChannels.Contains(scriptRepositoryChannel))
+            scriptRepositoryChannel = "CNB";
         return new
         {
             screenshotEnabled = ScreenshotEnabled(root),
@@ -116,6 +135,16 @@ public sealed class CommonSettingsCatalog(RuntimeLayout layout)
                 other.FarmingPlanConfig.MiyousheDataConfig.DailyMobCap,
             miyousheCookie = other.MiyousheConfig.Cookie,
             miyousheLogSyncCookie = other.MiyousheConfig.LogSyncCookie,
+            autoUpdateSubscribedScripts =
+                script?["autoUpdateSubscribedScripts"]?.GetValue<bool>() ?? false,
+            autoUpdateBeforeCommandLineRun =
+                script?["autoUpdateBeforeCommandLineRun"]?.GetValue<bool>() ?? false,
+            scriptRepositoryChannel,
+            scriptRepositoryChannelOptions = ScriptRepositoryChannels,
+            scriptRepositoryChannelUrls =
+                ScriptRepositoryCatalog.RepositoryChannels,
+            scriptRepositoryCustomUrl =
+                script?["customRepoUrl"]?.GetValue<string>() ?? "",
         };
     }
 

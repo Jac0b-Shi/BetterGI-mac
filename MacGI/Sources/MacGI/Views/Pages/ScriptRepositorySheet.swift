@@ -2,34 +2,12 @@ import AppKit
 import SwiftUI
 import WebKit
 
-private struct ScriptRepositoryChannel: Identifiable, Equatable {
-    let name: String
-    let url: String
-
-    var id: String { name }
-
-    static let channels = [
-        ScriptRepositoryChannel(
-            name: "CNB",
-            url: "https://cnb.cool/bettergi/bettergi-scripts-list"
-        ),
-        ScriptRepositoryChannel(
-            name: "GitCode",
-            url: "https://gitcode.com/huiyadanli/bettergi-scripts-list"
-        ),
-        ScriptRepositoryChannel(
-            name: "GitHub",
-            url: "https://github.com/babalae/bettergi-scripts-list"
-        ),
-        ScriptRepositoryChannel(name: "自定义", url: "")
-    ]
-}
-
 struct ScriptRepositorySheet: View {
     @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("scriptRepository.channel") private var selectedChannelName = "CNB"
-    @AppStorage("scriptRepository.customURL") private var customURL = ""
+    @State private var selectedChannelName = "CNB"
+    @State private var customURL = ""
+    @State private var repositoryPreferencesLoaded = false
 
     @State private var repositoryState: BetterGIScriptRepositoryState?
     @State private var statusText = "正在读取本地仓库状态..."
@@ -38,13 +16,16 @@ struct ScriptRepositorySheet: View {
     @State private var confirmingReset = false
     @State private var showingBrowser = false
 
-    private var selectedChannel: ScriptRepositoryChannel {
-        ScriptRepositoryChannel.channels.first { $0.name == selectedChannelName }
-            ?? ScriptRepositoryChannel.channels[0]
+    private var channelOptions: [String] {
+        appState.commonSettings?.scriptRepositoryChannelOptions ?? ["CNB"]
     }
 
     private var repositoryURL: String {
-        selectedChannel.name == "自定义" ? customURL : selectedChannel.url
+        if selectedChannelName == "自定义" {
+            return customURL
+        }
+        return appState.commonSettings?
+            .scriptRepositoryChannelURLs[selectedChannelName] ?? ""
     }
 
     var body: some View {
@@ -63,8 +44,8 @@ struct ScriptRepositorySheet: View {
             BGISectionCard("Git 一键更新", subtitle: statusText, symbolName: "arrow.triangle.branch") {
                 VStack(alignment: .leading, spacing: 14) {
                     Picker("更新渠道", selection: $selectedChannelName) {
-                        ForEach(ScriptRepositoryChannel.channels) { channel in
-                            Text(channel.name).tag(channel.name)
+                        ForEach(channelOptions, id: \.self) { channel in
+                            Text(channel).tag(channel)
                         }
                     }
                     .pickerStyle(.menu)
@@ -72,7 +53,7 @@ struct ScriptRepositorySheet: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text("仓库地址")
                             .frame(width: 76, alignment: .leading)
-                        if selectedChannel.name == "自定义" {
+                        if selectedChannelName == "自定义" {
                             TextField("https://...", text: $customURL)
                                 .textFieldStyle(.roundedBorder)
                         } else {
@@ -161,7 +142,18 @@ struct ScriptRepositorySheet: View {
         }
         .padding(20)
         .frame(minWidth: 560, idealWidth: 620, minHeight: 470)
-        .task { await refreshState() }
+        .task {
+            loadRepositoryPreferences()
+            await refreshState()
+        }
+        .onChange(of: selectedChannelName) { _, value in
+            guard repositoryPreferencesLoaded else { return }
+            appState.saveCommonSettings(scriptRepositoryChannel: value)
+        }
+        .onChange(of: customURL) { _, value in
+            guard repositoryPreferencesLoaded else { return }
+            appState.saveCommonSettings(scriptRepositoryCustomURL: value)
+        }
         .confirmationDialog("确定要重置脚本仓库吗？", isPresented: $confirmingReset) {
             Button("重置仓库", role: .destructive) {
                 resetRepository()
@@ -184,6 +176,14 @@ struct ScriptRepositorySheet: View {
         repositoryState?.available == true && repositoryState?.webIndexPath != nil
     }
 
+    private func loadRepositoryPreferences() {
+        if let settings = appState.commonSettings {
+            selectedChannelName = settings.scriptRepositoryChannel
+            customURL = settings.scriptRepositoryCustomURL
+        }
+        repositoryPreferencesLoaded = true
+    }
+
     private var repositorySummary: String {
         guard let state = repositoryState else { return "正在读取仓库状态..." }
         if !state.available { return "尚未更新本地脚本仓库。" }
@@ -194,11 +194,11 @@ struct ScriptRepositorySheet: View {
     private func updateRepository() {
         isUpdating = true
         error = nil
-        statusText = "正在从 \(selectedChannel.name) 更新脚本仓库..."
+        statusText = "正在从 \(selectedChannelName) 更新脚本仓库..."
         Task {
             do {
                 let result = try await appState.updateScriptRepository(
-                    channel: selectedChannel.name,
+                    channel: selectedChannelName,
                     url: repositoryURL.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
                 statusText = result.status == "alreadyUpToDate"
@@ -237,7 +237,7 @@ struct ScriptRepositorySheet: View {
         Task {
             do {
                 let result = try await appState.updateSubscribedScripts(
-                    channel: selectedChannel.name,
+                    channel: selectedChannelName,
                     url: repositoryURL.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
                 if result.failureCount == 0 {

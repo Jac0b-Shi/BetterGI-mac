@@ -36,6 +36,13 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                     "screenshotUidCoverEnabled": true,
                     "rewardRecognitionScreenshotEnabled": true
                   },
+                  "scriptConfig": {
+                    "preserved": { "value": 91 },
+                    "autoUpdateSubscribedScripts": false,
+                    "autoUpdateBeforeCommandLineRun": false,
+                    "selectedChannelName": "CNB",
+                    "customRepoUrl": ""
+                  },
                   "otherConfig": {
                     "preserved": { "value": 73 },
                     "autoFetchDispatchAdventurersGuildCountry": "无",
@@ -121,6 +128,10 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 miyousheDailyMobCap = 2020,
                 miyousheCookie = "test-cookie",
                 miyousheLogSyncCookie = false,
+                autoUpdateSubscribedScripts = true,
+                autoUpdateBeforeCommandLineRun = true,
+                scriptRepositoryChannel = "GitHub",
+                scriptRepositoryCustomUrl = "",
             }));
             fishingSettings = JObject.FromObject(catalog.Get("AutoFishing"));
             var commonSettings = JObject.FromObject(commonSettingsCatalog.Get());
@@ -138,12 +149,24 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 commonSettings.Value<bool>("farmingPlanEnabled") &&
                 commonSettings.Value<bool>("miyousheDataEnabled") &&
                 commonSettings.Value<string>("miyousheCookie") == "test-cookie" &&
+                commonSettings.Value<bool>("autoUpdateSubscribedScripts") &&
+                commonSettings.Value<bool>("autoUpdateBeforeCommandLineRun") &&
+                commonSettings.Value<string>("scriptRepositoryChannel") == "GitHub" &&
+                ((JArray)commonSettings["scriptRepositoryChannelOptions"]!)
+                    .Values<string>().SequenceEqual(["CNB", "GitCode", "GitHub", "自定义"]) &&
+                commonSettings.SelectToken(
+                    "scriptRepositoryChannelUrls.GitHub")?.Value<string>() ==
+                    "https://github.com/babalae/bettergi-scripts-list" &&
                 updatedOtherConfig?.AutoFetchDispatchAdventurersGuildCountry == "璃月" &&
                 updatedOtherConfig?.ServerTimeZoneOffset == TimeSpan.FromHours(1) &&
                 commonPersisted.SelectToken(
                     "commonConfig.rewardRecognitionScreenshotEnabled")?.Value<bool>() == true &&
                 commonPersisted.SelectToken(
-                    "otherConfig.preserved.value")?.Value<int>() == 73,
+                    "otherConfig.preserved.value")?.Value<int>() == 73 &&
+                commonPersisted.SelectToken(
+                    "scriptConfig.preserved.value")?.Value<int>() == 91 &&
+                commonPersisted.SelectToken(
+                    "scriptConfig.autoUpdateBeforeCommandLineRun")?.Value<bool>() == true,
                 "Common settings did not preserve unknown values, persist unattended settings or publish the live update.");
             var tcgFolder = Path.Combine(layout.UserPath, "AutoGeniusInvokation");
             Directory.CreateDirectory(tcgFolder);
