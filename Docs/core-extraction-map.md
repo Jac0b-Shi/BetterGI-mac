@@ -99,8 +99,9 @@ The big-map HUD also consumes the upstream per-data-source hidden-point storage:
 Core owns hide-all/show-all persistence and republishes the resulting point
 state, while Swift only displays the visible/total count and sends explicit
 commands. Per-point right-click visibility uses a marker-bounded transparent
-AppKit panel so non-marker map input continues to reach the game. The upstream
-point-detail popup remains uncomposed.
+AppKit panel so non-marker map input continues to reach the game. Left-click
+details reuse the shared map service for text, images and guide links; the
+popup remains anchored to the Core-owned viewport as the map moves.
 
 The CI gate intentionally does not replace the last row with a synthetic fixture: hosted runners do not contain the user's `User` tree or a running game. A real window, Core startup, provisioning, capture and catalog discovery are now recorded, but the overall first-step status remains **partial** until the three remaining game-dependent projects complete through explicitly authorized real input.
 

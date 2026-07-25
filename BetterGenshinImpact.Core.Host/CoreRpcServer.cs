@@ -354,6 +354,14 @@ public sealed class CoreRpcServer(
                         RequiredString(request.Params, "pointId"),
                         RequiredBoolean(request.Params, "hidden")));
             }
+            if (request.Method == "mapMask.point.info")
+            {
+                return RpcResponse.Success(
+                    request.Id,
+                    await MapMaskRuntimePlatform.GetPointInfoAsync(
+                        RequiredString(request.Params, "pointId"),
+                        _shutdown.Token));
+            }
             if (request.Method == "keyMouse.stop")
                 return RpcResponse.Success(request.Id, await KeyMouseScripts.StopAsync());
             if (request.Method == "macro.keyEdge")

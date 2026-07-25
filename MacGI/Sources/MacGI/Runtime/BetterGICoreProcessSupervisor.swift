@@ -249,6 +249,20 @@ struct BetterGICoreMapMaskLabel: Sendable, Equatable, Identifiable {
     let children: [BetterGICoreMapMaskLabel]
 }
 
+struct BetterGICoreMapMaskPointLink: Sendable, Equatable, Identifiable {
+    let text: String
+    let url: String
+    var id: String { "\(text)\u{0}\(url)" }
+}
+
+struct BetterGICoreMapMaskPointDetail: Sendable, Equatable {
+    let pointID: String
+    let title: String
+    let text: String
+    let imageURL: String
+    let links: [BetterGICoreMapMaskPointLink]
+}
+
 struct BetterGICoreSoloTask: Sendable, Equatable, Identifiable {
     let name: String
     let displayName: String
@@ -2361,6 +2375,37 @@ actor BetterGICoreProcessSupervisor {
             throw BetterGICoreRPCError.protocolViolation(
                 "Invalid MapMask point visibility result.")
         }
+    }
+
+    func mapMaskPointInfo(_ pointID: String) throws
+        -> BetterGICoreMapMaskPointDetail {
+        guard case .running = state, let client,
+              let value = try client.request(
+                method: "mapMask.point.info",
+                parameters: ["pointId": pointID]) as? [String: Any],
+              let returnedPointID = value["pointId"] as? String,
+              returnedPointID == pointID,
+              let title = value["title"] as? String,
+              let text = value["text"] as? String,
+              let imageURL = value["imageUrl"] as? String,
+              let rawLinks = value["links"] as? [[String: Any]] else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid MapMask point detail result.")
+        }
+        let links = try rawLinks.map { item in
+            guard let text = item["text"] as? String,
+                  let url = item["url"] as? String else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid MapMask point link.")
+            }
+            return BetterGICoreMapMaskPointLink(text: text, url: url)
+        }
+        return .init(
+            pointID: returnedPointID,
+            title: title,
+            text: text,
+            imageURL: imageURL,
+            links: links)
     }
 
     private func requestTriggerSettings(

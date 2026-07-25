@@ -85,7 +85,6 @@ final class MapMaskPointInteractionPanelController {
 
     func synchronize(with window: WindowInfo?) {
         guard appState.isHUDPresented,
-              appState.isMapMaskPickerOpen,
               appState.coreOverlayStore.state.isInBigMapUI,
               let window, window.isOnScreen, !window.isSynthetic else {
             hide()
@@ -99,11 +98,24 @@ final class MapMaskPointInteractionPanelController {
         let gameFrame = HUDPanelController.appKitFrame(
             forQuartzFrame: window.captureRect, referenceMaxY: referenceMaxY)
         panel.setFrame(gameFrame, display: true)
-        panel.ignoresMouseEvents = !Self.isMouseOverMapPoint(
-            NSEvent.mouseLocation,
+        let screenPoint = NSEvent.mouseLocation
+        let localPoint = CGPoint(
+            x: screenPoint.x - gameFrame.minX,
+            y: gameFrame.maxY - screenPoint.y)
+        let isOverPoint = Self.isMouseOverMapPoint(
+            screenPoint,
             gameFrame: gameFrame,
             points: appState.coreOverlayStore.state.mapPoints,
             viewport: appState.coreOverlayStore.state.bigMapViewport)
+        let popupFrame = appState.selectedMapMaskPointID.flatMap { pointID in
+            MapMaskPointInteractionGeometry.popupFrame(
+                pointID: pointID,
+                points: appState.coreOverlayStore.state.mapPoints,
+                viewport: appState.coreOverlayStore.state.bigMapViewport,
+                size: gameFrame.size)
+        }
+        panel.ignoresMouseEvents =
+            !isOverPoint && !(popupFrame?.contains(localPoint) ?? false)
         if !panel.isVisible {
             panel.orderFrontRegardless()
         }

@@ -368,6 +368,7 @@ final class AppState: ObservableObject {
     private var runtimeGeometryRefreshTask: Task<Void, Never>?
     private var runtimeTargetProcessID: pid_t?
     private var mapMaskSelectionSaveTask: Task<Void, Never>?
+    private var mapMaskPointDetailRequestRevision = 0
     private let keyMouseEventRecorder = MacKeyMouseEventRecorder()
     private var keyMouseRecordingStartTask: Task<Void, Never>?
     private var keyMousePlaybackPollTask: Task<Void, Never>?
@@ -476,6 +477,10 @@ final class AppState: ObservableObject {
     @Published private(set) var mapMaskCatalogLoading = false
     @Published private(set) var mapMaskCatalogLoaded = false
     @Published private(set) var isMapMaskPickerOpen = false
+    @Published private(set) var selectedMapMaskPointID: String?
+    @Published private(set) var mapMaskPointDetail: BetterGICoreMapMaskPointDetail?
+    @Published private(set) var mapMaskPointDetailLoading = false
+    @Published private(set) var mapMaskPointDetailError: String?
     @Published var recentLogs: [LogEntry] = []
 
     var onHUDPresentationChanged: ((Bool) -> Void)?
@@ -1815,6 +1820,7 @@ final class AppState: ObservableObject {
         }
         if !coreOverlayStore.state.isInBigMapUI {
             isMapMaskPickerOpen = false
+            closeMapMaskPointDetail()
         }
     }
 
@@ -3732,11 +3738,66 @@ final class AppState: ObservableObject {
         }
     }
 
+    func showMapMaskPointDetail(_ pointID: String) {
+        guard let supervisor = betterGICoreSupervisor else { return }
+        mapMaskPointDetailRequestRevision += 1
+        let revision = mapMaskPointDetailRequestRevision
+        selectedMapMaskPointID = pointID
+        mapMaskPointDetail = nil
+        mapMaskPointDetailLoading = true
+        mapMaskPointDetailError = nil
+        Task { [weak self] in
+            do {
+                let detail = try await supervisor.mapMaskPointInfo(pointID)
+                guard let self,
+                      revision == self.mapMaskPointDetailRequestRevision,
+                      self.selectedMapMaskPointID == pointID else {
+                    return
+                }
+                self.mapMaskPointDetail = detail
+                self.mapMaskPointDetailLoading = false
+            } catch {
+                guard let self,
+                      revision == self.mapMaskPointDetailRequestRevision,
+                      self.selectedMapMaskPointID == pointID else {
+                    return
+                }
+                self.mapMaskPointDetailLoading = false
+                self.mapMaskPointDetailError = "查询失败"
+                self.addLog(
+                    .error,
+                    "Core failed to load MapMask point detail: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func closeMapMaskPointDetail() {
+        mapMaskPointDetailRequestRevision += 1
+        selectedMapMaskPointID = nil
+        mapMaskPointDetail = nil
+        mapMaskPointDetailLoading = false
+        mapMaskPointDetailError = nil
+    }
+
+    func openMapMaskPointLink(_ value: String) {
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = text.hasPrefix("//") ? "https:\(text)"
+            : text.lowercased().hasPrefix("www.") ? "https://\(text)"
+            : text
+        guard let url = URL(string: normalized),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+              NSWorkspace.shared.open(url) else {
+            addLog(.error, "MapMask point link is invalid: \(value)")
+            return
+        }
+    }
+
     func saveMapMaskPickerSettings(
         mapPointApiProvider: String? = nil,
         hoYoLabLanguage: String? = nil
     ) {
         guard let supervisor = betterGICoreSupervisor, let current = mapMaskPickerSettings else { return }
+        closeMapMaskPointDetail()
         let next = BetterGICoreMapMaskPickerSettings(
             mapPointApiProvider: mapPointApiProvider ?? current.mapPointApiProvider,
             mapPointApiProviderOptions: current.mapPointApiProviderOptions,

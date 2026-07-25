@@ -21,6 +21,11 @@ public sealed class MapMaskPointDataService(IMaskMapPointService mapPointService
         CancellationToken cancellationToken = default) =>
         mapPointService.GetLabelCategoriesAsync(cancellationToken);
 
+    public Task<MaskMapPointInfo> GetPointInfoAsync(
+        MaskMapPoint point,
+        CancellationToken cancellationToken = default) =>
+        mapPointService.GetPointInfoAsync(point, cancellationToken);
+
     public async Task<MapMaskPointDataSnapshot> LoadAsync(
         MapMaskConfig config,
         CancellationToken cancellationToken = default)

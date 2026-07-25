@@ -173,6 +173,43 @@ public sealed class MacMapMaskRuntimePlatform : IMapMaskRuntimePlatform
         return new { pointId, hidden };
     }
 
+    public async Task<object> GetPointInfoAsync(
+        string pointId,
+        CancellationToken cancellationToken)
+    {
+        MaskMapPoint point;
+        string title;
+        lock (_stateLock)
+        {
+            point = _snapshot.Points.FirstOrDefault(item =>
+                        string.Equals(item.Id, pointId, StringComparison.Ordinal))
+                    ?? throw new KeyNotFoundException(
+                        $"Unknown MapMask point id: {pointId}");
+            title = _snapshot.Labels.TryGetValue(point.LabelId, out var label) &&
+                    !string.IsNullOrWhiteSpace(label.Name)
+                ? label.Name
+                : $"点位 {point.Id}";
+        }
+
+        var info = await _pointDataService.GetPointInfoAsync(
+            point, cancellationToken);
+        var links = info.UrlList.Count > 0
+            ? info.UrlList
+            : point.VideoUrls;
+        return new
+        {
+            pointId = point.Id,
+            title,
+            text = string.IsNullOrWhiteSpace(info.Text) ? "暂无描述" : info.Text,
+            imageUrl = info.ImageUrl,
+            links = links.Select(link => new
+            {
+                text = link.DisplayText,
+                url = link.Url
+            }).ToArray()
+        };
+    }
+
     public async Task<object> SavePointSelectionAsync(
         IReadOnlyCollection<string> selectedIds,
         CancellationToken cancellationToken)

@@ -148,7 +148,7 @@ struct QuartzWindowEnumeratorTests {
 
     @Test("Map point interaction captures only marker bounds")
     @MainActor
-    func mapPointInteractionUsesMarkerBounds() {
+    func mapPointInteractionUsesMarkerBounds() throws {
         let gameFrame = CGRect(x: 100, y: 80, width: 1920, height: 1080)
         let point = CoreOverlayMapPoint(
             id: "map-mask-42",
@@ -169,6 +169,15 @@ struct QuartzWindowEnumeratorTests {
             gameFrame: gameFrame,
             points: [point],
             viewport: viewport))
+
+        let popupFrame = try #require(MapMaskPointInteractionGeometry.popupFrame(
+            pointID: point.sourceID,
+            points: [point],
+            viewport: viewport,
+            size: gameFrame.size))
+        #expect(CGRect(origin: .zero, size: gameFrame.size)
+            .insetBy(dx: 12, dy: 12)
+            .contains(popupFrame))
     }
 
     private func makeWindow(
