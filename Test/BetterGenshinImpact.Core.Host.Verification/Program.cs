@@ -300,7 +300,7 @@ BvRuntimePlatform.Configure(new MacBvRuntimePlatform(() => gameTaskManagerPlatfo
 var farmingScriptServicePlatform = new MacScriptServicePlatform(
     layout, loggerFactory.CreateLogger("BetterGenshinImpact.Service.ScriptService"), scriptHostServices,
     server.PlatformCallbacks, sessionToken, cancellation.Token, new SharedCaptureRingReader(layout, allowFileFixture: true),
-    gameTaskManagerPlatform, foregroundInputCoordinator);
+    gameTaskManagerPlatform, foregroundInputCoordinator, () => false);
 Require(farmingScriptServicePlatform.FarmingPlanEnabled,
     "macOS scheduler ignored the upstream farming-plan configuration");
 Require(farmingScriptServicePlatform.RestartPolicy is
@@ -349,7 +349,7 @@ await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "config.json"), execu
 var scriptServicePlatform = new MacScriptServicePlatform(
     layout, loggerFactory.CreateLogger("BetterGenshinImpact.Service.ScriptService"), scriptHostServices,
     server.PlatformCallbacks, sessionToken, cancellation.Token, new SharedCaptureRingReader(layout, allowFileFixture: true),
-    gameTaskManagerPlatform, foregroundInputCoordinator);
+    gameTaskManagerPlatform, foregroundInputCoordinator, () => false);
 Require(!scriptServicePlatform.FarmingPlanEnabled,
     "Host Shell fixture must not enter the upstream farming-path cap check");
 ScriptServicePlatform.Configure(scriptServicePlatform);

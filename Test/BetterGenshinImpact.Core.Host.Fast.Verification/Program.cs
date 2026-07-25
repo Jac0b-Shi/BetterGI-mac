@@ -20,4 +20,5 @@ return await VerificationRunner.RunAsync(args,
     new KeyBindingSettingsSuite(),
     new HtmlMaskContractSuite(),
     new CaptureRingContractSuite(),
+    new ScriptStartupSuite(),
 ]);

@@ -30,7 +30,8 @@ public sealed class MacScriptServicePlatform(
     CancellationToken hostCancellationToken,
     SharedCaptureRingReader captureRing,
     MacGameTaskManagerPlatform gameTaskManagerPlatform,
-    ForegroundInputCoordinator inputCoordinator) : IScriptServicePlatform
+    ForegroundInputCoordinator inputCoordinator,
+    Func<bool> isTriggerDispatcherRunning) : IScriptServicePlatform
 {
     private string _mapMatchingMethod = "TemplateMatch";
     private readonly JsonObject? _configRoot = LoadConfigRoot(layout);
@@ -70,6 +71,8 @@ public sealed class MacScriptServicePlatform(
 
     public async Task StartGameTask(bool waitForMainUi)
     {
+        if (isTriggerDispatcherRunning())
+            return;
         inputCoordinator.WaitForGameFocus(hostCancellationToken);
         if (!waitForMainUi)
             return;
@@ -84,11 +87,10 @@ public sealed class MacScriptServicePlatform(
                 return;
             }
 
-            var response = await callbacks.InvokeAsync(
-                "capture.request", null, sessionToken, hostCancellationToken)
-                ?? throw new InvalidDataException("capture.request returned an empty response.");
-            using var content = captureRing.Read(response);
-            if (Bv.IsInMainUi(content))
+            using var content = await Capture(hostCancellationToken);
+            if (Bv.IsInMainUi(content) ||
+                Bv.IsInAnyClosableUi(content) ||
+                Bv.IsInDomain(content))
                 return;
             if (first)
             {
@@ -172,7 +174,7 @@ public sealed class MacScriptServicePlatform(
     {
         var response = await callbacks.InvokeAsync("capture.request", null, sessionToken, cancellationToken)
             ?? throw new InvalidDataException("capture.request returned an empty response.");
-        return captureRing.Read(response);
+        return captureRing.Read(response).DeriveTo1080P();
     }
 
     private static bool IsBlessing(BetterGenshinImpact.GameTask.Model.Area.ImageRegion frame)

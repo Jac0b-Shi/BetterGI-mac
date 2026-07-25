@@ -113,7 +113,8 @@ public sealed class NotificationRoutingSuite : IVerificationSuite
                 cancellationToken,
                 new SharedCaptureRingReader(layout, allowFileFixture: true),
                 gameTaskManager,
-                foreground);
+                foreground,
+                () => false);
             var groupRequest = ReadHttpRequestBodyAsync(
                 listener, cancellationToken);
             scriptService.NotifyGroupStart("验证组");

@@ -380,7 +380,7 @@ BetterGenshinImpact.GameTask.AutoFight.Script.CombatSceneProvider.Configure(
 var scriptServicePlatform = new MacScriptServicePlatform(
     layout, loggerFactory.CreateLogger("BetterGenshinImpact.Service.ScriptService"), scriptHostServices,
     server.PlatformCallbacks, sessionToken, shutdown.Token, captureRing, gameTaskManagerPlatform,
-    foregroundInputCoordinator);
+    foregroundInputCoordinator, () => triggerDispatcher.IsRunning);
 ScriptServicePlatform.Configure(scriptServicePlatform);
 FarmingStatsRuntimePlatform.Configure(new MacFarmingStatsRuntimePlatform(
     layout, loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.FarmingPlan.FarmingStatsRecorder")));
