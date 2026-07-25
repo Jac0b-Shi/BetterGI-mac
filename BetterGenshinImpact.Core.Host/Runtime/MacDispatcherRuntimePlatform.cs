@@ -11,6 +11,7 @@ using BetterGenshinImpact.GameTask.AutoPathing.Handler;
 using BetterGenshinImpact.GameTask.AutoWood;
 using BetterGenshinImpact.GameTask.AutoMusicGame;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
+using BetterGenshinImpact.GameTask.GetGridIcons;
 using BetterGenshinImpact.GameTask.AutoDomain;
 using BetterGenshinImpact.GameTask.AutoBoss;
 using BetterGenshinImpact.GameTask.AutoEat;
@@ -183,6 +184,30 @@ public sealed class MacDispatcherRuntimePlatform(
                     systemInfo().AssetScale,
                     loggerFactory.CreateLogger<AutoArtifactSalvageTask>())
                 .Start(cancellationToken);
+            return null;
+        }
+        if (request is DispatcherGetGridIconsTaskRequest gridIcons)
+        {
+            if (gridIcons.AccuracyTest)
+            {
+                await new GridIconsAccuracyTestTask(
+                        gridIcons.GridName,
+                        gridIcons.MaxNumToGet,
+                        ocrService,
+                        loggerFactory.CreateLogger<GridIconsAccuracyTestTask>())
+                    .Start(cancellationToken);
+            }
+            else
+            {
+                await new GetGridIconsTask(
+                        gridIcons.GridName,
+                        gridIcons.StarAsSuffix,
+                        gridIcons.MaxNumToGet,
+                        ocrService,
+                        systemInfo(),
+                        loggerFactory.CreateLogger<GetGridIconsTask>())
+                    .Start(cancellationToken);
+            }
             return null;
         }
         if (request is DispatcherEatTaskRequest eat)

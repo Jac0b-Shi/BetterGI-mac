@@ -1,11 +1,12 @@
 using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
+using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Model.GameUI;
 using BetterGenshinImpact.Helpers.Extensions;
-using BetterGenshinImpact.View.Drawable;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -25,7 +26,8 @@ namespace BetterGenshinImpact.GameTask.GetGridIcons;
 /// </summary>
 public class GridIconsAccuracyTestTask : ISoloTask
 {
-    private readonly ILogger logger = App.GetLogger<GetGridIconsTask>();
+    private readonly IOcrService ocrService;
+    private readonly ILogger logger;
     private CancellationToken ct;
 
     public string Name => "获取Grid界面物品图标独立任务";
@@ -34,10 +36,27 @@ public class GridIconsAccuracyTestTask : ISoloTask
 
     private readonly GridScreenName gridScreenName;
 
+#if BGI_FULL_WINDOWS
     public GridIconsAccuracyTestTask(GridScreenName gridScreenName, int? maxNumToTest = null)
+        : this(
+            gridScreenName,
+            maxNumToTest,
+            OcrFactory.Paddle,
+            App.GetLogger<GetGridIconsTask>())
+    {
+    }
+#endif
+
+    public GridIconsAccuracyTestTask(
+        GridScreenName gridScreenName,
+        int? maxNumToTest,
+        IOcrService ocrService,
+        ILogger logger)
     {
         this.gridScreenName = gridScreenName;
         this.maxNumToTest = maxNumToTest;
+        this.ocrService = ocrService;
+        this.logger = logger;
     }
 
     /// <summary>
@@ -80,7 +99,7 @@ public class GridIconsAccuracyTestTask : ISoloTask
 
         GridScreen gridScreen = new GridScreen(GridParams.Templates[this.gridScreenName], this.logger, this.ct);
         gridScreen.OnAfterTurnToNewPage += GridScreen.DrawItemsAfterTurnToNewPage;
-        gridScreen.OnBeforeScroll += () => VisionContext.Instance().DrawContent.ClearAll();
+        gridScreen.OnBeforeScroll += () => OverlayDrawPlatform.Current.ClearAll();
         try
         {
             await foreach ((ImageRegion pageRegion, Rect itemRect) in gridScreen)
@@ -104,7 +123,7 @@ public class GridIconsAccuracyTestTask : ISoloTask
                 // 用CV方法得到的结果
                 using var ra1 = CaptureToRectArea();
                 using ImageRegion nameRegion = ra1.DeriveCrop(new Rect((int)(ra1.Width * 0.682), (int)(ra1.Width * 0.0625), (int)(ra1.Width * 0.256), (int)(ra1.Width * 0.03125)));
-                var ocrResult = OcrFactory.Paddle.OcrResult(nameRegion.SrcMat);
+                var ocrResult = ocrService.OcrResult(nameRegion.SrcMat);
                 string itemName = ocrResult.Text;
 
                 using ImageRegion starRegion = ra1.DeriveCrop(new Rect((int)(ra1.Width * 0.682), (int)(ra1.Width * 0.1823), (int)(ra1.Width * 0.105), (int)(ra1.Width * 0.02345)));
@@ -136,7 +155,7 @@ public class GridIconsAccuracyTestTask : ISoloTask
         }
         finally
         {
-            VisionContext.Instance().DrawContent.ClearAll();
+            OverlayDrawPlatform.Current.ClearAll();
         }
     }
 

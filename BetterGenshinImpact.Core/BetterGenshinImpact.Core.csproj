@@ -437,6 +437,9 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Reward/RewardResultRuntimePlatform.cs" Link="GameTask/Common/Reward/RewardResultRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvSimpleOperation.cs" Link="GameTask/Common/BgiVision/BvSimpleOperation.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvSimpleOperationPlatform.cs" Link="GameTask/Common/BgiVision/BvSimpleOperationPlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/GetGridIcons/GetGridIconsConfig.cs" Link="GameTask/GetGridIcons/GetGridIconsConfig.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/GetGridIcons/GetGridIconsTask.cs" Link="GameTask/GetGridIcons/GetGridIconsTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/GetGridIcons/GridIconsAccuracyTestTask.cs" Link="GameTask/GetGridIcons/GridIconsAccuracyTestTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/GetGridIcons/GridIconClassifier.cs" Link="GameTask/GetGridIcons/GridIconClassifier.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recognition/OpenCv/ImageDifferenceDetector.cs" Link="Core/Recognition/OpenCv/ImageDifferenceDetector.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recognition/OpenCv/ArithmeticHelper.cs" Link="Core/Recognition/OpenCv/ArithmeticHelper.cs" />

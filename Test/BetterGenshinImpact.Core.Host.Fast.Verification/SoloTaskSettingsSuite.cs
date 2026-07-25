@@ -1,6 +1,7 @@
 using BetterGenshinImpact.Core.Host.Runtime;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script.Dependence;
+using BetterGenshinImpact.GameTask.Model.GameUI;
 using BetterGenshinImpact.Verification.Framework;
 using Newtonsoft.Json.Linq;
 
@@ -110,6 +111,12 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 fishingSettings.Value<bool>("screenshotEnabled") == false &&
                 fishingSettings.Value<bool>("saveScreenshotOnKeyTick") == false,
                 "AutoFishing exposed key-tick screenshots while the upstream global gate was off.");
+            var hiddenGridIconsCoordinator = new SoloTaskCoordinator(
+                new RecordingDispatcherPlatform(), catalog, layout, CancellationToken.None);
+            context.Require(
+                JArray.FromObject(hiddenGridIconsCoordinator.List()).All(item =>
+                    item.Value<string>("name") != "GetGridIcons"),
+                "GetGridIcons was listed while the upstream screenshot gate was off.");
             OtherConfig? updatedOtherConfig = null;
             commonSettingsCatalog.AttachOtherConfigUpdated(
                 value => updatedOtherConfig = value);
@@ -219,6 +226,7 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 ["AutoCook"] = "在手动烹饪界面运行，自动识别并点击结束烹饪",
                 ["AutoArtifactSalvage"] = "指定匹配表达式逐一筛选分解，支持5星圣遗物",
                 ["AutoRedeemCode"] = "自动使用输入的兑换码",
+                ["GetGridIcons"] = "需要启用保存截图，文件保存在 log/gridIcons",
             };
             foreach (var (name, description) in upstreamDescriptions)
             {
@@ -239,6 +247,7 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 ["AutoMusicGame"] = "https://www.bettergi.com/feats/task/music.html",
                 ["AutoArtifactSalvage"] =
                     "https://www.bettergi.com/feats/task/artifactSalvage.html",
+                ["GetGridIcons"] = "https://www.bettergi.com/dev/getGridIcons.html",
             };
             foreach (var (name, tutorialUrl) in upstreamTutorialUrls)
             {
@@ -255,7 +264,7 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
             var directoryTasks = new HashSet<string>
             {
                 "AutoFight", "AutoDomain", "AutoStygianOnslaught",
-                "AutoLeyLineOutcrop",
+                "AutoLeyLineOutcrop", "GetGridIcons",
             };
             foreach (var item in descriptors.OfType<JObject>())
             {
@@ -269,11 +278,53 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                     $"Solo task '{name}' script directory entry drifted from upstream.");
             }
             context.Require(
-                directoryTasks.All(name =>
+                directoryTasks.Where(name => name != "GetGridIcons").All(name =>
                     descriptors.Single(item => item.Value<string>("name") == name)
                         .Value<string>("scriptDirectoryPath") ==
                     Path.Combine(layout.UserPath, "AutoFight")),
                 "Solo task combat script directory did not resolve to the canonical runtime path.");
+            var gridDescriptor = descriptors.Single(item =>
+                item.Value<string>("name") == "GetGridIcons");
+            var gridActions = gridDescriptor["actions"]?.OfType<JObject>().ToArray();
+            context.Require(
+                gridDescriptor.Value<bool>("settingsAvailable") &&
+                gridDescriptor.Value<bool>("headerAction") == false &&
+                gridDescriptor.Value<string>("scriptDirectoryPath") ==
+                    Path.Combine(layout.LogPath, "gridIcons") &&
+                gridActions is { Length: 2 } &&
+                gridActions[0].Value<string>("name") == "GetGridIcons" &&
+                gridActions[1].Value<string>("name") == "GridIconsAccuracyTest",
+                "GetGridIcons did not expose the upstream gated card and actions.");
+            _ = catalog.Save("GetGridIcons", JObject.FromObject(new
+            {
+                gridName = "Food",
+                starAsSuffix = true,
+                lvAsSuffix = false,
+                maxNumToGet = 12,
+            }));
+            var gridSettings = JObject.FromObject(catalog.Get("GetGridIcons"));
+            context.Require(
+                gridSettings.Value<string>("gridName") == "Food" &&
+                gridSettings.Value<bool>("starAsSuffix") &&
+                !gridSettings.Value<bool>("lvAsSuffix") &&
+                gridSettings.Value<int>("maxNumToGet") == 12 &&
+                gridSettings["gridNameOptions"]?.OfType<JObject>().Any(option =>
+                    option.Value<string>("value") == "Food" &&
+                    option.Value<string>("displayName") == "食物") == true,
+                "GetGridIcons did not persist or describe its upstream settings.");
+            platform.Reset();
+            _ = coordinator.Start("GetGridIcons");
+            for (var retry = 0; retry < 20 && platform.Request is null; retry++)
+                await Task.Delay(10, cancellationToken);
+            context.Require(
+                platform.Request is DispatcherGetGridIconsTaskRequest
+                {
+                    GridName: GridScreenName.Food,
+                    StarAsSuffix: true,
+                    MaxNumToGet: 12,
+                    AccuracyTest: false,
+                },
+                "GetGridIcons did not dispatch its typed Core-owned request.");
             context.Require(
                 descriptors.Single(item => item.Value<string>("name") == "AutoRedeemCode")
                     .Value<bool>("settingsAvailable"),

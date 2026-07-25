@@ -16,9 +16,11 @@ public sealed class SoloTaskCoordinator(
     private string _state = "idle";
     private string? _error;
 
-    public object List() => new[]
+    public object List()
     {
-        Descriptor(
+        var tasks = new List<object>
+        {
+            Descriptor(
             "AutoGeniusInvokation", "自动七圣召唤", "全自动打牌", true,
             tutorialUrl: "https://www.bettergi.com/feats/task/tcg.html",
             showsScriptRepository: true),
@@ -83,11 +85,39 @@ public sealed class SoloTaskCoordinator(
             "AutoRedeemCode", "自动使用兑换码", "自动使用输入的兑换码", true,
             inputKind: "multilineText", inputTitle: "输入兑换码",
             inputPlaceholder: "每行一条兑换码"),
-    };
+        };
+        if (settings.ScreenshotEnabled)
+        {
+            tasks.Add(Descriptor(
+                "GetGridIcons",
+                "截取物品图标（开发者）",
+                "需要启用保存截图，文件保存在 log/gridIcons",
+                true,
+                headerAction: false,
+                tutorialUrl: "https://www.bettergi.com/dev/getGridIcons.html",
+                scriptDirectoryPath: GetGridIconsDirectoryPath,
+                actions:
+                [
+                    new
+                    {
+                        name = "GetGridIcons",
+                        title = "截取物品图标",
+                        description = "扫描所选界面并保存物品图标",
+                    },
+                    new
+                    {
+                        name = "GridIconsAccuracyTest",
+                        title = "测试识别效果",
+                        description = "请先将游戏界面切换至待测试分类界面",
+                    },
+                ]));
+        }
+        return tasks;
+    }
 
     public object Start(string name, string? inputText = null)
     {
-        if (name is not ("AutoGeniusInvokation" or "AutoWood" or "AutoFishing" or "AutoFight" or "AutoCook" or "AutoMusicGame" or "AutoAlbum" or "AutoArtifactSalvage" or "AutoDomain" or "AutoBoss" or "AutoLeyLineOutcrop" or "AutoStygianOnslaught" or "AutoRedeemCode"))
+        if (name is not ("AutoGeniusInvokation" or "AutoWood" or "AutoFishing" or "AutoFight" or "AutoCook" or "AutoMusicGame" or "AutoAlbum" or "AutoArtifactSalvage" or "AutoDomain" or "AutoBoss" or "AutoLeyLineOutcrop" or "AutoStygianOnslaught" or "AutoRedeemCode" or "GetGridIcons" or "GridIconsAccuracyTest"))
             throw new CapabilityUnavailableException(
                 $"solo task '{name}' is not composed in the macOS Core yet; no task was executed.");
 
@@ -189,6 +219,8 @@ public sealed class SoloTaskCoordinator(
                 "AutoArtifactSalvage" => new DispatcherArtifactSalvageTaskRequest(),
                 "AutoRedeemCode" => new DispatcherRedeemCodeTaskRequest(
                     ParseRedeemCodes(inputText)),
+                "GetGridIcons" or "GridIconsAccuracyTest" =>
+                    BuildGetGridIconsRequest(name == "GridIconsAccuracyTest"),
                 "AutoLeyLineOutcrop" => new DispatcherLeyLineTaskRequest(
                     settings.BuildAutoLeyLineOutcropConfig()),
                 "AutoStygianOnslaught" => BuildStygianRequest(),
@@ -243,6 +275,17 @@ public sealed class SoloTaskCoordinator(
             config, defaults.DefaultStrategyName, defaults.ArtifactSalvageStar, path);
     }
 
+    private DispatcherGetGridIconsTaskRequest BuildGetGridIconsRequest(
+        bool accuracyTest)
+    {
+        var config = settings.BuildGetGridIconsConfig();
+        return new DispatcherGetGridIconsTaskRequest(
+            config.GridName,
+            config.StarAsSuffix,
+            config.MaxNumToGet,
+            accuracyTest);
+    }
+
     private void Complete(string taskId, string state, string? error)
     {
         lock (_lock)
@@ -283,6 +326,17 @@ public sealed class SoloTaskCoordinator(
         {
             layout.EnsureCreated();
             return Path.Combine(layout.UserPath, "AutoFight");
+        }
+    }
+
+    private string GetGridIconsDirectoryPath
+    {
+        get
+        {
+            layout.EnsureCreated();
+            var path = Path.Combine(layout.LogPath, "gridIcons");
+            Directory.CreateDirectory(path);
+            return path;
         }
     }
 }

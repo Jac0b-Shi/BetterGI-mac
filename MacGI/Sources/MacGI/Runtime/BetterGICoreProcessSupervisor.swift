@@ -297,6 +297,14 @@ struct BetterGICoreAutoRedeemCodeSettings: Sendable, Equatable {
     let clipboardListenerEnabled: Bool
 }
 
+struct BetterGICoreGetGridIconsSettings: Sendable, Equatable {
+    let gridName: String
+    let gridNameOptions: [BetterGICoreNamedOption]
+    let starAsSuffix: Bool
+    let lvAsSuffix: Bool
+    let maxNumToGet: Int
+}
+
 struct BetterGICoreAutoGeniusInvokationSettings: Sendable, Equatable {
     let strategyName: String
     let strategyOptions: [String]
@@ -2655,6 +2663,25 @@ actor BetterGICoreProcessSupervisor {
         ))
     }
 
+    func getGridIconsSettings() throws -> BetterGICoreGetGridIconsSettings {
+        try decodeGetGridIconsSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "GetGridIcons"]
+        ))
+    }
+
+    func saveGetGridIconsSettings(_ settings: BetterGICoreGetGridIconsSettings) throws
+        -> BetterGICoreGetGridIconsSettings {
+        try decodeGetGridIconsSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "GetGridIcons", "settings": [
+                "gridName": settings.gridName,
+                "starAsSuffix": settings.starAsSuffix,
+                "lvAsSuffix": settings.lvAsSuffix,
+                "maxNumToGet": settings.maxNumToGet,
+            ]]
+        ))
+    }
+
     func autoGeniusInvokationSettings() throws
         -> BetterGICoreAutoGeniusInvokationSettings {
         try decodeAutoGeniusInvokationSettings(requestSoloSettings(
@@ -2987,6 +3014,34 @@ actor BetterGICoreProcessSupervisor {
         }
         return BetterGICoreAutoRedeemCodeSettings(
             clipboardListenerEnabled: clipboardListenerEnabled)
+    }
+
+    private func decodeGetGridIconsSettings(_ value: Any) throws
+        -> BetterGICoreGetGridIconsSettings {
+        guard let result = value as? [String: Any],
+              result["name"] as? String == "GetGridIcons",
+              let gridName = result["gridName"] as? String,
+              let rawOptions = result["gridNameOptions"] as? [[String: Any]],
+              let starAsSuffix = result["starAsSuffix"] as? Bool,
+              let lvAsSuffix = result["lvAsSuffix"] as? Bool,
+              let maxNumToGet = result["maxNumToGet"] as? Int else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid GetGridIcons settings.")
+        }
+        let options = try rawOptions.map { option -> BetterGICoreNamedOption in
+            guard let value = option["value"] as? String,
+                  let displayName = option["displayName"] as? String else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid GetGridIcons grid option.")
+            }
+            return .init(value: value, displayName: displayName)
+        }
+        return .init(
+            gridName: gridName,
+            gridNameOptions: options,
+            starAsSuffix: starAsSuffix,
+            lvAsSuffix: lvAsSuffix,
+            maxNumToGet: maxNumToGet)
     }
 
     private func decodeAutoFishingSettings(_ value: Any) throws

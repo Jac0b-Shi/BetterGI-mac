@@ -455,6 +455,7 @@ final class AppState: ObservableObject {
         BetterGICoreAutoGeniusInvokationSettings?
     @Published private(set) var autoCookSettings: BetterGICoreAutoCookSettings?
     @Published private(set) var autoRedeemCodeSettings: BetterGICoreAutoRedeemCodeSettings?
+    @Published private(set) var getGridIconsSettings: BetterGICoreGetGridIconsSettings?
     @Published private(set) var autoFishingSettings: BetterGICoreAutoFishingSettings?
     @Published private(set) var autoWoodSettings: BetterGICoreAutoWoodSettings?
     @Published private(set) var autoMusicGameSettings: BetterGICoreAutoMusicGameSettings?
@@ -3895,6 +3896,7 @@ final class AppState: ObservableObject {
             autoGeniusInvokationSettings = try await supervisor.autoGeniusInvokationSettings()
             autoCookSettings = try await supervisor.autoCookSettings()
             autoRedeemCodeSettings = try await supervisor.autoRedeemCodeSettings()
+            getGridIconsSettings = try await supervisor.getGridIconsSettings()
             autoFishingSettings = try await supervisor.autoFishingSettings()
             autoWoodSettings = try await supervisor.autoWoodSettings()
             autoMusicGameSettings = try await supervisor.autoMusicGameSettings()
@@ -3909,6 +3911,7 @@ final class AppState: ObservableObject {
             autoGeniusInvokationSettings = nil
             autoCookSettings = nil
             autoRedeemCodeSettings = nil
+            getGridIconsSettings = nil
             autoFishingSettings = nil
             autoWoodSettings = nil
             autoMusicGameSettings = nil
@@ -4031,6 +4034,7 @@ final class AppState: ObservableObject {
                 self.commonSettings = saved
                 self.overlayUidCoverEnabled = saved.screenshotUidCoverEnabled
                 self.autoFishingSettings = try await supervisor.autoFishingSettings()
+                self.soloTasks = try await supervisor.listSoloTasks()
             } catch {
                 guard revision == self.commonSettingsSaveRevision else { return }
                 self.addLog(.error,
@@ -4146,6 +4150,32 @@ final class AppState: ObservableObject {
                 self?.addLog(
                     .error,
                     "AutoRedeemCode settings save failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func saveGetGridIconsSettings(
+        gridName: String? = nil,
+        starAsSuffix: Bool? = nil,
+        lvAsSuffix: Bool? = nil,
+        maxNumToGet: Int? = nil
+    ) {
+        guard let supervisor = betterGICoreSupervisor,
+              let current = getGridIconsSettings else { return }
+        let next = BetterGICoreGetGridIconsSettings(
+            gridName: gridName ?? current.gridName,
+            gridNameOptions: current.gridNameOptions,
+            starAsSuffix: starAsSuffix ?? current.starAsSuffix,
+            lvAsSuffix: lvAsSuffix ?? current.lvAsSuffix,
+            maxNumToGet: maxNumToGet ?? current.maxNumToGet)
+        Task { [weak self] in
+            do {
+                self?.getGridIconsSettings =
+                    try await supervisor.saveGetGridIconsSettings(next)
+            } catch {
+                self?.addLog(
+                    .error,
+                    "GetGridIcons settings save failed: \(error.localizedDescription)")
             }
         }
     }

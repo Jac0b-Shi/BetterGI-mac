@@ -256,9 +256,7 @@ struct SoloTasksPage: View {
         if task.showsScriptRepository || task.scriptDirectoryPath != nil {
             BGISettingLine(
                 title: "脚本资源",
-                subtitle: task.scriptDirectoryPath == nil
-                    ? "从脚本仓库更新任务所需策略"
-                    : "从脚本仓库更新策略，或在 Finder 中打开本地自动战斗目录"
+                subtitle: scriptResourceSubtitle(for: task)
             ) {
                 HStack(spacing: 8) {
                     if task.showsScriptRepository {
@@ -296,11 +294,22 @@ struct SoloTasksPage: View {
         case "AutoArtifactSalvage": autoArtifactSalvageSettings
         case "AutoFight": autoFightSettings
         case "AutoRedeemCode": autoRedeemCodeSettings
+        case "GetGridIcons": getGridIconsSettings
         default:
             BGISettingLine(title: "设置", subtitle: "该任务的设置暂不可用") {
                 BGIStatusBadge(text: "不可用", tint: BGIColors.muted)
             }
         }
+    }
+
+    private func scriptResourceSubtitle(for task: BetterGICoreSoloTask) -> String {
+        if task.showsScriptRepository, task.scriptDirectoryPath != nil {
+            return "从脚本仓库更新策略，或在 Finder 中打开本地任务目录"
+        }
+        if task.showsScriptRepository {
+            return "从脚本仓库更新任务所需策略"
+        }
+        return "在 Finder 中打开本地任务目录"
     }
 
     @ViewBuilder
@@ -456,6 +465,62 @@ struct SoloTasksPage: View {
                     }))
                     .toggleStyle(.switch)
                     .labelsHidden()
+            }
+        } else {
+            settingsLoading
+        }
+    }
+
+    @ViewBuilder
+    private var getGridIconsSettings: some View {
+        if let settings = appState.getGridIconsSettings {
+            BGISettingLine(
+                title: "界面名称",
+                subtitle: "不同界面的参数不一样，请选择你要扫描的界面"
+            ) {
+                Picker("", selection: Binding(
+                    get: { settings.gridName },
+                    set: { appState.saveGetGridIconsSettings(gridName: $0) })) {
+                    ForEach(settings.gridNameOptions) { option in
+                        Text(option.displayName).tag(option.value)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 170)
+            }
+            BGISettingLine(
+                title: "使用星星作为名称后缀",
+                subtitle: "有些物品具有相同的名称，但具有不同的图标和星星数"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.starAsSuffix },
+                    set: { appState.saveGetGridIconsSettings(starAsSuffix: $0) }))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+            BGISettingLine(
+                title: "使用等级作为名称后缀（待开发）",
+                subtitle: "有些物品具有相同的名称，但具有不同的图标和等级"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.lvAsSuffix },
+                    set: { appState.saveGetGridIconsSettings(lvAsSuffix: $0) }))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .disabled(true)
+            }
+            BGISettingLine(
+                title: "最大截取数量",
+                subtitle: "达到最大截取数量后会停止"
+            ) {
+                TextField("", value: Binding(
+                    get: { settings.maxNumToGet },
+                    set: {
+                        appState.saveGetGridIconsSettings(
+                            maxNumToGet: max(1, $0))
+                    }), format: .number)
+                    .frame(width: 110)
+                    .multilineTextAlignment(.trailing)
             }
         } else {
             settingsLoading
@@ -1141,6 +1206,7 @@ struct SoloTasksPage: View {
         switch name {
         case "AutoFishing": .fgi("\u{e3a8}")
         case "AutoRedeemCode": .symbol("barcode.viewfinder")
+        case "GetGridIcons": .symbol("wrench.and.screwdriver")
         default: .symbol("gearshape.2")
         }
     }

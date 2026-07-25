@@ -18,6 +18,7 @@ using BetterGenshinImpact.GameTask.AutoWood;
 using BetterGenshinImpact.GameTask.AutoMusicGame;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
 using BetterGenshinImpact.GameTask.Common.Job;
+using BetterGenshinImpact.GameTask.GetGridIcons;
 using BetterGenshinImpact.ViewModel.Pages;
 using BetterGenshinImpact.GameTask;
 
@@ -118,6 +119,22 @@ public sealed class WindowsDispatcherRuntimePlatform(
                     .Start(cancellationToken);
                 return null;
             }
+            case DispatcherGetGridIconsTaskRequest gridIcons:
+                if (gridIcons.AccuracyTest)
+                {
+                    await new GridIconsAccuracyTestTask(
+                            gridIcons.GridName, gridIcons.MaxNumToGet)
+                        .Start(cancellationToken);
+                }
+                else
+                {
+                    await new GetGridIconsTask(
+                            gridIcons.GridName,
+                            gridIcons.StarAsSuffix,
+                            gridIcons.MaxNumToGet)
+                        .Start(cancellationToken);
+                }
+                return null;
             case DispatcherLeyLineTaskRequest leyLine:
                 await new AutoLeyLineOutcropTask(
                         new AutoLeyLineOutcropParam(leyLine.Config))

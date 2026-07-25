@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
 using BetterGenshinImpact.GameTask.AutoStygianOnslaught;
+using BetterGenshinImpact.GameTask.Model.GameUI;
 
 namespace BetterGenshinImpact.Core.Script.Dependence;
 
@@ -41,6 +42,9 @@ public sealed record DispatcherAlbumTaskRequest() : DispatcherSoloTaskRequest("A
 public sealed record DispatcherRedeemCodeTaskRequest(IReadOnlyList<string> Codes) :
     DispatcherSoloTaskRequest("AutoRedeemCode");
 public sealed record DispatcherArtifactSalvageTaskRequest() : DispatcherSoloTaskRequest("AutoArtifactSalvage");
+public sealed record DispatcherGetGridIconsTaskRequest(
+    GridScreenName GridName, bool StarAsSuffix, int MaxNumToGet, bool AccuracyTest) :
+    DispatcherSoloTaskRequest(AccuracyTest ? "GridIconsAccuracyTest" : "GetGridIcons");
 public sealed record DispatcherLeyLineTaskRequest(AutoLeyLineOutcropConfig Config) :
     DispatcherSoloTaskRequest("AutoLeyLineOutcrop");
 public sealed record DispatcherStygianTaskRequest(

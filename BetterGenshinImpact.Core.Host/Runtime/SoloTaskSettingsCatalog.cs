@@ -13,7 +13,10 @@ using BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
 using BetterGenshinImpact.GameTask.AutoStygianOnslaught;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
+using BetterGenshinImpact.GameTask.GetGridIcons;
+using BetterGenshinImpact.GameTask.Model.GameUI;
 using BetterGenshinImpact.GameTask.UseRedeemCode;
+using BetterGenshinImpact.Helpers.Extensions;
 using Newtonsoft.Json.Linq;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
@@ -26,12 +29,22 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
     public bool AutoFishingSaveScreenshotOnKeyTick { get; private set; }
     public int AutoWoodRoundNum { get; private set; }
     public int AutoWoodDailyMaxCount { get; private set; } = 2000;
+    public bool ScreenshotEnabled
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return CommonSettingsCatalog.ScreenshotEnabled(LoadRoot());
+            }
+        }
+    }
 
     public bool IsAvailable(string name) => name is
         "AutoGeniusInvokation" or "AutoCook" or "AutoFishing" or "AutoWood" or
         "AutoMusicGame" or "AutoAlbum" or "AutoBoss" or "AutoFight" or
         "AutoDomain" or "AutoArtifactSalvage" or "AutoLeyLineOutcrop" or
-        "AutoStygianOnslaught" or "AutoRedeemCode";
+        "AutoStygianOnslaught" or "AutoRedeemCode" or "GetGridIcons";
 
     public void AttachAutoFightConfigUpdated(Action<AutoFightConfig> callback) =>
         _autoFightConfigUpdated = callback ?? throw new ArgumentNullException(nameof(callback));
@@ -67,6 +80,15 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         {
             return LoadConfig<AutoMusicGameConfig>(
                 LoadRoot(), "autoMusicGameConfig");
+        }
+    }
+
+    public GetGridIconsConfig BuildGetGridIconsConfig()
+    {
+        lock (_lock)
+        {
+            return LoadConfig<GetGridIconsConfig>(
+                LoadRoot(), "getGridIconsConfig");
         }
     }
 
@@ -156,6 +178,8 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
                     LoadConfig<AutoArtifactSalvageConfig>(root, "autoArtifactSalvageConfig")),
                 "AutoRedeemCode" => Describe(
                     LoadConfig<AutoRedeemCodeConfig>(root, "autoRedeemCodeConfig")),
+                "GetGridIcons" => Describe(
+                    LoadConfig<GetGridIconsConfig>(root, "getGridIconsConfig")),
                 _ => throw Unavailable(name),
             };
         }
@@ -177,8 +201,33 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             "AutoLeyLineOutcrop" => SaveAutoLeyLineOutcrop(settings),
             "AutoStygianOnslaught" => SaveAutoStygianOnslaught(settings),
             "AutoRedeemCode" => SaveAutoRedeemCode(settings),
+            "GetGridIcons" => SaveGetGridIcons(settings),
             _ => throw Unavailable(name),
         };
+    }
+
+    private object SaveGetGridIcons(JObject settings)
+    {
+        var gridNameValue = RequiredString(settings, "gridName");
+        if (!Enum.TryParse<GridScreenName>(gridNameValue, out var gridName) ||
+            !Enum.IsDefined(gridName))
+            throw new ArgumentException($"Unsupported gridName: {gridNameValue}");
+        var maxNumToGet = RequiredInt(settings, "maxNumToGet");
+        if (maxNumToGet < 1)
+            throw new ArgumentOutOfRangeException(
+                "maxNumToGet", maxNumToGet, "maxNumToGet must be positive.");
+        var config = new GetGridIconsConfig
+        {
+            GridName = gridName,
+            StarAsSuffix = RequiredBool(settings, "starAsSuffix"),
+            LvAsSuffix = RequiredBool(settings, "lvAsSuffix"),
+            MaxNumToGet = maxNumToGet,
+        };
+        lock (_lock)
+        {
+            SaveConfig("getGridIconsConfig", config);
+            return Describe(config);
+        }
     }
 
     private object SaveAutoRedeemCode(JObject settings)
@@ -639,6 +688,20 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
     {
         name = "AutoRedeemCode",
         clipboardListenerEnabled = config.ClipboardListenerEnabled,
+    };
+
+    private static object Describe(GetGridIconsConfig config) => new
+    {
+        name = "GetGridIcons",
+        gridName = config.GridName.ToString(),
+        gridNameOptions = Enum.GetValues<GridScreenName>().Select(value => new
+        {
+            value = value.ToString(),
+            displayName = value.GetDescription(),
+        }).ToArray(),
+        starAsSuffix = config.StarAsSuffix,
+        lvAsSuffix = config.LvAsSuffix,
+        maxNumToGet = config.MaxNumToGet,
     };
 
     private object Describe(AutoBossConfig config) => new
