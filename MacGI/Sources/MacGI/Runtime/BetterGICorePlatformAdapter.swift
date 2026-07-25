@@ -222,6 +222,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             self.audioCapture = nil
             return ["acknowledged": true]
         case "game.close":
+            appState.addLog(.warn, "Core requested game.close.")
             guard let application = NSRunningApplication(
                 processIdentifier: appState.selectedWindow.ownerPID
             ), application.terminate() else {
@@ -231,6 +232,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             }
             return ["acknowledged": true]
         case "application.quit":
+            appState.addLog(.warn, "Core requested application.quit.")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 NSApp.terminate(nil)
             }
@@ -255,6 +257,9 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                     "application.restart requires a non-empty taskProgressName."
                 )
             }
+            appState.addLog(
+                .warn,
+                "Core requested application.restart for task progress \(taskProgressName).")
             let bundleURL = Bundle.main.bundleURL
             guard bundleURL.pathExtension == "app" else {
                 throw BetterGICorePlatformAdapterError.invalidParameters(

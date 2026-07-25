@@ -2067,7 +2067,9 @@ final class AppState: ObservableObject {
                 return
             }
             do {
+                self.addLog(.debug, "Requesting BetterGI Core runtime stop.")
                 try await supervisor.stopRuntime()
+                self.addLog(.debug, "BetterGI Core runtime stop acknowledged.")
                 self.cancelRuntimeGeometryRefresh()
                 self.captureTimestamps = []
                 self.measuredCaptureFPS = 0
