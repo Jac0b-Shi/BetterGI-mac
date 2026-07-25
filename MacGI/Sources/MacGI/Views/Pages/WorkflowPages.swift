@@ -1,11 +1,12 @@
 import SwiftUI
 
 struct BGICommand: Identifiable {
-    let id = UUID()
     let title: String
     let symbol: String
     var isEnabled = true
     let action: () -> Void
+
+    var id: String { "\(symbol)|\(title)" }
 }
 
 struct BGIWorkflowShell<Sidebar: View, Content: View>: View {

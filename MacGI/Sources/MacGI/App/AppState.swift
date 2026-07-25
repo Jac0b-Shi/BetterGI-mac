@@ -2835,6 +2835,11 @@ final class AppState: ObservableObject {
             addLog(.error, "Cannot run scheduler: no real on-screen game window is selected.")
             return
         }
+        guard !safetyGate.emergencyStop else {
+            schedulerExecutionStatus = "Emergency stop"
+            addLog(.error, "Cannot run scheduler: emergency stop is enabled.")
+            return
+        }
         startSchedulerGroups(names: [selectedSchedulerGroupName], continuous: false)
     }
 
@@ -2989,6 +2994,8 @@ final class AppState: ObservableObject {
             && isWindowValid
             && !selectedWindow.isSynthetic
             && currentSchedulerProjectID == nil
+            && oneDragonStatus.taskID == nil
+            && !safetyGate.emergencyStop
     }
 
     var schedulerRunReadiness: String {
@@ -2996,6 +3003,8 @@ final class AppState: ObservableObject {
         guard runtimeLifecycle == .running else { return "请先启动 BetterGI 运行时" }
         guard selectedSchedulerGroup != nil else { return "尚未选择配置组" }
         guard isWindowValid, !selectedWindow.isSynthetic else { return "尚未选择真实游戏窗口" }
+        guard currentSchedulerProjectID == nil else { return "调度器正在运行" }
+        guard oneDragonStatus.taskID == nil else { return "一条龙正在运行" }
         guard !safetyGate.emergencyStop else { return "紧急停止已启用" }
         if dryRunLaunchEnabled { return "Dry-Run：不会发送真实输入" }
         return "已就绪"
