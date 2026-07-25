@@ -56,13 +56,27 @@ struct BGIGroupSidebar: View {
     let groups: [String]
     var selected: String
     let onSelect: (String) -> Void
+    var onAdd: (() -> Void)? = nil
+    var onRename: ((String) -> Void)? = nil
+    var onCopy: ((String) -> Void)? = nil
+    var onDelete: ((String) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(BGIFonts.bodyStrong)
-                .foregroundStyle(BGIColors.primaryText)
-                .padding(.horizontal, 12)
+            HStack {
+                Text(title)
+                    .font(BGIFonts.bodyStrong)
+                    .foregroundStyle(BGIColors.primaryText)
+                Spacer()
+                if let onAdd {
+                    Button(action: onAdd) {
+                        Image(systemName: "plus")
+                    }
+                    .buttonStyle(.plain)
+                    .help("新增配置组")
+                }
+            }
+            .padding(.horizontal, 12)
             VStack(spacing: 4) {
                 ForEach(groups, id: \.self) { group in
                     Button {
@@ -84,7 +98,28 @@ struct BGIGroupSidebar: View {
                     .padding(.vertical, 9)
                     .background(group == selected ? BGIColors.cardElevated : Color.clear)
                     .clipShape(RoundedRectangle(cornerRadius: BGIRadius.small, style: .continuous))
+                    .contextMenu {
+                        if let onAdd {
+                            Button("新增组", action: onAdd)
+                        }
+                        if let onRename {
+                            Button("重命名") { onRename(group) }
+                        }
+                        if let onCopy {
+                            Button("复制组") { onCopy(group) }
+                        }
+                        if let onDelete {
+                            Divider()
+                            Button("删除组", role: .destructive) { onDelete(group) }
+                        }
+                    }
                 }
+            }
+            if groups.isEmpty, let onAdd {
+                Button("新增配置组", systemImage: "plus", action: onAdd)
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 10)
             }
         }
         .padding(10)

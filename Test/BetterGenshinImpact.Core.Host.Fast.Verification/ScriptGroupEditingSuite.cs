@@ -130,6 +130,28 @@ public sealed class ScriptGroupEditingSuite : IVerificationSuite
                             "DisableAutoPickupForNonElite"),
                 "Group settings omitted upstream AutoFight, AutoEat or option semantics.");
 
+            _ = catalog.Create("Created Group");
+            _ = catalog.Copy("Fixture Group", "Fixture Copy");
+            context.Require(
+                catalog.List().OrderBy(group => group.Index).Select(group => group.Name)
+                    .SequenceEqual(["Fixture Group", "Created Group", "Fixture Copy"]) &&
+                catalog.Get("Fixture Copy").Document["projects"]?.Count() == 1,
+                "Script-group create/copy did not preserve upstream ordering or deep-copy the group.");
+            _ = catalog.SetNextProject("Fixture Copy", 1);
+            _ = catalog.Rename("Fixture Copy", "Renamed Copy");
+            context.Require(
+                !catalog.List().Any(group => group.Name == "Fixture Copy") &&
+                catalog.List().Single(group => group.Name == "Renamed Copy")
+                    .Projects.Single().NextFlag,
+                "Script-group rename did not preserve the selected next project.");
+            _ = catalog.Delete("Renamed Copy");
+            _ = catalog.Delete("Created Group");
+            context.Require(
+                catalog.List().Select(group => (group.Name, group.Index))
+                    .SequenceEqual([("Fixture Group", 1)]) &&
+                !File.Exists(layout.SchedulerStatePath),
+                "Script-group delete did not reindex groups or clear stale next-project state.");
+
             _ = catalog.AddProjects("Fixture Group", "Shell", [], "printf fixture");
             _ = catalog.Reverse("Fixture Group");
             var reversed = catalog.List().Single().Projects;

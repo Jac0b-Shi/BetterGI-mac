@@ -355,6 +355,14 @@ public sealed class CoreRpcServer(
                 "catalog.saveScriptGroup" => _catalog.Save(
                     RequiredString(request.Params, "name"),
                     request.Params?["document"] as JObject ?? throw new ArgumentException("document is required.")),
+                "catalog.createScriptGroup" => _catalog.Create(RequiredString(request.Params, "name")),
+                "catalog.copyScriptGroup" => _catalog.Copy(
+                    RequiredString(request.Params, "sourceName"),
+                    RequiredString(request.Params, "targetName")),
+                "catalog.renameScriptGroup" => _catalog.Rename(
+                    RequiredString(request.Params, "sourceName"),
+                    RequiredString(request.Params, "targetName")),
+                "catalog.deleteScriptGroup" => _catalog.Delete(RequiredString(request.Params, "name")),
                 "catalog.setScriptGroupProjectEnabled" => _catalog.SetProjectEnabled(
                     RequiredString(request.Params, "name"),
                     request.Params?.Value<int?>("projectIndex")

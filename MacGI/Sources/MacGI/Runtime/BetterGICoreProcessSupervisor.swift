@@ -617,6 +617,54 @@ actor BetterGICoreProcessSupervisor {
         return try client.listScriptGroups()
     }
 
+    func createScriptGroup(name: String) throws {
+        try requireScriptGroupResult(
+            method: "catalog.createScriptGroup",
+            expectedName: name,
+            parameters: ["name": name]
+        )
+    }
+
+    func copyScriptGroup(sourceName: String, targetName: String) throws {
+        try requireScriptGroupResult(
+            method: "catalog.copyScriptGroup",
+            expectedName: targetName,
+            parameters: ["sourceName": sourceName, "targetName": targetName]
+        )
+    }
+
+    func renameScriptGroup(sourceName: String, targetName: String) throws {
+        try requireScriptGroupResult(
+            method: "catalog.renameScriptGroup",
+            expectedName: targetName,
+            parameters: ["sourceName": sourceName, "targetName": targetName]
+        )
+    }
+
+    func deleteScriptGroup(name: String) throws {
+        guard let result = try runningClient().request(
+            method: "catalog.deleteScriptGroup",
+            parameters: ["name": name]
+        ) as? [String: Any], result["deletedName"] as? String == name else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid catalog.deleteScriptGroup result."
+            )
+        }
+    }
+
+    private func requireScriptGroupResult(
+        method: String,
+        expectedName: String,
+        parameters: [String: Any]
+    ) throws {
+        guard let result = try runningClient().request(
+            method: method,
+            parameters: parameters
+        ) as? [String: Any], result["name"] as? String == expectedName else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid \(method) result.")
+        }
+    }
+
     func setScriptGroupProjectEnabled(groupName: String, projectIndex: Int, enabled: Bool) throws {
         guard case .running = state, let client else {
             throw BetterGICoreRPCError.socket("BetterGI Core is not running.")

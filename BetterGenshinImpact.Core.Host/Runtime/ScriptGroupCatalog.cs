@@ -41,6 +41,65 @@ public sealed class ScriptGroupCatalog(RuntimeLayout layout)
             return SaveGroup(name, group);
     }
 
+    public ScriptGroupSummary Create(string name)
+    {
+        lock (_writeLock)
+        {
+            EnsureGroupDoesNotExist(name);
+            var groups = ReadOrderedGroups();
+            var group = new ScriptGroup { Name = name };
+            groups.Add(group);
+            SaveOrderedGroups(groups);
+            return ReadSummary(Resolve(name));
+        }
+    }
+
+    public ScriptGroupSummary Copy(string sourceName, string targetName)
+    {
+        lock (_writeLock)
+        {
+            EnsureGroupDoesNotExist(targetName);
+            var source = ReadGroup(Resolve(sourceName));
+            var copy = ScriptGroup.FromJson(source.ToJson());
+            copy.Name = targetName;
+            var groups = ReadOrderedGroups();
+            groups.Add(copy);
+            SaveOrderedGroups(groups);
+            return ReadSummary(Resolve(targetName));
+        }
+    }
+
+    public ScriptGroupSummary Rename(string sourceName, string targetName)
+    {
+        lock (_writeLock)
+        {
+            if (string.Equals(sourceName, targetName, StringComparison.Ordinal))
+                return ReadSummary(Resolve(sourceName));
+            EnsureGroupDoesNotExist(targetName);
+            var sourcePath = Resolve(sourceName);
+            var group = ReadGroup(sourcePath);
+            group.Name = targetName;
+            SaveGroup(targetName, group);
+            File.Delete(sourcePath);
+            RewriteNextProjectGroupName(sourceName, targetName);
+            return ReadSummary(Resolve(targetName));
+        }
+    }
+
+    public object Delete(string name)
+    {
+        lock (_writeLock)
+        {
+            var path = Resolve(name);
+            if (!File.Exists(path))
+                throw new FileNotFoundException($"Script group does not exist: {name}", path);
+            File.Delete(path);
+            ClearNextProjectForGroup(name);
+            SaveOrderedGroups(ReadOrderedGroups());
+            return new { deletedName = name };
+        }
+    }
+
     public ScriptGroupSummary SetProjectEnabled(string name, int projectIndex, bool enabled)
     {
         lock (_writeLock)
@@ -373,6 +432,26 @@ public sealed class ScriptGroupCatalog(RuntimeLayout layout)
         return Read(path);
     }
 
+    private List<ScriptGroup> ReadOrderedGroups()
+    {
+        layout.EnsureCreated();
+        return Directory.EnumerateFiles(layout.ScriptGroupPath, "*.json", SearchOption.TopDirectoryOnly)
+            .Select(path => (Path: path, Group: ReadGroup(path)))
+            .OrderBy(item => item.Group.Index)
+            .ThenBy(item => Path.GetFileName(item.Path), StringComparer.Ordinal)
+            .Select(item => item.Group)
+            .ToList();
+    }
+
+    private void SaveOrderedGroups(IReadOnlyList<ScriptGroup> groups)
+    {
+        for (var index = 0; index < groups.Count; index++)
+        {
+            groups[index].Index = index + 1;
+            SaveGroup(groups[index].Name, groups[index]);
+        }
+    }
+
     private ScriptGroupDocument Read(string path)
     {
         var text = File.ReadAllText(path, Encoding.UTF8);
@@ -470,6 +549,37 @@ public sealed class ScriptGroupCatalog(RuntimeLayout layout)
         catch { return false; }
     }
 
+    private void RewriteNextProjectGroupName(string sourceName, string targetName)
+    {
+        if (!File.Exists(layout.SchedulerStatePath)) return;
+        try
+        {
+            var state = JObject.Parse(File.ReadAllText(layout.SchedulerStatePath));
+            if (state.Value<string>("groupName") != sourceName) return;
+            state["groupName"] = targetName;
+            WriteAtomic(layout.SchedulerStatePath, state.ToString(Formatting.Indented) + Environment.NewLine);
+        }
+        catch
+        {
+            File.Delete(layout.SchedulerStatePath);
+        }
+    }
+
+    private void ClearNextProjectForGroup(string groupName)
+    {
+        if (!File.Exists(layout.SchedulerStatePath)) return;
+        try
+        {
+            var state = JObject.Parse(File.ReadAllText(layout.SchedulerStatePath));
+            if (state.Value<string>("groupName") == groupName)
+                File.Delete(layout.SchedulerStatePath);
+        }
+        catch
+        {
+            File.Delete(layout.SchedulerStatePath);
+        }
+    }
+
     private static void ApplyDefaults(IEnumerable<SettingItem> schema, JObject values)
     {
         foreach (var item in schema.Where(item => item.Type != "separator" && !string.IsNullOrWhiteSpace(item.Name)))
@@ -549,5 +659,12 @@ public sealed class ScriptGroupCatalog(RuntimeLayout layout)
         if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || name is "." or ".." || name.Contains('/') || name.Contains('\\'))
             throw new ArgumentException("Script group name contains invalid path characters.", nameof(name));
         return Path.Combine(layout.ScriptGroupPath, name + ".json");
+    }
+
+    private void EnsureGroupDoesNotExist(string name)
+    {
+        var path = Resolve(name);
+        if (File.Exists(path))
+            throw new InvalidOperationException($"Script group already exists: {name}");
     }
 }

@@ -522,6 +522,67 @@ final class AppState: ObservableObject {
         }
     }
 
+    func createSchedulerGroup(name: String) async throws {
+        let name = try validatedSchedulerGroupName(name)
+        guard let supervisor = betterGICoreSupervisor else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is unavailable.")
+        }
+        guard currentSchedulerProjectID == nil else {
+            throw BetterGICoreRPCError.protocolViolation("调度器运行期间不能修改配置组。")
+        }
+        try await supervisor.createScriptGroup(name: name)
+        selectedSchedulerGroupName = name
+        await loadSchedulerGroupsFromCore()
+    }
+
+    func copySchedulerGroup(sourceName: String, targetName: String) async throws {
+        let targetName = try validatedSchedulerGroupName(targetName)
+        guard let supervisor = betterGICoreSupervisor else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is unavailable.")
+        }
+        guard currentSchedulerProjectID == nil else {
+            throw BetterGICoreRPCError.protocolViolation("调度器运行期间不能修改配置组。")
+        }
+        try await supervisor.copyScriptGroup(sourceName: sourceName, targetName: targetName)
+        selectedSchedulerGroupName = targetName
+        await loadSchedulerGroupsFromCore()
+    }
+
+    func renameSchedulerGroup(sourceName: String, targetName: String) async throws {
+        let targetName = try validatedSchedulerGroupName(targetName)
+        guard let supervisor = betterGICoreSupervisor else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is unavailable.")
+        }
+        guard currentSchedulerProjectID == nil else {
+            throw BetterGICoreRPCError.protocolViolation("调度器运行期间不能修改配置组。")
+        }
+        try await supervisor.renameScriptGroup(sourceName: sourceName, targetName: targetName)
+        selectedSchedulerGroupName = targetName
+        await loadSchedulerGroupsFromCore()
+    }
+
+    func deleteSchedulerGroup(name: String) async throws {
+        guard let supervisor = betterGICoreSupervisor else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is unavailable.")
+        }
+        guard currentSchedulerProjectID == nil else {
+            throw BetterGICoreRPCError.protocolViolation("调度器运行期间不能修改配置组。")
+        }
+        try await supervisor.deleteScriptGroup(name: name)
+        if selectedSchedulerGroupName == name {
+            selectedSchedulerGroupName = ""
+        }
+        await loadSchedulerGroupsFromCore()
+    }
+
+    private func validatedSchedulerGroupName(_ name: String) throws -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw BetterGICoreRPCError.protocolViolation("配置组名称不能为空。")
+        }
+        return trimmed
+    }
+
     func setSchedulerProjectEnabled(projectIndex: Int, enabled: Bool) {
         guard currentSchedulerProjectID == nil else {
             addLog(.error, "Cannot edit scheduler group while it is running.")

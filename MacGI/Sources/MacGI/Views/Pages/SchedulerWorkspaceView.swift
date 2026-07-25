@@ -4,6 +4,9 @@ private enum SchedulerSheet: Identifiable {
     case common(Int)
     case custom(Int)
     case add(String)
+    case createGroup
+    case renameGroup(String)
+    case copyGroup(String)
     case groupSettings
     case repository
 
@@ -12,16 +15,25 @@ private enum SchedulerSheet: Identifiable {
         case .common(let index): "common-\(index)"
         case .custom(let index): "custom-\(index)"
         case .add(let type): "add-\(type)"
+        case .createGroup: "create-group"
+        case .renameGroup(let name): "rename-group-\(name)"
+        case .copyGroup(let name): "copy-group-\(name)"
         case .groupSettings: "group-settings"
         case .repository: "repository"
         }
     }
 }
 
+private struct SchedulerGroupDeletion: Identifiable {
+    let name: String
+    var id: String { name }
+}
+
 struct SchedulerWorkspaceView: View {
     @EnvironmentObject private var appState: AppState
     @State private var sheet: SchedulerSheet?
     @State private var confirmingClear = false
+    @State private var groupDeletion: SchedulerGroupDeletion?
 
     var body: some View {
         let selectedGroup = appState.selectedSchedulerGroup
@@ -39,7 +51,11 @@ struct SchedulerWorkspaceView: View {
         ) {
             BGIGroupSidebar(title: "配置组", groups: appState.schedulerGroups.map(\.name),
                             selected: selectedGroup?.name ?? "",
-                            onSelect: { appState.selectedSchedulerGroupName = $0 })
+                            onSelect: { appState.selectedSchedulerGroupName = $0 },
+                            onAdd: { sheet = .createGroup },
+                            onRename: { sheet = .renameGroup($0) },
+                            onCopy: { sheet = .copyGroup($0) },
+                            onDelete: { groupDeletion = SchedulerGroupDeletion(name: $0) })
         } content: {
             VStack(alignment: .leading, spacing: 14) {
                 operationPanel
@@ -51,6 +67,9 @@ struct SchedulerWorkspaceView: View {
             case .common(let index): SchedulerProjectCommonSettingsSheet(projectIndex: index)
             case .custom(let index): SchedulerProjectCustomSettingsSheet(projectIndex: index)
             case .add(let type): SchedulerAddProjectsSheet(type: type)
+            case .createGroup: SchedulerGroupNameSheet(mode: .create)
+            case .renameGroup(let name): SchedulerGroupNameSheet(mode: .rename(name))
+            case .copyGroup(let name): SchedulerGroupNameSheet(mode: .copy(name))
             case .groupSettings: SchedulerGroupSettingsSheet()
             case .repository: ScriptRepositorySheet()
             }
@@ -58,6 +77,30 @@ struct SchedulerWorkspaceView: View {
         .confirmationDialog("是否清空当前配置组的所有任务？", isPresented: $confirmingClear) {
             Button("清空", role: .destructive) {
                 appState.performSchedulerCatalogMutation(.clear)
+            }
+        }
+        .confirmationDialog(
+            "是否删除配置组“\(groupDeletion?.name ?? "")”？",
+            isPresented: Binding(
+                get: { groupDeletion != nil },
+                set: { if !$0 { groupDeletion = nil } }
+            )
+        ) {
+            if let groupDeletion {
+                Button("删除组", role: .destructive) {
+                    let name = groupDeletion.name
+                    self.groupDeletion = nil
+                    Task {
+                        do {
+                            try await appState.deleteSchedulerGroup(name: name)
+                        } catch {
+                            appState.addLog(
+                                .error,
+                                "Delete scheduler group failed: \(error.localizedDescription)"
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -158,6 +201,92 @@ struct SchedulerWorkspaceView: View {
 
     private func typeDescription(_ type: String) -> String {
         ["Javascript": "JS脚本", "Pathing": "地图追踪", "KeyMouse": "键鼠脚本", "Shell": "Shell"][type] ?? type
+    }
+}
+
+private enum SchedulerGroupNameMode {
+    case create
+    case rename(String)
+    case copy(String)
+
+    var title: String {
+        switch self {
+        case .create: "新增配置组"
+        case .rename: "重命名配置组"
+        case .copy: "复制配置组"
+        }
+    }
+
+    var initialName: String {
+        switch self {
+        case .create: ""
+        case .rename(let name), .copy(let name): name
+        }
+    }
+}
+
+private struct SchedulerGroupNameSheet: View {
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.dismiss) private var dismiss
+    let mode: SchedulerGroupNameMode
+    @State private var name: String
+    @State private var error: String?
+    @State private var saving = false
+
+    init(mode: SchedulerGroupNameMode) {
+        self.mode = mode
+        _name = State(initialValue: mode.initialName)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(mode.title).font(.title2).bold()
+            TextField("配置组名称", text: $name)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit(save)
+            if let error {
+                Text(error)
+                    .foregroundStyle(BGIColors.danger)
+                    .textSelection(.enabled)
+            }
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                Button("确定", action: save)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(saving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 420)
+    }
+
+    private func save() {
+        guard !saving else { return }
+        saving = true
+        error = nil
+        Task {
+            do {
+                switch mode {
+                case .create:
+                    try await appState.createSchedulerGroup(name: name)
+                case .rename(let sourceName):
+                    try await appState.renameSchedulerGroup(
+                        sourceName: sourceName,
+                        targetName: name
+                    )
+                case .copy(let sourceName):
+                    try await appState.copySchedulerGroup(
+                        sourceName: sourceName,
+                        targetName: name
+                    )
+                }
+                dismiss()
+            } catch {
+                self.error = error.localizedDescription
+                saving = false
+            }
+        }
     }
 }
 
