@@ -16,6 +16,32 @@ enum BetterGICoreRPCError: Error, LocalizedError, Equatable {
     }
 }
 
+enum BetterGICoreSocket {
+    static func makeStreamSocket() throws -> Int32 {
+        let descriptor = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
+        guard descriptor >= 0 else { throw posixError("socket") }
+
+        var noSigPipe: Int32 = 1
+        guard Darwin.setsockopt(
+            descriptor,
+            SOL_SOCKET,
+            SO_NOSIGPIPE,
+            &noSigPipe,
+            socklen_t(MemoryLayout.size(ofValue: noSigPipe))
+        ) == 0 else {
+            let error = posixError("setsockopt(SO_NOSIGPIPE)")
+            Darwin.close(descriptor)
+            throw error
+        }
+        return descriptor
+    }
+
+    private static func posixError(_ operation: String) -> BetterGICoreRPCError {
+        BetterGICoreRPCError.socket(
+            "\(operation) failed: \(String(cString: strerror(errno)))")
+    }
+}
+
 struct BetterGICoreHandshake: Equatable, Sendable {
     let protocolVersion: Int
     let runtimeVersion: String
@@ -360,8 +386,7 @@ final class BetterGICoreRPCClient: @unchecked Sendable {
         defer { lock.unlock() }
         guard descriptor < 0 else { return }
 
-        let fd = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { throw posixError("socket") }
+        let fd = try BetterGICoreSocket.makeStreamSocket()
         do {
             var address = sockaddr_un()
             address.sun_family = sa_family_t(AF_UNIX)

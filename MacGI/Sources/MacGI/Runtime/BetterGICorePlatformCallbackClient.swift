@@ -78,8 +78,7 @@ final class BetterGICorePlatformCallbackClient: @unchecked Sendable {
     }
 
     private func connectSocket() throws -> Int32 {
-        let fd = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { throw posixError("socket") }
+        let fd = try BetterGICoreSocket.makeStreamSocket()
         do {
             var address = sockaddr_un()
             address.sun_family = sa_family_t(AF_UNIX)
