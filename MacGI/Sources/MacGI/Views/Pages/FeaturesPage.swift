@@ -7,17 +7,23 @@ struct FeaturesPage: View {
         VStack(alignment: .leading, spacing: 14) {
             BGIPageTitle(title: "实时触发的自动化任务设置")
             ForEach(appState.features) { feature in
-                if feature.settingsAvailable {
-                    BGIExpandableTaskCard(
-                        icon: feature.icon, title: feature.name, subtitle: feature.detail
-                    ) {
-                        featureToggle(feature)
-                    } content: {
-                        triggerSettings(for: feature.id)
+                if feature.id != "GameLoading" {
+                    if feature.settingsAvailable {
+                        BGIExpandableTaskCard(
+                            icon: feature.icon, title: feature.name, subtitle: feature.detail
+                        ) {
+                            featureToggle(feature)
+                        } content: {
+                            triggerSettings(for: feature.id)
+                        }
+                    } else {
+                        BGITaskCard(icon: feature.icon, title: feature.name, subtitle: feature.detail) {
+                            featureToggle(feature)
+                        }
                     }
-                } else {
-                    BGITaskCard(icon: feature.icon, title: feature.name, subtitle: feature.detail) {
-                        featureToggle(feature)
+
+                    if feature.id == "AutoSkip" {
+                        autoHangoutCard
                     }
                 }
             }
@@ -55,15 +61,6 @@ struct FeaturesPage: View {
     @ViewBuilder
     private var autoPickSettings: some View {
         if let settings = appState.autoPickTriggerSettings {
-            BGISettingLine(
-                title: "极速拾取模式",
-                subtitle: "打开后不再识别具体拾取内容，黑名单与白名单不会生效"
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { settings.fastModeEnabled },
-                    set: { appState.saveAutoPickTriggerConfiguration(fastModeEnabled: $0) }))
-                    .toggleStyle(.switch).labelsHidden()
-            }
             BGISettingLine(
                 title: "选择自动拾取文字识别引擎",
                 subtitle: "Paddle可识别所有文字,速度慢,消耗少;Yap可识别部分文字,快且准,消耗大"
@@ -120,6 +117,25 @@ struct FeaturesPage: View {
     }
 
     @ViewBuilder
+    private var autoHangoutCard: some View {
+        if let settings = appState.autoSkipTriggerSettings {
+            BGIExpandableTaskCard(
+                icon: .symbol("person.2"),
+                title: "自动邀约",
+                subtitle: "自动剧情开启的情况下此功能才会生效，自动选择邀约选项"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.autoHangoutEventEnabled },
+                    set: { appState.saveAutoSkipTriggerSettings(autoHangoutEventEnabled: $0) }))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            } content: {
+                AutoHangoutTriggerSettingsView()
+            }
+        }
+    }
+
+    @ViewBuilder
     private var autoEatSettings: some View {
         if let settings = appState.autoEatTriggerSettings {
             BGISettingLine(title: "触发时间间隔（毫秒）", subtitle: "多少时间检查一次是否红血或需要复活") {
@@ -140,13 +156,13 @@ struct FeaturesPage: View {
     @ViewBuilder
     private var quickTeleportSettings: some View {
         if let settings = appState.quickTeleportTriggerSettings {
-            BGISettingLine(title: "点击候选列表传送点的间隔时间（毫秒）", subtitle: "需要根据文字识别耗时配置，太低会导致点击失败") {
+            BGISettingLine(title: "点击候选列表传送点的间隔时间（毫秒）", subtitle: "普通用户请不要修改此配置，需要根据文字识别耗时配置，太低会导致点击失败") {
                 TextField("", value: Binding(
                     get: { settings.teleportListClickDelay },
                     set: { appState.saveQuickTeleportTriggerSettings(teleportListClickDelay: $0) }), format: .number)
                     .frame(width: 90).multilineTextAlignment(.trailing)
             }
-            BGISettingLine(title: "等待右侧传送弹出界面的时间（毫秒）", subtitle: "不建议低于 80ms，太低会导致传送按钮识别不到") {
+            BGISettingLine(title: "等待右侧传送弹出界面的时间（毫秒）", subtitle: "普通用户请不要修改此配置，不建议低于80ms，太低会导致传送按钮识别不到") {
                 TextField("", value: Binding(
                     get: { settings.waitTeleportPanelDelay },
                     set: { appState.saveQuickTeleportTriggerSettings(waitTeleportPanelDelay: $0) }), format: .number)
@@ -164,7 +180,7 @@ struct FeaturesPage: View {
     @ViewBuilder
     private var mapMaskSettings: some View {
         if let settings = appState.mapMaskTriggerSettings {
-            BGISettingLine(title: "启用小地图遮罩", subtitle: "在小地图上显示已选择的点位") {
+            BGISettingLine(title: "启用小地图遮罩", subtitle: "在小地图上显示点位") {
                 Toggle("", isOn: Binding(
                     get: { settings.miniMapMaskEnabled },
                     set: { appState.saveMapMaskTriggerSettings(miniMapMaskEnabled: $0) }))

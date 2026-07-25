@@ -2416,7 +2416,7 @@ final class AppState: ObservableObject {
         ]
         return definitions.map { id, name, glyph in
             let enabled = id == "AutoHangout"
-                ? (features.first(where: { $0.id == "AutoSkip" })?.autoHangoutEventEnabled ?? false)
+                ? (autoSkipTriggerSettings?.autoHangoutEventEnabled ?? false)
                 : (features.first(where: { $0.id == id })?.isEnabled ?? false)
             return OverlayStatusItem(id: id, glyph: glyph, name: name, isEnabled: enabled)
         }
@@ -3219,13 +3219,13 @@ final class AppState: ObservableObject {
 
     private static let triggerPresentation: [String: (detail: String, icon: BGIIcon, glyph: String)] = [
         "GameLoading": ("处理游戏启动和加载界面。", .symbol("hourglass"), "\u{f252}"),
-        "AutoPick": ("自动拾取和交互。", .symbol("hand.wave"), "\u{f256}"),
-        "AutoSkip": ("自动推进剧情和选择对话选项。", .fgi("\u{f075}"), "\u{f075}"),
-        "AutoFish": ("半自动钓鱼触发器。", .fgi("\u{f578}"), "\u{f578}"),
-        "AutoEat": ("检测低血量并使用营养袋。", .fgi("\u{f0f1}"), "\u{f0f1}"),
-        "QuickTeleport": ("自动完成大地图传送确认。", .fgi("\u{f3c5}"), "\u{f3c5}"),
-        "MapMask": ("输出地图遮罩绘制命令。", .fgi("\u{f279}"), "\u{f279}"),
-        "SkillCd": ("显示角色技能冷却状态。", .symbol("timer"), "\u{f017}"),
+        "AutoPick": ("选项不是NPC对话且不在黑名单时，自动按下 F 拾取/交互", .symbol("hand.wave"), "\u{f256}"),
+        "AutoSkip": ("快速跳过剧情文本、自动选择选项、自动提交物品等", .fgi("\u{f075}"), "\u{f075}"),
+        "AutoFish": ("半自动钓鱼需要手动抛竿（全自动钓鱼已迁移至独立任务下）", .fgi("\u{f578}"), "\u{f578}"),
+        "AutoEat": ("检测角色红血状态，自动使用便携营养袋回复生命值", .fgi("\u{f0f1}"), "\u{f0f1}"),
+        "QuickTeleport": ("在大地图上点击传送点（或列表中有传送点）时，自动点击传送", .fgi("\u{f3c5}"), "\u{f3c5}"),
+        "MapMask": ("在遮罩窗口中显示大地图位置与标点信息", .fgi("\u{f279}"), "\u{f279}"),
+        "SkillCd": ("在头像旁显示角色元素战技剩余冷却时间", .symbol("timer"), "\u{f017}"),
     ]
 
     private func loadTriggerStatesFromCore() async {

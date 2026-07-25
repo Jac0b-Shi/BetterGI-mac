@@ -96,43 +96,69 @@ struct AutoSkipTriggerSettingsView: View {
                     "自动领取已完成探索的奖励，并重新派遣",
                     settings.autoReExploreEnabled
                 ) { appState.saveAutoSkipTriggerSettings(autoReExploreEnabled: $0) }
-
-                toggleLine(
-                    "自动邀约",
-                    "自动剧情开启时自动选择邀约选项",
-                    settings.autoHangoutEventEnabled
-                ) { appState.saveAutoSkipTriggerSettings(autoHangoutEventEnabled: $0) }
-
-                if settings.autoHangoutEventEnabled {
-                    toggleLine(
-                        "存在跳过按钮时自动点击",
-                        "邀约过程中左上角出现跳过按钮时自动点击",
-                        settings.autoHangoutPressSkipEnabled
-                    ) { appState.saveAutoSkipTriggerSettings(autoHangoutPressSkipEnabled: $0) }
-
-                    BGISettingLine(
-                        title: "选择邀约分支（不支持气泡联想选择）",
-                        subtitle: "按照所选分支的关键词选择选项"
-                    ) {
-                        Picker("", selection: Binding(
-                            get: { settings.autoHangoutEndChoose },
-                            set: { appState.saveAutoSkipTriggerSettings(autoHangoutEndChoose: $0) })) {
-                            Text("不指定邀约分支").tag("")
-                            ForEach(settings.autoHangoutEndChooseOptions, id: \.self) {
-                                Text($0).tag($0)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(width: 260)
-                    }
-
-                    numberLine(
-                        "选择邀约选项前的延迟（毫秒）",
-                        "方便在自动邀约时看清楚选项",
-                        settings.autoHangoutChooseOptionSleepDelay
-                    ) { appState.saveAutoSkipTriggerSettings(autoHangoutChooseOptionSleepDelay: $0) }
-                }
             }
+        }
+    }
+
+    private func toggleLine(
+        _ title: String,
+        _ subtitle: String,
+        _ value: Bool,
+        save: @escaping (Bool) -> Void
+    ) -> some View {
+        BGISettingLine(title: title, subtitle: subtitle) {
+            Toggle("", isOn: Binding(get: { value }, set: { save($0) }))
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+    }
+
+    private func numberLine(
+        _ title: String,
+        _ subtitle: String,
+        _ value: Int,
+        save: @escaping (Int) -> Void
+    ) -> some View {
+        BGISettingLine(title: title, subtitle: subtitle) {
+            TextField("", value: Binding(get: { value }, set: { save($0) }), format: .number)
+                .frame(width: 90)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+}
+
+struct AutoHangoutTriggerSettingsView: View {
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        if let settings = appState.autoSkipTriggerSettings {
+            toggleLine(
+                "存在跳过按钮时自动点击",
+                "邀约过程中左上角存在跳过按钮时候，自动点击跳过",
+                settings.autoHangoutPressSkipEnabled
+            ) { appState.saveAutoSkipTriggerSettings(autoHangoutPressSkipEnabled: $0) }
+
+            BGISettingLine(
+                title: "选择邀约分支（不支持气泡联想选择）",
+                subtitle: "会按照选择分支的关键词进行选项选择"
+            ) {
+                Picker("", selection: Binding(
+                    get: { settings.autoHangoutEndChoose },
+                    set: { appState.saveAutoSkipTriggerSettings(autoHangoutEndChoose: $0) })) {
+                    Text("不指定邀约分支").tag("")
+                    ForEach(settings.autoHangoutEndChooseOptions, id: \.self) {
+                        Text($0).tag($0)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 260)
+            }
+
+            numberLine(
+                "选择邀约选项前的延迟（毫秒）",
+                "方便在自动邀约的情况下，依旧能够看清楚选项",
+                settings.autoHangoutChooseOptionSleepDelay
+            ) { appState.saveAutoSkipTriggerSettings(autoHangoutChooseOptionSleepDelay: $0) }
         }
     }
 
