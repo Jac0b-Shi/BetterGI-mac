@@ -13,7 +13,8 @@ public sealed class MacTriggerDispatcher(
     ILogger<MacTriggerDispatcher> logger,
     CancellationToken shutdown,
     Func<CancellationToken, Task>? runLoop = null,
-    Func<CancellationToken, Task>? stopCleanup = null)
+    Func<CancellationToken, Task>? stopCleanup = null,
+    Func<CancellationToken, bool>? isGameActive = null)
 {
     private const int IntervalMilliseconds = 50;
     private const int CaptureFailureBackoffMilliseconds = 500;
@@ -100,6 +101,9 @@ public sealed class MacTriggerDispatcher(
 
             try
             {
+                if (isGameActive is not null && !isGameActive(cancellationToken))
+                    continue;
+
                 using var content = new CaptureContent(
                     TaskControl.CaptureToRectArea(), _frameIndex++, IntervalMilliseconds);
                 content.CurrentGameUiCategory = Bv.WhichGameUiForTriggers(content.CaptureRectArea);

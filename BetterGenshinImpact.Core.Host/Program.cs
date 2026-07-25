@@ -152,7 +152,8 @@ var triggerDispatcher = new MacTriggerDispatcher(
             throw new InvalidDataException(
                 "macOS did not acknowledge HTML mask cleanup.");
         }
-    });
+    },
+    isGameActive: foregroundInputCoordinator.IsGameFocused);
 server.AttachTriggerDispatcher(triggerDispatcher);
 server.AttachPlatformAssetInitializer(() =>
 {
