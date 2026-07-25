@@ -291,7 +291,13 @@ struct BetterGICoreAutoFishingSettings: Sendable, Equatable {
     let wholeProcessTimeoutSeconds: Int
     let fishingTimePolicy: String
     let fishingTimePolicyOptions: [BetterGICoreNamedOption]
+    let screenshotEnabled: Bool
     let saveScreenshotOnKeyTick: Bool
+}
+
+struct BetterGICoreCommonSettings: Sendable, Equatable {
+    let screenshotEnabled: Bool
+    let screenshotUidCoverEnabled: Bool
 }
 
 struct BetterGICoreAutoWoodSettings: Sendable, Equatable {
@@ -791,6 +797,23 @@ actor BetterGICoreProcessSupervisor {
         try parseNotificationSettings(runningClient().request(method: "notification.settings.get"))
     }
 
+    func commonSettings() throws -> BetterGICoreCommonSettings {
+        try parseCommonSettings(runningClient().request(method: "common.settings.get"))
+    }
+
+    func saveCommonSettings(
+        _ settings: BetterGICoreCommonSettings
+    ) throws -> BetterGICoreCommonSettings {
+        try parseCommonSettings(runningClient().request(
+            method: "common.settings.save",
+            parameters: [
+                "settings": [
+                    "screenshotEnabled": settings.screenshotEnabled,
+                    "screenshotUidCoverEnabled": settings.screenshotUidCoverEnabled,
+                ],
+            ]))
+    }
+
     func saveNotificationSettings(
         _ settings: BetterGINotificationSettings
     ) throws -> BetterGINotificationSettings {
@@ -1113,6 +1136,19 @@ actor BetterGICoreProcessSupervisor {
             webhookEndpoint: webhookEndpoint,
             webhookSendTo: webhookSendTo,
             channels: channels)
+    }
+
+    private func parseCommonSettings(_ value: Any) throws -> BetterGICoreCommonSettings {
+        guard let result = value as? [String: Any],
+              let screenshotEnabled = result["screenshotEnabled"] as? Bool,
+              let screenshotUidCoverEnabled =
+                result["screenshotUidCoverEnabled"] as? Bool
+        else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid common settings.")
+        }
+        return .init(
+            screenshotEnabled: screenshotEnabled,
+            screenshotUidCoverEnabled: screenshotUidCoverEnabled)
     }
 
     private func parseHotKeyBindings(_ value: Any) throws
@@ -2653,6 +2689,7 @@ actor BetterGICoreProcessSupervisor {
               let wholeProcessTimeoutSeconds = value["wholeProcessTimeoutSeconds"] as? Int,
               let fishingTimePolicy = value["fishingTimePolicy"] as? String,
               let rawOptions = value["fishingTimePolicyOptions"] as? [[String: Any]],
+              let screenshotEnabled = value["screenshotEnabled"] as? Bool,
               let saveScreenshotOnKeyTick = value["saveScreenshotOnKeyTick"] as? Bool else {
             throw BetterGICoreRPCError.protocolViolation("Invalid AutoFishing settings.")
         }
@@ -2668,6 +2705,7 @@ actor BetterGICoreProcessSupervisor {
                      wholeProcessTimeoutSeconds: wholeProcessTimeoutSeconds,
                      fishingTimePolicy: fishingTimePolicy,
                      fishingTimePolicyOptions: options,
+                     screenshotEnabled: screenshotEnabled,
                      saveScreenshotOnKeyTick: saveScreenshotOnKeyTick)
     }
 

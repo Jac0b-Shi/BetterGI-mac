@@ -39,8 +39,14 @@ struct SettingsPage: View {
                         .labelsHidden()
                 }
                 BGISettingLine(title: "启用UID遮盖", subtitle: "遮盖右下角 UID 区域。") {
-                    Toggle("", isOn: $appState.overlayUidCoverEnabled)
+                    Toggle("", isOn: Binding(
+                        get: {
+                            appState.commonSettings?.screenshotUidCoverEnabled
+                                ?? appState.overlayUidCoverEnabled
+                        },
+                        set: { appState.saveCommonSettings(screenshotUidCoverEnabled: $0) }))
                         .labelsHidden()
+                        .disabled(appState.commonSettings == nil)
                 }
                 BGISettingLine(title: "显示小地图方位", subtitle: "在小地图周围显示东南西北文字。") {
                     Toggle("", isOn: $appState.showOverlayDirections)
@@ -67,6 +73,16 @@ struct SettingsPage: View {
             BGISettingGroup(icon: "gearshape", title: "通用", subtitle: "betterGI-mac 软件本体设置。") {
                 EmptyView()
             } content: {
+                BGISettingLine(
+                    title: "启用保存截图功能（开发者）",
+                    subtitle: "可以通过快捷键保存截图，文件保存在 log/screenshot"
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { appState.commonSettings?.screenshotEnabled ?? false },
+                        set: { appState.saveCommonSettings(screenshotEnabled: $0) }))
+                        .labelsHidden()
+                        .disabled(appState.commonSettings == nil)
+                }
                 BGISettingLine(title: "启动时显示 HUD", subtitle: "启动后自动显示右下角状态浮层。") {
                     Toggle("", isOn: $appState.showHUDOnStart)
                         .labelsHidden()

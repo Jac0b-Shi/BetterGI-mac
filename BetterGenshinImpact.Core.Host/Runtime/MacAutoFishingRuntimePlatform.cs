@@ -21,7 +21,6 @@ public sealed class MacAutoFishingRuntimePlatform : IAutoFishingRuntimePlatform
     private readonly Func<ISystemInfo> _systemInfoProvider;
     private readonly MacImageRegionOcrService _recognition;
     private readonly ILoggerFactory _loggerFactory;
-    private readonly bool _screenshotUidCoverEnabled;
     private readonly object _configLock = new();
     private AutoFishingConfig _config;
 
@@ -35,7 +34,7 @@ public sealed class MacAutoFishingRuntimePlatform : IAutoFishingRuntimePlatform
         _systemInfoProvider = systemInfoProvider ?? throw new ArgumentNullException(nameof(systemInfoProvider));
         _recognition = recognition;
         _loggerFactory = loggerFactory;
-        (_config, GameCultureInfoName, _screenshotUidCoverEnabled) = LoadConfig();
+        (_config, GameCultureInfoName) = LoadConfig();
     }
 
     public ISystemInfo SystemInfo => _systemInfoProvider();
@@ -76,17 +75,17 @@ public sealed class MacAutoFishingRuntimePlatform : IAutoFishingRuntimePlatform
         var directory = Path.Combine(_layout.RootPath, "log", "screenshot");
         Directory.CreateDirectory(directory);
         using var image = imageRegion.SrcMat.Clone();
-        if (_screenshotUidCoverEnabled)
+        if (ScreenshotUidCoverEnabled())
             ScreenshotPrivacy.ApplyUidCover(image, SystemInfo.ScaleTo1080PRatio);
         var path = Path.Combine(directory, safeName);
         if (!Cv2.ImWrite(path, image))
             throw new IOException($"OpenCV failed to save AutoFishing screenshot '{safeName}'.");
     }
 
-    private (AutoFishingConfig Config, string Culture, bool ScreenshotUidCoverEnabled) LoadConfig()
+    private (AutoFishingConfig Config, string Culture) LoadConfig()
     {
         var path = Path.Combine(_layout.UserPath, "config.json");
-        if (!File.Exists(path)) return (new AutoFishingConfig(), "zh-Hans", true);
+        if (!File.Exists(path)) return (new AutoFishingConfig(), "zh-Hans");
         var root = JsonNode.Parse(File.ReadAllText(path), documentOptions: new JsonDocumentOptions
         {
             AllowTrailingCommas = true,
@@ -95,9 +94,20 @@ public sealed class MacAutoFishingRuntimePlatform : IAutoFishingRuntimePlatform
         var config = root["autoFishingConfig"]?.Deserialize<AutoFishingConfig>(ConfigJson.Options)
             ?? new AutoFishingConfig();
         var culture = root["otherConfig"]?["gameCultureInfoName"]?.GetValue<string>() ?? "zh-Hans";
-        var uidCover = root["commonConfig"]?["screenshotUidCoverEnabled"]?.GetValue<bool>() ?? true;
         _ = System.Globalization.CultureInfo.GetCultureInfo(culture);
-        return (config, culture, uidCover);
+        return (config, culture);
+    }
+
+    private bool ScreenshotUidCoverEnabled()
+    {
+        var path = Path.Combine(_layout.UserPath, "config.json");
+        if (!File.Exists(path)) return true;
+        var root = JsonNode.Parse(File.ReadAllText(path), documentOptions: new JsonDocumentOptions
+        {
+            AllowTrailingCommas = true,
+            CommentHandling = JsonCommentHandling.Skip,
+        }) as JsonObject ?? throw new InvalidDataException("User/config.json root must be an object.");
+        return root["commonConfig"]?["screenshotUidCoverEnabled"]?.GetValue<bool>() ?? true;
     }
 
     private void PersistConfig(AutoFishingConfig config)

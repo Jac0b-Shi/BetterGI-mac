@@ -429,6 +429,7 @@ final class AppState: ObservableObject {
     @Published private(set) var keyMousePlaybackStatus = BetterGIKeyMousePlaybackStatus(
         taskID: nil, scriptID: nil, state: "idle", error: nil)
     @Published private(set) var notificationSettings: BetterGINotificationSettings?
+    @Published private(set) var commonSettings: BetterGICoreCommonSettings?
     @Published private(set) var notificationTestStatus = ""
     @Published private(set) var macroSettings: BetterGIMacroSettings?
     @Published private(set) var hotKeyBindings: [BetterGIHotKeyBinding] = []
@@ -1790,6 +1791,7 @@ final class AppState: ObservableObject {
             coreStatus = .ok
             addLog(.info, "BetterGI Core \(handshake.runtimeVersion) connected (\(handshake.architecture))")
             await loadTriggerStatesFromCore()
+            await loadCommonSettingsFromCore()
             await loadSoloTasksFromCore()
             await loadSchedulerGroupsFromCore()
             await synchronizeSchedulerStatusFromCore()
@@ -3661,6 +3663,44 @@ final class AppState: ObservableObject {
         }
     }
 
+    private func loadCommonSettingsFromCore() async {
+        guard let supervisor = betterGICoreSupervisor else {
+            commonSettings = nil
+            return
+        }
+        do {
+            let settings = try await supervisor.commonSettings()
+            commonSettings = settings
+            overlayUidCoverEnabled = settings.screenshotUidCoverEnabled
+        } catch {
+            commonSettings = nil
+            addLog(.error, "BetterGI Core common settings failed: \(error.localizedDescription)")
+        }
+    }
+
+    func saveCommonSettings(
+        screenshotEnabled: Bool? = nil,
+        screenshotUidCoverEnabled: Bool? = nil
+    ) {
+        guard let supervisor = betterGICoreSupervisor,
+              let current = commonSettings else { return }
+        let next = BetterGICoreCommonSettings(
+            screenshotEnabled: screenshotEnabled ?? current.screenshotEnabled,
+            screenshotUidCoverEnabled:
+                screenshotUidCoverEnabled ?? current.screenshotUidCoverEnabled)
+        Task { [weak self] in
+            do {
+                let saved = try await supervisor.saveCommonSettings(next)
+                self?.commonSettings = saved
+                self?.overlayUidCoverEnabled = saved.screenshotUidCoverEnabled
+                self?.autoFishingSettings = try await supervisor.autoFishingSettings()
+            } catch {
+                self?.addLog(.error,
+                    "BetterGI Core common settings save failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
     func saveAutoGeniusInvokationSettings(
         strategyName: String? = nil, sleepDelay: Int? = nil
     ) {
@@ -3712,6 +3752,7 @@ final class AppState: ObservableObject {
                 wholeProcessTimeoutSeconds ?? current.wholeProcessTimeoutSeconds,
             fishingTimePolicy: fishingTimePolicy ?? current.fishingTimePolicy,
             fishingTimePolicyOptions: current.fishingTimePolicyOptions,
+            screenshotEnabled: current.screenshotEnabled,
             saveScreenshotOnKeyTick:
                 saveScreenshotOnKeyTick ?? current.saveScreenshotOnKeyTick)
         Task { [weak self] in

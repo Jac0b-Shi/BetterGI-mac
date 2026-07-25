@@ -316,12 +316,13 @@ struct SoloTasksPage: View {
             }
             BGISettingLine(
                 title: "关键帧保存截图（开发者）",
-                subtitle: "在流程关键时刻保存截图，会产生大量文件，非调试时请关闭"
+                subtitle: "在流程判断的关键时刻保存当时的截图，供分析判断。会大量写入，非调试时请关闭。需要启用保存截图功能"
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.saveScreenshotOnKeyTick },
                     set: { appState.saveAutoFishingSettings(saveScreenshotOnKeyTick: $0) }))
                     .toggleStyle(.switch).labelsHidden()
+                    .disabled(!settings.screenshotEnabled)
             }
         } else { settingsLoading }
     }

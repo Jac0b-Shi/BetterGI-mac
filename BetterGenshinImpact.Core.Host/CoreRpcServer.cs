@@ -27,6 +27,7 @@ public sealed class CoreRpcServer(
     private readonly ScriptRepositoryCatalog _scriptRepositoryCatalog = new(layout);
     private readonly PathingCatalog _pathingCatalog = new(layout);
     private readonly OneDragonCatalog _oneDragonCatalog = new(layout);
+    private readonly CommonSettingsCatalog _commonSettings = new(layout);
     private readonly SoloTaskSettingsCatalog _soloTaskSettings = new(layout);
     private readonly TriggerSettingsCatalog _triggerSettings = new(layout);
     private readonly MacroSettingsCatalog _macroSettings = new(layout);
@@ -439,6 +440,10 @@ public sealed class CoreRpcServer(
                 "repository.web.setGuideStatus" => _scriptRepositoryCatalog.SetGuideStatus(
                     request.Params?.Value<bool?>("status")
                     ?? throw new ArgumentException("status is required.")),
+                "common.settings.get" => _commonSettings.Get(),
+                "common.settings.save" => _commonSettings.Save(
+                    request.Params?["settings"] as JObject
+                    ?? throw new ArgumentException("settings is required.")),
                 "trigger.list" => ListTriggers(),
                 "trigger.setEnabled" => SetTriggerEnabled(
                     RequiredString(request.Params, "name"),

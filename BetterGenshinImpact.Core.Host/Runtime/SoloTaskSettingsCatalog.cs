@@ -43,9 +43,12 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
     {
         lock (_lock)
         {
-            var config = LoadConfig<AutoFishingConfig>(LoadRoot(), "autoFishingConfig");
+            var root = LoadRoot();
+            var config = LoadConfig<AutoFishingConfig>(root, "autoFishingConfig");
             return AutoFishingTaskParam.BuildFromConfig(
-                config, AutoFishingSaveScreenshotOnKeyTick);
+                config,
+                CommonSettingsCatalog.ScreenshotEnabled(root) &&
+                AutoFishingSaveScreenshotOnKeyTick);
         }
     }
 
@@ -127,7 +130,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
                         root, "autoGeniusInvokationConfig")),
                 "AutoCook" => Describe(LoadConfig<AutoCookConfig>(root, "autoCookConfig")),
                 "AutoFishing" => Describe(
-                    LoadConfig<AutoFishingConfig>(root, "autoFishingConfig")),
+                    LoadConfig<AutoFishingConfig>(root, "autoFishingConfig"), root),
                 "AutoWood" => Describe(LoadConfig<AutoWoodConfig>(root, "autoWoodConfig")),
                 "AutoMusicGame" or "AutoAlbum" => Describe(
                     LoadConfig<AutoMusicGameConfig>(root, "autoMusicGameConfig"), name),
@@ -257,7 +260,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             root["autoFishingConfig"] = JsonSerializer.SerializeToNode(config, ConfigJson.Options);
             SaveRoot(root);
             _autoFishingConfigUpdated?.Invoke(config);
-            return Describe(config);
+            return Describe(config, root);
         }
     }
 
@@ -578,7 +581,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         stopTaskWhenRecoverButtonDetected = config.StopTaskWhenRecoverButtonDetected,
     };
 
-    private object Describe(AutoFishingConfig config) => new
+    private object Describe(AutoFishingConfig config, JsonObject root) => new
     {
         name = "AutoFishing",
         autoThrowRodTimeOut = config.AutoThrowRodTimeOut,
@@ -591,7 +594,10 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             new { value = FishingTimePolicy.Nighttime.ToString(), displayName = "夜晚" },
             new { value = FishingTimePolicy.DontChange.ToString(), displayName = "不调" },
         },
-        saveScreenshotOnKeyTick = AutoFishingSaveScreenshotOnKeyTick,
+        screenshotEnabled = CommonSettingsCatalog.ScreenshotEnabled(root),
+        saveScreenshotOnKeyTick =
+            CommonSettingsCatalog.ScreenshotEnabled(root) &&
+            AutoFishingSaveScreenshotOnKeyTick,
     };
 
     private object Describe(AutoWoodConfig config) => new

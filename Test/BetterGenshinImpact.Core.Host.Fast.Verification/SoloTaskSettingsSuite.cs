@@ -30,6 +30,11 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                   "autoRedeemCodeConfig": {
                     "clipboardListenerEnabled": true
                   },
+                  "commonConfig": {
+                    "screenshotEnabled": false,
+                    "screenshotUidCoverEnabled": true,
+                    "rewardRecognitionScreenshotEnabled": true
+                  },
                   "autoLeyLineOutcropConfig": {
                     "leyLineOutcropType": "启示之花",
                     "country": "蒙德",
@@ -54,6 +59,36 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 """, cancellationToken);
 
             var catalog = new SoloTaskSettingsCatalog(layout);
+            var commonSettingsCatalog = new CommonSettingsCatalog(layout);
+            _ = catalog.Save("AutoFishing", JObject.FromObject(new
+            {
+                autoThrowRodTimeOut = 15,
+                wholeProcessTimeoutSeconds = 300,
+                fishingTimePolicy = "All",
+                saveScreenshotOnKeyTick = true,
+            }));
+            var fishingSettings = JObject.FromObject(catalog.Get("AutoFishing"));
+            context.Require(
+                fishingSettings.Value<bool>("screenshotEnabled") == false &&
+                fishingSettings.Value<bool>("saveScreenshotOnKeyTick") == false,
+                "AutoFishing exposed key-tick screenshots while the upstream global gate was off.");
+            _ = commonSettingsCatalog.Save(JObject.FromObject(new
+            {
+                screenshotEnabled = true,
+                screenshotUidCoverEnabled = false,
+            }));
+            fishingSettings = JObject.FromObject(catalog.Get("AutoFishing"));
+            var commonSettings = JObject.FromObject(commonSettingsCatalog.Get());
+            var commonPersisted = JObject.Parse(await File.ReadAllTextAsync(
+                Path.Combine(layout.UserPath, "config.json"), cancellationToken));
+            context.Require(
+                fishingSettings.Value<bool>("screenshotEnabled") &&
+                fishingSettings.Value<bool>("saveScreenshotOnKeyTick") &&
+                commonSettings.Value<bool>("screenshotEnabled") &&
+                commonSettings.Value<bool>("screenshotUidCoverEnabled") == false &&
+                commonPersisted.SelectToken(
+                    "commonConfig.rewardRecognitionScreenshotEnabled")?.Value<bool>() == true,
+                "Common screenshot settings did not preserve or apply the upstream gate.");
             var tcgFolder = Path.Combine(layout.UserPath, "AutoGeniusInvokation");
             Directory.CreateDirectory(tcgFolder);
             const string tcgStrategy = "角色定义:\n角色1=莫娜\n角色2=砂糖\n角色3=琴\n";
