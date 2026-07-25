@@ -6,6 +6,7 @@ final class AppCoordinator: ObservableObject {
     private var appState: AppState?
     private var hudPanelController: HUDPanelController?
     private var mapMaskPickerPanelController: MapMaskPickerPanelController?
+    private var mapMaskPointInteractionPanelController: MapMaskPointInteractionPanelController?
     private let gameFocusObserver = GameFocusObserver()
     private var windowTrackingTimer: Timer?
 
@@ -15,8 +16,11 @@ final class AppCoordinator: ObservableObject {
         setApplicationIcon()
         let controller = HUDPanelController(appState: appState)
         let pickerController = MapMaskPickerPanelController(appState: appState)
+        let pointInteractionController =
+            MapMaskPointInteractionPanelController(appState: appState)
         hudPanelController = controller
         mapMaskPickerPanelController = pickerController
+        mapMaskPointInteractionPanelController = pointInteractionController
         appState.onHUDPresentationChanged = { [weak self] visible in
             Task { @MainActor in
                 if visible {
@@ -24,6 +28,7 @@ final class AppCoordinator: ObservableObject {
                 } else {
                     self?.hudPanelController?.hide()
                     self?.mapMaskPickerPanelController?.hide()
+                    self?.mapMaskPointInteractionPanelController?.hide()
                 }
             }
         }
@@ -32,11 +37,14 @@ final class AppCoordinator: ObservableObject {
             controller.show()
         }
         windowTrackingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) {
-            [weak appState, weak controller, weak pickerController] _ in
+            [weak appState, weak controller, weak pickerController,
+             weak pointInteractionController] _ in
             Task { @MainActor in
-                guard let appState, let controller, let pickerController else { return }
+                guard let appState, let controller, let pickerController,
+                      let pointInteractionController else { return }
                 let window = appState.refreshSelectedWindowGeometry()
                 controller.synchronize(with: window)
+                pointInteractionController.synchronize(with: window)
                 pickerController.synchronize(with: window)
             }
         }
@@ -59,6 +67,87 @@ final class AppCoordinator: ObservableObject {
             return
         }
         NSApp.applicationIconImage = image
+    }
+}
+
+@MainActor
+final class MapMaskPointInteractionPanelController {
+    private let appState: AppState
+    private var panel: NSPanel?
+
+    init(appState: AppState) {
+        self.appState = appState
+    }
+
+    func hide() {
+        panel?.orderOut(nil)
+    }
+
+    func synchronize(with window: WindowInfo?) {
+        guard appState.isHUDPresented,
+              appState.isMapMaskPickerOpen,
+              appState.coreOverlayStore.state.isInBigMapUI,
+              let window, window.isOnScreen, !window.isSynthetic else {
+            hide()
+            return
+        }
+
+        let panel = panel ?? makePanel()
+        self.panel = panel
+        let referenceMaxY =
+            NSScreen.screens.first?.frame.maxY ?? NSScreen.main?.frame.maxY ?? 0
+        let gameFrame = HUDPanelController.appKitFrame(
+            forQuartzFrame: window.captureRect, referenceMaxY: referenceMaxY)
+        panel.setFrame(gameFrame, display: true)
+        panel.ignoresMouseEvents = !Self.isMouseOverMapPoint(
+            NSEvent.mouseLocation,
+            gameFrame: gameFrame,
+            points: appState.coreOverlayStore.state.mapPoints,
+            viewport: appState.coreOverlayStore.state.bigMapViewport)
+        if !panel.isVisible {
+            panel.orderFrontRegardless()
+        }
+    }
+
+    static func isMouseOverMapPoint(
+        _ screenPoint: CGPoint,
+        gameFrame: CGRect,
+        points: [CoreOverlayMapPoint],
+        viewport: CGRect?
+    ) -> Bool {
+        let localPoint = CGPoint(
+            x: screenPoint.x - gameFrame.minX,
+            y: gameFrame.maxY - screenPoint.y)
+        return MapMaskPointInteractionGeometry.containsMarker(
+            at: localPoint,
+            points: points,
+            viewport: viewport,
+            size: gameFrame.size)
+    }
+
+    private func makePanel() -> NSPanel {
+        let panel = NSPanel(
+            contentRect: .init(x: 0, y: 0, width: 960, height: 540),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false)
+        panel.isFloatingPanel = true
+        panel.level = NSWindow.Level(
+            rawValue: NSWindow.Level.screenSaver.rawValue - 1)
+        panel.collectionBehavior = [
+            .canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle
+        ]
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = false
+        panel.hidesOnDeactivate = false
+        panel.ignoresMouseEvents = true
+        panel.titleVisibility = .hidden
+        panel.titlebarAppearsTransparent = true
+        panel.contentView = NSHostingView(
+            rootView: MapMaskPointInteractionView()
+                .environmentObject(appState))
+        return panel
     }
 }
 

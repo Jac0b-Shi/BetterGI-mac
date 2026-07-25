@@ -146,6 +146,31 @@ struct QuartzWindowEnumeratorTests {
         #expect(expanded.height < gameFrame.height)
     }
 
+    @Test("Map point interaction captures only marker bounds")
+    @MainActor
+    func mapPointInteractionUsesMarkerBounds() {
+        let gameFrame = CGRect(x: 100, y: 80, width: 1920, height: 1080)
+        let point = CoreOverlayMapPoint(
+            id: "map-mask-42",
+            sourceID: "42",
+            label: "传送锚点",
+            iconURL: nil,
+            imagePosition: CGPoint(x: 1960, y: 1040),
+            isHidden: false)
+        let viewport = CGRect(x: 1000, y: 500, width: 1920, height: 1080)
+
+        #expect(MapMaskPointInteractionPanelController.isMouseOverMapPoint(
+            CGPoint(x: 1060, y: 620),
+            gameFrame: gameFrame,
+            points: [point],
+            viewport: viewport))
+        #expect(!MapMaskPointInteractionPanelController.isMouseOverMapPoint(
+            CGPoint(x: 900, y: 620),
+            gameFrame: gameFrame,
+            points: [point],
+            viewport: viewport))
+    }
+
     private func makeWindow(
         id: CGWindowID,
         ownerName: String,

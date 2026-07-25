@@ -3719,6 +3719,19 @@ final class AppState: ObservableObject {
         }
     }
 
+    func setMapMaskPointHidden(_ pointID: String, hidden: Bool) {
+        guard let supervisor = betterGICoreSupervisor else { return }
+        Task { [weak self] in
+            do {
+                try await supervisor.setMapMaskPointHidden(pointID, hidden: hidden)
+            } catch {
+                self?.addLog(
+                    .error,
+                    "Core failed to update MapMask point visibility: \(error.localizedDescription)")
+            }
+        }
+    }
+
     func saveMapMaskPickerSettings(
         mapPointApiProvider: String? = nil,
         hoYoLabLanguage: String? = nil
