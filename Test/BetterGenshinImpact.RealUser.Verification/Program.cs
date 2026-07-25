@@ -322,6 +322,8 @@ sealed class RecordingGlobalMethodRuntime : IGlobalMethodRuntime
     public void MoveMouseBy(int x, int y) => Unexpected(nameof(MoveMouseBy));
     public void MoveMouseToGameCoordinate(int x, int y, int gameWidth, int gameHeight) =>
         Unexpected(nameof(MoveMouseToGameCoordinate));
+    public void ClickGameCoordinate(int x, int y, int gameWidth, int gameHeight) =>
+        Unexpected(nameof(ClickGameCoordinate));
     public void LeftButtonClick() => Unexpected(nameof(LeftButtonClick));
     public void LeftButtonDown() => Unexpected(nameof(LeftButtonDown));
     public void LeftButtonUp() => Unexpected(nameof(LeftButtonUp));

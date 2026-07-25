@@ -10,6 +10,22 @@ output_root=${MACGI_APP_OUTPUT_ROOT:-${macgi_root}/.build/App}
 app=${output_root}/${app_name}
 contents=${app}/Contents
 executable_name=betterGI-mac
+running_executable=${app}/Contents/MacOS/${executable_name}
+packaged_app_is_running() {
+  local process_command
+  while IFS= read -r process_command; do
+    if [[ ${process_command} == ${running_executable} \
+      || ${process_command} == ${running_executable}\ * ]]; then
+      return 0
+    fi
+  done < <(ps -axww -o command=)
+  return 1
+}
+if [[ ${MACGI_SIGNING_PLAN_ONLY:-0} != 1 ]] && packaged_app_is_running; then
+  print -u2 "Cannot replace ${app} while BetterGI is running."
+  print -u2 "Quit the packaged app before rebuilding to preserve its TCC identity."
+  exit 5
+fi
 default_bundle_identifier=cn.jac0bshi.bettergi.mac
 if [[ ${MACGI_ALLOW_ADHOC_SIGNING:-0} == 1 && -z ${MACGI_BUNDLE_IDENTIFIER:-} ]]; then
   default_bundle_identifier=${default_bundle_identifier}.adhoc

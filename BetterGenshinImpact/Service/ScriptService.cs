@@ -363,6 +363,14 @@ public partial class ScriptService : IScriptService
                                 _logger.LogInformation("取消执行配置组: {Msg}", e.Message);
                                 throw;
                             }
+                            catch (Exception e) when (CancellationContext.Instance.IsCancellationRequested)
+                            {
+                                _logger.LogInformation("取消执行配置组: {Msg}", e.Message);
+                                throw new OperationCanceledException(
+                                    "配置组执行已取消",
+                                    e,
+                                    CancellationContext.Instance.Cts.Token);
+                            }
                             catch (Exception e)
                             {
                                 _logger.LogDebug(e, "执行脚本时发生异常");

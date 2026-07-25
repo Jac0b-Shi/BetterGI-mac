@@ -182,6 +182,101 @@ struct BetterGICoreInputAcknowledgementTests {
         ])
     }
 
+    @MainActor
+    @Test("Core game-coordinate click stays atomic")
+    func coreGameCoordinateClickStaysAtomic() async {
+        let dispatcher = RecordingInputDispatcher()
+        let appState = runningAppState(
+            name: "runtime-atomic-game-click",
+            dispatcher: dispatcher,
+            scaleFactor: 2
+        )
+        let adapter = BetterGICorePlatformAdapter(appState: appState)
+
+        let error = await Task.detached {
+            do {
+                _ = try adapter.handle(
+                    method: "input.dispatch",
+                    parameters: [
+                        "action": "mouseClickGame",
+                        "button": "left",
+                        "x": 420,
+                        "y": 830,
+                        "gameWidth": 1920,
+                        "gameHeight": 1080,
+                    ]
+                )
+                return nil as Error?
+            } catch {
+                return error
+            }
+        }.value
+
+        #expect(error == nil)
+        #expect(dispatcher.actions.count == 1)
+        guard let action = dispatcher.actions.first,
+              case let .mouseClick(button, point) = action else {
+            Issue.record("Game-coordinate click was split into multiple input actions")
+            return
+        }
+        #expect(button == .left)
+        #expect(point != nil)
+    }
+
+    @MainActor
+    @Test("Button-only mouse input keeps the current cursor target")
+    func buttonOnlyMouseInputDoesNotInventAWindowCenterTarget() async {
+        let dispatcher = RecordingInputDispatcher()
+        let appState = runningAppState(
+            name: "runtime-current-cursor-click",
+            dispatcher: dispatcher
+        )
+        let adapter = BetterGICorePlatformAdapter(appState: appState)
+
+        let error = await Task.detached {
+            do {
+                _ = try adapter.handle(
+                    method: "input.dispatch",
+                    parameters: [
+                        "action": "mouseClick",
+                        "button": "left",
+                    ]
+                )
+                return nil as Error?
+            } catch {
+                return error
+            }
+        }.value
+
+        #expect(error == nil)
+        #expect(dispatcher.actions == [
+            .mouseClick(button: .left, at: nil)
+        ])
+    }
+
+    @Test("Button-only mouse dispatch resolves the current cursor location")
+    func buttonOnlyMouseDispatchUsesCurrentCursorLocation() {
+        let explicit = CGPoint(x: 30, y: 40)
+        let current = CGPoint(x: 300, y: 400)
+        let window = CGRect(x: 100, y: 200, width: 800, height: 600)
+
+        #expect(CGEventInputDispatcher.resolveClickPoint(
+            explicitPoint: explicit,
+            currentCursorPoint: current,
+            targetWindowFrame: window
+        ) == explicit)
+        #expect(CGEventInputDispatcher.resolveClickPoint(
+            explicitPoint: nil,
+            currentCursorPoint: current,
+            targetWindowFrame: window
+        ) == current)
+        #expect(CGEventInputDispatcher.resolveClickPoint(
+            explicitPoint: nil,
+            currentCursorPoint: nil,
+            targetWindowFrame: window
+        ) == CGPoint(x: 500, y: 500))
+    }
+
 }
 
 private func temporaryStore(_ name: String) -> BGIRuntimeResourceStore {

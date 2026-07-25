@@ -190,13 +190,31 @@ final class CGEventInputDispatcher: InputDispatching {
     }
 
     private func clickPoint(_ point: CGPoint?, targetWindow: WindowInfo) throws -> CGPoint {
-        if let point {
-            return point
-        }
-        guard !targetWindow.frame.isEmpty else {
+        guard let destination = Self.resolveClickPoint(
+            explicitPoint: point,
+            currentCursorPoint: CGEvent(source: nil)?.location,
+            targetWindowFrame: targetWindow.frame
+        ) else {
             throw CGEventInputDispatchError.invalidClickTarget
         }
-        return CGPoint(x: targetWindow.frame.midX, y: targetWindow.frame.midY)
+        return destination
+    }
+
+    static func resolveClickPoint(
+        explicitPoint: CGPoint?,
+        currentCursorPoint: CGPoint?,
+        targetWindowFrame: CGRect
+    ) -> CGPoint? {
+        if let explicitPoint {
+            return explicitPoint
+        }
+        if let currentCursorPoint {
+            return currentCursorPoint
+        }
+        guard !targetWindowFrame.isEmpty else {
+            return nil
+        }
+        return CGPoint(x: targetWindowFrame.midX, y: targetWindowFrame.midY)
     }
 
     private func releaseAll(targetWindow: WindowInfo) throws -> CGEventDispatchReport {

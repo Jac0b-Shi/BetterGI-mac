@@ -94,6 +94,29 @@ struct QuartzWindowEnumeratorTests {
         #expect(game.capturePixelSize == CGSize(width: 2560, height: 1440))
     }
 
+    @Test("Wine title bar is excluded from a non-Retina 2560x1440 game")
+    func nonRetinaWineTitleBarIsExcludedFromCaptureRect() {
+        let game = WindowInfo(
+            id: 552, ownerPID: 7960, ownerName: "wine", title: "原神",
+            frame: CGRect(x: 120, y: 80, width: 2560, height: 1504),
+            layer: 0, isOnScreen: true, scaleFactor: 1
+        )
+
+        #expect(game.captureRect == CGRect(x: 120, y: 144, width: 2560, height: 1440))
+        #expect(game.capturePixelSize == CGSize(width: 2560, height: 1440))
+    }
+
+    @Test("Wine windows far from 16:9 are not cropped as title bars")
+    func nonWidescreenWineWindowIsNotCropped() {
+        let game = WindowInfo(
+            id: 553, ownerPID: 7960, ownerName: "wine", title: "原神",
+            frame: CGRect(x: 120, y: 80, width: 1920, height: 1200),
+            layer: 0, isOnScreen: true, scaleFactor: 1
+        )
+
+        #expect(game.captureRect == game.frame)
+    }
+
     @Test("HUD follows the Wine game client instead of its title bar")
     @MainActor
     func hudFrameFollowsWineGameClient() {

@@ -119,7 +119,7 @@ var foregroundInputCoordinator = new ForegroundInputCoordinator(
     server.PlatformCallbacks, sessionToken, shutdown.Token);
 var externalKeyMappingResolver = new ExternalKeyMappingResolver(layout);
 var globalMethodRuntime = new MacGlobalMethodRuntime(
-    server.PlatformCallbacks, sessionToken, shutdown.Token, captureRing,
+    server.PlatformCallbacks, sessionToken, captureRing,
     foregroundInputCoordinator, externalKeyMappingResolver);
 BetterGenshinImpact.Core.BgiVision.BvRuntimePlatform.Configure(
     new MacBvRuntimePlatform(() => gameTaskManagerPlatform.SystemInfo));

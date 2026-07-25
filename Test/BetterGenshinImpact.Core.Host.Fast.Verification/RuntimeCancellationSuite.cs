@@ -1,5 +1,6 @@
 using BetterGenshinImpact.Core.Host.Runtime;
 using BetterGenshinImpact.Core.Host.Transport;
+using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.Verification.Framework;
 
 namespace BetterGenshinImpact.Core.Host.Fast.Verification;
@@ -33,6 +34,16 @@ public sealed class RuntimeCancellationSuite : IVerificationSuite
         catch (OperationCanceledException)
         {
         }
+
+        CancellationContext.Instance.Set();
+        var scriptCancellation = CancellationContext.Instance.Cts.Token;
+        CancellationContext.Instance.ManualCancel();
+        context.Require(
+            scriptCancellation.IsCancellationRequested &&
+            CancellationContext.Instance.IsManualStop,
+            "Scheduler stop did not cancel the upstream script cancellation context.");
+        CancellationContext.Instance.Clear();
+        CancellationContext.Instance.Set();
 
         var cleanupCount = 0;
         using var dispatcherCancellation = new CancellationTokenSource();

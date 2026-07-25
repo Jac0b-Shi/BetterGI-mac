@@ -538,6 +538,21 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                 x: rect.minX + x / gameWidth * rect.width,
                 y: rect.minY + y / gameHeight * rect.height
             ))
+        case "mouseClickGame":
+            guard let button = mouseButton(parameters["button"] as? String),
+                  let x = number(parameters["x"]), let y = number(parameters["y"]),
+                  let gameWidth = number(parameters["gameWidth"]),
+                  let gameHeight = number(parameters["gameHeight"]),
+                  gameWidth > 0, gameHeight > 0
+            else {
+                throw BetterGICorePlatformAdapterError.invalidParameters(
+                    "mouseClickGame requires a button, valid coordinates and game dimensions.")
+            }
+            let rect = appState.selectedWindow.captureRect
+            return .mouseClick(button: button, at: CGPoint(
+                x: rect.minX + x / gameWidth * rect.width,
+                y: rect.minY + y / gameHeight * rect.height
+            ))
         case "moveMouseToVirtualDesktop":
             guard let x = number(parameters["normalizedX"]), let y = number(parameters["normalizedY"]),
                   (0...65535).contains(x), (0...65535).contains(y),

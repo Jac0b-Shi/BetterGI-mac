@@ -21,4 +21,5 @@ return await VerificationRunner.RunAsync(args,
     new HtmlMaskContractSuite(),
     new CaptureRingContractSuite(),
     new ScriptStartupSuite(),
+    new ScriptFilePathSuite(),
 ]);

@@ -661,6 +661,11 @@ rg -q 'CFBundlePackageType string APPL' MacGI/scripts/package-macgi-app.sh \
   && rg -q 'CFBundleIdentifier string \$\{bundle_identifier\}' MacGI/scripts/package-macgi-app.sh \
   && rg -q 'NSScreenCaptureUsageDescription' MacGI/scripts/package-macgi-app.sh \
   || fail "macOS App packaging does not create a standard APPL bundle identity"
+package_running_guard_line=$(rg -n 'packaged_app_is_running; then$' MacGI/scripts/package-macgi-app.sh | cut -d: -f1)
+package_replacement_line=$(rg -n '^rm -rf \$\{app\}$' MacGI/scripts/package-macgi-app.sh | cut -d: -f1)
+[[ -n ${package_running_guard_line} && -n ${package_replacement_line} \
+  && ${package_running_guard_line} -lt ${package_replacement_line} ]] \
+  || fail "macOS App packaging can replace a running signed bundle"
 adhoc_signing_plan=$(
   MACGI_ALLOW_ADHOC_SIGNING=1 \
   MACGI_SIGNING_PLAN_ONLY=1 \

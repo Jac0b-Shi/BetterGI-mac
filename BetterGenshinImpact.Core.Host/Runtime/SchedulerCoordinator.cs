@@ -159,6 +159,12 @@ public sealed class SchedulerCoordinator(
             SetExecutionStatus(taskId, "cancelled");
             await EmitAsync(taskId, "cancelled", null);
         }
+        catch (Exception) when (
+            CancellationContext.Instance.IsManualStop || cancellationToken.IsCancellationRequested)
+        {
+            SetExecutionStatus(taskId, "cancelled");
+            await EmitAsync(taskId, "cancelled", null);
+        }
         catch (Exception ex)
         {
             SetExecutionStatus(taskId, "failed", ex.Message);

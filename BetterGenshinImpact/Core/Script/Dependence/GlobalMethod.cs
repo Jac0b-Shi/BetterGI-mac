@@ -64,8 +64,9 @@ public static partial class GlobalMethod
 
     public static void Click(int x, int y)
     {
-        MoveMouseTo(x, y);
-        LeftButtonClick();
+        if (x < 0 || x > _gameWidth || y < 0 || y > _gameHeight)
+            throw new ArgumentException("鼠标坐标超出游戏窗口范围");
+        Runtime.ClickGameCoordinate(x, y, _gameWidth, _gameHeight);
     }
 
     public static void LeftButtonClick() => Runtime.LeftButtonClick();
@@ -130,6 +131,7 @@ public interface IGlobalMethodRuntime
     void KeyPress(string key);
     void MoveMouseBy(int x, int y);
     void MoveMouseToGameCoordinate(int x, int y, int gameWidth, int gameHeight);
+    void ClickGameCoordinate(int x, int y, int gameWidth, int gameHeight);
     void LeftButtonClick();
     void LeftButtonDown();
     void LeftButtonUp();

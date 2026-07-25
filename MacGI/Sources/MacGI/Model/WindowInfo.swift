@@ -77,7 +77,11 @@ struct WindowInfo: Identifiable, Equatable, Hashable, Sendable {
         }
         let expectedContentHeight = frame.width * 9 / 16
         let titleBarHeight = frame.height - expectedContentHeight
-        guard (18...40).contains(titleBarHeight) else { return frame }
+        let maximumTitleBarHeight = min(96, frame.height * 0.08)
+        guard titleBarHeight >= 16,
+              titleBarHeight <= maximumTitleBarHeight else {
+            return frame
+        }
         return CGRect(
             x: frame.minX,
             y: frame.minY + titleBarHeight,

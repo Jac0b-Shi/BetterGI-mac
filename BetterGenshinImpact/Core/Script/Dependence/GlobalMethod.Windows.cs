@@ -86,6 +86,12 @@ public static partial class GlobalMethod
                 return (x * scale * scaleTo1080P, y * scale * scaleTo1080P);
             });
 
+        public void ClickGameCoordinate(int x, int y, int gameWidth, int gameHeight)
+        {
+            MoveMouseToGameCoordinate(x, y, gameWidth, gameHeight);
+            LeftButtonClick();
+        }
+
         public void LeftButtonClick() => Simulation.SendInput.Mouse.LeftButtonDown().Sleep(60).LeftButtonUp();
         public void LeftButtonDown() => Simulation.SendInput.Mouse.LeftButtonDown();
         public void LeftButtonUp() => Simulation.SendInput.Mouse.LeftButtonUp();

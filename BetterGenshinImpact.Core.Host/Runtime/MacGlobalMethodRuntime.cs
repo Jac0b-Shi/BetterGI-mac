@@ -1,4 +1,5 @@
 using BetterGenshinImpact.Core.Host.Transport;
+using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.Core.Script.Dependence;
 using BetterGenshinImpact.GameTask.Model.Area;
 using Newtonsoft.Json.Linq;
@@ -15,12 +16,11 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 public sealed class MacGlobalMethodRuntime(
     PlatformCallbackChannel callbacks,
     string sessionToken,
-    CancellationToken cancellationToken,
     SharedCaptureRingReader captureRing,
     ForegroundInputCoordinator inputCoordinator,
     ExternalKeyMappingResolver keyMappingResolver) : IGlobalMethodRuntime
 {
-    public CancellationToken CancellationToken => cancellationToken;
+    public CancellationToken CancellationToken => CancellationContext.Instance.Cts.Token;
 
     public double DpiScale => Invoke("window.metrics", null).Value<double?>("dpiScale")
         ?? throw new InvalidDataException("window.metrics did not return dpiScale.");
@@ -31,6 +31,8 @@ public sealed class MacGlobalMethodRuntime(
     public void MoveMouseBy(int x, int y) => Dispatch(new { action = "moveMouseBy", x, y });
     public void MoveMouseToGameCoordinate(int x, int y, int gameWidth, int gameHeight) =>
         Dispatch(new { action = "moveMouseToGame", x, y, gameWidth, gameHeight });
+    public void ClickGameCoordinate(int x, int y, int gameWidth, int gameHeight) =>
+        Dispatch(new { action = "mouseClickGame", button = "left", x, y, gameWidth, gameHeight });
     public void LeftButtonClick() => Dispatch(new { action = "mouseClick", button = "left" });
     public void LeftButtonDown() => Dispatch(new { action = "mouseDown", button = "left" });
     public void LeftButtonUp() => Dispatch(new { action = "mouseUp", button = "left" });
@@ -44,11 +46,12 @@ public sealed class MacGlobalMethodRuntime(
         Dispatch(new { action = "verticalScroll", clicks = scrollAmountInClicks });
     public void InputText(string text) => Dispatch(new { action = "inputText", text });
 
-    public ImageRegion CaptureGameRegion() => captureRing.Read(Invoke("capture.request", null));
+    public ImageRegion CaptureGameRegion() =>
+        captureRing.Read(Invoke("capture.request", null)).DeriveTo1080P();
 
     public string[] GetAvatars()
     {
-        var scene = CombatSceneProvider.Current.GetCombatScene(cancellationToken)
+        var scene = CombatSceneProvider.Current.GetCombatScene(CancellationToken)
             .GetAwaiter().GetResult()
             ?? throw new InvalidOperationException("队伍角色识别失败");
         return scene.GetAvatars().Select(avatar => avatar.Name).ToArray();
@@ -56,7 +59,7 @@ public sealed class MacGlobalMethodRuntime(
 
     private void Dispatch(object operation)
     {
-        inputCoordinator.Dispatch(JObject.FromObject(operation), cancellationToken);
+        inputCoordinator.Dispatch(JObject.FromObject(operation), CancellationToken);
     }
 
     private void DispatchKey(string action, string key)
@@ -100,7 +103,7 @@ public sealed class MacGlobalMethodRuntime(
     }
 
     private JToken Invoke(string method, JObject? parameters) =>
-        callbacks.InvokeAsync(method, parameters, sessionToken, cancellationToken)
+        callbacks.InvokeAsync(method, parameters, sessionToken, CancellationToken)
             .GetAwaiter().GetResult()
         ?? throw new InvalidDataException($"{method} returned an empty response.");
 }
