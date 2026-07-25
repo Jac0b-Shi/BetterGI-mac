@@ -194,6 +194,7 @@ struct FeaturesPage: View {
 struct SoloTasksPage: View {
     @EnvironmentObject private var appState: AppState
     @State private var confirmingScanDropsAfterReward = false
+    @State private var showingScriptRepository = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -202,7 +203,9 @@ struct SoloTasksPage: View {
                 if task.settingsAvailable {
                     BGIExpandableTaskCard(
                         icon: icon(for: task.name), title: task.displayName,
-                        subtitle: task.unavailableReason ?? task.description
+                        subtitle: task.unavailableReason ?? task.description,
+                        subtitleLinkTitle: task.tutorialURL == nil ? nil : "点击查看使用教程",
+                        subtitleLinkURL: task.tutorialURL.flatMap(URL.init(string:))
                     ) {
                         taskAction(task)
                     } content: {
@@ -215,6 +218,10 @@ struct SoloTasksPage: View {
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showingScriptRepository) {
+            ScriptRepositorySheet()
+                .environmentObject(appState)
         }
         .alert("风险提示", isPresented: $confirmingScanDropsAfterReward) {
             Button("不接受，保持关闭", role: .cancel) {
@@ -245,6 +252,31 @@ struct SoloTasksPage: View {
                     .frame(width: 360, height: 120)
                     .overlay(Rectangle().stroke(BGIColors.border, lineWidth: 1))
                 }
+        }
+        if task.showsScriptRepository || task.scriptDirectoryPath != nil {
+            BGISettingLine(
+                title: "脚本资源",
+                subtitle: task.scriptDirectoryPath == nil
+                    ? "从脚本仓库更新任务所需策略"
+                    : "从脚本仓库更新策略，或在 Finder 中打开本地自动战斗目录"
+            ) {
+                HStack(spacing: 8) {
+                    if task.showsScriptRepository {
+                        Button {
+                            showingScriptRepository = true
+                        } label: {
+                            Label("脚本仓库", systemImage: "archivebox")
+                        }
+                    }
+                    if let path = task.scriptDirectoryPath {
+                        Button {
+                            appState.openSoloTaskScriptDirectory(path: path)
+                        } label: {
+                            Label("打开目录", systemImage: "folder")
+                        }
+                    }
+                }
+            }
         }
         ForEach(task.actions) { action in
             BGISettingLine(title: action.title, subtitle: action.description) {

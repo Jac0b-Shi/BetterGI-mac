@@ -100,7 +100,8 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 sleepDelay = 350,
             }));
             var platform = new RecordingDispatcherPlatform();
-            var coordinator = new SoloTaskCoordinator(platform, catalog, CancellationToken.None);
+            var coordinator = new SoloTaskCoordinator(
+                platform, catalog, layout, CancellationToken.None);
             var descriptors = JArray.FromObject(coordinator.List());
             foreach (var item in descriptors.OfType<JObject>())
             {
@@ -135,6 +136,53 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                         .Value<string>("description") == description,
                     $"Solo task '{name}' description drifted from the upstream task settings page.");
             }
+            var upstreamTutorialUrls = new Dictionary<string, string>
+            {
+                ["AutoGeniusInvokation"] = "https://www.bettergi.com/feats/task/tcg.html",
+                ["AutoWood"] = "https://www.bettergi.com/feats/task/felling.html",
+                ["AutoFight"] = "https://www.bettergi.com/feats/task/domain.html",
+                ["AutoDomain"] = "https://www.bettergi.com/feats/task/domain.html",
+                ["AutoStygianOnslaught"] = "https://www.bettergi.com/feats/task/stygian.html",
+                ["AutoFishing"] = "https://www.bettergi.com/feats/task/fish.html",
+                ["AutoLeyLineOutcrop"] = "https://www.bettergi.com/feats/task/leyline.html",
+                ["AutoMusicGame"] = "https://www.bettergi.com/feats/task/music.html",
+                ["AutoArtifactSalvage"] =
+                    "https://www.bettergi.com/feats/task/artifactSalvage.html",
+            };
+            foreach (var (name, tutorialUrl) in upstreamTutorialUrls)
+            {
+                context.Require(
+                    descriptors.Single(item => item.Value<string>("name") == name)
+                        .Value<string>("tutorialUrl") == tutorialUrl,
+                    $"Solo task '{name}' tutorial link drifted from the upstream task settings page.");
+            }
+            var repositoryTasks = new HashSet<string>
+            {
+                "AutoGeniusInvokation", "AutoFight", "AutoDomain",
+                "AutoStygianOnslaught", "AutoLeyLineOutcrop",
+            };
+            var directoryTasks = new HashSet<string>
+            {
+                "AutoFight", "AutoDomain", "AutoStygianOnslaught",
+                "AutoLeyLineOutcrop",
+            };
+            foreach (var item in descriptors.OfType<JObject>())
+            {
+                var name = item.Value<string>("name")!;
+                context.Require(
+                    item.Value<bool>("showsScriptRepository") == repositoryTasks.Contains(name),
+                    $"Solo task '{name}' script repository entry drifted from upstream.");
+                context.Require(
+                    (item.Value<string>("scriptDirectoryPath") is not null) ==
+                    directoryTasks.Contains(name),
+                    $"Solo task '{name}' script directory entry drifted from upstream.");
+            }
+            context.Require(
+                directoryTasks.All(name =>
+                    descriptors.Single(item => item.Value<string>("name") == name)
+                        .Value<string>("scriptDirectoryPath") ==
+                    Path.Combine(layout.UserPath, "AutoFight")),
+                "Solo task combat script directory did not resolve to the canonical runtime path.");
             context.Require(
                 descriptors.Single(item => item.Value<string>("name") == "AutoRedeemCode")
                     .Value<bool>("settingsAvailable"),

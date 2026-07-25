@@ -554,15 +554,18 @@ rg -q '"solo.settings.get" => _soloTaskSettings.Get' BetterGenshinImpact.Core.Ho
 rg -q '"solo.settings.save" => _soloTaskSettings.Save' BetterGenshinImpact.Core.Host/CoreRpcServer.cs \
   || fail "Core Host does not own independent-task settings writes"
 for descriptor in \
-  'Descriptor("AutoGeniusInvokation", "自动七圣召唤",' \
-  '"AutoWood", "自动伐木",' \
-  'Descriptor("AutoBoss", "自动首领讨伐",' \
-  'Descriptor("AutoDomain", "自动秘境",' \
-  '"AutoArtifactSalvage", "自动分解圣遗物",' \
-  '"AutoMusicGame", "自动千音雅集",' \
-  '"AutoCook", "自动烹饪",'; do
-  rg -Fq "${descriptor}" BetterGenshinImpact.Core.Host/Runtime/SoloTaskCoordinator.cs \
-    || fail "composed independent-task settings are missing from the truthful catalog: ${descriptor}"
+  'AutoGeniusInvokation|自动七圣召唤' \
+  'AutoWood|自动伐木' \
+  'AutoBoss|自动首领讨伐' \
+  'AutoDomain|自动秘境' \
+  'AutoArtifactSalvage|自动分解圣遗物' \
+  'AutoMusicGame|自动千音雅集' \
+  'AutoCook|自动烹饪'; do
+  task_name=${descriptor%%|*}
+  display_name=${descriptor#*|}
+  rg -Uq "Descriptor\\(\\s*\"${task_name}\"\\s*,\\s*\"${display_name}\"" \
+    BetterGenshinImpact.Core.Host/Runtime/SoloTaskCoordinator.cs \
+    || fail "composed independent-task settings are missing from the truthful catalog: ${task_name}"
 done
 rg -Fq 'name = "AutoAlbum",' BetterGenshinImpact.Core.Host/Runtime/SoloTaskCoordinator.cs \
   && rg -Fq 'title = "【专辑】 全自动完成整个专辑",' \

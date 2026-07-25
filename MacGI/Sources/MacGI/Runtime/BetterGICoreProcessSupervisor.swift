@@ -261,6 +261,9 @@ struct BetterGICoreSoloTask: Sendable, Equatable, Identifiable {
     let inputKind: String?
     let inputTitle: String?
     let inputPlaceholder: String?
+    let tutorialURL: String?
+    let showsScriptRepository: Bool
+    let scriptDirectoryPath: String?
     var id: String { name }
 }
 
@@ -2352,7 +2355,10 @@ actor BetterGICoreProcessSupervisor {
                 actions: actions,
                 inputKind: item["inputKind"] as? String,
                 inputTitle: item["inputTitle"] as? String,
-                inputPlaceholder: item["inputPlaceholder"] as? String
+                inputPlaceholder: item["inputPlaceholder"] as? String,
+                tutorialURL: item["tutorialUrl"] as? String,
+                showsScriptRepository: item["showsScriptRepository"] as? Bool ?? false,
+                scriptDirectoryPath: item["scriptDirectoryPath"] as? String
             )
         }
     }

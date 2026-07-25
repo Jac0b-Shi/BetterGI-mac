@@ -703,6 +703,18 @@ final class AppState: ObservableObject {
         }
     }
 
+    func openSoloTaskScriptDirectory(path: String) {
+        guard !path.isEmpty else {
+            addLog(.error, "打开脚本目录失败：Core 未返回目录路径。")
+            return
+        }
+        guard NSWorkspace.shared.open(URL(fileURLWithPath: path)) else {
+            addLog(.error, "打开脚本目录失败：Finder 无法打开该目录。")
+            return
+        }
+        addLog(.info, "已打开自动战斗脚本目录。")
+    }
+
     func loadScriptRepositoryState() async throws -> BetterGIScriptRepositoryState {
         guard let supervisor = betterGICoreSupervisor else {
             throw BetterGICoreRPCError.socket("BetterGI Core is unavailable.")

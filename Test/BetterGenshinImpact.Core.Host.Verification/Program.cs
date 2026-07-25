@@ -1135,7 +1135,7 @@ try
     var dispatcherRuntime = new VerificationDispatcherRuntimePlatform(cancellation.Token);
     DispatcherRuntimePlatform.Configure(dispatcherRuntime);
     server.AttachSoloTaskCoordinator(new SoloTaskCoordinator(
-        dispatcherRuntime, server.SoloTaskSettings, cancellation.Token));
+        dispatcherRuntime, server.SoloTaskSettings, layout, cancellation.Token));
     ScriptProjectHost.Configure(new MacScriptProjectHostInitializer(
         scriptGroupExecutionServices,
         server.PlatformCallbacks,

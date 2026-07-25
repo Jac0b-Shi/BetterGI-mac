@@ -289,9 +289,29 @@ struct BGIExpandableTaskCard<Trailing: View, Content: View>: View {
     let icon: BGIIcon
     let title: String
     let subtitle: String
+    let subtitleLinkTitle: String?
+    let subtitleLinkURL: URL?
     @ViewBuilder var trailing: Trailing
     @ViewBuilder var content: Content
     @State private var isExpanded = false
+
+    init(
+        icon: BGIIcon,
+        title: String,
+        subtitle: String,
+        subtitleLinkTitle: String? = nil,
+        subtitleLinkURL: URL? = nil,
+        @ViewBuilder trailing: () -> Trailing,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.icon = icon
+        self.title = title
+        self.subtitle = subtitle
+        self.subtitleLinkTitle = subtitleLinkTitle
+        self.subtitleLinkURL = subtitleLinkURL
+        self.trailing = trailing()
+        self.content = content()
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -306,6 +326,11 @@ struct BGIExpandableTaskCard<Trailing: View, Content: View>: View {
                         .font(BGIFonts.body)
                         .foregroundStyle(BGIColors.secondaryText)
                         .lineLimit(2)
+                    if let subtitleLinkTitle, let subtitleLinkURL {
+                        Link(subtitleLinkTitle, destination: subtitleLinkURL)
+                            .font(BGIFonts.body)
+                            .foregroundStyle(BGIColors.accent)
+                    }
                 }
                 Spacer(minLength: 20)
                 trailing

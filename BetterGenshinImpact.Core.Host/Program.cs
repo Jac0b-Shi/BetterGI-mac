@@ -437,7 +437,7 @@ var dispatcherRuntimePlatform = new MacDispatcherRuntimePlatform(
     foregroundInputCoordinator, loggerFactory);
 DispatcherRuntimePlatform.Configure(dispatcherRuntimePlatform);
 server.AttachSoloTaskCoordinator(new SoloTaskCoordinator(
-    dispatcherRuntimePlatform, server.SoloTaskSettings, shutdown.Token));
+    dispatcherRuntimePlatform, server.SoloTaskSettings, layout, shutdown.Token));
 var oneDragonExecutionPlatform = new MacOneDragonExecutionPlatform(
     layout,
     server.OneDragonCatalog,
