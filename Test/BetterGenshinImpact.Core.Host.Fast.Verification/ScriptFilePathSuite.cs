@@ -23,6 +23,10 @@ public sealed class ScriptFilePathSuite : IVerificationSuite
                 "Script file paths did not preserve relative Windows and POSIX separators.");
 
             context.Require(
+                ScriptUtils.GetScriptRelativePath(root, expected) == @"data\store.json",
+                "Script directory listings did not preserve the upstream Windows path representation.");
+
+            context.Require(
                 Throws<ArgumentException>(() =>
                     ScriptUtils.NormalizePath(root, @"C:\Users\script\data\store.json")) &&
                 Throws<ArgumentException>(() =>

@@ -42,7 +42,8 @@ public class LimitedFile(string rootPath)
             string[] combined = files.Concat(directories).ToArray();
 
             // 将绝对路径转换为相对于 rootPath 的相对路径
-            return combined.Select(path => Path.GetRelativePath(rootPath, path)).ToArray();
+            return combined.Select(path =>
+                ScriptUtils.GetScriptRelativePath(rootPath, path)).ToArray();
         }
         catch (Exception ex)
         {

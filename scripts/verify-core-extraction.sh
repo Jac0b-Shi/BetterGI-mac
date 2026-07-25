@@ -376,7 +376,8 @@ rg -q 'AttachRuntimeArtifactInitializer' BetterGenshinImpact.Core.Host/Program.c
 rg -q 'EnsureInstalledAsync' BetterGenshinImpact.Core.Host/Runtime/RuntimeArtifactProvisioner.cs \
   || fail "Core runtime artifact provisioner is not source-lock backed"
 rg -Fq '| Live game execution | partial |' Docs/core-extraction-map.md \
-  && rg -q 'overall first-step status remains \*\*partial\*\* until the four game-dependent projects complete' Docs/core-extraction-map.md \
+  && rg -q 'AutoHoeingOneDragon, AAA-Artifacts-Bulk-Supply and AbundantOre still require full completion' Docs/core-extraction-map.md \
+  && rg -q 'overall first-step status remains \*\*partial\*\* until the three remaining game-dependent projects complete' Docs/core-extraction-map.md \
   || fail "completion map must retain the real-game execution Gate"
 
 if rg -n 'BGIJSScriptRuntime|BGIScriptGroupScheduler' MacGI/Sources/MacGI MacGI/Package.swift; then

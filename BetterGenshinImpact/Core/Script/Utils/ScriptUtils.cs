@@ -6,6 +6,12 @@ namespace BetterGenshinImpact.Core.Script.Utils;
 
 public class ScriptUtils
 {
+    public static string GetScriptRelativePath(string root, string path)
+    {
+        return Path.GetRelativePath(root, path)
+            .Replace('/', '\\');
+    }
+
     /// <summary>
     /// Normalize and validate a path.
     /// </summary>
