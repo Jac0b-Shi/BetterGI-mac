@@ -1151,8 +1151,9 @@ public class TpTask
             {
                 throw;
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                Logger.LogWarning(e, "传送尝试发生异常，重试");
             }
         }
 

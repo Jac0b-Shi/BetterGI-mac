@@ -13,8 +13,15 @@ public sealed class EmbeddedResourceStringLocalizer<T> : IStringLocalizer<T>
     {
         get
         {
-            var value = _resources.GetString(name, CultureInfo.CurrentUICulture);
-            return new LocalizedString(name, value ?? name, resourceNotFound: value is null);
+            try
+            {
+                var value = _resources.GetString(name, CultureInfo.CurrentUICulture);
+                return new LocalizedString(name, value ?? name, resourceNotFound: value is null);
+            }
+            catch (MissingManifestResourceException)
+            {
+                return new LocalizedString(name, name, resourceNotFound: true);
+            }
         }
     }
 
@@ -36,7 +43,15 @@ public sealed class EmbeddedResourceStringLocalizer<T> : IStringLocalizer<T>
              culture != CultureInfo.InvariantCulture;
              culture = includeParentCultures ? culture.Parent : CultureInfo.InvariantCulture)
         {
-            var resourceSet = _resources.GetResourceSet(culture, true, false);
+            ResourceSet? resourceSet;
+            try
+            {
+                resourceSet = _resources.GetResourceSet(culture, true, false);
+            }
+            catch (MissingManifestResourceException)
+            {
+                yield break;
+            }
             if (resourceSet is null) continue;
             foreach (DictionaryEntry entry in resourceSet)
             {
