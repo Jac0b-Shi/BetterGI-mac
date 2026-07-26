@@ -3433,10 +3433,15 @@ sealed class RecordingAutoMusicGameRuntimePlatform : IAutoMusicGameRuntimePlatfo
     public double AssetScale => 1;
     public int ValidateCount { get; private set; }
     public void ValidateResolution() => ValidateCount++;
-    public byte ReadBlueChannel(int x, int y)
+    public void ReadBlueChannels(ReadOnlySpan<Point> points, Span<byte> blueChannels)
     {
-        if (x != 417) return 255;
-        return Interlocked.Increment(ref _aLaneSamples) <= 2 ? (byte)100 : (byte)255;
+        for (var index = 0; index < points.Length; index++)
+        {
+            blueChannels[index] = points[index].X == 417 &&
+                                  Interlocked.Increment(ref _aLaneSamples) <= 2
+                ? (byte)100
+                : (byte)255;
+        }
     }
 }
 

@@ -2,8 +2,6 @@
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.Common;
@@ -26,15 +24,15 @@ public class AutoMusicGameTask : ISoloTask
     public string Name => "自动音游";
 
 
-    private readonly ConcurrentDictionary<int, int> _keyX = new()
-    {
-        [0x41] = 417,
-        [0x53] = 628,
-        [0x44] = 844,
-        [0x4A] = 1061,
-        [0x4B] = 1277,
-        [0x4C] = 1493
-    };
+    private static readonly (int Key, int X)[] KeyLanes =
+    [
+        (0x41, 417),
+        (0x53, 628),
+        (0x44, 844),
+        (0x4A, 1061),
+        (0x4B, 1277),
+        (0x4C, 1493)
+    ];
 
     private readonly int _keyY = 921;
 
@@ -50,46 +48,40 @@ public class AutoMusicGameTask : ISoloTask
         {
             Logger.LogInformation("开始自动演奏");
             var assetScale = runtimePlatform.AssetScale;
-            var taskList = new List<Task>();
-
-            foreach (var keyValuePair in _keyX)
+            var points = new Point[KeyLanes.Length];
+            var blueChannels = new byte[KeyLanes.Length];
+            var pressed = new bool[KeyLanes.Length];
+            for (var index = 0; index < KeyLanes.Length; index++)
             {
-                var x = (int)(keyValuePair.Value * assetScale);
-                var y = (int)(_keyY * assetScale);
-                taskList.Add(Task.Run(async () => await PollLane(ct, keyValuePair.Key, new Point(x, y)), ct));
+                points[index] = new Point(
+                    (int)(KeyLanes[index].X * assetScale),
+                    (int)(_keyY * assetScale));
             }
 
-            await Task.WhenAll(taskList);
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(5, ct);
+                runtimePlatform.ReadBlueChannels(points, blueChannels);
+                for (var index = 0; index < KeyLanes.Length; index++)
+                {
+                    var shouldPress = blueChannels[index] < 220;
+                    if (shouldPress == pressed[index])
+                    {
+                        continue;
+                    }
+
+                    if (shouldPress)
+                        KeyDown(KeyLanes[index].Key);
+                    else
+                        KeyUp(KeyLanes[index].Key);
+                    pressed[index] = shouldPress;
+                }
+            }
         }
         finally
         {
             TaskControlPlatform.Current.ReleasePressedInputs();
             Logger.LogInformation("结束自动演奏");
-        }
-    }
-
-    private async Task PollLane(CancellationToken ct, int key, Point point)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            await Task.Delay(5, ct);
-            var blue = runtimePlatform.ReadBlueChannel(point.X, point.Y);
-
-            if (blue < 220)
-            {
-                KeyDown(key);
-                while (!ct.IsCancellationRequested)
-                {
-                    await Task.Delay(5, ct);
-                    blue = runtimePlatform.ReadBlueChannel(point.X, point.Y);
-                    if (blue >= 220)
-                    {
-                        break;
-                    }
-                }
-
-                KeyUp(key);
-            }
         }
     }
 

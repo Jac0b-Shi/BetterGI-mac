@@ -21,8 +21,13 @@ public sealed class MacAutoMusicGameRuntimePlatform(Func<double> assetScale) : I
                 $"自动音游要求 16:9 游戏画面，实际截图为 {frame.Width}x{frame.Height}。");
     }
 
-    public byte ReadBlueChannel(int x, int y)
+    public void ReadBlueChannels(ReadOnlySpan<Point> points, Span<byte> blueChannels)
     {
+        if (blueChannels.Length < points.Length)
+            throw new ArgumentException(
+                "The blue-channel destination is smaller than the requested point set.",
+                nameof(blueChannels));
+
         lock (_frameLock)
         {
             var now = Environment.TickCount64;
@@ -32,9 +37,18 @@ public sealed class MacAutoMusicGameRuntimePlatform(Func<double> assetScale) : I
                 _cachedFrame = TaskControl.CaptureToRectArea();
                 _cachedAt = now;
             }
-            if (x < 0 || y < 0 || x >= _cachedFrame.Width || y >= _cachedFrame.Height)
-                throw new ArgumentOutOfRangeException(nameof(x), $"Music sample point ({x},{y}) is outside the capture frame.");
-            return _cachedFrame.SrcMat.At<Vec4b>(y, x).Item0;
+            for (var index = 0; index < points.Length; index++)
+            {
+                var point = points[index];
+                if (point.X < 0 || point.Y < 0 ||
+                    point.X >= _cachedFrame.Width || point.Y >= _cachedFrame.Height)
+                {
+                    throw new ArgumentOutOfRangeException(
+                        nameof(points),
+                        $"Music sample point ({point.X},{point.Y}) is outside the capture frame.");
+                }
+                blueChannels[index] = _cachedFrame.SrcMat.At<Vec4b>(point.Y, point.X).Item0;
+            }
         }
     }
 
