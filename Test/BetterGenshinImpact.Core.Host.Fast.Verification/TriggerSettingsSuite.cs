@@ -48,6 +48,19 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
         try
         {
             var trigger = new MapMaskTrigger();
+            trigger.IsEnabled = true;
+            var exclusiveTrigger = new ExclusiveTrigger();
+            var selected = MacTriggerDispatcher.SelectTriggersForFrame(
+                [exclusiveTrigger, mapMaskCategoryTrigger], trigger);
+            context.Require(
+                selected.Length == 2 &&
+                ReferenceEquals(selected[0], trigger) &&
+                ReferenceEquals(selected[1], exclusiveTrigger),
+                "The macOS dispatcher did not run the read-only MapMask companion before the exclusive trigger.");
+            selected = MacTriggerDispatcher.SelectTriggersForFrame([], trigger);
+            context.Require(
+                selected.Length == 1 && ReferenceEquals(selected[0], trigger),
+                "The macOS dispatcher dropped MapMask when a script cleared the shared trigger registry.");
             trigger.ObserveBigMapPresence(true);
             context.Require(
                 trigger.IsInBigMapUi,
@@ -247,6 +260,16 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
         public bool IsExclusive => false;
         public int InitCount { get; private set; }
         public void Init() => InitCount++;
+        public void OnCapture(CaptureContent content) { }
+    }
+
+    private sealed class ExclusiveTrigger : ITaskTrigger
+    {
+        public string Name => "独占测试触发器";
+        public bool IsEnabled { get; set; } = true;
+        public int Priority => 100;
+        public bool IsExclusive => true;
+        public void Init() { }
         public void OnCapture(CaptureContent content) { }
     }
 

@@ -792,8 +792,7 @@ public sealed class CoreRpcServer(
     {
         running = RequiredTriggerDispatcher().IsRunning,
         mapMask = _mapMaskRuntimePlatform?.GetStatus(),
-        mapMaskTrigger = GameTaskManager.TriggerDictionary?.GetValueOrDefault("MapMask")
-            is MapMaskTrigger trigger ? trigger.GetRuntimeStatus() : null
+        mapMaskTrigger = RequiredTriggerDispatcher().MapMaskRuntimeStatus
     };
 
     private async Task<object> RefreshRuntimeGeometryAsync(CancellationToken cancellationToken)

@@ -26,7 +26,7 @@ public sealed class MacTriggerDispatcher(
     private int _frameIndex;
     private GameUiCategory _previousCategory = GameUiCategory.Unknown;
     private DateTime _categoryChangedAt = DateTime.MinValue;
-    private bool _mapMaskSuppressed;
+    private MapMaskTrigger? _mapMaskCompanion;
 
     internal bool IsRunning
     {
@@ -35,6 +35,18 @@ public sealed class MacTriggerDispatcher(
             lock (_startLock)
                 return _loop is { IsCompleted: false };
         }
+    }
+
+    internal object? MapMaskRuntimeStatus =>
+        Volatile.Read(ref _mapMaskCompanion)?.GetRuntimeStatus();
+
+    internal void SetMapMaskCompanion(MapMaskTrigger trigger)
+    {
+        ArgumentNullException.ThrowIfNull(trigger);
+        trigger.Init();
+        var previous = Interlocked.Exchange(ref _mapMaskCompanion, trigger);
+        if (previous is not null && !ReferenceEquals(previous, trigger))
+            previous.Invalidate();
     }
 
     public void Start()
@@ -91,27 +103,14 @@ public sealed class MacTriggerDispatcher(
         using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(IntervalMilliseconds));
         while (await timer.WaitForNextTickAsync(cancellationToken))
         {
-            var triggers = GameTaskManager.TriggerDictionary?.Values
+            var registeredTriggers = GameTaskManager.TriggerDictionary?.Values
                 .Where(trigger => trigger.IsEnabled)
                 .OrderByDescending(trigger => trigger.Priority)
                 .ToArray() ?? [];
+            var triggers = SelectTriggersForFrame(
+                registeredTriggers, Volatile.Read(ref _mapMaskCompanion));
             if (triggers.Length == 0)
                 continue;
-
-            var exclusive = triggers.FirstOrDefault(trigger => trigger.IsExclusive);
-            if (exclusive is not null)
-            {
-                if (!_mapMaskSuppressed && exclusive is not MapMaskTrigger)
-                {
-                    InvalidateMapMask();
-                    _mapMaskSuppressed = true;
-                }
-                triggers = [exclusive];
-            }
-            else
-            {
-                _mapMaskSuppressed = false;
-            }
 
             try
             {
@@ -121,7 +120,6 @@ public sealed class MacTriggerDispatcher(
                 using var content = new CaptureContent(
                     TaskControl.CaptureToRectArea(), _frameIndex++, IntervalMilliseconds);
                 content.CurrentGameUiCategory = Bv.WhichGameUiForTriggers(content.CaptureRectArea);
-                ObserveMapMaskPresence(content);
                 if (content.CurrentGameUiCategory != _previousCategory)
                     _categoryChangedAt = DateTime.Now;
 
@@ -185,27 +183,30 @@ public sealed class MacTriggerDispatcher(
         (now - categoryChangedAt).TotalSeconds <= 30 ||
         trigger.SupportsGameUiCategory(currentCategory);
 
-    private static void InvalidateMapMask()
+    internal static ITaskTrigger[] SelectTriggersForFrame(
+        ITaskTrigger[] triggers, MapMaskTrigger? mapMaskCompanion)
     {
-        if (GameTaskManager.TriggerDictionary?.GetValueOrDefault("MapMask")
-            is MapMaskTrigger mapMask)
+        var businessTriggers = triggers
+            .Where(trigger => trigger is not MapMaskTrigger)
+            .ToArray();
+        var exclusive = businessTriggers.FirstOrDefault(trigger => trigger.IsExclusive);
+        var mapMask = mapMaskCompanion is { IsEnabled: true } ? mapMaskCompanion : null;
+        if (exclusive is null)
         {
-            mapMask.Invalidate();
+            return mapMask is null
+                ? businessTriggers
+                : businessTriggers
+                    .Append(mapMask)
+                    .OrderByDescending(trigger => trigger.Priority)
+                    .ToArray();
         }
+
+        return mapMask is null ? [exclusive] : [mapMask, exclusive];
     }
 
-    private static void ObserveMapMaskPresence(CaptureContent content)
+    private void InvalidateMapMask()
     {
-        if (GameTaskManager.TriggerDictionary?.GetValueOrDefault("MapMask")
-                is not MapMaskTrigger { IsEnabled: true } mapMask ||
-            !mapMask.IsInBigMapUi)
-        {
-            return;
-        }
-
-        var isInBigMapUi =
-            content.CurrentGameUiCategory == GameUiCategory.BigMap ||
-            Bv.IsInBigMapUi(content.CaptureRectArea);
-        mapMask.ObserveBigMapPresence(isInBigMapUi);
+        Volatile.Read(ref _mapMaskCompanion)?.Invalidate();
     }
+
 }

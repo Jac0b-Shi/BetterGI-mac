@@ -163,6 +163,13 @@ server.AttachPlatformAssetInitializer(() =>
     GameTaskManager.LoadInitialTriggers(
         semanticInputBackend, gameTaskManagerPlatform.SystemInfo, autoPickRuntimeState,
         autoPickConfigProvider, paddleAutoPickRecognizer, yapAutoPickRecognizer);
+    if (GameTaskManager.TriggerDictionary?.GetValueOrDefault("MapMask")
+        is not MapMaskTrigger mapMask)
+    {
+        throw new InvalidOperationException(
+            "The macOS MapMask companion was not composed during platform initialization.");
+    }
+    triggerDispatcher.SetMapMaskCompanion(mapMask);
 });
 BetterGenshinImpact.Core.Recognition.OCR.ImageRegionOcrPlatform.Configure(imageRegionOcrService);
 var gameActionKeyResolver = new GameActionKeyResolver(layout);
