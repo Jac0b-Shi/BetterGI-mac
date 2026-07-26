@@ -248,6 +248,72 @@ struct BetterGICoreInputAcknowledgementTests {
         ])
     }
 
+    @MainActor
+    @Test("Core text input remains a backend-owned text action")
+    func coreTextInputRemainsBackendOwned() async {
+        let dispatcher = RecordingInputDispatcher()
+        let appState = runningAppState(
+            name: "runtime-input-text",
+            dispatcher: dispatcher)
+        let adapter = BetterGICorePlatformAdapter(appState: appState)
+
+        let error = await Task.detached {
+            do {
+                _ = try adapter.handle(
+                    method: "input.dispatch",
+                    parameters: [
+                        "action": "inputText",
+                        "text": "BetterGI 测试",
+                    ])
+                return nil as Error?
+            } catch {
+                return error
+            }
+        }.value
+
+        #expect(error == nil)
+        #expect(dispatcher.actions == [.inputText("BetterGI 测试")])
+    }
+
+    @MainActor
+    @Test("Core input query uses the selected input backend")
+    func coreInputQueryUsesSelectedBackend() async {
+        let dispatcher = RecordingInputDispatcher()
+        dispatcher.queryResult = true
+        let appState = runningAppState(
+            name: "runtime-input-query",
+            dispatcher: dispatcher)
+        let adapter = BetterGICorePlatformAdapter(appState: appState)
+
+        let isDown = await Task.detached {
+            guard let result = try? adapter.handle(
+                method: "input.query",
+                parameters: [
+                    "action": "isKeyDown",
+                    "key": "F",
+                ]) as? [String: Any] else {
+                return false
+            }
+            return result["isDown"] as? Bool == true
+        }.value
+
+        #expect(isDown)
+        #expect(dispatcher.queries == [.key(.f)])
+    }
+
+    @MainActor
+    @Test("App shutdown closes the selected input backend")
+    func appShutdownClosesSelectedBackend() {
+        let dispatcher = RecordingInputDispatcher()
+        let appState = AppState(
+            resourceStore: temporaryStore("input-backend-shutdown"),
+            inputDispatcher: dispatcher)
+
+        appState.shutdownInputBackend()
+
+        #expect(dispatcher.shutdownCount == 1)
+    }
+
     @Test("Relative CGEvent preserves delta and injection marker")
     func relativeCGEventPreservesDeltaAndMarker() throws {
         let event = try CGEventInputDispatcher.makeRelativeMouseEvent(
@@ -374,10 +440,22 @@ private struct RejectingInputDispatcher: InputDispatching {
 
 private final class RecordingInputDispatcher: InputDispatching {
     private(set) var actions: [InputAction] = []
+    private(set) var queries: [InputQuery] = []
+    private(set) var shutdownCount = 0
+    var queryResult = false
 
     func perform(_ action: InputAction, targetWindow: WindowInfo) throws -> CGEventDispatchReport {
         actions.append(action)
         return CGEventDispatchReport(eventCount: 1, detail: action.displayName)
+    }
+
+    func query(_ query: InputQuery, targetWindow: WindowInfo) throws -> Bool {
+        queries.append(query)
+        return queryResult
+    }
+
+    func shutdown() {
+        shutdownCount += 1
     }
 }
 
