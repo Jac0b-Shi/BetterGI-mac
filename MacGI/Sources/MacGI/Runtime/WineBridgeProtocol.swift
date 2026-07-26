@@ -41,12 +41,13 @@ enum WineBridgeStatus: UInt32 {
     case targetMismatch = 10
     case inputFailed = 11
     case internalError = 12
-    case inputContextPrimingRequired = 13
+    case inputContextWakePending = 13
+    case inputContextWakeTimeout = 14
 }
 
 enum WineBridgeProtocol {
     static let magic: UInt32 = 0x3149_4742
-    static let version: UInt16 = 2
+    static let version: UInt16 = 4
     static let headerSize = 24
     static let maximumPayloadSize = 65_536
     static let inputMarker: UInt64 = 0x4247_4957_494E_45

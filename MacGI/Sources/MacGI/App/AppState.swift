@@ -548,8 +548,8 @@ final class AppState: ObservableObject {
         if self.inputDispatcher.capabilities.supportsBackgroundDelivery {
             addLog(
                 .warn,
-                "Wine Bridge background delivery is enabled with atomic "
-                    + "input-context priming.")
+                "Wine Bridge 后台操控已启用：原神窗口失焦后需要发送一次左键点击"
+                    + "以恢复输入，少数情况下可能造成一次误输入。")
         } else if launchArguments.contains("--wine-background-diagnostic") {
             addLog(
                 .error,

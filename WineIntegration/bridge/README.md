@@ -45,16 +45,57 @@ The helper can discover the largest visible top-level window belonging to an
 explicit executable name. BetterGI must then register the returned Windows PID,
 HWND and executable name before sending input.
 
-The `CONFIGURE_INPUT_CONTEXT` command enables or disables atomic input-context
-priming after target registration. When enabled, every input-producing command
-checks `GetForegroundWindow()`, performs the configured finite zero-delta
-priming loop when necessary, and immediately executes the requested `SendInput`
-operation on the same bridge thread. State queries and `releaseAll` never prime
-the target.
+The `CONFIGURE_INPUT_CONTEXT` command enables or disables a stateful
+input-context wake sequence after target registration and supplies its
+3-second monotonic deadline. When enabled, every input-producing command checks
+`GetForegroundWindow()`. A mismatch starts helper-owned wake state, sends one
+zero-delta relative mouse prime, then returns
+`BGI_WINE_STATUS_INPUT_CONTEXT_WAKE_PENDING` without executing the original
+action. The client retries the same command with delays of 20, 40, 80 and
+120 ms followed by a 200 ms ceiling, allowing Wine to process each prime
+between requests. The first retry that observes the target HWND immediately
+executes the original input in that same helper request. If Wine keeps reporting
+its desktop HWND, the next request sends one private complete left click through the same
+`send_mouse_button()` down/up path used by normal script mouse actions. It then
+marks the registered target best-effort ready after a 500 ms settle window and
+executes the original input exactly once. This click is experimental: the tested cold-focus
+path swallowed it, delivered the following F6 on its first attempt and showed no
+extra attack. An unexpected early recovery could still expose the probe as one
+attack. Probe state is not exposed to Core. The
+helper ACKs only when the real business `SendInput` succeeds. Swift invalidates
+best-effort readiness after observing the game become the macOS frontmost
+application and then lose host focus again. The 3-second monotonic deadline
+remains a safety bound. State queries and `releaseAll` never wake the target.
+
+This stateful cross-request design is required by the tested YAAgl Wine
+11.0-1 engine. A 15-second loop that primed, slept and queried
+`GetForegroundWindow()` entirely inside one helper command never observed the
+target HWND. Both confirmed successful variants returned from the prime request
+before waiting and sending real input. A separate foreground query is therefore
+diagnostic; the important scheduling boundary is returning control to Wine's
+event loop between prime and real input.
+
+The current target-HWND readiness rule remains experimental. Real-game logs
+include successful background input while a post-input query still reported
+Wine desktop `0x10020`, and a later cross-request test that required target
+foreground timed out after 15 seconds. Foreground equality is therefore only an
+early-ready signal; the bounded best-effort settle path reproduces the scheduling
+shape of the successful script-level and Bridge-private experiments. A later
+mouse-only best-effort test swallowed its first F6 and text commands before a
+left click became visible. A follow-up with longer waiting and F24/XBUTTON2
+probes had the same result, proving that elapsed time and unrelated input paths
+alone are not sufficient. Reusing the ordinary key path with the unbound `0`
+key and then release-only left-button events also failed: F6 and the first
+complete business click were swallowed, while the following click attacked.
+The current probe therefore reproduces that complete primary-button transition
+once before releasing business input. Real-game validation then delivered F6
+on its first attempt without a visible extra attack; the possible early-recovery
+mis-input remains an explicit user-facing warning.
 
 ## Current Limitation
 
-Background delivery remains explicitly gated while broader real-task
-validation is in progress. Only the validated mouse-prime policy advertises
-background-delivery capability to Swift and Core; the other foreground
-experiments remain diagnostics and do not bypass host foreground checks.
+The validated mouse-prime policy is the normal Wine Bridge default and
+advertises background delivery to Swift and Core. Other foreground experiments
+remain diagnostics and do not bypass host foreground checks. The private
+left-click wake probe can become visible if Wine recovers earlier than expected,
+so the app presents an explicit warning in its runtime log.

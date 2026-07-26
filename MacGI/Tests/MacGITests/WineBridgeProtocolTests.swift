@@ -192,7 +192,7 @@ struct WineBridgeProtocolTests {
             bridgeExecutableURL: base.bridgeExecutableURL,
             targetExecutableNames: base.targetExecutableNames,
             startupTimeout: base.startupTimeout,
-            backgroundDiagnosticEnabled: true,
+            backgroundDiagnosticEnabled: false,
             relativeMouseMode: base.relativeMouseMode,
             foregroundExperiment: .mousePrime)
 
@@ -200,16 +200,17 @@ struct WineBridgeProtocolTests {
         #expect(validated.capabilities == InputDeliveryCapabilities(
             requiresHostForeground: false,
             supportsBackgroundDelivery: true))
+        #expect(InputBackendSelection.allCases.first == .wineBridge)
     }
 
-    @Test("Atomic input-context policy encodes finite retries")
-    func atomicInputContextPolicyPayload() throws {
+    @Test("Input-context policy encodes a monotonic wake deadline")
+    func inputContextPolicyPayload() throws {
         var reader = WineBridgeDataReader(
             WineBridgeInputDispatcher.inputContextPolicyPayload(enabled: true))
 
         #expect(try reader.readUInt8() == 1)
-        #expect(try reader.readUInt8() == 3)
-        #expect(try reader.readUInt16() == 150)
+        #expect(try reader.readUInt8() == 0)
+        #expect(try reader.readUInt16() == 3_000)
     }
 
     @Test("Wine Bridge is the default and invalid overrides never fall back")
@@ -226,6 +227,35 @@ struct WineBridgeProtocolTests {
         #expect(wine.deliveryMode == .wineBridge)
         #expect(invalid.deliveryMode == .wineBridge)
         #expect(!(invalid is CGEventInputDispatcher))
+    }
+
+    @Test("Normal Wine configuration enables validated background delivery")
+    func normalWineConfigurationUsesBackgroundDelivery() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "bettergi-wine-default-\(UUID().uuidString)",
+                isDirectory: true)
+        let wine = root.appendingPathComponent("wine")
+        let prefix = root.appendingPathComponent("prefix", isDirectory: true)
+        let bridge = root.appendingPathComponent("bridge.exe")
+        try FileManager.default.createDirectory(
+            at: prefix,
+            withIntermediateDirectories: true)
+        _ = FileManager.default.createFile(atPath: wine.path, contents: Data())
+        _ = FileManager.default.createFile(atPath: bridge.path, contents: Data())
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let configuration = try WineBridgeConfiguration.resolve(
+            launchArguments: ["betterGI-mac"],
+            environment: [
+                "BETTERGI_WINE_EXECUTABLE": wine.path,
+                "BETTERGI_WINE_PREFIX": prefix.path,
+                "BETTERGI_WINE_BRIDGE_EXE": bridge.path,
+            ])
+
+        #expect(configuration.foregroundExperiment == .mousePrime)
+        #expect(configuration.capabilities.supportsBackgroundDelivery)
+        #expect(!configuration.capabilities.requiresHostForeground)
     }
 
     @MainActor

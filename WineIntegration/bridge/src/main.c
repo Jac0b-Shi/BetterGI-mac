@@ -19,8 +19,14 @@ struct bridge_state {
     struct bgi_wine_target target;
     bool has_target;
     bool automatic_input_context_priming;
-    uint8_t input_context_attempts;
-    uint16_t input_context_retry_delay_ms;
+    uint16_t input_context_wake_timeout_ms;
+    bool input_context_wake_in_progress;
+    ULONGLONG input_context_wake_started_at;
+    ULONGLONG input_context_wake_deadline;
+    uint8_t input_context_next_prime_index;
+    uint8_t input_context_probe_count;
+    int input_context_first_prime_result;
+    bool input_context_best_effort_ready;
     bool held_keys[256];
     bool held_mouse[6];
 };
@@ -188,6 +194,13 @@ static bool send_inputs(INPUT *inputs, UINT count)
 }
 
 static bool move_mouse_relative(int32_t delta_x, int32_t delta_y);
+static bool send_mouse_button(struct bridge_state *state, uint8_t button, bool down);
+
+static bool send_input_wake_probe(struct bridge_state *state)
+{
+    if (!send_mouse_button(state, BGI_WINE_MOUSE_LEFT, true)) return false;
+    return send_mouse_button(state, BGI_WINE_MOUSE_LEFT, false);
+}
 
 static void collect_foreground_diagnostic(
     const struct bridge_state *state,
@@ -289,7 +302,7 @@ static uint32_t prepare_target_input(
     memcpy(response_payload, &diagnostic, sizeof(diagnostic));
     *response_length = sizeof(diagnostic);
     if (ready) return BGI_WINE_STATUS_OK;
-    return BGI_WINE_STATUS_INPUT_CONTEXT_PRIMING_REQUIRED;
+    return BGI_WINE_STATUS_INPUT_CONTEXT_WAKE_PENDING;
 }
 
 static uint32_t prime_target_input(
@@ -308,6 +321,8 @@ static uint32_t prime_target_input(
     return BGI_WINE_STATUS_OK;
 }
 
+static void reset_input_context_wake(struct bridge_state *state);
+
 static uint32_t configure_input_context(
     struct bridge_state *state,
     const struct bgi_wine_packet_header *request,
@@ -319,21 +334,31 @@ static uint32_t configure_input_context(
     const struct bgi_wine_input_context_policy *policy =
         (const struct bgi_wine_input_context_policy *)payload;
     if (policy->enabled > 1
-        || policy->maximum_attempts == 0
-        || policy->maximum_attempts > 10
-        || policy->retry_delay_ms > 1000) {
+        || policy->reserved != 0
+        || policy->wake_timeout_ms == 0
+        || policy->wake_timeout_ms > 30000) {
         return BGI_WINE_STATUS_INVALID_PAYLOAD;
     }
     state->automatic_input_context_priming = policy->enabled != 0;
-    state->input_context_attempts = policy->maximum_attempts;
-    state->input_context_retry_delay_ms = policy->retry_delay_ms;
+    state->input_context_wake_timeout_ms = policy->wake_timeout_ms;
+    state->input_context_best_effort_ready = false;
+    reset_input_context_wake(state);
     fprintf(stderr,
-        "input-context policy enabled=%d attempts=%u delayMs=%u\n",
+        "input-context policy enabled=%d wakeTimeoutMs=%u\n",
         state->automatic_input_context_priming,
-        state->input_context_attempts,
-        state->input_context_retry_delay_ms);
+        state->input_context_wake_timeout_ms);
     fflush(stderr);
     return BGI_WINE_STATUS_OK;
+}
+
+static void reset_input_context_wake(struct bridge_state *state)
+{
+    state->input_context_wake_in_progress = false;
+    state->input_context_wake_started_at = 0;
+    state->input_context_wake_deadline = 0;
+    state->input_context_next_prime_index = 0;
+    state->input_context_probe_count = 0;
+    state->input_context_first_prime_result = -1;
 }
 
 static uint32_t ensure_target_input_context(struct bridge_state *state)
@@ -342,29 +367,114 @@ static uint32_t ensure_target_input_context(struct bridge_state *state)
         return BGI_WINE_STATUS_OK;
     }
     HWND target = (HWND)(uintptr_t)state->target.window_handle;
-    if (GetForegroundWindow() == target) {
+    static const DWORD prime_offsets_ms[] = {0};
+    static const DWORD input_probe_offsets_ms[] = {0};
+    static const DWORD best_effort_settle_ms = 500;
+    const size_t prime_offset_count =
+        sizeof(prime_offsets_ms) / sizeof(prime_offsets_ms[0]);
+    const size_t input_probe_offset_count =
+        sizeof(input_probe_offsets_ms) / sizeof(input_probe_offsets_ms[0]);
+    ULONGLONG now = GetTickCount64();
+    HWND foreground = GetForegroundWindow();
+    if (foreground == target) {
+        state->input_context_best_effort_ready = true;
+        if (state->input_context_wake_in_progress) {
+            ULONGLONG elapsed_ms =
+                GetTickCount64() - state->input_context_wake_started_at;
+            fprintf(stderr,
+                "input-context wake ready elapsedMs=%llu primes=%u "
+                "firstPrimeResult=%d foreground=0x%llx\n",
+                (unsigned long long)elapsed_ms,
+                state->input_context_next_prime_index,
+                state->input_context_first_prime_result,
+                (unsigned long long)(uintptr_t)foreground);
+            fflush(stderr);
+        }
+        reset_input_context_wake(state);
         return BGI_WINE_STATUS_OK;
     }
-    for (uint8_t attempt = 1; attempt <= state->input_context_attempts; ++attempt) {
-        if (!move_mouse_relative(0, 0)) {
-            return BGI_WINE_STATUS_INPUT_FAILED;
-        }
-        if (state->input_context_retry_delay_ms > 0) {
-            Sleep(state->input_context_retry_delay_ms);
-        }
-        HWND foreground = GetForegroundWindow();
+    if (state->input_context_best_effort_ready) {
+        return BGI_WINE_STATUS_OK;
+    }
+
+    if (!state->input_context_wake_in_progress) {
+        state->input_context_wake_in_progress = true;
+        state->input_context_wake_started_at = now;
+        state->input_context_wake_deadline =
+            now + state->input_context_wake_timeout_ms;
+        state->input_context_next_prime_index = 0;
+        state->input_context_first_prime_result = -1;
         fprintf(stderr,
-            "input-context atomic prime attempt=%u/%u foreground=0x%llx target=0x%llx\n",
-            attempt,
-            state->input_context_attempts,
+            "input-context wake started timeoutMs=%u "
+            "foreground=0x%llx target=0x%llx\n",
+            state->input_context_wake_timeout_ms,
             (unsigned long long)(uintptr_t)foreground,
             (unsigned long long)(uintptr_t)target);
         fflush(stderr);
-        if (foreground == target) {
-            return BGI_WINE_STATUS_OK;
-        }
     }
-    return BGI_WINE_STATUS_INPUT_CONTEXT_PRIMING_REQUIRED;
+
+    if (!validate_target(&state->target)) {
+        state->has_target = false;
+        reset_input_context_wake(state);
+        return BGI_WINE_STATUS_TARGET_MISMATCH;
+    }
+    if (now >= state->input_context_wake_deadline) {
+        ULONGLONG elapsed_ms = now - state->input_context_wake_started_at;
+        fprintf(stderr,
+            "input-context wake timed out elapsedMs=%llu primes=%u "
+            "firstPrimeResult=%d foreground=0x%llx target=0x%llx\n",
+            (unsigned long long)elapsed_ms,
+            state->input_context_next_prime_index,
+            state->input_context_first_prime_result,
+            (unsigned long long)(uintptr_t)foreground,
+            (unsigned long long)(uintptr_t)target);
+        fflush(stderr);
+        reset_input_context_wake(state);
+        return BGI_WINE_STATUS_INPUT_CONTEXT_WAKE_TIMEOUT;
+    }
+
+    ULONGLONG elapsed_ms = now - state->input_context_wake_started_at;
+    if (state->input_context_next_prime_index < prime_offset_count
+        && elapsed_ms
+            >= prime_offsets_ms[state->input_context_next_prime_index]) {
+        bool prime_succeeded = move_mouse_relative(0, 0);
+        if (state->input_context_next_prime_index == 0) {
+            state->input_context_first_prime_result = prime_succeeded ? 1 : 0;
+        }
+        state->input_context_next_prime_index++;
+        if (!prime_succeeded) {
+            reset_input_context_wake(state);
+            return BGI_WINE_STATUS_INPUT_FAILED;
+        }
+        return BGI_WINE_STATUS_INPUT_CONTEXT_WAKE_PENDING;
+    }
+    if (state->input_context_probe_count < input_probe_offset_count
+        && elapsed_ms
+            >= input_probe_offsets_ms[state->input_context_probe_count]) {
+        if (!send_input_wake_probe(state)) {
+            reset_input_context_wake(state);
+            return BGI_WINE_STATUS_INPUT_FAILED;
+        }
+        state->input_context_probe_count++;
+        return BGI_WINE_STATUS_INPUT_CONTEXT_WAKE_PENDING;
+    }
+    if (elapsed_ms >= best_effort_settle_ms) {
+        fprintf(stderr,
+            "input-context wake settled best-effort elapsedMs=%llu "
+            "mousePrimes=%u inputProbes=%u firstPrimeResult=%d "
+            "foreground=0x%llx target=0x%llx\n",
+            (unsigned long long)elapsed_ms,
+            state->input_context_next_prime_index,
+            state->input_context_probe_count,
+            state->input_context_first_prime_result,
+            (unsigned long long)(uintptr_t)foreground,
+            (unsigned long long)(uintptr_t)target);
+        fflush(stderr);
+        state->input_context_best_effort_ready = true;
+        reset_input_context_wake(state);
+        return BGI_WINE_STATUS_OK;
+    }
+    return BGI_WINE_STATUS_INPUT_CONTEXT_WAKE_PENDING;
 }
 
 static bool send_key(struct bridge_state *state, WORD virtual_key, bool down)
@@ -640,6 +750,8 @@ static uint32_t handle_authenticated_command(
         if (!state->has_target) return BGI_WINE_STATUS_TARGET_REQUIRED;
         if (!validate_target(&state->target)) {
             state->has_target = false;
+            state->input_context_best_effort_ready = false;
+            reset_input_context_wake(state);
             release_all(state);
             return BGI_WINE_STATUS_TARGET_MISMATCH;
         }
@@ -669,6 +781,8 @@ static uint32_t handle_authenticated_command(
         state->target.executable_name[sizeof(state->target.executable_name) - 1] = '\0';
         if (!validate_target(&state->target)) return BGI_WINE_STATUS_TARGET_MISMATCH;
         state->has_target = true;
+        state->input_context_best_effort_ready = false;
+        reset_input_context_wake(state);
         return BGI_WINE_STATUS_OK;
     case BGI_WINE_COMMAND_PING:
         return BGI_WINE_STATUS_OK;
@@ -815,7 +929,7 @@ static bool serve_client(struct bridge_state *state)
                     | BGI_WINE_CAP_STATE_QUERY | BGI_WINE_CAP_TARGET_DISCOVERY
                     | BGI_WINE_CAP_FOREGROUND_DIAGNOSTICS
                     | BGI_WINE_CAP_INPUT_CONTEXT_PRIMING
-                    | BGI_WINE_CAP_ATOMIC_INPUT_CONTEXT,
+                    | BGI_WINE_CAP_STATEFUL_INPUT_CONTEXT_WAKE,
                 BGI_WINE_INPUT_MARKER
             };
             memcpy(response_payload, &response, sizeof(response));

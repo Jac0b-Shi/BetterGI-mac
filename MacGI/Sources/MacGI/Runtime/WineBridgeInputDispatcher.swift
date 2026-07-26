@@ -64,8 +64,7 @@ struct WineBridgeConfiguration: Equatable {
     let foregroundExperiment: WineForegroundExperiment
 
     var capabilities: InputDeliveryCapabilities {
-        let supportsBackgroundDelivery =
-            backgroundDiagnosticEnabled && foregroundExperiment == .mousePrime
+        let supportsBackgroundDelivery = foregroundExperiment == .mousePrime
         return InputDeliveryCapabilities(
             requiresHostForeground: !supportsBackgroundDelivery,
             supportsBackgroundDelivery: supportsBackgroundDelivery)
@@ -117,12 +116,15 @@ struct WineBridgeConfiguration: Equatable {
             description: "--wine-relative-mouse",
             type: WineRelativeMouseMode.self)
         let foregroundExperiment = try enumValue(
-            arguments.value(after: "--wine-foreground-experiment") ?? "none",
+            arguments.value(after: "--wine-foreground-experiment") ?? "mouse-prime",
             description: "--wine-foreground-experiment",
             type: WineForegroundExperiment.self)
-        guard backgroundDiagnosticEnabled || foregroundExperiment == .none else {
+        guard backgroundDiagnosticEnabled
+                || foregroundExperiment == .none
+                || foregroundExperiment == .mousePrime else {
             throw WineBridgeError.invalidConfiguration(
-                "--wine-foreground-experiment requires --wine-background-diagnostic")
+                "once/always foreground experiments require "
+                    + "--wine-background-diagnostic")
         }
 
         return WineBridgeConfiguration(
@@ -226,8 +228,8 @@ struct CommandLineOptions {
 }
 
 enum InputBackendSelection: String, CaseIterable, Identifiable {
-    case foregroundCGEvent = "foreground-cgevent"
     case wineBridge = "wine-bridge"
+    case foregroundCGEvent = "foreground-cgevent"
 
     var id: String { rawValue }
 
@@ -320,22 +322,42 @@ private struct UnavailableInputDispatcher: InputDispatching {
     }
 }
 
-final class WineBridgeInputDispatcher: InputDispatching {
+final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
+    private static let inputContextWakeTimeoutMs: UInt16 = 3_000
+
     let deliveryMode = InputDeliveryMode.wineBridge
     let capabilities: InputDeliveryCapabilities
 
     private let configurationResult: Result<WineBridgeConfiguration, Error>
     private let lock = NSLock()
+    private let hostFocusLock = NSLock()
     private var process: Process?
     private var connection: WineBridgeConnection?
     private var registeredTarget: WineBridgeTarget?
     private var hostTargetPID: pid_t?
     private var outputPipe: Pipe?
     private var backgroundEpisodeForegroundAttempted = false
+    private var hostFocusObserver: NSObjectProtocol?
+    private var observedHostTargetPID: pid_t?
+    private var targetWasHostFrontmost = false
+    private var hostFocusGeneration: UInt64 = 0
+    private var appliedHostFocusGeneration: UInt64 = 0
 
     init(configuration: Result<WineBridgeConfiguration, Error>) {
         configurationResult = configuration
         capabilities = (try? configuration.get().capabilities) ?? .foregroundOnly
+        hostFocusObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let application = notification.userInfo?[
+                NSWorkspace.applicationUserInfoKey
+            ] as? NSRunningApplication else {
+                return
+            }
+            self?.recordHostApplicationActivation(application.processIdentifier)
+        }
     }
 
     convenience init(launchArguments: [String]) {
@@ -348,6 +370,9 @@ final class WineBridgeInputDispatcher: InputDispatching {
     }
 
     deinit {
+        if let hostFocusObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(hostFocusObserver)
+        }
         shutdown()
     }
 
@@ -371,6 +396,7 @@ final class WineBridgeInputDispatcher: InputDispatching {
             return CGEventDispatchReport(eventCount: 1, detail: "releaseAll")
         }
         let session = try ensureSession(targetWindow: targetWindow)
+        try resetInputContextAfterHostFocusCycle(through: session)
         let diagnostic = try prepareDiagnostic(
             action: action,
             targetWindow: targetWindow,
@@ -428,6 +454,7 @@ final class WineBridgeInputDispatcher: InputDispatching {
         connection = nil
         registeredTarget = nil
         hostTargetPID = nil
+        clearObservedHostTarget()
         backgroundEpisodeForegroundAttempted = false
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         outputPipe = nil
@@ -489,6 +516,7 @@ final class WineBridgeInputDispatcher: InputDispatching {
             self.connection = connection
             registeredTarget = target
             hostTargetPID = targetWindow.ownerPID
+            observeHostTarget(targetWindow.ownerPID)
             NSLog(
                 "Wine bridge ready hostPID=%d windowsPID=%u hwnd=0x%llx",
                 targetWindow.ownerPID,
@@ -593,33 +621,38 @@ final class WineBridgeInputDispatcher: InputDispatching {
     ) throws -> Int {
         switch action {
         case let .keyDown(key, modifiers):
-            try connection.request(
+            try requestInput(
                 .keyDown,
-                payload: try Self.keyPayload(key, modifiers: modifiers, durationMs: 0))
+                payload: try Self.keyPayload(key, modifiers: modifiers, durationMs: 0),
+                through: connection)
             return 1
         case let .keyUp(key, modifiers):
-            try connection.request(
+            try requestInput(
                 .keyUp,
-                payload: try Self.keyPayload(key, modifiers: modifiers, durationMs: 0))
+                payload: try Self.keyPayload(key, modifiers: modifiers, durationMs: 0),
+                through: connection)
             return 1
         case let .keyPress(key, modifiers):
-            try connection.request(
+            try requestInput(
                 .keyPress,
-                payload: try Self.keyPayload(key, modifiers: modifiers, durationMs: 0))
+                payload: try Self.keyPayload(key, modifiers: modifiers, durationMs: 0),
+                through: connection)
             return 2
         case let .keyHold(key, durationMs, modifiers):
-            try connection.request(
+            try requestInput(
                 .keyPress,
                 payload: try Self.keyPayload(
                     key,
                     modifiers: modifiers,
-                    durationMs: durationMs))
+                    durationMs: durationMs),
+                through: connection)
             return 2
         case let .mouseMove(point):
-            try connection.request(
+            try requestInput(
                 .mouseMoveAbsolute,
                 payload: Self.mouseMovePayload(
-                    point: Self.wineClientPoint(point, targetWindow: targetWindow)))
+                    point: Self.wineClientPoint(point, targetWindow: targetWindow)),
+                through: connection)
             return 1
         case let .mouseMoveRelative(deltaX, deltaY):
             let configuration = try configurationResult.get()
@@ -628,75 +661,163 @@ final class WineBridgeInputDispatcher: InputDispatching {
                 deltaY: deltaY,
                 targetWindow: targetWindow,
                 mode: configuration.relativeMouseMode)
-            try connection.request(
+            try requestInput(
                 .mouseMoveRelative,
-                payload: Self.mouseMovePayload(x: delta.x, y: delta.y))
+                payload: Self.mouseMovePayload(x: delta.x, y: delta.y),
+                through: connection)
             return 1
         case let .mouseButtonDown(button, point):
-            try connection.request(
+            try requestInput(
                 .mouseButtonDown,
                 payload: try Self.mouseButtonPayload(
                     button,
                     point: point.map {
                         Self.wineClientPoint($0, targetWindow: targetWindow)
                     },
-                    durationMs: 0))
+                    durationMs: 0),
+                through: connection)
             return point == nil ? 1 : 2
         case let .mouseButtonUp(button, point):
-            try connection.request(
+            try requestInput(
                 .mouseButtonUp,
                 payload: try Self.mouseButtonPayload(
                     button,
                     point: point.map {
                         Self.wineClientPoint($0, targetWindow: targetWindow)
                     },
-                    durationMs: 0))
+                    durationMs: 0),
+                through: connection)
             return point == nil ? 1 : 2
         case let .mouseClick(button, point):
-            try connection.request(
+            try requestInput(
                 .mouseClick,
                 payload: try Self.mouseButtonPayload(
                     button,
                     point: point.map {
                         Self.wineClientPoint($0, targetWindow: targetWindow)
                     },
-                    durationMs: 50))
+                    durationMs: 50),
+                through: connection)
             return point == nil ? 2 : 3
         case let .mouseButtonHold(button, durationMs, point):
-            try connection.request(
+            try requestInput(
                 .mouseClick,
                 payload: try Self.mouseButtonPayload(
                     button,
                     point: point.map {
                         Self.wineClientPoint($0, targetWindow: targetWindow)
                     },
-                    durationMs: durationMs))
+                    durationMs: durationMs),
+                through: connection)
             return point == nil ? 2 : 3
         case let .verticalScroll(clicks):
             var payload = Data()
             payload.appendLittleEndian(Int32(clamping: clicks * 120))
-            try connection.request(.mouseWheel, payload: payload)
+            try requestInput(.mouseWheel, payload: payload, through: connection)
             return 1
         case let .inputText(text):
             guard let payload = text.data(using: .utf16LittleEndian), !payload.isEmpty else {
                 throw WineBridgeError.invalidConfiguration("Text cannot be encoded as UTF-16LE")
             }
-            try connection.request(.inputText, payload: payload)
+            try requestInput(.inputText, payload: payload, through: connection)
             return payload.count
         case let .leftClick(point):
-            try connection.request(
+            try requestInput(
                 .mouseClick,
                 payload: try Self.mouseButtonPayload(
                     .left,
                     point: point.map {
                         Self.wineClientPoint($0, targetWindow: targetWindow)
                     },
-                    durationMs: 50))
+                    durationMs: 50),
+                through: connection)
             return point == nil ? 2 : 3
         case .releaseAll:
             try connection.request(.releaseAll)
             return 1
         }
+    }
+
+    private func requestInput(
+        _ command: WineBridgeCommand,
+        payload: Data = Data(),
+        through connection: WineBridgeConnection
+    ) throws {
+        var pollDelay: TimeInterval = 0.02
+        while true {
+            do {
+                _ = try connection.request(command, payload: payload)
+                return
+            } catch let error as WineBridgeError {
+                guard case let .requestFailed(failedCommand, status) = error,
+                      failedCommand == command,
+                      status == WineBridgeStatus.inputContextWakePending.rawValue else {
+                    throw error
+                }
+                Thread.sleep(forTimeInterval: pollDelay)
+                if pollDelay < 0.04 {
+                    pollDelay = 0.04
+                } else if pollDelay < 0.08 {
+                    pollDelay = 0.08
+                } else if pollDelay < 0.12 {
+                    pollDelay = 0.12
+                } else {
+                    pollDelay = 0.2
+                }
+            }
+        }
+    }
+
+    private func observeHostTarget(_ processIdentifier: pid_t) {
+        hostFocusLock.lock()
+        observedHostTargetPID = processIdentifier
+        targetWasHostFrontmost =
+            NSWorkspace.shared.frontmostApplication?.processIdentifier
+                == processIdentifier
+        appliedHostFocusGeneration = hostFocusGeneration
+        hostFocusLock.unlock()
+    }
+
+    private func clearObservedHostTarget() {
+        hostFocusLock.lock()
+        observedHostTargetPID = nil
+        targetWasHostFrontmost = false
+        appliedHostFocusGeneration = hostFocusGeneration
+        hostFocusLock.unlock()
+    }
+
+    private func recordHostApplicationActivation(_ processIdentifier: pid_t) {
+        hostFocusLock.lock()
+        defer { hostFocusLock.unlock() }
+        guard let observedHostTargetPID else { return }
+        if processIdentifier == observedHostTargetPID {
+            targetWasHostFrontmost = true
+        } else if targetWasHostFrontmost {
+            targetWasHostFrontmost = false
+            hostFocusGeneration &+= 1
+        }
+    }
+
+    private func resetInputContextAfterHostFocusCycle(
+        through connection: WineBridgeConnection
+    ) throws {
+        hostFocusLock.lock()
+        let generation = hostFocusGeneration
+        let requiresReset = generation != appliedHostFocusGeneration
+        if requiresReset {
+            appliedHostFocusGeneration = generation
+        }
+        hostFocusLock.unlock()
+        guard requiresReset else { return }
+
+        let configuration = try configurationResult.get()
+        _ = try connection.request(
+            .configureInputContext,
+            payload: Self.inputContextPolicyPayload(
+                enabled: configuration.capabilities.supportsBackgroundDelivery))
+        NSLog(
+            "Wine bridge input context invalidated after host focus cycle generation=%llu",
+            generation)
     }
 
     private static func keyPayload(
@@ -832,8 +953,8 @@ final class WineBridgeInputDispatcher: InputDispatching {
     }
 
     static func inputContextPolicyPayload(enabled: Bool) -> Data {
-        var payload = Data([enabled ? 1 : 0, 3])
-        payload.appendLittleEndian(UInt16(150))
+        var payload = Data([enabled ? 1 : 0, 0])
+        payload.appendLittleEndian(inputContextWakeTimeoutMs)
         return payload
     }
 

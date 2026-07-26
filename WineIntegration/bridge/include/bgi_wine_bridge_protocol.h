@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define BGI_WINE_BRIDGE_MAGIC UINT32_C(0x31494742)
-#define BGI_WINE_BRIDGE_VERSION UINT16_C(2)
+#define BGI_WINE_BRIDGE_VERSION UINT16_C(4)
 #define BGI_WINE_BRIDGE_MAX_PAYLOAD UINT32_C(65536)
 #define BGI_WINE_INPUT_MARKER UINT64_C(0x42474957494E45)
 
@@ -16,7 +16,7 @@
 #define BGI_WINE_CAP_TARGET_DISCOVERY UINT32_C(1 << 5)
 #define BGI_WINE_CAP_FOREGROUND_DIAGNOSTICS UINT32_C(1 << 6)
 #define BGI_WINE_CAP_INPUT_CONTEXT_PRIMING UINT32_C(1 << 7)
-#define BGI_WINE_CAP_ATOMIC_INPUT_CONTEXT UINT32_C(1 << 8)
+#define BGI_WINE_CAP_STATEFUL_INPUT_CONTEXT_WAKE UINT32_C(1 << 8)
 
 #define BGI_WINE_DIAGNOSTIC_TARGET_IS_WINDOW UINT32_C(1)
 #define BGI_WINE_DIAGNOSTIC_TARGET_IS_VISIBLE UINT32_C(1 << 1)
@@ -62,7 +62,8 @@ enum bgi_wine_status {
     BGI_WINE_STATUS_TARGET_MISMATCH = 10,
     BGI_WINE_STATUS_INPUT_FAILED = 11,
     BGI_WINE_STATUS_INTERNAL_ERROR = 12,
-    BGI_WINE_STATUS_INPUT_CONTEXT_PRIMING_REQUIRED = 13
+    BGI_WINE_STATUS_INPUT_CONTEXT_WAKE_PENDING = 13,
+    BGI_WINE_STATUS_INPUT_CONTEXT_WAKE_TIMEOUT = 14
 };
 
 enum bgi_wine_mouse_button {
@@ -147,8 +148,8 @@ struct bgi_wine_query_response {
 
 struct bgi_wine_input_context_policy {
     uint8_t enabled;
-    uint8_t maximum_attempts;
-    uint16_t retry_delay_ms;
+    uint8_t reserved;
+    uint16_t wake_timeout_ms;
 };
 
 struct bgi_wine_foreground_diagnostic {

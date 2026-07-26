@@ -11,7 +11,9 @@
 
 BetterGI macOS 将 [BetterGI](https://github.com/babalae/better-genshin-impact) 的
 C# Core、识别资源、任务、脚本与调度能力接入 SwiftUI/AppKit 前端，并使用
-ScreenCaptureKit、Core Graphics 和 macOS 原生窗口系统完成截图、输入与 HUD。
+ScreenCaptureKit、Wine Bridge、Core Graphics 和 macOS 原生窗口系统完成截图、
+输入与 HUD。默认 Wine Bridge 可在原神位于后台时继续投递键鼠输入，同时不移动
+用户正在操作的 macOS 光标。
 
 本仓库不是 BetterGI 官方发布，也不由 BetterGI 上游维护者提供支持。Windows
 版本请前往[上游项目](https://github.com/babalae/better-genshin-impact)。
@@ -62,12 +64,25 @@ ad-hoc 版本升级后可能需要重新授予屏幕录制和辅助功能权限�
 2. 打开 BetterGI，在“启动”页面确认两项 macOS 权限均显示“已授权”。
 3. 点击“启动”开启 BetterGI Core 和 ScreenCaptureKit 截图器。
 4. 如果自动识别不到游戏，展开“手动选择窗口”，选择真实、可见的原神窗口。
-5. 截图器进入运行状态后，再按需启用实时任务、独立任务、调度器、脚本或 HUD。
-6. 退出游戏后，BetterGI 会自动停止截图器。
+5. 默认“输入后端”为 Wine Bridge，适用于 YAAgl/Wine 原神；云原神、远程客户端
+   或其他非 Wine 场景请选择“macOS CGEvent”。
+6. 截图器进入运行状态后，再按需启用实时任务、独立任务、调度器、脚本或 HUD。
+7. 退出游戏后，BetterGI 会自动停止截图器。
 
-当前默认输入后端要求原神是 macOS 前台应用。切换到其他应用时，依赖键鼠输入的
-任务会暂停或拒绝发送输入，不会把操作投递给当前前台应用。后台 Wine 输入仍属于
-后续实验能力。
+## Wine 后台操控
+
+Wine Bridge 是默认和推荐输入后端。它在原神所在的 Wine prefix 内启动原生 Win32
+helper，通过 `SendInput` 投递按键、点击、滚轮和相对鼠标移动。切换到浏览器、终端
+或 IDE 后，任务仍可继续控制后台原神，真实 macOS 光标不会被 BetterGI 移动，输入
+也不会回退并泄漏到当前前台应用。
+
+原神窗口每次从 macOS 前台切到后台后，Wine Bridge 需要先发送一次左键点击来恢复
+Wine 输入上下文。实测冷状态下该点击会被 Wine 吞掉，但如果 Wine 提前恢复，它仍
+可能表现为一次额外攻击或误点击。应用启动时也会在左下角日志区显示此风险。
+
+“macOS CGEvent”保留为兼容后端，适用于云原神、远程控制另一台电脑或其他不使用
+本机 Wine prefix 的客户端。CGEvent 后端仍要求游戏位于 macOS 前台，失焦时会暂停
+或拒绝输入，避免操作泄漏到当前应用。
 
 各功能的任务语义和脚本格式以
 [BetterGI 文档](https://www.bettergi.com/doc.html)及上游实现为准，但页面位置、
@@ -78,7 +93,7 @@ ad-hoc 版本升级后可能需要重新授予屏幕录制和辅助功能权限�
 | 权限 | 用途 |
 | --- | --- |
 | 屏幕录制 | 通过 ScreenCaptureKit 读取原神窗口画面，用于识别、定位和任务执行 |
-| 辅助功能（无障碍） | 通过 Core Graphics 发送经安全门校验的键盘和鼠标输入 |
+| 辅助功能（无障碍） | 使用 CGEvent 兼容后端、全局快捷键和相关 macOS 输入能力 |
 
 BetterGI 不会在启动截图器时反复请求权限。若本次启动已经发出屏幕录制请求，请在
 系统设置中完成授权，然后退出并重新打开应用。
@@ -87,7 +102,9 @@ BetterGI 不会在启动截图器时反复请求权限。若本次启动已经�
 
 - 小地图标点继承上游 BetterGI 的定位数据与算法覆盖范围，部分较新的地图区域可能
   不显示标点；大地图标点不受此限制。
-- 当前稳定输入后端不支持在原神失去 macOS 前台焦点后继续操控游戏。
+- Wine 后台操控当前针对 YAAgl OS 的 Wine 11.0-1 CrossOver 引擎完成验证；其他
+  Wine/CrossOver 版本可能需要重新验证输入上下文恢复行为。
+- Wine Bridge 在窗口失焦后会发送一次预热点击，少数情况下可能产生一次误输入。
 - Wine、YAAgl、游戏版本和 macOS 更新都可能影响截图、窗口识别或模拟输入行为。
 - macOS 移植持续跟进上游，但新功能可能不会与 Windows 版同时可用。
 
@@ -111,8 +128,9 @@ macOS 将窗口画面读取和模拟键鼠输入分别置于两个隐私权限�
 
 ### 为什么切到其他应用后任务不再输入？
 
-这是当前前台输入安全策略。它用于防止 BetterGI 将按键或点击发送到浏览器、终端等
-其他前台应用，不是任务卡死。
+确认“启动”页面的输入后端为 Wine Bridge，并且游戏通过本机 YAAgl/Wine 运行。
+CGEvent 后端、云原神和远程客户端仍受 macOS 前台输入安全策略约束；失焦时暂停是
+为了避免 BetterGI 将按键或点击发送到浏览器、终端等当前前台应用。
 
 ### 会不会封号？
 
