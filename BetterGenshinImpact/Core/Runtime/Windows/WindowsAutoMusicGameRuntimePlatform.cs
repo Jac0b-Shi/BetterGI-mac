@@ -2,6 +2,7 @@ using BetterGenshinImpact.GameTask.AutoMusicGame;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.Helpers;
 using OpenCvSharp;
+using System;
 using Vanara.PInvoke;
 
 namespace BetterGenshinImpact.Core.Runtime.Windows;
