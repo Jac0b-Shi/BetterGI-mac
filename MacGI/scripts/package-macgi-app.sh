@@ -78,7 +78,7 @@ fi
 cmake \
   -S ${wine_bridge_root} \
   -B ${wine_bridge_build} \
-  -DCMAKE_TOOLCHAIN_FILE=${repository_root}/toolchains/mingw-x86_64.cmake \
+  -DCMAKE_TOOLCHAIN_FILE=${wine_bridge_root}/toolchains/mingw-x86_64.cmake \
   -DCMAKE_BUILD_TYPE=Release
 cmake --build ${wine_bridge_build} --parallel
 if [[ ! -f ${wine_bridge_executable} ]]; then
