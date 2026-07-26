@@ -95,10 +95,12 @@ public class MapMaskTrigger : ITaskTrigger
     private string? _lastMiniMapPoint;
     private string? _lastUiApplyError;
 
+    public bool IsInBigMapUi => Volatile.Read(ref _lastCaptureInBigMap) == 1;
+
     public object GetRuntimeStatus() => new
     {
         captures = Interlocked.Read(ref _captureCount),
-        lastCaptureInBigMap = Volatile.Read(ref _lastCaptureInBigMap) == 1,
+        lastCaptureInBigMap = IsInBigMapUi,
         bigMapMatchAttempts = Interlocked.Read(ref _bigMapMatchAttempts),
         bigMapMatchSuccesses = Interlocked.Read(ref _bigMapMatchSuccesses),
         bigMapMatchFailures = Interlocked.Read(ref _bigMapMatchFailures),
@@ -147,6 +149,27 @@ public class MapMaskTrigger : ITaskTrigger
         _platform.Publish(new(false, new(0, 0, 0, 0), new(0, 0, 0, 0)));
     }
 
+    public void ObserveBigMapPresence(bool isInBigMapUi)
+    {
+        var wasInBigMapUi = Interlocked.Exchange(
+            ref _lastCaptureInBigMap, isInBigMapUi ? 1 : 0) == 1;
+        if (isInBigMapUi == wasInBigMapUi)
+        {
+            return;
+        }
+
+        if (!isInBigMapUi)
+        {
+            Invalidate();
+            return;
+        }
+
+        lock (_navigationLock)
+        {
+            _navigationInstance.Reset();
+        }
+    }
+
     /// <summary>
     /// 接收每帧截图内容并驱动大地图/小地图的异步定位与UI更新
     /// </summary>
@@ -162,19 +185,11 @@ public class MapMaskTrigger : ITaskTrigger
 
         try
         {
-            var generation = Volatile.Read(ref _generation);
             var region = content.CaptureRectArea;
             var inBigMapUi = content.CurrentGameUiCategory == GameUiCategory.BigMap || Bv.IsInBigMapUi(region);
+            ObserveBigMapPresence(inBigMapUi);
+            var generation = Volatile.Read(ref _generation);
             Interlocked.Increment(ref _captureCount);
-            var wasInBigMapUi = Interlocked.Exchange(
-                ref _lastCaptureInBigMap, inBigMapUi ? 1 : 0) == 1;
-            if (inBigMapUi && !wasInBigMapUi)
-            {
-                lock (_navigationLock)
-                {
-                    _navigationInstance.Reset();
-                }
-            }
             var mapMatchingMethod = _platform.MapMatchingMethod;
             PendingUiUpdate? update = null;
 

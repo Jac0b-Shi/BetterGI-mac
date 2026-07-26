@@ -121,6 +121,7 @@ public sealed class MacTriggerDispatcher(
                 using var content = new CaptureContent(
                     TaskControl.CaptureToRectArea(), _frameIndex++, IntervalMilliseconds);
                 content.CurrentGameUiCategory = Bv.WhichGameUiForTriggers(content.CaptureRectArea);
+                ObserveMapMaskPresence(content);
                 if (content.CurrentGameUiCategory != _previousCategory)
                     _categoryChangedAt = DateTime.Now;
 
@@ -191,5 +192,20 @@ public sealed class MacTriggerDispatcher(
         {
             mapMask.Invalidate();
         }
+    }
+
+    private static void ObserveMapMaskPresence(CaptureContent content)
+    {
+        if (GameTaskManager.TriggerDictionary?.GetValueOrDefault("MapMask")
+                is not MapMaskTrigger { IsEnabled: true } mapMask ||
+            !mapMask.IsInBigMapUi)
+        {
+            return;
+        }
+
+        var isInBigMapUi =
+            content.CurrentGameUiCategory == GameUiCategory.BigMap ||
+            Bv.IsInBigMapUi(content.CaptureRectArea);
+        mapMask.ObserveBigMapPresence(isInBigMapUi);
     }
 }
