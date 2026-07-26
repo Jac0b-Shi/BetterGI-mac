@@ -32,25 +32,17 @@ There is no `wine/bin/wine64` or `wine/bin/wine-preloader` in this distribution.
 Code must detect the executable and must not assume either path exists.
 
 The GitHub Release asset SHA-256 and the inspected installation manifest are
-recorded in [engine-lock.json](engine-lock.json). Local absolute paths, game
-installation paths, credentials, signing identities and session tokens are not
-stored.
+recorded in [engine-lock.json](engine-lock.json). The audit evidence and
+reproducibility limits are documented in
+[Docs/wine-engine-provenance.md](../Docs/wine-engine-provenance.md). Local
+absolute paths, game installation paths, credentials, signing identities and
+session tokens are not stored.
 
 ## Reproducibility Status
 
-The release repository points to
-[`riverfog7/macports-wine`](https://github.com/riverfog7/macports-wine), and the
-release notes describe timeout, CN game, Media Foundation and CrossOver patches.
-They do not identify the exact overlay commit, CrossOver source baseline,
-ordered patch series or build configuration.
-
-The current binary therefore cannot yet be reproduced exactly from public
-metadata. A future `winemac.drv` patch must not be generated against Wine master
-or described as compatible until those inputs are identified.
-
-The distribution name says `signed`, but the inspected Mach-O files are ad-hoc
-signed with no Team ID and no entitlements. Installation tooling must preserve
-that fact instead of assuming an Apple Development or Developer ID signature.
+The exact MacPorts overlay commit, CrossOver source baseline, ordered patch
+series and build configuration are not currently published. See the provenance
+audit for the evidence and the resulting macdrv patch boundary.
 
 ## Repository Boundary
 
