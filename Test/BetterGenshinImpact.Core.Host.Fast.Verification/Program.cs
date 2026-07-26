@@ -4,6 +4,7 @@ using BetterGenshinImpact.Verification.Framework;
 return await VerificationRunner.RunAsync(args,
 [
     new TriggerSettingsSuite(),
+    new LocalizationResourceSuite(),
     new SoloTaskSettingsSuite(),
     new ScriptGroupEditingSuite(),
     new PathingCatalogSuite(),
