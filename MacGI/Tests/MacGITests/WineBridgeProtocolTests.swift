@@ -103,6 +103,54 @@ struct WineBridgeProtocolTests {
         #expect(delta == CGPoint(x: -590, y: 120))
     }
 
+    @Test("Raw Wine relative movement preserves Core deltas")
+    func rawRelativeMovementPreservesCoreDeltas() {
+        let window = WindowInfo(
+            id: 42,
+            ownerPID: 42,
+            ownerName: "wine",
+            title: "Genshin Impact",
+            frame: CGRect(x: 839, y: 233, width: 960, height: 572),
+            layer: 0,
+            isOnScreen: true,
+            scaleFactor: 2)
+
+        let delta = WineBridgeInputDispatcher.wineRelativeDelta(
+            deltaX: -1_180,
+            deltaY: 240,
+            targetWindow: window,
+            mode: .raw)
+
+        #expect(delta == CGPoint(x: -1_180, y: 240))
+    }
+
+    @Test("Foreground diagnostic decodes Win32 focus state")
+    func foregroundDiagnosticDecodes() throws {
+        var payload = Data()
+        [UInt32(123), 456, 12, 34].forEach { payload.appendLittleEndian($0) }
+        [
+            UInt64(0x100), 0x200, 0x300, 0x400, 0x500, 0x600, 0x700
+        ].forEach { payload.appendLittleEndian($0) }
+        payload.appendLittleEndian(UInt32(bitPattern: -1))
+        payload.appendLittleEndian(UInt32(3))
+        payload.appendLittleEndian(UInt16(0x46))
+        payload.appendLittleEndian(UInt16(0x8001))
+        let name = Data("GenshinImpact.exe".utf8)
+        payload.append(name)
+        payload.append(Data(repeating: 0, count: 64 - name.count))
+
+        let diagnostic = try WineBridgeForegroundDiagnostic.decode(payload)
+
+        #expect(payload.count == WineBridgeForegroundDiagnostic.encodedSize)
+        #expect(diagnostic.targetProcessID == 123)
+        #expect(diagnostic.foregroundProcessID == 456)
+        #expect(diagnostic.targetIsWindow)
+        #expect(diagnostic.targetIsVisible)
+        #expect(diagnostic.focusWindow == 0x400)
+        #expect(diagnostic.setForegroundResult == -1)
+        #expect(diagnostic.foregroundExecutableName == "GenshinImpact.exe")
+    }
+
     @Test("Backend selection is explicit and never falls back for invalid values")
     func backendSelection() {
         let normal = InputDispatcherFactory.make(launchArguments: ["betterGI-mac"])
@@ -156,5 +204,58 @@ struct WineBridgeProtocolTests {
             source: .runtimeTrigger)
 
         #expect(result.isDryRun)
+    }
+
+    @MainActor
+    @Test("Explicit Wine diagnostic bypasses only the runtime foreground gate")
+    func explicitDiagnosticBypassesRuntimeForegroundGate() {
+        let dispatcher = DiagnosticRecordingInputDispatcher()
+        let launchArguments = [
+            "betterGI-mac",
+            "--input-backend",
+            "wine-bridge",
+            "--wine-background-diagnostic",
+        ]
+        let appState = AppState(
+            resourceStore: BGIRuntimeResourceStore(
+                rootURL: FileManager.default.temporaryDirectory
+                    .appendingPathComponent(
+                        "bettergi-wine-background-diagnostic-\(UUID().uuidString)",
+                        isDirectory: true)),
+            inputDispatcher: dispatcher,
+            isTargetWindowFrontmost: { _ in false },
+            launchArguments: launchArguments)
+        appState.selectedWindow = WindowInfo(
+            id: 42,
+            ownerPID: 42,
+            ownerName: "wine",
+            title: "Genshin Impact",
+            frame: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+            layer: 0,
+            isOnScreen: true,
+            scaleFactor: 1)
+        appState.runtimeLifecycle = .running
+
+        let result = appState.dispatchInput(
+            .keyPress(key: .f),
+            source: .runtimeTrigger)
+
+        #expect(result.allowed)
+        #expect(dispatcher.actions == [.keyPress(key: .f)])
+        #expect(appState.wineBackgroundDiagnosticAllowed)
+        #expect(appState.inputDeliveryMode == .wineBridge)
+    }
+}
+
+private final class DiagnosticRecordingInputDispatcher: InputDispatching {
+    let deliveryMode = InputDeliveryMode.wineBridge
+    private(set) var actions: [InputAction] = []
+
+    func perform(
+        _ action: InputAction,
+        targetWindow: WindowInfo
+    ) throws -> CGEventDispatchReport {
+        actions.append(action)
+        return CGEventDispatchReport(eventCount: 1, detail: action.displayName)
     }
 }

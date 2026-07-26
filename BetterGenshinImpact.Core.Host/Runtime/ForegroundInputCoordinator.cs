@@ -10,7 +10,8 @@ public sealed class ForegroundInputCoordinator(
     string sessionToken,
     CancellationToken hostCancellationToken,
     TimeSpan? pollInterval = null,
-    Func<bool>? focusProbe = null)
+    Func<bool>? focusProbe = null,
+    Func<bool>? inputAvailabilityProbe = null)
 {
     private readonly TimeSpan _pollInterval = pollInterval ?? TimeSpan.FromMilliseconds(100);
     private readonly AsyncLocal<CancellationToken?> _operationCancellation = new();
@@ -29,7 +30,7 @@ public sealed class ForegroundInputCoordinator(
         while (true)
         {
             ThrowIfTaskCancelled(linked.Token);
-            if (IsGameFocused(linked.Token))
+            if (IsInputAvailable(linked.Token))
                 return;
 
             Interlocked.Exchange(ref _releaseRequired, 1);
@@ -64,7 +65,7 @@ public sealed class ForegroundInputCoordinator(
     public void ReleaseAllWhenFocused(CancellationToken cancellationToken = default)
     {
         using var linked = CreateLinkedCancellation(cancellationToken);
-        if (!IsGameFocused(linked.Token))
+        if (!IsInputAvailable(linked.Token))
         {
             Interlocked.Exchange(ref _releaseRequired, 1);
             return;
@@ -84,6 +85,24 @@ public sealed class ForegroundInputCoordinator(
         focusProbe?.Invoke()
         ?? Metrics(cancellationToken).Value<bool?>("isActive")
         ?? throw new InvalidDataException("window.metrics did not return isActive.");
+
+    public bool IsInputAvailable(CancellationToken cancellationToken = default)
+    {
+        if (inputAvailabilityProbe is not null)
+            return inputAvailabilityProbe();
+        if (focusProbe is not null)
+            return focusProbe();
+
+        var metrics = Metrics(cancellationToken);
+        var isActive = metrics.Value<bool?>("isActive")
+            ?? throw new InvalidDataException("window.metrics did not return isActive.");
+        var diagnosticAllowed =
+            metrics.Value<bool?>("backgroundInputDiagnosticAllowed") == true;
+        var deliveryMode = metrics.Value<string>("inputDeliveryMode");
+        return isActive ||
+               diagnosticAllowed &&
+               string.Equals(deliveryMode, "wineBridge", StringComparison.Ordinal);
+    }
 
     private CancellationTokenSource CreateLinkedCancellation(CancellationToken cancellationToken)
     {

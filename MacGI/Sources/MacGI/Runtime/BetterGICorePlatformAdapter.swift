@@ -161,6 +161,8 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                 "workingAreaX": Int(workingArea.minX * scale), "workingAreaY": Int(workingArea.minY * scale),
                 "workingAreaWidth": Int(workingArea.width * scale), "workingAreaHeight": Int(workingArea.height * scale),
                 "isActive": isActive,
+                "backgroundInputDiagnosticAllowed": appState.wineBackgroundDiagnosticAllowed,
+                "inputDeliveryMode": appState.inputDeliveryMode.rawValue,
             ]
         case "clipboard.write":
             guard let text = parameters?["text"] as? String, !text.isEmpty else {

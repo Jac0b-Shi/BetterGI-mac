@@ -38,6 +38,11 @@ public sealed class RuntimeCancellationSuite : IVerificationSuite
         {
         }
 
+        var diagnosticCoordinator = new ForegroundInputCoordinator(
+            new PlatformCallbackChannel(), "verification", CancellationToken.None,
+            TimeSpan.FromMilliseconds(5), () => false, () => true);
+        diagnosticCoordinator.WaitForGameFocus(cancellationToken);
+
         CancellationContext.Instance.Set();
         var scriptCancellation = CancellationContext.Instance.Cts.Token;
         CancellationContext.Instance.ManualCancel();
