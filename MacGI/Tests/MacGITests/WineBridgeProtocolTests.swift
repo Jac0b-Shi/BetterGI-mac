@@ -151,6 +151,30 @@ struct WineBridgeProtocolTests {
         #expect(diagnostic.foregroundExecutableName == "GenshinImpact.exe")
     }
 
+    @Test("Input context priming is needed only when Wine foreground differs")
+    func inputContextPrimingRequirementTracksWineForeground() throws {
+        var payload = Data()
+        [UInt32(123), 456, 12, 34].forEach { payload.appendLittleEndian($0) }
+        [
+            UInt64(0x30054), 0x10020, 0x30054, 0x30054, 0, 0, 0
+        ].forEach { payload.appendLittleEndian($0) }
+        payload.appendLittleEndian(UInt32(bitPattern: -1))
+        payload.appendLittleEndian(UInt32(3))
+        payload.appendLittleEndian(UInt16(0x46))
+        payload.appendLittleEndian(UInt16(0))
+        payload.append(Data(repeating: 0, count: 64))
+        let background = try WineBridgeForegroundDiagnostic.decode(payload)
+
+        #expect(WineBridgeInputDispatcher.needsInputContextPriming(background))
+
+        payload.replaceSubrange(
+            24 ..< 32,
+            with: withUnsafeBytes(of: UInt64(0x30054).littleEndian, Array.init))
+        let foreground = try WineBridgeForegroundDiagnostic.decode(payload)
+
+        #expect(!WineBridgeInputDispatcher.needsInputContextPriming(foreground))
+    }
+
     @Test("Backend selection is explicit and never falls back for invalid values")
     func backendSelection() {
         let normal = InputDispatcherFactory.make(launchArguments: ["betterGI-mac"])

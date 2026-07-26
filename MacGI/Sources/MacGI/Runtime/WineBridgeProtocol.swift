@@ -8,6 +8,8 @@ enum WineBridgeCommand: UInt16 {
     case ping = 5
     case queryForeground = 6
     case setForeground = 7
+    case prepareTargetInput = 8
+    case primeTargetInput = 9
     case keyDown = 10
     case keyUp = 11
     case keyPress = 12
@@ -38,6 +40,7 @@ enum WineBridgeStatus: UInt32 {
     case targetMismatch = 10
     case inputFailed = 11
     case internalError = 12
+    case inputContextPrimingRequired = 13
 }
 
 enum WineBridgeProtocol {

@@ -50,6 +50,7 @@ enum WineForegroundExperiment: String, Equatable {
     case none
     case once
     case always
+    case mousePrime = "mouse-prime"
 }
 
 struct WineBridgeConfiguration: Equatable {
@@ -354,6 +355,7 @@ final class WineBridgeInputDispatcher: InputDispatching {
         }
         let session = try ensureSession(targetWindow: targetWindow)
         let diagnostic = try prepareDiagnostic(
+            action: action,
             targetWindow: targetWindow,
             through: session)
         let eventCount = try send(
@@ -748,7 +750,14 @@ final class WineBridgeInputDispatcher: InputDispatching {
         return CGPoint(x: deltaX / scale, y: deltaY / scale)
     }
 
+    static func needsInputContextPriming(
+        _ diagnostic: WineBridgeForegroundDiagnostic
+    ) -> Bool {
+        diagnostic.foregroundWindow != diagnostic.targetWindow
+    }
+
     private func prepareDiagnostic(
+        action: InputAction,
         targetWindow: WindowInfo,
         through connection: WineBridgeConnection
     ) throws -> WineBridgeForegroundDiagnostic? {
@@ -768,6 +777,24 @@ final class WineBridgeInputDispatcher: InputDispatching {
                 && !backgroundEpisodeForegroundAttempted
         case .always:
             shouldSetForeground = !hostIsFrontmost
+        case .mousePrime:
+            let beforePrime = try queryForeground(through: connection)
+            logDiagnostic(
+                beforePrime,
+                phase: "before input",
+                hostIsFrontmost: hostIsFrontmost)
+            guard action != .releaseAll,
+                  !hostIsFrontmost,
+                  Self.needsInputContextPriming(beforePrime) else {
+                return beforePrime
+            }
+
+            let afterPrime = try prepareTargetInput(through: connection)
+            logDiagnostic(
+                afterPrime,
+                phase: "after Wine input-context priming",
+                hostIsFrontmost: hostIsFrontmost)
+            return afterPrime
         }
         if shouldSetForeground {
             backgroundEpisodeForegroundAttempted = true
@@ -792,6 +819,28 @@ final class WineBridgeInputDispatcher: InputDispatching {
         through connection: WineBridgeConnection
     ) throws -> WineBridgeForegroundDiagnostic {
         try foregroundDiagnostic(.setForeground, through: connection)
+    }
+
+    private func prepareTargetInput(
+        through connection: WineBridgeConnection
+    ) throws -> WineBridgeForegroundDiagnostic {
+        do {
+            return try WineBridgeForegroundDiagnostic.decode(
+                connection.request(.prepareTargetInput))
+        } catch let WineBridgeError.requestFailed(command, status)
+            where command == .prepareTargetInput
+                && status == WineBridgeStatus.inputContextPrimingRequired.rawValue {
+            _ = try connection.request(.primeTargetInput)
+            Thread.sleep(forTimeInterval: 0.15)
+            let diagnostic = try queryForeground(through: connection)
+            guard !Self.needsInputContextPriming(diagnostic) else {
+                throw WineBridgeError.bridgeUnavailable(
+                    "Wine input-context priming remained on foreground "
+                        + "0x\(String(diagnostic.foregroundWindow, radix: 16)); "
+                        + "target is 0x\(String(diagnostic.targetWindow, radix: 16))")
+            }
+            return diagnostic
+        }
     }
 
     private func foregroundDiagnostic(

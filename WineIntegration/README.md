@@ -87,4 +87,42 @@ Without an override, target discovery checks both `YuanShen.exe` (CN) and
 The game must remain the macOS foreground application during normal use. The
 explicit `--wine-background-diagnostic` launch mode exists only to measure
 unmodified Wine behavior and does not claim supported background automation.
-This branch does not yet patch Wine virtual foreground behavior.
+The `--wine-foreground-experiment mouse-prime` diagnostic strategy invokes the
+bridge-private `prepareTargetInput` command only when Wine's foreground HWND
+differs from the registered game HWND. The bridge performs Wine input-context
+priming internally and waits up to 150 ms for Wine to restore the target before
+Swift delivers the original input. The bridge keeps checking and event
+submission separate: `prepareTargetInput` reports whether priming is required,
+`primeTargetInput` submits the event and returns immediately, and a separate
+read-only foreground query checks readiness after 150 ms. No synthetic
+`InputAction` is exposed to Core or task code.
+
+On the tested unmodified YAAgl Wine 11.0-1 engine, the private priming commands
+still leave `GetForegroundWindow()` on Wine's desktop HWND (`0x10020`) instead
+of the registered game HWND (`0x30054`). The experiment therefore remains
+diagnostic-only and must not be described as supported background automation.
+
+The only successful background-input baseline so far uses an ordinary relative
+mouse command from the local diagnostic script before each input set:
+
+```javascript
+log.info(`[${label}] 零位移鼠标预热`);
+moveMouseBy(0, 0);
+await sleep(150);
+```
+
+Run that baseline with:
+
+```bash
+open MacGI/.build/App/betterGI-mac.app --args \
+  --input-backend wine-bridge \
+  --wine-background-diagnostic \
+  --wine-foreground-experiment none \
+  --wine-relative-mouse scaled
+```
+
+This script-level workaround has been observed to restore Wine's game
+foreground without bringing Wine to the macOS foreground. It is retained only
+as an experimental comparison point; production background support still
+requires a reliable bridge or `winemac.drv` solution. This branch does not patch
+Wine virtual foreground behavior.

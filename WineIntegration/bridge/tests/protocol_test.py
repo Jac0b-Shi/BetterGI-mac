@@ -18,6 +18,8 @@ DISCOVER_TARGET = 3
 PING = 5
 QUERY_FOREGROUND = 6
 SET_FOREGROUND = 7
+PREPARE_TARGET_INPUT = 8
+PRIME_TARGET_INPUT = 9
 QUERY_KEY_STATE = 40
 RELEASE_ALL = 50
 SHUTDOWN = 51
@@ -137,6 +139,10 @@ def run_protocol_test(wine: Path, prefix: Path, bridge: Path) -> None:
     status, _ = client.request(QUERY_FOREGROUND, struct.pack("<HH", 0x46, 0))
     assert status == TARGET_REQUIRED
     status, _ = client.request(SET_FOREGROUND, struct.pack("<HH", 0x46, 0))
+    assert status == TARGET_REQUIRED
+    status, _ = client.request(PREPARE_TARGET_INPUT)
+    assert status == TARGET_REQUIRED
+    status, _ = client.request(PRIME_TARGET_INPUT)
     assert status == TARGET_REQUIRED
 
     status, _ = client.request(RELEASE_ALL)
