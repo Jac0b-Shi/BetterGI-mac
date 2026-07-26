@@ -391,21 +391,15 @@ final class AppState: ObservableObject {
     private var hotKeyMonitorErrorLogged = false
     private lazy var auxiliaryControlMonitor = MacAuxiliaryControlMonitor {
         [weak self] key, isDown in
-        MainActor.assumeIsolated {
-            self?.handleAuxiliaryControlKey(key, isDown: isDown)
-        }
+        self?.handleAuxiliaryControlKey(key, isDown: isDown)
     }
     private lazy var hotKeyMonitor = MacHotKeyMonitor(
         handler: { [weak self] binding, isDown in
-            MainActor.assumeIsolated {
-                self?.handleHotKey(binding, isDown: isDown)
-            }
+            self?.handleHotKey(binding, isDown: isDown)
         },
         captureHandler: { [weak self] id, value, error in
-            MainActor.assumeIsolated {
-                self?.completeHotKeyCapture(
-                    id: id, value: value, error: error)
-            }
+            self?.completeHotKeyCapture(
+                id: id, value: value, error: error)
         })
     private var confirmedMapMaskSelectedLabelIDs: Set<String> = []
     private var captureTimestamps: [Date] = []

@@ -4,13 +4,13 @@ import CoreGraphics
 import Foundation
 
 final class MacAuxiliaryControlMonitor {
-    private let handler: (KeyCode, Bool) -> Void
+    private let handler: @MainActor @Sendable (KeyCode, Bool) -> Void
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var targetProcessID: pid_t = 0
     private var pressedKeys: Set<KeyCode> = []
 
-    init(handler: @escaping (KeyCode, Bool) -> Void) {
+    init(handler: @escaping @MainActor @Sendable (KeyCode, Bool) -> Void) {
         self.handler = handler
     }
 
@@ -44,7 +44,7 @@ final class MacAuxiliaryControlMonitor {
         let keysToRelease = pressedKeys
         pressedKeys.removeAll()
         for key in keysToRelease {
-            handler(key, false)
+            dispatch(key, isDown: false)
         }
         if let eventTap {
             CGEvent.tapEnable(tap: eventTap, enable: false)
@@ -75,10 +75,17 @@ final class MacAuxiliaryControlMonitor {
         }
         if type == .keyDown {
             if pressedKeys.insert(key).inserted {
-                handler(key, true)
+                dispatch(key, isDown: true)
             }
         } else if type == .keyUp, pressedKeys.remove(key) != nil {
-            handler(key, false)
+            dispatch(key, isDown: false)
+        }
+    }
+
+    private func dispatch(_ key: KeyCode, isDown: Bool) {
+        let handler = handler
+        MainActor.assumeIsolated {
+            handler(key, isDown)
         }
     }
 }

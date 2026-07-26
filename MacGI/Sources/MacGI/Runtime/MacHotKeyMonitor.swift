@@ -107,8 +107,8 @@ final class MacHotKeyMonitor {
         let signature: MacHotKeySignature
     }
 
-    private let handler: (BetterGIHotKeyBinding, Bool) -> Void
-    private let captureHandler: (String, String?, String?) -> Void
+    private let handler: @MainActor @Sendable (BetterGIHotKeyBinding, Bool) -> Void
+    private let captureHandler: @MainActor @Sendable (String, String?, String?) -> Void
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var bindings: [RegisteredBinding] = []
@@ -118,8 +118,8 @@ final class MacHotKeyMonitor {
     private var activeReleaseBindings: [String: BetterGIHotKeyBinding] = [:]
 
     init(
-        handler: @escaping (BetterGIHotKeyBinding, Bool) -> Void,
-        captureHandler: @escaping (String, String?, String?) -> Void
+        handler: @escaping @MainActor @Sendable (BetterGIHotKeyBinding, Bool) -> Void,
+        captureHandler: @escaping @MainActor @Sendable (String, String?, String?) -> Void
     ) {
         self.handler = handler
         self.captureHandler = captureHandler
@@ -197,16 +197,17 @@ final class MacHotKeyMonitor {
                let key = signature.key,
                [.delete, .backspace, .escape].contains(key) {
                 self.capture = nil
-                captureHandler(capture.id, "", nil)
+                dispatchCapture(id: capture.id, value: "", error: nil)
                 return
             }
             if let message = signature.validationMessage(
                 for: capture.hotKeyType) {
-                captureHandler(capture.id, nil, message)
+                dispatchCapture(id: capture.id, value: nil, error: message)
                 return
             }
             self.capture = nil
-            captureHandler(capture.id, signature.upstreamValue, nil)
+            dispatchCapture(
+                id: capture.id, value: signature.upstreamValue, error: nil)
             return
         }
 
@@ -222,7 +223,7 @@ final class MacHotKeyMonitor {
             else {
                 return
             }
-            handler(registered.binding, false)
+            dispatch(registered.binding, isDown: false)
             return
         }
         guard registered.binding.dispatchOnPress else { return }
@@ -241,7 +242,7 @@ final class MacHotKeyMonitor {
             }
             activeReleaseBindings[registered.binding.id] = registered.binding
         }
-        handler(registered.binding, true)
+        dispatch(registered.binding, isDown: true)
     }
 
     private func startIfNeeded() throws {
@@ -275,7 +276,21 @@ final class MacHotKeyMonitor {
         let active = Array(activeReleaseBindings.values)
         activeReleaseBindings.removeAll()
         for binding in active {
-            handler(binding, false)
+            dispatch(binding, isDown: false)
+        }
+    }
+
+    private func dispatch(_ binding: BetterGIHotKeyBinding, isDown: Bool) {
+        let handler = handler
+        MainActor.assumeIsolated {
+            handler(binding, isDown)
+        }
+    }
+
+    private func dispatchCapture(id: String, value: String?, error: String?) {
+        let captureHandler = captureHandler
+        MainActor.assumeIsolated {
+            captureHandler(id, value, error)
         }
     }
 }
