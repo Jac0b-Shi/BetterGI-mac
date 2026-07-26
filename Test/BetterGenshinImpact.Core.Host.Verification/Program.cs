@@ -3054,6 +3054,9 @@ try
     var fishingConfigPath = Path.Combine(layout.UserPath, "config.json");
     var fishingConfigRoot = JObject.Parse(await File.ReadAllTextAsync(
         fishingConfigPath, cancellation.Token));
+    var fishingCommonConfig = fishingConfigRoot["commonConfig"] as JObject ?? new JObject();
+    fishingCommonConfig["screenshotEnabled"] = true;
+    fishingConfigRoot["commonConfig"] = fishingCommonConfig;
     fishingConfigRoot["autoFishingConfig"] = JObject.FromObject(new
     {
         enabled = true,
@@ -3093,6 +3096,7 @@ try
             savedFishingSettingsJson.Value<int>("autoThrowRodTimeOut") == 42 &&
             savedFishingSettingsJson.Value<int>("wholeProcessTimeoutSeconds") == 900 &&
             savedFishingSettingsJson.Value<string>("fishingTimePolicy") == "Nighttime" &&
+            savedFishingSettingsJson.Value<bool>("screenshotEnabled") &&
             savedFishingSettingsJson.Value<bool>("saveScreenshotOnKeyTick") &&
             persistedFishingConfig.SelectToken("autoFishingConfig.enabled")?.Value<bool>() == true &&
             persistedFishingConfig.SelectToken("autoFishingConfig.autoThrowRodEnabled")?.Value<bool>() == true &&
@@ -3809,7 +3813,11 @@ static async Task StageMapBack3Async(string runtimeRoot, CancellationToken cance
             Artifact("Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin", "BetterGI/Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin", 856128,
                 "6a0f18b74adfa4c00a21c95f0a7ff4f32087b0495b19f75972723367ac85dc73"),
             Artifact("Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png", "BetterGI/Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png", 3451880,
-                "70e10ebb9f2ace54dd878037742651be38e2d40af473dc7625202e3318f97221")
+                "70e10ebb9f2ace54dd878037742651be38e2d40af473dc7625202e3318f97221"),
+            Artifact("Assets/Map/Teyvat/Teyvat_0_2048_SIFT.kp.bin", "BetterGI/Assets/Map/Teyvat/Teyvat_0_2048_SIFT.kp.bin", 15226624,
+                "84ba9507bd6b4d98597f4fda593993b46488d49fea7d333d9667d86405381f22"),
+            Artifact("Assets/Map/Teyvat/Teyvat_0_2048_SIFT.mat.png", "BetterGI/Assets/Map/Teyvat/Teyvat_0_2048_SIFT.mat.png", 60112921,
+                "a2440e2ea54fa3c52b248c26f0f9d9904aeaac12aa93cf83b1e183206166aeff")
         ]
     };
     var temporaryLockPath = Path.Combine(Path.GetTempPath(), $"bgi-host-map-{Guid.NewGuid():N}.json");
