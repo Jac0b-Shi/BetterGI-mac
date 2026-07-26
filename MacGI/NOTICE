@@ -33,18 +33,18 @@ Imported upstream assets:
 
 These assets were copied from:
 
-- /Volumes/Aquarius/CodeProjects/better-genshin-impact/BetterGenshinImpact/Resources/Images/banner.jpg
-- /Volumes/Aquarius/CodeProjects/better-genshin-impact/BetterGenshinImpact/Resources/Images/logo.png
-- /Volumes/Aquarius/CodeProjects/better-genshin-impact/BetterGenshinImpact/Resources/Images/drag.png
-- /Volumes/Aquarius/CodeProjects/better-genshin-impact/BetterGenshinImpact/Resources/Fonts/Fgi-Regular.ttf
-- /Volumes/Aquarius/CodeProjects/better-genshin-impact/BetterGenshinImpact/Resources/Fonts/MiSans-Regular.ttf
-- /Volumes/Aquarius/CodeProjects/better-genshin-impact/BetterGenshinImpact/GameTask/AutoPick/Assets/1920x1080/
-- /Volumes/Aquarius/CodeProjects/better-genshin-impact/BetterGenshinImpact/GameTask/AutoSkip/Assets/1920x1080/
-- /Volumes/Aquarius/CodeProjects/better-genshin-impact/packages/bettergi.assets.model/1.0.24/contentFiles/any/any/Assets/Model/
+- BetterGenshinImpact/Resources/Images/banner.jpg
+- BetterGenshinImpact/Resources/Images/logo.png
+- BetterGenshinImpact/Resources/Images/drag.png
+- BetterGenshinImpact/Resources/Fonts/Fgi-Regular.ttf
+- BetterGenshinImpact/Resources/Fonts/MiSans-Regular.ttf
+- BetterGenshinImpact/GameTask/AutoPick/Assets/1920x1080/
+- BetterGenshinImpact/GameTask/AutoSkip/Assets/1920x1080/
+- packages/bettergi.assets.model/1.0.24/contentFiles/any/any/Assets/Model/
 
 Upstream repository reference:
 
-- /Volumes/Aquarius/CodeProjects/better-genshin-impact
+- https://github.com/babalae/better-genshin-impact
 
 License:
 

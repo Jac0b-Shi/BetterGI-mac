@@ -1,6 +1,6 @@
 # BetterGI UI Inventory
 
-This inventory is based on the referenced BetterGI repository at `/Volumes/Aquarius/CodeProjects/better-genshin-impact`.
+This inventory is based on the BetterGI sources included in this repository.
 
 ## Source Files Read
 
