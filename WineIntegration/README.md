@@ -84,28 +84,38 @@ per-user data directory. Development overrides are available when needed:
 Without an override, target discovery checks both `YuanShen.exe` (CN) and
 `GenshinImpact.exe` (global).
 
-The game must remain the macOS foreground application during normal use. The
-explicit `--wine-background-diagnostic` launch mode exists only to measure
-unmodified Wine behavior and does not claim supported background automation.
-The `--wine-foreground-experiment mouse-prime` diagnostic strategy invokes the
-bridge-private `prepareTargetInput` command only when Wine's foreground HWND
-differs from the registered game HWND. The bridge performs Wine input-context
-priming internally and waits up to 150 ms for Wine to restore the target before
-Swift delivers the original input. The bridge keeps checking and event
-submission separate: `prepareTargetInput` reports whether priming is required,
-`primeTargetInput` submits the event and returns immediately, and a separate
-read-only foreground query checks readiness after 150 ms. The experimental
-dispatcher makes at most three priming attempts and stops as soon as Wine
-reports the registered game HWND as foreground. No synthetic `InputAction` is
-exposed to Core or task code.
+Normal Wine Bridge use still requires the game to be the macOS foreground
+application. Background delivery is enabled only by the validated combination:
+
+```text
+--wine-background-diagnostic
+--wine-foreground-experiment mouse-prime
+```
+
+The dispatcher exposes this as a typed capability. `.none`, `.once` and
+`.always` remain diagnostic strategies and cannot bypass the Swift or Core
+foreground gates.
+
+When validated background delivery is enabled, Swift configures the helper once
+after target registration. Each real keyboard, mouse, wheel or text command
+then runs `ensure_target_input_context()` and the original `SendInput` operation
+consecutively on the same helper thread. The helper checks the registered game
+HWND, submits at most three zero-delta priming events with a 150 ms delay, and
+sends the original input immediately after the target becomes Wine foreground.
+No synthetic `InputAction` is exposed to Core or task code, and there is no TCP
+round trip between readiness confirmation and the original input.
+
+`releaseAll` bypasses foreground diagnostics and priming. Swift sends it
+directly whenever a bridge connection exists; disconnect and shutdown retain
+the helper-side release fallback.
 
 Real-game testing against the unmodified YAAgl Wine 11.0-1 engine showed that a
 single priming event can leave `GetForegroundWindow()` on Wine's desktop HWND,
-while the finite three-attempt bridge retry restores the registered game HWND
-reliably enough for the tested background keyboard, mouse-button, relative-mouse
-and movement sequence. The macOS foreground application remained unchanged
-during that run. This confirms that the recovery belongs in the Wine bridge
-input-delivery boundary rather than in Core tasks or scripts.
+while finite three-attempt priming restores the registered game HWND reliably
+enough for the tested background keyboard, mouse-button, relative-mouse and
+movement sequence. The macOS foreground application remained unchanged during
+that run. This confirms that recovery belongs in the Wine bridge input-delivery
+boundary rather than in Core tasks or scripts.
 
 The local scheduler group `Wine 后台输入诊断` retains an ordinary relative
 mouse command before each input set as a comparison baseline:

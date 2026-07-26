@@ -24,6 +24,7 @@ enum WineBridgeCommand: UInt16 {
     case queryMouseButtonState = 41
     case releaseAll = 50
     case shutdown = 51
+    case configureInputContext = 52
 }
 
 enum WineBridgeStatus: UInt32 {
@@ -45,7 +46,7 @@ enum WineBridgeStatus: UInt32 {
 
 enum WineBridgeProtocol {
     static let magic: UInt32 = 0x3149_4742
-    static let version: UInt16 = 1
+    static let version: UInt16 = 2
     static let headerSize = 24
     static let maximumPayloadSize = 65_536
     static let inputMarker: UInt64 = 0x4247_4957_494E_45
@@ -227,6 +228,10 @@ struct WineBridgeDataReader {
 
     init(_ data: Data) {
         self.data = data
+    }
+
+    mutating func readUInt8() throws -> UInt8 {
+        try readData(count: 1)[0]
     }
 
     mutating func readUInt16() throws -> UInt16 {

@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define BGI_WINE_BRIDGE_MAGIC UINT32_C(0x31494742)
-#define BGI_WINE_BRIDGE_VERSION UINT16_C(1)
+#define BGI_WINE_BRIDGE_VERSION UINT16_C(2)
 #define BGI_WINE_BRIDGE_MAX_PAYLOAD UINT32_C(65536)
 #define BGI_WINE_INPUT_MARKER UINT64_C(0x42474957494E45)
 
@@ -16,6 +16,7 @@
 #define BGI_WINE_CAP_TARGET_DISCOVERY UINT32_C(1 << 5)
 #define BGI_WINE_CAP_FOREGROUND_DIAGNOSTICS UINT32_C(1 << 6)
 #define BGI_WINE_CAP_INPUT_CONTEXT_PRIMING UINT32_C(1 << 7)
+#define BGI_WINE_CAP_ATOMIC_INPUT_CONTEXT UINT32_C(1 << 8)
 
 #define BGI_WINE_DIAGNOSTIC_TARGET_IS_WINDOW UINT32_C(1)
 #define BGI_WINE_DIAGNOSTIC_TARGET_IS_VISIBLE UINT32_C(1 << 1)
@@ -43,7 +44,8 @@ enum bgi_wine_command {
     BGI_WINE_COMMAND_QUERY_KEY_STATE = 40,
     BGI_WINE_COMMAND_QUERY_MOUSE_BUTTON_STATE = 41,
     BGI_WINE_COMMAND_RELEASE_ALL = 50,
-    BGI_WINE_COMMAND_SHUTDOWN = 51
+    BGI_WINE_COMMAND_SHUTDOWN = 51,
+    BGI_WINE_COMMAND_CONFIGURE_INPUT_CONTEXT = 52
 };
 
 enum bgi_wine_status {
@@ -141,6 +143,12 @@ struct bgi_wine_query_mouse {
 struct bgi_wine_query_response {
     uint8_t is_down;
     uint8_t reserved[3];
+};
+
+struct bgi_wine_input_context_policy {
+    uint8_t enabled;
+    uint8_t maximum_attempts;
+    uint16_t retry_delay_ms;
 };
 
 struct bgi_wine_foreground_diagnostic {

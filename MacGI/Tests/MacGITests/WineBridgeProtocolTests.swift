@@ -175,7 +175,44 @@ struct WineBridgeProtocolTests {
         #expect(!WineBridgeInputDispatcher.needsInputContextPriming(foreground))
     }
 
-    @Test("Backend selection is explicit and never falls back for invalid values")
+    @Test("Input delivery capabilities require the validated mouse-prime configuration")
+    func inputDeliveryCapabilities() {
+        let base = WineBridgeConfiguration(
+            wineExecutableURL: URL(fileURLWithPath: "/wine"),
+            winePrefixURL: URL(fileURLWithPath: "/prefix"),
+            bridgeExecutableURL: URL(fileURLWithPath: "/bridge.exe"),
+            targetExecutableNames: ["YuanShen.exe", "GenshinImpact.exe"],
+            startupTimeout: 12,
+            backgroundDiagnosticEnabled: true,
+            relativeMouseMode: .scaled,
+            foregroundExperiment: .none)
+        let validated = WineBridgeConfiguration(
+            wineExecutableURL: base.wineExecutableURL,
+            winePrefixURL: base.winePrefixURL,
+            bridgeExecutableURL: base.bridgeExecutableURL,
+            targetExecutableNames: base.targetExecutableNames,
+            startupTimeout: base.startupTimeout,
+            backgroundDiagnosticEnabled: true,
+            relativeMouseMode: base.relativeMouseMode,
+            foregroundExperiment: .mousePrime)
+
+        #expect(base.capabilities == .foregroundOnly)
+        #expect(validated.capabilities == InputDeliveryCapabilities(
+            requiresHostForeground: false,
+            supportsBackgroundDelivery: true))
+    }
+
+    @Test("Atomic input-context policy encodes finite retries")
+    func atomicInputContextPolicyPayload() throws {
+        var reader = WineBridgeDataReader(
+            WineBridgeInputDispatcher.inputContextPolicyPayload(enabled: true))
+
+        #expect(try reader.readUInt8() == 1)
+        #expect(try reader.readUInt8() == 3)
+        #expect(try reader.readUInt16() == 150)
+    }
+
+    @Test("Backend selection is explicit and invalid overrides never fall back")
     func backendSelection() {
         let normal = InputDispatcherFactory.make(launchArguments: ["betterGI-mac"])
         let wine = InputDispatcherFactory.make(launchArguments: [
@@ -231,9 +268,10 @@ struct WineBridgeProtocolTests {
     }
 
     @MainActor
-    @Test("Explicit Wine diagnostic bypasses only the runtime foreground gate")
-    func explicitDiagnosticBypassesRuntimeForegroundGate() {
-        let dispatcher = DiagnosticRecordingInputDispatcher()
+    @Test("Diagnostic flag alone cannot bypass the runtime foreground gate")
+    func diagnosticFlagDoesNotBypassRuntimeForegroundGate() {
+        let dispatcher = DiagnosticRecordingInputDispatcher(
+            capabilities: .foregroundOnly)
         let launchArguments = [
             "betterGI-mac",
             "--input-backend",
@@ -264,16 +302,65 @@ struct WineBridgeProtocolTests {
             .keyPress(key: .f),
             source: .runtimeTrigger)
 
+        #expect(!result.allowed)
+        #expect(dispatcher.actions.isEmpty)
+        #expect(!appState.inputDeliveryCapabilities.supportsBackgroundDelivery)
+        #expect(appState.inputDeliveryMode == .wineBridge)
+    }
+
+    @MainActor
+    @Test("Validated Wine background capability bypasses the runtime foreground gate")
+    func validatedCapabilityBypassesRuntimeForegroundGate() {
+        let dispatcher = DiagnosticRecordingInputDispatcher(
+            capabilities: InputDeliveryCapabilities(
+                requiresHostForeground: false,
+                supportsBackgroundDelivery: true))
+        let launchArguments = [
+            "betterGI-mac",
+            "--input-backend",
+            "wine-bridge",
+            "--wine-background-diagnostic",
+            "--wine-foreground-experiment",
+            "mouse-prime",
+        ]
+        let appState = AppState(
+            resourceStore: BGIRuntimeResourceStore(
+                rootURL: FileManager.default.temporaryDirectory
+                    .appendingPathComponent(
+                        "bettergi-wine-background-capability-\(UUID().uuidString)",
+                        isDirectory: true)),
+            inputDispatcher: dispatcher,
+            isTargetWindowFrontmost: { _ in false },
+            launchArguments: launchArguments)
+        appState.selectedWindow = WindowInfo(
+            id: 42,
+            ownerPID: 42,
+            ownerName: "wine",
+            title: "Genshin Impact",
+            frame: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+            layer: 0,
+            isOnScreen: true,
+            scaleFactor: 1)
+        appState.runtimeLifecycle = .running
+
+        let result = appState.dispatchInput(
+            .keyPress(key: .f),
+            source: .runtimeTrigger)
+
         #expect(result.allowed)
         #expect(dispatcher.actions == [.keyPress(key: .f)])
-        #expect(appState.wineBackgroundDiagnosticAllowed)
-        #expect(appState.inputDeliveryMode == .wineBridge)
+        #expect(appState.inputDeliveryCapabilities.supportsBackgroundDelivery)
     }
 }
 
 private final class DiagnosticRecordingInputDispatcher: InputDispatching {
     let deliveryMode = InputDeliveryMode.wineBridge
+    let capabilities: InputDeliveryCapabilities
     private(set) var actions: [InputAction] = []
+
+    init(capabilities: InputDeliveryCapabilities = .foregroundOnly) {
+        self.capabilities = capabilities
+    }
 
     func perform(
         _ action: InputAction,

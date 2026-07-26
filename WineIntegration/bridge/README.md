@@ -2,8 +2,7 @@
 
 This helper runs in the same Wine prefix as the game and sends input through
 Win32 `SendInput`. It is bundled with betterGI-mac as an experimental input
-backend. Normal use remains foreground-only and the helper does not modify Wine
-focus behavior.
+backend.
 
 ## Build
 
@@ -46,10 +45,16 @@ The helper can discover the largest visible top-level window belonging to an
 explicit executable name. BetterGI must then register the returned Windows PID,
 HWND and executable name before sending input.
 
+The `CONFIGURE_INPUT_CONTEXT` command enables or disables atomic input-context
+priming after target registration. When enabled, every input-producing command
+checks `GetForegroundWindow()`, performs the configured finite zero-delta
+priming loop when necessary, and immediately executes the requested `SendInput`
+operation on the same bridge thread. State queries and `releaseAll` never prime
+the target.
+
 ## Current Limitation
 
-`SendInput` may still move the host cursor, and Wine clears its Windows
-foreground window when the macOS application deactivates. The explicit
-background diagnostic mode records foreground/active/focus state and can test
-an isolated `SetForegroundWindow` call. It is not a supported production
-background-input mode.
+Background delivery remains explicitly gated while broader real-task
+validation is in progress. Only the validated mouse-prime policy advertises
+background-delivery capability to Swift and Core; the other foreground
+experiments remain diagnostics and do not bypass host foreground checks.

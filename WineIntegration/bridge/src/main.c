@@ -18,7 +18,9 @@ struct bridge_state {
     char token[256];
     struct bgi_wine_target target;
     bool has_target;
-    bool input_context_ready;
+    bool automatic_input_context_priming;
+    uint8_t input_context_attempts;
+    uint16_t input_context_retry_delay_ms;
     bool held_keys[256];
     bool held_mouse[6];
 };
@@ -276,21 +278,17 @@ static uint32_t prepare_target_input(
 
     struct bgi_wine_foreground_diagnostic diagnostic;
     collect_foreground_diagnostic(state, 0, -1, &diagnostic);
-    if (diagnostic.foreground_window == diagnostic.target_window) {
-        state->input_context_ready = true;
-    } else {
-        state->input_context_ready = false;
-    }
+    bool ready = diagnostic.foreground_window == diagnostic.target_window;
 
     fprintf(stderr,
         "input-context prepare ready=%d foreground=0x%llx target=0x%llx\n",
-        state->input_context_ready,
+        ready,
         (unsigned long long)diagnostic.foreground_window,
         (unsigned long long)diagnostic.target_window);
     fflush(stderr);
     memcpy(response_payload, &diagnostic, sizeof(diagnostic));
     *response_length = sizeof(diagnostic);
-    if (state->input_context_ready) return BGI_WINE_STATUS_OK;
+    if (ready) return BGI_WINE_STATUS_OK;
     return BGI_WINE_STATUS_INPUT_CONTEXT_PRIMING_REQUIRED;
 }
 
@@ -298,16 +296,75 @@ static uint32_t prime_target_input(
     struct bridge_state *state,
     const struct bgi_wine_packet_header *request)
 {
+    (void)state;
     if (request->payload_length != 0) {
         return BGI_WINE_STATUS_INVALID_PAYLOAD;
     }
-    state->input_context_ready = false;
     if (!move_mouse_relative(0, 0)) {
         return BGI_WINE_STATUS_INPUT_FAILED;
     }
     fputs("input-context priming submitted\n", stderr);
     fflush(stderr);
     return BGI_WINE_STATUS_OK;
+}
+
+static uint32_t configure_input_context(
+    struct bridge_state *state,
+    const struct bgi_wine_packet_header *request,
+    const uint8_t *payload)
+{
+    if (request->payload_length != sizeof(struct bgi_wine_input_context_policy)) {
+        return BGI_WINE_STATUS_INVALID_PAYLOAD;
+    }
+    const struct bgi_wine_input_context_policy *policy =
+        (const struct bgi_wine_input_context_policy *)payload;
+    if (policy->enabled > 1
+        || policy->maximum_attempts == 0
+        || policy->maximum_attempts > 10
+        || policy->retry_delay_ms > 1000) {
+        return BGI_WINE_STATUS_INVALID_PAYLOAD;
+    }
+    state->automatic_input_context_priming = policy->enabled != 0;
+    state->input_context_attempts = policy->maximum_attempts;
+    state->input_context_retry_delay_ms = policy->retry_delay_ms;
+    fprintf(stderr,
+        "input-context policy enabled=%d attempts=%u delayMs=%u\n",
+        state->automatic_input_context_priming,
+        state->input_context_attempts,
+        state->input_context_retry_delay_ms);
+    fflush(stderr);
+    return BGI_WINE_STATUS_OK;
+}
+
+static uint32_t ensure_target_input_context(struct bridge_state *state)
+{
+    if (!state->automatic_input_context_priming) {
+        return BGI_WINE_STATUS_OK;
+    }
+    HWND target = (HWND)(uintptr_t)state->target.window_handle;
+    if (GetForegroundWindow() == target) {
+        return BGI_WINE_STATUS_OK;
+    }
+    for (uint8_t attempt = 1; attempt <= state->input_context_attempts; ++attempt) {
+        if (!move_mouse_relative(0, 0)) {
+            return BGI_WINE_STATUS_INPUT_FAILED;
+        }
+        if (state->input_context_retry_delay_ms > 0) {
+            Sleep(state->input_context_retry_delay_ms);
+        }
+        HWND foreground = GetForegroundWindow();
+        fprintf(stderr,
+            "input-context atomic prime attempt=%u/%u foreground=0x%llx target=0x%llx\n",
+            attempt,
+            state->input_context_attempts,
+            (unsigned long long)(uintptr_t)foreground,
+            (unsigned long long)(uintptr_t)target);
+        fflush(stderr);
+        if (foreground == target) {
+            return BGI_WINE_STATUS_OK;
+        }
+    }
+    return BGI_WINE_STATUS_INPUT_CONTEXT_PRIMING_REQUIRED;
 }
 
 static bool send_key(struct bridge_state *state, WORD virtual_key, bool down)
@@ -558,8 +615,18 @@ static bool command_requires_target(uint16_t command)
         || command == BGI_WINE_COMMAND_SET_FOREGROUND
         || command == BGI_WINE_COMMAND_PREPARE_TARGET_INPUT
         || command == BGI_WINE_COMMAND_PRIME_TARGET_INPUT
+        || command == BGI_WINE_COMMAND_CONFIGURE_INPUT_CONTEXT
         || (command >= BGI_WINE_COMMAND_KEY_DOWN
             && command <= BGI_WINE_COMMAND_QUERY_MOUSE_BUTTON_STATE);
+}
+
+static bool command_delivers_input(uint16_t command)
+{
+    return (command >= BGI_WINE_COMMAND_KEY_DOWN
+            && command <= BGI_WINE_COMMAND_KEY_PRESS)
+        || (command >= BGI_WINE_COMMAND_MOUSE_BUTTON_DOWN
+            && command <= BGI_WINE_COMMAND_MOUSE_WHEEL)
+        || command == BGI_WINE_COMMAND_INPUT_TEXT;
 }
 
 static uint32_t handle_authenticated_command(
@@ -573,9 +640,14 @@ static uint32_t handle_authenticated_command(
         if (!state->has_target) return BGI_WINE_STATUS_TARGET_REQUIRED;
         if (!validate_target(&state->target)) {
             state->has_target = false;
-            state->input_context_ready = false;
             release_all(state);
             return BGI_WINE_STATUS_TARGET_MISMATCH;
+        }
+    }
+    if (command_delivers_input(request->command)) {
+        uint32_t context_status = ensure_target_input_context(state);
+        if (context_status != BGI_WINE_STATUS_OK) {
+            return context_status;
         }
     }
 
@@ -597,7 +669,6 @@ static uint32_t handle_authenticated_command(
         state->target.executable_name[sizeof(state->target.executable_name) - 1] = '\0';
         if (!validate_target(&state->target)) return BGI_WINE_STATUS_TARGET_MISMATCH;
         state->has_target = true;
-        state->input_context_ready = false;
         return BGI_WINE_STATUS_OK;
     case BGI_WINE_COMMAND_PING:
         return BGI_WINE_STATUS_OK;
@@ -612,6 +683,8 @@ static uint32_t handle_authenticated_command(
             state, request, response_payload, response_length);
     case BGI_WINE_COMMAND_PRIME_TARGET_INPUT:
         return prime_target_input(state, request);
+    case BGI_WINE_COMMAND_CONFIGURE_INPUT_CONTEXT:
+        return configure_input_context(state, request, payload);
     case BGI_WINE_COMMAND_KEY_DOWN:
     case BGI_WINE_COMMAND_KEY_UP:
     case BGI_WINE_COMMAND_KEY_PRESS:
@@ -741,7 +814,8 @@ static bool serve_client(struct bridge_state *state)
                     | BGI_WINE_CAP_RELATIVE_MOUSE | BGI_WINE_CAP_TEXT
                     | BGI_WINE_CAP_STATE_QUERY | BGI_WINE_CAP_TARGET_DISCOVERY
                     | BGI_WINE_CAP_FOREGROUND_DIAGNOSTICS
-                    | BGI_WINE_CAP_INPUT_CONTEXT_PRIMING,
+                    | BGI_WINE_CAP_INPUT_CONTEXT_PRIMING
+                    | BGI_WINE_CAP_ATOMIC_INPUT_CONTEXT,
                 BGI_WINE_INPUT_MARKER
             };
             memcpy(response_payload, &response, sizeof(response));
@@ -800,6 +874,7 @@ static int self_test(void)
     if (sizeof(struct bgi_wine_mouse_move) != 8) return 5;
     if (BGI_WINE_INPUT_MARKER != UINT64_C(0x42474957494E45)) return 6;
     if (sizeof(struct bgi_wine_foreground_diagnostic) != 148) return 7;
+    if (sizeof(struct bgi_wine_input_context_policy) != 4) return 8;
     puts("BetterGIWineInputBridge self-test passed");
     return 0;
 }

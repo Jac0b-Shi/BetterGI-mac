@@ -96,13 +96,19 @@ public sealed class ForegroundInputCoordinator(
         var metrics = Metrics(cancellationToken);
         var isActive = metrics.Value<bool?>("isActive")
             ?? throw new InvalidDataException("window.metrics did not return isActive.");
-        var diagnosticAllowed =
-            metrics.Value<bool?>("backgroundInputDiagnosticAllowed") == true;
-        var deliveryMode = metrics.Value<string>("inputDeliveryMode");
-        return isActive ||
-               diagnosticAllowed &&
-               string.Equals(deliveryMode, "wineBridge", StringComparison.Ordinal);
+        var requiresHostForeground =
+            metrics.Value<bool?>("inputRequiresHostForeground") ?? true;
+        var supportsBackgroundDelivery =
+            metrics.Value<bool?>("supportsBackgroundInputDelivery") == true;
+        return EvaluateInputAvailability(
+            isActive, requiresHostForeground, supportsBackgroundDelivery);
     }
+
+    public static bool EvaluateInputAvailability(
+        bool isActive,
+        bool requiresHostForeground,
+        bool supportsBackgroundDelivery) =>
+        isActive || !requiresHostForeground && supportsBackgroundDelivery;
 
     private CancellationTokenSource CreateLinkedCancellation(CancellationToken cancellationToken)
     {

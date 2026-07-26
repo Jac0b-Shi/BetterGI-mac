@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 MAGIC = 0x31494742
-VERSION = 1
+VERSION = 2
 HEADER = struct.Struct("<IHHIIII")
 
 HELLO = 1
@@ -23,6 +23,7 @@ PRIME_TARGET_INPUT = 9
 QUERY_KEY_STATE = 40
 RELEASE_ALL = 50
 SHUTDOWN = 51
+CONFIGURE_INPUT_CONTEXT = 52
 
 OK = 0
 AUTHENTICATION_REQUIRED = 4
@@ -143,6 +144,11 @@ def run_protocol_test(wine: Path, prefix: Path, bridge: Path) -> None:
     status, _ = client.request(PREPARE_TARGET_INPUT)
     assert status == TARGET_REQUIRED
     status, _ = client.request(PRIME_TARGET_INPUT)
+    assert status == TARGET_REQUIRED
+    status, _ = client.request(
+        CONFIGURE_INPUT_CONTEXT,
+        struct.pack("<BBH", 1, 3, 150),
+    )
     assert status == TARGET_REQUIRED
 
     status, _ = client.request(RELEASE_ALL)

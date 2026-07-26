@@ -358,9 +358,10 @@ final class AppState: ObservableObject {
     private let runtimeLogWriter: RuntimeLogFileWriter
     private let userDefaults: UserDefaults
     private let launchArguments: [String]
-    private let wineBackgroundDiagnosticEnabled: Bool
-    var wineBackgroundDiagnosticAllowed: Bool { wineBackgroundDiagnosticEnabled }
     var inputDeliveryMode: InputDeliveryMode { inputDispatcher.deliveryMode }
+    var inputDeliveryCapabilities: InputDeliveryCapabilities {
+        inputDispatcher.capabilities
+    }
     let latestFrameStore = LatestFrameStore()
     private var runtimeFrameIndex: UInt64 = 0
     private var schedulerExecutionTask: Task<Void, Never>?
@@ -527,9 +528,6 @@ final class AppState: ObservableObject {
         self.inputDispatcher = inputDispatcher ?? InputDispatcherFactory.make(
             launchArguments: launchArguments,
             fallbackSelection: selectedInputBackend)
-        wineBackgroundDiagnosticEnabled =
-            launchArguments.contains("--wine-background-diagnostic")
-            && self.inputDispatcher.deliveryMode == .wineBridge
         self.isTargetWindowFrontmost = isTargetWindowFrontmost
         let storedFocusHiding = userDefaults.object(forKey: Self.hideHUDWhenGameUnfocusedKey)
             as? Bool ?? true
@@ -547,15 +545,16 @@ final class AppState: ObservableObject {
             || relativeMouseDiagnosticPending
         addLog(.info, "betterGI-mac Swift UI initialized")
         addLog(.info, "Input backend: \(self.inputDispatcher.deliveryMode.rawValue)")
-        if wineBackgroundDiagnosticEnabled {
+        if self.inputDispatcher.capabilities.supportsBackgroundDelivery {
             addLog(
                 .warn,
-                "Wine background diagnostic is enabled; runtime foreground waiting "
-                    + "is disabled for this launch only.")
+                "Wine Bridge background delivery is enabled with atomic "
+                    + "input-context priming.")
         } else if launchArguments.contains("--wine-background-diagnostic") {
             addLog(
                 .error,
-                "--wine-background-diagnostic was ignored because Wine Bridge is not selected.")
+                "--wine-background-diagnostic does not enable background delivery "
+                    + "without Wine Bridge mouse-prime.")
         }
         if dryRunLaunchEnabled {
             addLog(.info, "Dry-Run enabled by --dry-run; real input is disabled")
@@ -4956,7 +4955,7 @@ final class AppState: ObservableObject {
             source == .runtimeTrigger
             && !safetyGate.dryRun
             && safetyGate.realInputEnabled
-            && !wineBackgroundDiagnosticEnabled
+            && inputDispatcher.capabilities.requiresHostForeground
 
         let foregroundOK = requiresForegroundCheck
             ? isTargetWindowFrontmost(selectedWindow)

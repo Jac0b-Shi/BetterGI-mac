@@ -37,6 +37,7 @@ struct CGEventDispatchReport: Equatable {
 
 protocol InputDispatching {
     var deliveryMode: InputDeliveryMode { get }
+    var capabilities: InputDeliveryCapabilities { get }
     func perform(_ action: InputAction, targetWindow: WindowInfo) throws -> CGEventDispatchReport
     func query(_ query: InputQuery, targetWindow: WindowInfo) throws -> Bool
     func shutdown()
@@ -44,6 +45,7 @@ protocol InputDispatching {
 
 extension InputDispatching {
     var deliveryMode: InputDeliveryMode { .foregroundCGEvent }
+    var capabilities: InputDeliveryCapabilities { .foregroundOnly }
 
     func query(_ query: InputQuery, targetWindow: WindowInfo) throws -> Bool {
         guard !targetWindow.isSynthetic else {
@@ -74,6 +76,7 @@ final class CGEventInputDispatcher: InputDispatching {
     private let tap: CGEventTapLocation = .cghidEventTap
     private let clickDelayUsec: useconds_t = 50_000
     let deliveryMode = InputDeliveryMode.foregroundCGEvent
+    let capabilities = InputDeliveryCapabilities.foregroundOnly
 
     func perform(_ action: InputAction, targetWindow: WindowInfo) throws -> CGEventDispatchReport {
         guard !targetWindow.isSynthetic else {

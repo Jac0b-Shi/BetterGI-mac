@@ -12,6 +12,15 @@ enum InputDeliveryMode: String, Equatable, Sendable {
     case wineBridge
 }
 
+struct InputDeliveryCapabilities: Equatable, Sendable {
+    let requiresHostForeground: Bool
+    let supportsBackgroundDelivery: Bool
+
+    static let foregroundOnly = InputDeliveryCapabilities(
+        requiresHostForeground: true,
+        supportsBackgroundDelivery: false)
+}
+
 enum InputQuery: Equatable, Sendable {
     case key(KeyCode)
     case mouseButton(InputMouseButton)

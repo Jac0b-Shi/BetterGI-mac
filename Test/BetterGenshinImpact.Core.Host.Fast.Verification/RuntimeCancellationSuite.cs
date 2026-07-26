@@ -14,6 +14,23 @@ public sealed class RuntimeCancellationSuite : IVerificationSuite
 
     public async Task RunAsync(VerificationContext context, CancellationToken cancellationToken)
     {
+        context.Require(
+            ForegroundInputCoordinator.EvaluateInputAvailability(
+                true, true, false),
+            "Foreground input was rejected.");
+        context.Require(
+            !ForegroundInputCoordinator.EvaluateInputAvailability(
+                false, true, false),
+            "A foreground-only backend bypassed the host foreground gate.");
+        context.Require(
+            ForegroundInputCoordinator.EvaluateInputAvailability(
+                false, false, true),
+            "A validated background-delivery capability was rejected.");
+        context.Require(
+            !ForegroundInputCoordinator.EvaluateInputAvailability(
+                false, false, false),
+            "A backend without background-delivery support bypassed the gate.");
+
         var coordinator = new ForegroundInputCoordinator(
             new PlatformCallbackChannel(), "verification", CancellationToken.None,
             TimeSpan.FromMilliseconds(5), () => false);

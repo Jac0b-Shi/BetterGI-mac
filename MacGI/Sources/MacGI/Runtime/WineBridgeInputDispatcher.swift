@@ -63,6 +63,14 @@ struct WineBridgeConfiguration: Equatable {
     let relativeMouseMode: WineRelativeMouseMode
     let foregroundExperiment: WineForegroundExperiment
 
+    var capabilities: InputDeliveryCapabilities {
+        let supportsBackgroundDelivery =
+            backgroundDiagnosticEnabled && foregroundExperiment == .mousePrime
+        return InputDeliveryCapabilities(
+            requiresHostForeground: !supportsBackgroundDelivery,
+            supportsBackgroundDelivery: supportsBackgroundDelivery)
+    }
+
     static func resolve(
         launchArguments: [String],
         environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -235,7 +243,7 @@ enum InputBackendSelection: String, CaseIterable, Identifiable {
         case .foregroundCGEvent:
             "兼容模式，通过 macOS 事件发送输入，要求原神保持前台。"
         case .wineBridge:
-            "通过原神所在 Wine prefix 内的 SendInput helper 发送输入；当前仍要求原神保持前台。"
+            "通过原神所在 Wine prefix 内的 SendInput helper 发送输入。"
         }
     }
 
@@ -297,6 +305,7 @@ enum InputDispatcherFactory {
 
 private struct UnavailableInputDispatcher: InputDispatching {
     let deliveryMode = InputDeliveryMode.wineBridge
+    let capabilities = InputDeliveryCapabilities.foregroundOnly
     let error: Error
 
     func perform(
@@ -313,6 +322,7 @@ private struct UnavailableInputDispatcher: InputDispatching {
 
 final class WineBridgeInputDispatcher: InputDispatching {
     let deliveryMode = InputDeliveryMode.wineBridge
+    let capabilities: InputDeliveryCapabilities
 
     private let configurationResult: Result<WineBridgeConfiguration, Error>
     private let lock = NSLock()
@@ -325,6 +335,7 @@ final class WineBridgeInputDispatcher: InputDispatching {
 
     init(configuration: Result<WineBridgeConfiguration, Error>) {
         configurationResult = configuration
+        capabilities = (try? configuration.get().capabilities) ?? .foregroundOnly
     }
 
     convenience init(launchArguments: [String]) {
@@ -350,8 +361,14 @@ final class WineBridgeInputDispatcher: InputDispatching {
         lock.lock()
         defer { lock.unlock() }
 
-        if action == .releaseAll, connection == nil {
-            return CGEventDispatchReport(eventCount: 0, detail: "releaseAll (bridge inactive)")
+        if action == .releaseAll {
+            guard let connection else {
+                return CGEventDispatchReport(
+                    eventCount: 0,
+                    detail: "releaseAll (bridge inactive)")
+            }
+            try connection.request(.releaseAll)
+            return CGEventDispatchReport(eventCount: 1, detail: "releaseAll")
         }
         let session = try ensureSession(targetWindow: targetWindow)
         let diagnostic = try prepareDiagnostic(
@@ -465,6 +482,10 @@ final class WineBridgeInputDispatcher: InputDispatching {
                     "No supported Genshin executable was found")
             }
             _ = try connection.request(.registerTarget, payload: try target.encoded())
+            _ = try connection.request(
+                .configureInputContext,
+                payload: Self.inputContextPolicyPayload(
+                    enabled: configuration.capabilities.supportsBackgroundDelivery))
             self.connection = connection
             registeredTarget = target
             hostTargetPID = targetWindow.ownerPID
@@ -783,18 +804,7 @@ final class WineBridgeInputDispatcher: InputDispatching {
                 beforePrime,
                 phase: "before input",
                 hostIsFrontmost: hostIsFrontmost)
-            guard action != .releaseAll,
-                  !hostIsFrontmost,
-                  Self.needsInputContextPriming(beforePrime) else {
-                return beforePrime
-            }
-
-            let afterPrime = try prepareTargetInput(through: connection)
-            logDiagnostic(
-                afterPrime,
-                phase: "after Wine input-context priming",
-                hostIsFrontmost: hostIsFrontmost)
-            return afterPrime
+            return beforePrime
         }
         if shouldSetForeground {
             backgroundEpisodeForegroundAttempted = true
@@ -821,32 +831,10 @@ final class WineBridgeInputDispatcher: InputDispatching {
         try foregroundDiagnostic(.setForeground, through: connection)
     }
 
-    private func prepareTargetInput(
-        through connection: WineBridgeConnection
-    ) throws -> WineBridgeForegroundDiagnostic {
-        do {
-            return try WineBridgeForegroundDiagnostic.decode(
-                connection.request(.prepareTargetInput))
-        } catch let WineBridgeError.requestFailed(command, status)
-            where command == .prepareTargetInput
-                && status == WineBridgeStatus.inputContextPrimingRequired.rawValue {
-            var diagnostic: WineBridgeForegroundDiagnostic?
-            for _ in 0 ..< 3 {
-                _ = try connection.request(.primeTargetInput)
-                Thread.sleep(forTimeInterval: 0.15)
-                let current = try queryForeground(through: connection)
-                if !Self.needsInputContextPriming(current) {
-                    return current
-                }
-                diagnostic = current
-            }
-            let foreground = diagnostic?.foregroundWindow ?? 0
-            let target = diagnostic?.targetWindow ?? 0
-            throw WineBridgeError.bridgeUnavailable(
-                "Wine input-context priming failed after 3 attempts; foreground "
-                    + "0x\(String(foreground, radix: 16)); "
-                    + "target is 0x\(String(target, radix: 16))")
-        }
+    static func inputContextPolicyPayload(enabled: Bool) -> Data {
+        var payload = Data([enabled ? 1 : 0, 3])
+        payload.appendLittleEndian(UInt16(150))
+        return payload
     }
 
     private func foregroundDiagnostic(
