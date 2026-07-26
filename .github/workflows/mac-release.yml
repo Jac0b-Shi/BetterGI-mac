@@ -65,6 +65,9 @@ jobs:
       - name: Require Apple Silicon
         run: test "$(uname -m)" = arm64
 
+      - name: Install static gate tools
+        run: brew install ripgrep
+
       - name: Select release signing mode
         id: release_mode
         env:
