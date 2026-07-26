@@ -9,3 +9,9 @@ rg -q 'ActionFactory\.CanExecuteAfterWaypoint\(waypoint\.Action\)' \
   BetterGenshinImpact/GameTask/AutoPathing/PathExecutor.cs
 rg -q 'PathExecutor\.SupportsAction\(waypoint\.Action\)' \
   Test/BetterGenshinImpact.Pathing.Verification/Program.cs
+rg -q '"OverlayMetricsDisplayHotkey"' \
+  BetterGenshinImpact.Core.Host/Runtime/HotKeySettingsCatalog.cs
+rg -q '"overlay\.metrics\.toggle"' \
+  BetterGenshinImpact.Core.Host/Runtime/HotKeySettingsCatalog.cs
+rg -q 'case "overlay\.metrics\.toggle":' \
+  MacGI/Sources/MacGI/App/AppState.swift

@@ -1638,7 +1638,8 @@ final class AppState: ObservableObject {
         case "overlay.log.toggle":
             showOverlayLogBox.toggle()
             showOverlayStatus = showOverlayLogBox
-            showOverlayMetrics = showOverlayLogBox
+        case "overlay.metrics.toggle":
+            showOverlayMetrics.toggle()
         case "recording.toggle":
             if keyMouseRecordingState == "recording" ||
                 keyMouseRecordingState == "starting" {

@@ -65,8 +65,11 @@ public sealed class HotKeySettingsCatalog(RuntimeLayout layout)
             "TakeScreenshotHotkey", "系统控制", "游戏截图",
             "takeScreenshotHotkey", "capture.screenshot", "core", false, true),
         new(
-            "LogBoxDisplayHotkey", "系统控制", "日志，状态窗与指标栏展示开关",
+            "LogBoxDisplayHotkey", "系统控制", "日志与状态窗口展示开关",
             "logBoxDisplayHotkey", "overlay.log.toggle", "swift", false, true),
+        new(
+            "OverlayMetricsDisplayHotkey", "系统控制", "遮罩指标栏展示开关",
+            "overlayMetricsDisplayHotkey", "overlay.metrics.toggle", "swift", false, true),
         new(
             "AutoPickEnabledHotkey", "实时任务", "自动拾取开关",
             "autoPickEnabledHotkey", "trigger.toggle:AutoPick", "core", false, true),

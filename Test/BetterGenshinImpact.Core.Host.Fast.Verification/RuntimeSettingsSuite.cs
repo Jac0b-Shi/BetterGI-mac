@@ -741,7 +741,22 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             }));
             var hotKeys = JArray.FromObject(hotKeyCatalog.List());
             context.Require(
-                hotKeys.Count == 33 &&
+                hotKeys.Count == 34 &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "LogBoxDisplayHotkey")
+                    .Value<string>("functionName") == "日志与状态窗口展示开关" &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "LogBoxDisplayHotkey")
+                    .Value<string>("action") == "overlay.log.toggle" &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "OverlayMetricsDisplayHotkey")
+                    .Value<string>("functionName") == "遮罩指标栏展示开关" &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "OverlayMetricsDisplayHotkey")
+                    .Value<string>("action") == "overlay.metrics.toggle" &&
+                hotKeys.Single(item =>
+                    item.Value<string>("id") == "OverlayMetricsDisplayHotkey")
+                    .Value<string>("executionOwner") == "swift" &&
                 hotKeys.Single(item =>
                     item.Value<string>("id") == "TakeScreenshotHotkey")
                     .Value<string>("action") == "capture.screenshot" &&
@@ -1192,7 +1207,11 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                     item.Value<string>("executionOwner") == "core") &&
                 hotKeyListResult.Any(item =>
                     item.Value<string>("id") == "AddWaypointHotkey" &&
-                    item.Value<string>("executionOwner") == "core"),
+                    item.Value<string>("executionOwner") == "core") &&
+                hotKeyListResult.Any(item =>
+                    item.Value<string>("id") == "OverlayMetricsDisplayHotkey" &&
+                    item.Value<string>("action") == "overlay.metrics.toggle" &&
+                    item.Value<string>("executionOwner") == "swift"),
                 hotKeyList.Error?.Message ??
                     "hotKey.settings.list did not return the persisted upstream binding.");
 
