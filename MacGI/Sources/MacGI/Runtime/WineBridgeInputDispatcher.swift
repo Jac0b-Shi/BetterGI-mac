@@ -830,16 +830,22 @@ final class WineBridgeInputDispatcher: InputDispatching {
         } catch let WineBridgeError.requestFailed(command, status)
             where command == .prepareTargetInput
                 && status == WineBridgeStatus.inputContextPrimingRequired.rawValue {
-            _ = try connection.request(.primeTargetInput)
-            Thread.sleep(forTimeInterval: 0.15)
-            let diagnostic = try queryForeground(through: connection)
-            guard !Self.needsInputContextPriming(diagnostic) else {
-                throw WineBridgeError.bridgeUnavailable(
-                    "Wine input-context priming remained on foreground "
-                        + "0x\(String(diagnostic.foregroundWindow, radix: 16)); "
-                        + "target is 0x\(String(diagnostic.targetWindow, radix: 16))")
+            var diagnostic: WineBridgeForegroundDiagnostic?
+            for _ in 0 ..< 3 {
+                _ = try connection.request(.primeTargetInput)
+                Thread.sleep(forTimeInterval: 0.15)
+                let current = try queryForeground(through: connection)
+                if !Self.needsInputContextPriming(current) {
+                    return current
+                }
+                diagnostic = current
             }
-            return diagnostic
+            let foreground = diagnostic?.foregroundWindow ?? 0
+            let target = diagnostic?.targetWindow ?? 0
+            throw WineBridgeError.bridgeUnavailable(
+                "Wine input-context priming failed after 3 attempts; foreground "
+                    + "0x\(String(foreground, radix: 16)); "
+                    + "target is 0x\(String(target, radix: 16))")
         }
     }
 

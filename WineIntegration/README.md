@@ -94,16 +94,21 @@ priming internally and waits up to 150 ms for Wine to restore the target before
 Swift delivers the original input. The bridge keeps checking and event
 submission separate: `prepareTargetInput` reports whether priming is required,
 `primeTargetInput` submits the event and returns immediately, and a separate
-read-only foreground query checks readiness after 150 ms. No synthetic
-`InputAction` is exposed to Core or task code.
+read-only foreground query checks readiness after 150 ms. The experimental
+dispatcher makes at most three priming attempts and stops as soon as Wine
+reports the registered game HWND as foreground. No synthetic `InputAction` is
+exposed to Core or task code.
 
-On the tested unmodified YAAgl Wine 11.0-1 engine, the private priming commands
-still leave `GetForegroundWindow()` on Wine's desktop HWND (`0x10020`) instead
-of the registered game HWND (`0x30054`). The experiment therefore remains
-diagnostic-only and must not be described as supported background automation.
+Real-game testing against the unmodified YAAgl Wine 11.0-1 engine showed that a
+single priming event can leave `GetForegroundWindow()` on Wine's desktop HWND,
+while the finite three-attempt bridge retry restores the registered game HWND
+reliably enough for the tested background keyboard, mouse-button, relative-mouse
+and movement sequence. The macOS foreground application remained unchanged
+during that run. This confirms that the recovery belongs in the Wine bridge
+input-delivery boundary rather than in Core tasks or scripts.
 
-The only successful background-input baseline so far uses an ordinary relative
-mouse command from the local diagnostic script before each input set:
+The local scheduler group `Wine 后台输入诊断` retains an ordinary relative
+mouse command before each input set as a comparison baseline:
 
 ```javascript
 log.info(`[${label}] 零位移鼠标预热`);
@@ -121,8 +126,10 @@ open MacGI/.build/App/betterGI-mac.app --args \
   --wine-relative-mouse scaled
 ```
 
-This script-level workaround has been observed to restore Wine's game
-foreground without bringing Wine to the macOS foreground. It is retained only
-as an experimental comparison point; production background support still
-requires a reliable bridge or `winemac.drv` solution. This branch does not patch
-Wine virtual foreground behavior.
+The same group also contains `Wine 后台输入诊断（无脚本预热）`, which omits
+that action. A successful background run of the no-prime script is the
+acceptance signal for bridge-private priming; it proves that task-level
+`moveMouseBy(0, 0)` is not providing the recovery. The script-level variant is
+retained only as an experimental comparison point. This branch still does not
+patch Wine virtual foreground behavior, and background delivery remains behind
+the explicit diagnostic launch mode until broader task validation is complete.
