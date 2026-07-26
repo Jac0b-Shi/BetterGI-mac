@@ -100,8 +100,9 @@ swift test --package-path MacGI
 
 ## Release 构建
 
-稳定版从 `main` 上的 `v*` SemVer 标签自动构建。GitHub Actions 会生成 Developer
-ID 签名并经过 Apple 公证的 arm64 DMG、ZIP 和 SHA256 清单。
+稳定版从 `main` 上的 `v*` SemVer 标签自动构建。配置完整 Developer ID 和公证
+凭据时，GitHub Actions 会生成正式签名并公证的 arm64 DMG、ZIP 和 SHA256 清单；
+未配置任何凭据时，则生成文件名带 `-unsigned` 的 ad-hoc 临时发布。
 
 仓库管理员配置、标签格式和发布步骤见
 [`MacGI/docs/release.md`](../MacGI/docs/release.md)。

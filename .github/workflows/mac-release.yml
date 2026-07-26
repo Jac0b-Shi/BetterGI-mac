@@ -17,7 +17,6 @@ jobs:
     runs-on: macos-15
     env:
       DIST_DIR: ${{ github.workspace }}/dist/mac
-      MACGI_BUNDLE_IDENTIFIER: cn.jac0bshi.bettergi.mac
 
     steps:
       - uses: actions/checkout@v4
@@ -66,7 +65,8 @@ jobs:
       - name: Require Apple Silicon
         run: test "$(uname -m)" = arm64
 
-      - name: Validate release credentials
+      - name: Select release signing mode
+        id: release_mode
         env:
           MACGI_CERTIFICATE_P12: ${{ secrets.MACGI_CERTIFICATE_P12 }}
           MACGI_CERTIFICATE_PASSWORD: ${{ secrets.MACGI_CERTIFICATE_PASSWORD }}
@@ -76,6 +76,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          present=0
           for variable in \
             MACGI_CERTIFICATE_P12 \
             MACGI_CERTIFICATE_PASSWORD \
@@ -83,14 +84,42 @@ jobs:
             APPLE_TEAM_ID \
             APPLE_APP_SPECIFIC_PASSWORD
           do
-            if [[ -z "${!variable}" ]]; then
-              echo "Required release secret is missing: $variable" >&2
-              exit 1
+            if [[ -n "${!variable}" ]]; then
+              present=$((present + 1))
             fi
           done
 
+          if [[ "$present" == 0 ]]; then
+            {
+              echo "mode=adhoc"
+              echo "adhoc=1"
+              echo "timestamp=0"
+              echo "artifact_suffix=-unsigned"
+              echo "bundle_identifier=cn.jac0bshi.bettergi.mac.adhoc"
+            } >> "$GITHUB_OUTPUT"
+            {
+              echo "### Ad-hoc release"
+              echo
+              echo "No Developer ID credentials are configured."
+              echo "Artifacts will be ad-hoc signed, unnotarized, and marked as unsigned."
+            } >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "$present" == 5 ]]; then
+            {
+              echo "mode=developer-id"
+              echo "adhoc=0"
+              echo "timestamp=1"
+              echo "artifact_suffix="
+              echo "bundle_identifier=cn.jac0bshi.bettergi.mac"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "Release signing secrets are only partially configured." >&2
+            echo "Configure all five secrets or remove all of them for an explicit ad-hoc release." >&2
+            exit 1
+          fi
+
       - name: Import Developer ID certificate
         id: signing
+        if: steps.release_mode.outputs.mode == 'developer-id'
         env:
           MACGI_CERTIFICATE_P12: ${{ secrets.MACGI_CERTIFICATE_P12 }}
           MACGI_CERTIFICATE_PASSWORD: ${{ secrets.MACGI_CERTIFICATE_PASSWORD }}
@@ -135,18 +164,21 @@ jobs:
       - name: Test Swift platform layer
         run: swift test --package-path MacGI
 
-      - name: Package signed application
+      - name: Package application
         env:
           CONFIGURATION: Release
           MACGI_APP_OUTPUT_ROOT: ${{ runner.temp }}/bettergi-release
           MACGI_APP_NAME: BetterGI.app
           MACGI_SHORT_VERSION: ${{ steps.version.outputs.bundle_short_version }}
           MACGI_BUNDLE_VERSION: ${{ github.run_number }}
+          MACGI_BUNDLE_IDENTIFIER: ${{ steps.release_mode.outputs.bundle_identifier }}
+          MACGI_ALLOW_ADHOC_SIGNING: ${{ steps.release_mode.outputs.adhoc }}
           MACGI_SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
-          MACGI_CODESIGN_TIMESTAMP: "1"
+          MACGI_CODESIGN_TIMESTAMP: ${{ steps.release_mode.outputs.timestamp }}
         run: MacGI/scripts/package-macgi-app.sh
 
       - name: Notarize application
+        if: steps.release_mode.outputs.mode == 'developer-id'
         env:
           APPLE_ID: ${{ secrets.MACGI_NOTARY_APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.MACGI_NOTARY_TEAM_ID }}
@@ -167,11 +199,13 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app"
           spctl --assess --type execute --verbose=4 "$app"
 
-      - name: Build and notarize release artifacts
+      - name: Build release artifacts
         env:
           APPLE_ID: ${{ secrets.MACGI_NOTARY_APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.MACGI_NOTARY_TEAM_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.MACGI_NOTARY_PASSWORD }}
+          ARTIFACT_SUFFIX: ${{ steps.release_mode.outputs.artifact_suffix }}
+          RELEASE_MODE: ${{ steps.release_mode.outputs.mode }}
           SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
           VERSION: ${{ steps.version.outputs.version }}
         shell: bash
@@ -179,22 +213,26 @@ jobs:
           set -euo pipefail
           mkdir -p "$DIST_DIR"
           app="$RUNNER_TEMP/bettergi-release/BetterGI.app"
-          zip="$DIST_DIR/BetterGI-mac-v${VERSION}-arm64.zip"
-          dmg="$DIST_DIR/BetterGI-mac-v${VERSION}-arm64.dmg"
+          zip="$DIST_DIR/BetterGI-mac-v${VERSION}-arm64${ARTIFACT_SUFFIX}.zip"
+          dmg="$DIST_DIR/BetterGI-mac-v${VERSION}-arm64${ARTIFACT_SUFFIX}.dmg"
           ditto -c -k --keepParent "$app" "$zip"
           MacGI/scripts/create-macgi-dmg.sh "$app" "$dmg" "BetterGI ${VERSION}"
-          codesign \
-            --force \
-            --timestamp \
-            --sign "$SIGNING_IDENTITY" \
-            "$dmg"
-          xcrun notarytool submit "$dmg" \
-            --apple-id "$APPLE_ID" \
-            --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-            --wait
-          xcrun stapler staple "$dmg"
-          xcrun stapler validate "$dmg"
+          if [[ "$RELEASE_MODE" == "developer-id" ]]; then
+            codesign \
+              --force \
+              --timestamp \
+              --sign "$SIGNING_IDENTITY" \
+              "$dmg"
+            xcrun notarytool submit "$dmg" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+              --wait
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+          else
+            codesign --verify --deep --strict --verbose=2 "$app"
+          fi
           (
             cd "$DIST_DIR"
             shasum -a 256 "${zip##*/}" "${dmg##*/}" > SHA256SUMS.txt
@@ -202,7 +240,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BetterGI-mac-${{ steps.version.outputs.version }}-arm64
+          name: BetterGI-mac-${{ steps.version.outputs.version }}-arm64${{ steps.release_mode.outputs.artifact_suffix }}
           path: dist/mac/*
           if-no-files-found: error
           retention-days: 14
@@ -211,6 +249,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
+          RELEASE_MODE: ${{ steps.release_mode.outputs.mode }}
           VERSION: ${{ steps.version.outputs.version }}
         shell: bash
         run: |
@@ -221,10 +260,17 @@ jobs:
             args=(
               "$GITHUB_REF_NAME"
               dist/mac/*
-              --title "BetterGI macOS ${VERSION}"
               --generate-notes
             )
-            if [[ "$PRERELEASE" == "true" ]]; then
+            if [[ "$RELEASE_MODE" == "developer-id" ]]; then
+              args+=(--title "BetterGI macOS ${VERSION}")
+            else
+              args+=(
+                --title "BetterGI macOS ${VERSION} (unsigned)"
+                --notes "⚠️ 此版本使用 ad-hoc 签名且未经过 Apple 公证。首次打开需要在 macOS 系统设置的隐私与安全性页面手动允许；升级后可能需要重新授予屏幕录制和辅助功能权限。"
+              )
+            fi
+            if [[ "$PRERELEASE" == "true" || "$RELEASE_MODE" != "developer-id" ]]; then
               args+=(--prerelease)
             fi
             gh release create "${args[@]}"

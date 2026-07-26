@@ -23,10 +23,12 @@ ScreenCaptureKit、Core Graphics 和 macOS 原生窗口系统完成截图、输�
 
 - `BetterGI-mac-v<版本>-arm64.dmg`：推荐的安装镜像。
 - `BetterGI-mac-v<版本>-arm64.zip`：应用压缩包。
+- 文件名包含 `-unsigned`：ad-hoc 签名、未经 Apple 公证的临时发布。
 - `SHA256SUMS.txt`：安装文件校验值。
 
-正式 Release 使用 Developer ID 签名并经过 Apple 公证。请勿从第三方来源下载，
-也不要将 CI 的 ad-hoc 测试包作为日常安装版本。
+拥有 Developer ID 后，正式 Release 会使用 Developer ID 签名并经过 Apple 公证。
+在此之前，本仓库会明确发布文件名带 `-unsigned` 的 ad-hoc 构建。请勿从第三方
+来源下载。ad-hoc 构建始终标记为 GitHub Prerelease，不作为正式 Latest 发布。
 
 ## 系统要求
 
@@ -47,8 +49,12 @@ Release 已内置自包含的 BetterGI Core，普通用户无需另外安装 .NE
 4. 首次运行时按“启动”页面提示授予“屏幕录制”和“辅助功能（无障碍）”权限。
 5. 完成屏幕录制授权后，完全退出 BetterGI，再从“应用程序”目录重新打开。
 
-为保持 macOS TCC 权限身份稳定，请始终运行已安装的正式应用。不要把
-SwiftPM `.build` 目录中的可执行文件或 ad-hoc 签名测试包作为日常版本。
+如果下载文件名包含 `-unsigned`，首次打开时 macOS 会提示无法验证开发者。请在
+“系统设置 → 隐私与安全性”中确认该应用来自本仓库 Release 后选择“仍要打开”。
+ad-hoc 版本升级后可能需要重新授予屏幕录制和辅助功能权限。
+
+请始终运行已安装到“应用程序”目录的版本，不要直接运行 SwiftPM `.build` 目录
+中的可执行文件。
 
 ## 使用方法
 
@@ -96,7 +102,7 @@ macOS 将窗口画面读取和模拟键鼠输入分别置于两个隐私权限�
 
 屏幕录制权限变更后通常需要重新启动应用。请完全退出 BetterGI，并确认重新打开的
 是 `/Applications/BetterGI.app`。开发构建、不同签名或不同 Bundle ID 会被 macOS
-视为另一个应用。
+视为另一个应用。ad-hoc 版本升级后也可能需要重新授权。
 
 ### 为什么找不到原神窗口？
 
@@ -131,9 +137,10 @@ macOS 将窗口画面读取和模拟键鼠输入分别置于两个隐私权限�
 
 ## 问题反馈
 
-当前仓库尚未启用 Issues。启用后，macOS 移植问题应只提交到本仓库，不要提交到
-BetterGI 上游。反馈时请附上 macOS 版本、Mac 型号、YAAgl/Wine 版本、游戏
-分辨率、BetterGI Release 版本和相关日志。
+macOS 移植问题请提交到本仓库
+[Issues](https://github.com/Jac0b-Shi/BetterGI-mac/issues)，不要提交到 BetterGI
+上游。反馈时请附上 macOS 版本、Mac 型号、YAAgl/Wine 版本、游戏分辨率、
+BetterGI Release 版本和相关日志。
 
 ## 开发
 
