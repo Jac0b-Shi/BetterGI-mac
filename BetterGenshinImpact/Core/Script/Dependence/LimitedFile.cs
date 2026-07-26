@@ -343,11 +343,11 @@ public class LimitedFile(string rootPath)
     {
         try
         {
-            path = NormalizePath(path);
             if (!IsValid(path, content))
             {
                 return false;
             }
+            path = NormalizePath(path);
 
             if (append && File.Exists(path))
             {
@@ -376,11 +376,11 @@ public class LimitedFile(string rootPath)
     {
         try
         {
-            path = NormalizePath(path);
             if (!IsValid(path, content))
             {
                 return false;
             }
+            path = NormalizePath(path);
             
             if (append && File.Exists(path))
             {
@@ -410,12 +410,12 @@ public class LimitedFile(string rootPath)
     {
         try
         {
-            path = NormalizePath(path);
             if (!IsValid(path, content))
             {
                 callbackFunc("路径不合法或文件内容不合法", null);
                 return false;
             }
+            path = NormalizePath(path);
             
             if (append && File.Exists(path))
             {
@@ -521,6 +521,12 @@ public class LimitedFile(string rootPath)
     {
         try
         {
+            if (!IsValid(newPath))
+            {
+                _logger.LogError("RenamePathSync 异常: 新文件路径不合法 {Path}", newPath);
+                return false;
+            }
+
             // 标准化路径
             oldPath = NormalizePath(oldPath);
             newPath = NormalizePath(newPath);
@@ -529,13 +535,6 @@ public class LimitedFile(string rootPath)
             if (!File.Exists(oldPath) && !Directory.Exists(oldPath))
             {
                 _logger.LogError("RenamePathSync 异常: 原路径不存在 {Path}", oldPath);
-                return false;
-            }
-
-            //验证扩展名合法性
-            if (File.Exists(oldPath) && !IsValid(newPath))
-            {
-                _logger.LogError("RenamePathSync 异常: 新文件路径不合法 {Path}", newPath);
                 return false;
             }
 
