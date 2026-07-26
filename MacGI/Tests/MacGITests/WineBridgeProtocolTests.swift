@@ -32,6 +32,29 @@ struct WineBridgeProtocolTests {
         #expect(try WineBridgeTarget.decode(encoded) == target)
     }
 
+    @Test("Target discovery defaults cover CN and global executables")
+    func targetDiscoveryDefaults() throws {
+        #expect(
+            try WineBridgeConfiguration.targetExecutableNames(from: nil)
+                == ["YuanShen.exe", "GenshinImpact.exe"])
+        #expect(
+            try WineBridgeConfiguration.targetExecutableNames(
+                from: "YuanShen.exe,GenshinImpact.exe")
+                == ["YuanShen.exe", "GenshinImpact.exe"])
+    }
+
+    @Test("Only pre-authentication connection failures retry port allocation")
+    func startupRetryClassification() {
+        #expect(WineBridgeInputDispatcher.isRetryableStartupError(
+            WineBridgeError.connectionFailed("Address already in use")))
+        #expect(WineBridgeInputDispatcher.isRetryableStartupError(
+            WineBridgeError.bridgeExited(1)))
+        #expect(!WineBridgeInputDispatcher.isRetryableStartupError(
+            WineBridgeError.requestFailed(.authenticate, 1)))
+        #expect(!WineBridgeInputDispatcher.isRetryableStartupError(
+            WineBridgeError.invalidResponse("header")))
+    }
+
     @Test("Relative mouse payload preserves signed deltas")
     func relativeMousePayloadPreservesSignedDeltas() throws {
         let payload = WineBridgeInputDispatcher.mouseMovePayload(x: -37, y: 19)
@@ -39,6 +62,45 @@ struct WineBridgeProtocolTests {
 
         #expect(Int32(bitPattern: try reader.readUInt32()) == -37)
         #expect(Int32(bitPattern: try reader.readUInt32()) == 19)
+    }
+
+    @Test("Quartz points map into the Wine target client")
+    func quartzPointMapsToWineClient() {
+        let window = WindowInfo(
+            id: 42,
+            ownerPID: 42,
+            ownerName: "wine",
+            title: "Genshin Impact",
+            frame: CGRect(x: 839, y: 233, width: 960, height: 572),
+            layer: 0,
+            isOnScreen: true,
+            scaleFactor: 2)
+
+        let point = WineBridgeInputDispatcher.wineClientPoint(
+            CGPoint(x: 1_719, y: 775),
+            targetWindow: window)
+
+        #expect(point == CGPoint(x: 1_760, y: 1_020))
+    }
+
+    @Test("Wine relative movement follows the host point scale")
+    func relativeMovementUsesHostPointScale() {
+        let window = WindowInfo(
+            id: 42,
+            ownerPID: 42,
+            ownerName: "wine",
+            title: "Genshin Impact",
+            frame: CGRect(x: 839, y: 233, width: 960, height: 572),
+            layer: 0,
+            isOnScreen: true,
+            scaleFactor: 2)
+
+        let delta = WineBridgeInputDispatcher.wineRelativeDelta(
+            deltaX: -1_180,
+            deltaY: 240,
+            targetWindow: window)
+
+        #expect(delta == CGPoint(x: -590, y: 120))
     }
 
     @Test("Backend selection is explicit and never falls back for invalid values")

@@ -102,12 +102,14 @@ struct bgi_wine_mouse_button_payload {
     uint8_t button;
     uint8_t move_first;
     uint16_t reserved;
+    /* Target HWND client coordinates when move_first is set. */
     int32_t x;
     int32_t y;
     uint32_t duration_ms;
 };
 
 struct bgi_wine_mouse_move {
+    /* Target HWND client coordinates for absolute moves; signed delta otherwise. */
     int32_t x;
     int32_t y;
 };

@@ -71,8 +71,11 @@ per-user data directory. Development overrides are available when needed:
 ```text
 --wine-executable <path>
 --wine-prefix <path>
---wine-target-executable <exe-name>
+--wine-target-executable <exe-name[,exe-name]>
 ```
+
+Without an override, target discovery checks both `YuanShen.exe` (CN) and
+`GenshinImpact.exe` (global).
 
 The bridge is not bundled into release artifacts during this experimental
 stage. The game must remain the macOS foreground application; this branch does

@@ -316,16 +316,31 @@ static bool send_mouse_button(struct bridge_state *state, uint8_t button, bool d
     return true;
 }
 
-static bool move_mouse_absolute(int32_t x, int32_t y)
+static bool move_mouse_absolute(
+    const struct bridge_state *state,
+    int32_t client_x,
+    int32_t client_y)
 {
+    RECT client_rect;
+    if (!GetClientRect((HWND)(uintptr_t)state->target.window_handle, &client_rect)) return false;
+    if (client_x < client_rect.left || client_x >= client_rect.right
+        || client_y < client_rect.top || client_y >= client_rect.bottom) {
+        return false;
+    }
+
+    POINT screen_point = {client_x, client_y};
+    if (!ClientToScreen((HWND)(uintptr_t)state->target.window_handle, &screen_point)) return false;
+
     int left = GetSystemMetrics(SM_XVIRTUALSCREEN);
     int top = GetSystemMetrics(SM_YVIRTUALSCREEN);
     int width = GetSystemMetrics(SM_CXVIRTUALSCREEN);
     int height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
     if (width <= 1 || height <= 1) return false;
 
-    LONG normalized_x = (LONG)(((int64_t)(x - left) * 65535) / (width - 1));
-    LONG normalized_y = (LONG)(((int64_t)(y - top) * 65535) / (height - 1));
+    LONG normalized_x =
+        (LONG)(((int64_t)(screen_point.x - left) * 65535) / (width - 1));
+    LONG normalized_y =
+        (LONG)(((int64_t)(screen_point.y - top) * 65535) / (height - 1));
     INPUT input = {0};
     input.type = INPUT_MOUSE;
     input.mi.dx = normalized_x;
@@ -353,7 +368,8 @@ static bool perform_mouse_button(
     if (payload->button < BGI_WINE_MOUSE_LEFT || payload->button > BGI_WINE_MOUSE_X2) {
         return false;
     }
-    if (payload->move_first && !move_mouse_absolute(payload->x, payload->y)) return false;
+    if (payload->move_first
+        && !move_mouse_absolute(state, payload->x, payload->y)) return false;
 
     switch (command) {
     case BGI_WINE_COMMAND_MOUSE_BUTTON_DOWN:
@@ -473,7 +489,7 @@ static uint32_t handle_authenticated_command(
         }
         const struct bgi_wine_mouse_move *move = (const struct bgi_wine_mouse_move *)payload;
         bool success = request->command == BGI_WINE_COMMAND_MOUSE_MOVE_ABSOLUTE
-            ? move_mouse_absolute(move->x, move->y)
+            ? move_mouse_absolute(state, move->x, move->y)
             : move_mouse_relative(move->x, move->y);
         return success ? BGI_WINE_STATUS_OK : BGI_WINE_STATUS_INPUT_FAILED;
     }

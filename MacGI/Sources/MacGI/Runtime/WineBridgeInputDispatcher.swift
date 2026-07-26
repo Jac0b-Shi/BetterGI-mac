@@ -44,7 +44,7 @@ struct WineBridgeConfiguration: Equatable {
     let wineExecutableURL: URL
     let winePrefixURL: URL
     let bridgeExecutableURL: URL
-    let targetExecutableName: String
+    let targetExecutableNames: [String]
     let startupTimeout: TimeInterval
 
     static func resolve(
@@ -82,22 +82,31 @@ struct WineBridgeConfiguration: Equatable {
             candidates: bridgeCandidates(fileManager: fileManager),
             description: "BetterGIWineInputBridge.exe",
             fileManager: fileManager)
-        let targetExecutableName =
+        let targetExecutableNames = try targetExecutableNames(from:
             arguments.value(after: "--wine-target-executable")
-            ?? environment["BETTERGI_WINE_TARGET_EXECUTABLE"]
-            ?? "GenshinImpact.exe"
-        guard !targetExecutableName.isEmpty,
-              !targetExecutableName.contains("/"),
-              !targetExecutableName.contains("\\") else {
-            throw WineBridgeError.invalidConfiguration("Invalid target executable name")
-        }
+                ?? environment["BETTERGI_WINE_TARGET_EXECUTABLE"]
+        )
 
         return WineBridgeConfiguration(
             wineExecutableURL: wineExecutableURL,
             winePrefixURL: winePrefixURL,
             bridgeExecutableURL: bridgeExecutableURL,
-            targetExecutableName: targetExecutableName,
+            targetExecutableNames: targetExecutableNames,
             startupTimeout: 12)
+    }
+
+    static func targetExecutableNames(from explicitValue: String?) throws -> [String] {
+        let values = explicitValue.map {
+            $0.split(whereSeparator: { $0 == "," || $0 == ";" })
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        } ?? ["YuanShen.exe", "GenshinImpact.exe"]
+        guard !values.isEmpty,
+              values.allSatisfy({
+                  !$0.isEmpty && !$0.contains("/") && !$0.contains("\\")
+              }) else {
+            throw WineBridgeError.invalidConfiguration("Invalid target executable name")
+        }
+        return values
     }
 
     private static func resolveFile(
@@ -163,22 +172,80 @@ struct CommandLineOptions {
     }
 }
 
+enum InputBackendSelection: String, CaseIterable, Identifiable {
+    case foregroundCGEvent = "foreground-cgevent"
+    case wineBridge = "wine-bridge"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .foregroundCGEvent: "macOS CGEvent"
+        case .wineBridge: "Wine Bridge（实验）"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .foregroundCGEvent:
+            "兼容模式，通过 macOS 事件发送输入，要求原神保持前台。"
+        case .wineBridge:
+            "通过原神所在 Wine prefix 内的 SendInput helper 发送输入；当前仍要求原神保持前台。"
+        }
+    }
+
+    var deliveryMode: InputDeliveryMode {
+        switch self {
+        case .foregroundCGEvent: .foregroundCGEvent
+        case .wineBridge: .wineBridge
+        }
+    }
+}
+
 enum InputDispatcherFactory {
-    static func make(launchArguments: [String]) -> any InputDispatching {
+    static func selection(
+        launchArguments: [String],
+        storedValue: String?
+    ) -> InputBackendSelection {
+        let arguments = CommandLineOptions(launchArguments)
+        if let commandLineValue = arguments.value(after: "--input-backend"),
+           let selection = InputBackendSelection(rawValue: commandLineValue) {
+            return selection
+        }
+        return storedValue.flatMap(InputBackendSelection.init(rawValue:))
+            ?? .foregroundCGEvent
+    }
+
+    static func make(
+        launchArguments: [String],
+        fallbackSelection: InputBackendSelection = .foregroundCGEvent
+    ) -> any InputDispatching {
         let selection = CommandLineOptions(launchArguments)
             .value(after: "--input-backend")
         guard let selection else {
-            return CGEventInputDispatcher()
+            return make(selection: fallbackSelection, launchArguments: launchArguments)
         }
         switch selection {
-        case "foreground-cgevent":
-            return CGEventInputDispatcher()
-        case "wine-bridge":
-            return WineBridgeInputDispatcher(launchArguments: launchArguments)
+        case InputBackendSelection.foregroundCGEvent.rawValue:
+            return make(selection: .foregroundCGEvent, launchArguments: launchArguments)
+        case InputBackendSelection.wineBridge.rawValue:
+            return make(selection: .wineBridge, launchArguments: launchArguments)
         default:
             return UnavailableInputDispatcher(
                 error: WineBridgeError.invalidConfiguration(
                     "Unsupported --input-backend value \(selection)"))
+        }
+    }
+
+    static func make(
+        selection: InputBackendSelection,
+        launchArguments: [String]
+    ) -> any InputDispatching {
+        switch selection {
+        case .foregroundCGEvent:
+            CGEventInputDispatcher()
+        case .wineBridge:
+            WineBridgeInputDispatcher(launchArguments: launchArguments)
         }
     }
 }
@@ -240,7 +307,10 @@ final class WineBridgeInputDispatcher: InputDispatching {
             return CGEventDispatchReport(eventCount: 0, detail: "releaseAll (bridge inactive)")
         }
         let session = try ensureSession(targetWindow: targetWindow)
-        let eventCount = try send(action, through: session)
+        let eventCount = try send(
+            action,
+            targetWindow: targetWindow,
+            through: session)
         let windowHandle = String(registeredTarget?.windowHandle ?? 0, radix: 16)
         return CGEventDispatchReport(
             eventCount: eventCount,
@@ -310,38 +380,27 @@ final class WineBridgeInputDispatcher: InputDispatching {
         }
 
         let configuration = try configurationResult.get()
-        let port = try Self.reserveLoopbackPort()
-        let token = try Self.randomToken()
-        let process = Process()
-        process.executableURL = configuration.wineExecutableURL
-        process.arguments = [configuration.bridgeExecutableURL.path, "--port", String(port)]
-        var environment = ProcessInfo.processInfo.environment
-        environment["WINEPREFIX"] = configuration.winePrefixURL.path
-        environment["BETTERGI_WINE_BRIDGE_TOKEN"] = token
-        environment["WINEDEBUG"] = "-all"
-        process.environment = environment
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-        } catch {
-            throw WineBridgeError.bridgeUnavailable(error.localizedDescription)
-        }
+        let (process, connection) = try startAuthenticatedConnection(
+            configuration: configuration)
         self.process = process
-
         do {
-            let connection = try WineBridgeConnection.connect(
-                port: port,
-                timeout: configuration.startupTimeout,
-                processIsRunning: { process.isRunning })
-            _ = try connection.request(.hello)
-            _ = try connection.request(
-                .authenticate,
-                payload: Data(token.utf8))
-            let discovery = try connection.request(
-                .discoverTarget,
-                payload: Data(configuration.targetExecutableName.utf8))
-            let target = try WineBridgeTarget.decode(discovery)
+            var discoveredTarget: WineBridgeTarget?
+            var discoveryError: Error?
+            for executableName in configuration.targetExecutableNames {
+                do {
+                    let discovery = try connection.request(
+                        .discoverTarget,
+                        payload: Data(executableName.utf8))
+                    discoveredTarget = try WineBridgeTarget.decode(discovery)
+                    break
+                } catch {
+                    discoveryError = error
+                }
+            }
+            guard let target = discoveredTarget else {
+                throw discoveryError ?? WineBridgeError.bridgeUnavailable(
+                    "No supported Genshin executable was found")
+            }
             _ = try connection.request(.registerTarget, payload: try target.encoded())
             self.connection = connection
             registeredTarget = target
@@ -361,8 +420,77 @@ final class WineBridgeInputDispatcher: InputDispatching {
         }
     }
 
+    private func startAuthenticatedConnection(
+        configuration: WineBridgeConfiguration
+    ) throws -> (Process, WineBridgeConnection) {
+        var lastError: Error?
+        for attempt in 1 ... 3 {
+            let port = try Self.reserveLoopbackPort()
+            let token = try Self.randomToken()
+            let process = Process()
+            process.executableURL = configuration.wineExecutableURL
+            process.arguments = [
+                configuration.bridgeExecutableURL.path,
+                "--port",
+                String(port),
+            ]
+            var environment = ProcessInfo.processInfo.environment
+            environment["WINEPREFIX"] = configuration.winePrefixURL.path
+            environment["BETTERGI_WINE_BRIDGE_TOKEN"] = token
+            environment["WINEDEBUG"] = "-all"
+            process.environment = environment
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+
+            do {
+                try process.run()
+            } catch {
+                throw WineBridgeError.bridgeUnavailable(error.localizedDescription)
+            }
+
+            var connection: WineBridgeConnection?
+            do {
+                let connected = try WineBridgeConnection.connect(
+                    port: port,
+                    timeout: configuration.startupTimeout,
+                    processIsRunning: { process.isRunning })
+                connection = connected
+                _ = try connected.request(.hello)
+                _ = try connected.request(
+                    .authenticate,
+                    payload: Data(token.utf8))
+                return (process, connected)
+            } catch {
+                connection?.close()
+                if process.isRunning {
+                    Self.stopProcess(process)
+                }
+                lastError = error
+                guard attempt < 3, Self.isRetryableStartupError(error) else {
+                    throw error
+                }
+                NSLog(
+                    "Wine bridge startup failed before authentication; retrying port allocation (%d/3): %@",
+                    attempt,
+                    error.localizedDescription)
+            }
+        }
+        throw lastError ?? WineBridgeError.bridgeUnavailable(
+            "Wine bridge startup failed")
+    }
+
+    static func isRetryableStartupError(_ error: Error) -> Bool {
+        switch error {
+        case WineBridgeError.connectionFailed, WineBridgeError.bridgeExited:
+            true
+        default:
+            false
+        }
+    }
+
     private func send(
         _ action: InputAction,
+        targetWindow: WindowInfo,
         through connection: WineBridgeConnection
     ) throws -> Int {
         switch action {
@@ -392,34 +520,56 @@ final class WineBridgeInputDispatcher: InputDispatching {
         case let .mouseMove(point):
             try connection.request(
                 .mouseMoveAbsolute,
-                payload: Self.mouseMovePayload(x: point.x, y: point.y))
+                payload: Self.mouseMovePayload(
+                    point: Self.wineClientPoint(point, targetWindow: targetWindow)))
             return 1
         case let .mouseMoveRelative(deltaX, deltaY):
+            let delta = Self.wineRelativeDelta(
+                deltaX: deltaX,
+                deltaY: deltaY,
+                targetWindow: targetWindow)
             try connection.request(
                 .mouseMoveRelative,
-                payload: Self.mouseMovePayload(x: deltaX, y: deltaY))
+                payload: Self.mouseMovePayload(x: delta.x, y: delta.y))
             return 1
         case let .mouseButtonDown(button, point):
             try connection.request(
                 .mouseButtonDown,
-                payload: try Self.mouseButtonPayload(button, point: point, durationMs: 0))
+                payload: try Self.mouseButtonPayload(
+                    button,
+                    point: point.map {
+                        Self.wineClientPoint($0, targetWindow: targetWindow)
+                    },
+                    durationMs: 0))
             return point == nil ? 1 : 2
         case let .mouseButtonUp(button, point):
             try connection.request(
                 .mouseButtonUp,
-                payload: try Self.mouseButtonPayload(button, point: point, durationMs: 0))
+                payload: try Self.mouseButtonPayload(
+                    button,
+                    point: point.map {
+                        Self.wineClientPoint($0, targetWindow: targetWindow)
+                    },
+                    durationMs: 0))
             return point == nil ? 1 : 2
         case let .mouseClick(button, point):
             try connection.request(
                 .mouseClick,
-                payload: try Self.mouseButtonPayload(button, point: point, durationMs: 50))
+                payload: try Self.mouseButtonPayload(
+                    button,
+                    point: point.map {
+                        Self.wineClientPoint($0, targetWindow: targetWindow)
+                    },
+                    durationMs: 50))
             return point == nil ? 2 : 3
         case let .mouseButtonHold(button, durationMs, point):
             try connection.request(
                 .mouseClick,
                 payload: try Self.mouseButtonPayload(
                     button,
-                    point: point,
+                    point: point.map {
+                        Self.wineClientPoint($0, targetWindow: targetWindow)
+                    },
                     durationMs: durationMs))
             return point == nil ? 2 : 3
         case let .verticalScroll(clicks):
@@ -438,7 +588,9 @@ final class WineBridgeInputDispatcher: InputDispatching {
                 .mouseClick,
                 payload: try Self.mouseButtonPayload(
                     .left,
-                    point: point,
+                    point: point.map {
+                        Self.wineClientPoint($0, targetWindow: targetWindow)
+                    },
                     durationMs: 50))
             return point == nil ? 2 : 3
         case .releaseAll:
@@ -489,6 +641,30 @@ final class WineBridgeInputDispatcher: InputDispatching {
         payload.appendLittleEndian(Int32(clamping: Int(x.rounded())))
         payload.appendLittleEndian(Int32(clamping: Int(y.rounded())))
         return payload
+    }
+
+    static func mouseMovePayload(point: CGPoint) -> Data {
+        mouseMovePayload(x: point.x, y: point.y)
+    }
+
+    static func wineClientPoint(
+        _ quartzPoint: CGPoint,
+        targetWindow: WindowInfo
+    ) -> CGPoint {
+        let captureRect = targetWindow.captureRect
+        let scale = max(1, targetWindow.scaleFactor)
+        return CGPoint(
+            x: (quartzPoint.x - captureRect.minX) * scale,
+            y: (quartzPoint.y - captureRect.minY) * scale)
+    }
+
+    static func wineRelativeDelta(
+        deltaX: CGFloat,
+        deltaY: CGFloat,
+        targetWindow: WindowInfo
+    ) -> CGPoint {
+        let scale = max(1, targetWindow.scaleFactor)
+        return CGPoint(x: deltaX / scale, y: deltaY / scale)
     }
 
     private static func mouseButton(_ button: InputMouseButton) throws -> UInt8 {
