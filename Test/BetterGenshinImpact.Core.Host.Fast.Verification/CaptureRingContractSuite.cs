@@ -49,7 +49,8 @@ public sealed class CaptureRingContractSuite : IVerificationSuite
                 _ = Munmap(address, 160);
             }
 
-            using var capture = new SharedCaptureRingReader(layout).Read(
+            var reader = new SharedCaptureRingReader(layout);
+            using var capture = reader.Read(
                 JObject.FromObject(new
                 {
                     ringName = name,
@@ -72,6 +73,27 @@ public sealed class CaptureRingContractSuite : IVerificationSuite
                 pixel[2] == 6 &&
                 pixel[3] == 255,
                 "Core did not read the production POSIX shared-memory BGRA ring.");
+
+            var requestCount = 0;
+            using var retriedCapture = reader.ReadLatest(() =>
+            {
+                requestCount++;
+                return JObject.FromObject(new
+                {
+                    ringName = name,
+                    frameId = requestCount == 1 ? 6UL : 7UL,
+                    sequence = 2UL,
+                    slot = 1,
+                    width = 2,
+                    height = 1,
+                    stride = 8,
+                    pixelFormat = "BGRA8",
+                });
+            });
+            context.Require(
+                requestCount == 2 &&
+                retriedCapture.SrcMat.At<OpenCvSharp.Vec4b>(0, 1)[0] == 4,
+                "Core did not retry a transient capture-ring consistency race.");
 
             context.Require(
                 !File.Exists(Path.Combine(layout.RunPath, "capture-ring.bin")),

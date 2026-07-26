@@ -12,6 +12,14 @@ using System.Text.RegularExpressions;
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
 [SupportedOSPlatform("macos")]
+public sealed class CaptureRingConsistencyException : IOException
+{
+    public CaptureRingConsistencyException(string message) : base(message)
+    {
+    }
+}
+
+[SupportedOSPlatform("macos")]
 public sealed class SharedCaptureRingReader(
     RuntimeLayout layout,
     Func<DesktopRegion>? desktopRegionProvider = null,
@@ -22,6 +30,26 @@ public sealed class SharedCaptureRingReader(
     private const int ProtectRead = 0x01;
     private const int MapShared = 0x0001;
     private static readonly byte[] Magic = Encoding.ASCII.GetBytes("BGIRING1");
+
+    public GameCaptureRegion ReadLatest(
+        Func<JToken> responseProvider,
+        int maxAttempts = 3)
+    {
+        ArgumentNullException.ThrowIfNull(responseProvider);
+        if (maxAttempts <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxAttempts));
+
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return Read(responseProvider());
+            }
+            catch (CaptureRingConsistencyException) when (attempt < maxAttempts)
+            {
+            }
+        }
+    }
 
     public GameCaptureRegion Read(JToken response)
     {
@@ -103,7 +131,8 @@ public sealed class SharedCaptureRingReader(
         var sequenceBefore = view.ReadUInt64(80);
 
         if ((sequenceBefore & 1) != 0)
-            throw new InvalidDataException("Capture ring frame is still being written.");
+            throw new CaptureRingConsistencyException(
+                "Capture ring frame is still being written.");
         if (slot is < 0 or >= 2 || slotCapacity <= 0)
             throw new InvalidDataException("Capture ring slot metadata is invalid.");
         if (width <= 0 || height <= 0 || width > 16384 || height > 16384)
@@ -117,31 +146,43 @@ public sealed class SharedCaptureRingReader(
             throw new InvalidDataException("Capture frame pixel format must be BGRA8.");
         if (RequiredUInt64(response, "frameId") != frameId ||
             RequiredUInt64(response, "sequence") != sequenceBefore)
-            throw new InvalidDataException(
+            throw new CaptureRingConsistencyException(
                 "capture.request metadata does not match the ring header.");
         if (RequiredInt(response, "width") != width ||
             RequiredInt(response, "height") != height ||
             RequiredInt(response, "stride") != stride ||
             RequiredInt(response, "slot") != slot)
-            throw new InvalidDataException(
+            throw new CaptureRingConsistencyException(
                 "capture.request dimensions do not match the ring header.");
 
         var source = HeaderSize + checked(slot * slotCapacity);
-        var row = new byte[stride];
+        var frame = new byte[checked((int)dataLength)];
+        view.ReadArray(source, frame, 0, frame.Length);
+        var sequenceAfter = view.ReadUInt64(80);
+        if (sequenceAfter != sequenceBefore || (sequenceAfter & 1) != 0)
+            throw new CaptureRingConsistencyException(
+                "Capture ring frame changed while it was being read.");
+
         var mat = new Mat(height, width, MatType.CV_8UC4);
         try
         {
-            for (var y = 0; y < height; y++)
+            var destinationStride = checked((int)mat.Step());
+            if (stride == destinationStride)
             {
-                view.ReadArray(source + (long)y * stride, row, 0, stride);
-                Marshal.Copy(
-                    row, 0, mat.Data + checked((int)(y * mat.Step())),
-                    width * 4);
+                Marshal.Copy(frame, 0, mat.Data, frame.Length);
             }
-            var sequenceAfter = view.ReadUInt64(80);
-            if (sequenceAfter != sequenceBefore || (sequenceAfter & 1) != 0)
-                throw new InvalidDataException(
-                    "Capture ring frame changed while it was being read.");
+            else
+            {
+                var rowLength = checked(width * 4);
+                for (var y = 0; y < height; y++)
+                {
+                    Marshal.Copy(
+                        frame, checked(y * stride),
+                        mat.Data + checked(y * destinationStride),
+                        rowLength);
+                }
+            }
+
             var desktop = desktopRegionProvider?.Invoke() ??
                 new DesktopRegion(width, height);
             return new GameCaptureRegion(
