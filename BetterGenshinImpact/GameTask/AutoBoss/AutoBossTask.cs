@@ -1,9 +1,7 @@
 using BetterGenshinImpact.Core.BgiVision;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recorder;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
@@ -18,7 +16,6 @@ using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.Common.Reward;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Helpers;
-using BetterGenshinImpact.Service.Notification;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -41,7 +38,9 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
 {
     public string Name => "自动首领讨伐";
 
-    private readonly ILogger<AutoBossTask> _logger = App.GetLogger<AutoBossTask>();
+    private readonly ILogger<AutoBossTask> _logger;
+    private readonly IAutoBossRuntimePlatform _runtime;
+    private readonly IAutoBossPathExecutorFactory _pathExecutorFactory;
     private readonly AutoBossParam _taskParam;
     private readonly CombatScriptBag? _combatScriptBag;
     private readonly string? _jsonCombatStrategyPath;
@@ -55,11 +54,11 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
 
     private string PathingAssetFolder => Global.Absolute(@"GameTask\AutoBoss\Assets\Pathing");
 
-    private double AssetScale => TaskContext.Instance().SystemInfo.AssetScale;
+    private double AssetScale => _runtime.SystemInfo.AssetScale;
 
-    private static RecognitionObject LoadRecognitionObject(string objectName)
+    private RecognitionObject LoadRecognitionObject(string objectName)
     {
-        var captureRect = TaskContext.Instance().SystemInfo.ScaleMax1080PCaptureRect;
+        var captureRect = _runtime.SystemInfo.ScaleMax1080PCaptureRect;
         return RecognitionAssets.Get("AutoBoss", objectName, captureRect.Width, captureRect.Height);
     }
 
@@ -71,9 +70,15 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
     /// 创建自动首领讨伐任务，并根据任务参数预解析战斗策略。
     /// </summary>
     /// <param name="taskParam">自动首领讨伐参数，包含 Boss、队伍、战斗策略、讨伐次数和补充树脂开关。</param>
-    public AutoBossTask(AutoBossParam taskParam)
+    public AutoBossTask(
+        AutoBossParam taskParam,
+        IAutoBossRuntimePlatform runtime,
+        IAutoBossPathExecutorFactory pathExecutorFactory)
     {
         _taskParam = taskParam;
+        _runtime = runtime;
+        _pathExecutorFactory = pathExecutorFactory;
+        _logger = runtime.Logger;
         if (string.IsNullOrWhiteSpace(_taskParam.CombatStrategyPath))
         {
             _taskParam.SetCombatStrategyPath(_taskParam.StrategyName);
@@ -90,6 +95,17 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
         }
     }
 
+#if !BGI_PLATFORM_MAC
+    public AutoBossTask(AutoBossParam taskParam) : this(
+        taskParam,
+        new BetterGenshinImpact.Core.Runtime.Windows.WindowsAutoBossRuntimePlatform(),
+        new AutoBossPathExecutorFactory(
+            ScriptGroupExecutionServices.Current,
+            PathingPartyConfig.BuildDefault))
+    {
+    }
+#endif
+
     /// <summary>
     /// 启动自动首领讨伐任务，包含参数校验、分辨率校验、死亡重试和最终输入状态释放。
     /// </summary>
@@ -103,7 +119,7 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
         Validate();
         LogScreenResolution();
 
-        Notify.Event("AutoBoss").Success($"{Name}启动");
+        _runtime.Notify(AutoBossNotification.Start, $"{Name}启动");
         try
         {
             var retryCount = 0;
@@ -129,9 +145,9 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
         }
         finally
         {
-            Simulation.ReleaseAllKey();
-            Simulation.SendInput.Mouse.LeftButtonUp();
-            Notify.Event("AutoBoss").Success($"{Name}结束");
+            TaskControlPlatform.Current.ReleasePressedInputs();
+            TaskControlPlatform.Current.LeftButtonUp();
+            _runtime.Notify(AutoBossNotification.End, $"{Name}结束");
         }
 
         return new Dictionary<string, int>(_rewardSummary);
@@ -340,7 +356,7 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
     {
         var countRect = new Rect(resinIconRight + ScaleX(25), ScaleY(37), ScaleX(120), ScaleY(24));
         using var countRegion = capture.DeriveCrop(countRect);
-        var countText = OcrFactory.Paddle.OcrWithoutDetector(countRegion.SrcMat);
+        var countText = _runtime.OcrService.OcrWithoutDetector(countRegion.SrcMat);
         var digits = Regex.Replace(StringUtils.ConvertFullWidthNumToHalfWidth(countText), @"\D", "");
         if (digits.Length < 3)
         {
@@ -369,7 +385,7 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
             220,
             150);
         using var detailRegion = capture.DeriveCrop(detailRect);
-        var result = OcrFactory.Paddle.OcrResult(detailRegion.SrcMat);
+        var result = _runtime.OcrService.OcrResult(detailRegion.SrcMat);
         var text = string.Concat(result.Regions
             .OrderBy(region => region.Rect.Center.Y)
             .ThenBy(region => region.Rect.Center.X)
@@ -817,14 +833,14 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
     {
         using var capture = CaptureToRectArea();
         using var region = capture.DeriveCrop(rect);
-        return OcrFactory.Paddle.OcrWithoutDetector(region.SrcMat);
+        return _runtime.OcrService.OcrWithoutDetector(region.SrcMat);
     }
 
     private string RecognizeSortedOcrText(Rect rect)
     {
         using var capture = CaptureToRectArea();
         using var region = capture.DeriveCrop(rect);
-        var result = OcrFactory.Paddle.OcrResult(region.SrcMat);
+        var result = _runtime.OcrService.OcrResult(region.SrcMat);
         return string.Concat(result.Regions
             .OrderBy(r => r.Rect.Center.Y)
             .ThenBy(r => r.Rect.Center.X)
@@ -878,7 +894,7 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
     /// <exception cref="Exception">没有可用战斗脚本时抛出。</exception>
     private List<CombatCommand> FindCombatScriptAndSwitchAvatar(CombatScenes combatScenes)
     {
-        var combatCommands = _combatScriptBag.FindCombatScript(combatScenes.GetAvatars());
+        var combatCommands = _combatScriptBag!.FindCombatScript(combatScenes.GetAvatars());
         if (combatCommands.Count == 0)
         {
             throw new Exception("没有可用战斗脚本");
@@ -962,7 +978,7 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
     /// </summary>
     private AutoFightParam BuildAutoFightParamForBoss()
     {
-        var taskParam = new AutoFightParam(_taskParam.CombatStrategyPath, TaskContext.Instance().Config.AutoFightConfig)
+        var taskParam = new AutoFightParam(_taskParam.CombatStrategyPath, _runtime.AutoFightConfig)
         {
             FightFinishDetectEnabled = true,
             PickDropsAfterFightEnabled = false,
@@ -1056,16 +1072,22 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
     /// <exception cref="Exception">游戏窗口不是 16:9 时抛出。</exception>
     private void LogScreenResolution()
     {
-        var gameScreenSize = SystemControl.GetGameScreenRect(TaskContext.Instance().GameHandle);
+        ValidateScreenResolution(_runtime.SystemInfo.CaptureAreaRect, _logger);
+    }
+
+    public static void ValidateScreenResolution(
+        BetterGenshinImpact.Platform.Abstractions.BgiRect gameScreenSize,
+        ILogger logger)
+    {
         if (gameScreenSize.Width * 9 != gameScreenSize.Height * 16)
         {
-            _logger.LogError("游戏窗口分辨率不是 16:9 ！当前分辨率为 {Width}x{Height}", gameScreenSize.Width, gameScreenSize.Height);
+            logger.LogError("游戏窗口分辨率不是 16:9 ！当前分辨率为 {Width}x{Height}", gameScreenSize.Width, gameScreenSize.Height);
             throw new Exception("游戏窗口分辨率不是 16:9");
         }
 
         if (gameScreenSize.Width < 1920 || gameScreenSize.Height < 1080)
         {
-            Logger.LogWarning("游戏窗口分辨率小于 1920x1080 ！当前分辨率为 {Width}x{Height} , 小于 1920x1080 的分辨率的游戏可能无法正常使用自动首领功能 !",
+            logger.LogWarning("游戏窗口分辨率小于 1920x1080 ！当前分辨率为 {Width}x{Height} , 小于 1920x1080 的分辨率的游戏可能无法正常使用自动首领功能 !",
                 gameScreenSize.Width, gameScreenSize.Height);
         }
     }
@@ -1124,10 +1146,8 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
     /// <param name="task">已经解析好的寻路任务。</param>
     private async Task RunPathingTask(PathingTask task)
     {
-        var executor = new PathExecutor(_ct)
-        {
-            PartyConfig = BuildPathingPartyConfig()
-        };
+        var executor = _pathExecutorFactory.Create(_ct);
+        executor.PartyConfig = BuildPathingPartyConfig();
         await executor.Pathing(task);
     }
 
@@ -1135,9 +1155,14 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
     /// 构建首领路线执行时使用的队伍配置，禁止寻路过程自动切队和自动战斗。
     /// </summary>
     /// <returns>寻路任务队伍配置。</returns>
-    private static PathingPartyConfig BuildPathingPartyConfig()
+    private PathingPartyConfig BuildPathingPartyConfig()
     {
-        var partyConfig = PathingPartyConfig.BuildDefault();
+        var partyConfig = _pathExecutorFactory.CreatePartyConfig();
+        return ConfigurePathingPartyConfig(partyConfig);
+    }
+
+    public static PathingPartyConfig ConfigurePathingPartyConfig(PathingPartyConfig partyConfig)
+    {
         partyConfig.SkipPartySwitch = true;
         partyConfig.AutoFightEnabled = false;
         return partyConfig;
@@ -1220,9 +1245,9 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
                 // The main loop observes task failures; shutdown also cancels background tasks.
             }
 
-            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
-            Simulation.SendInput.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
-            Simulation.SendInput.SimulateAction(GIActions.MoveRight, KeyType.KeyUp);
+            TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+            TaskControlPlatform.Current.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
+            TaskControlPlatform.Current.SimulateAction(GIActions.MoveRight, KeyType.KeyUp);
         }
     }
 
@@ -1258,7 +1283,7 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
             {
                 if (DateTime.UtcNow - lastInteractAt >= TimeSpan.FromMilliseconds(300))
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.PickUpOrInteract);
+                    TaskControlPlatform.Current.SimulateAction(GIActions.PickUpOrInteract);
                     lastInteractAt = DateTime.UtcNow;
                 }
             }
@@ -1270,7 +1295,7 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
     private async Task AdjustRewardCameraTask(BvPage page, CancellationTokenSource navigationCts)
     {
         var ct = navigationCts.Token;
-        var captureRect = TaskContext.Instance().SystemInfo.ScaleMax1080PCaptureRect;
+        var captureRect = _runtime.SystemInfo.ScaleMax1080PCaptureRect;
         //将图标控制在屏幕中间，大约截图宽度的45%-55%之间
         var minTargetX = captureRect.Width * 0.45;
         var maxTargetX = captureRect.Width * 0.55;
@@ -1284,7 +1309,7 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
             if (boxRegions.Count < 1)
             {
                 _logger.LogWarning("{Name}：未找到征讨之花图标，调整视角重试", Name);
-                Simulation.SendInput.Mouse.MoveMouseBy(ScaleX(200), 0);
+                TaskControlPlatform.Current.MoveMouseBy(ScaleX(200), 0);
                 await Delay(250, ct);
                 continue;
             }
@@ -1293,16 +1318,16 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
 
             if (icon.Y > halfHeight)
             {
-                Simulation.SendInput.Mouse.MoveMouseBy(0, (int)Math.Round(halfHeight));
+                TaskControlPlatform.Current.MoveMouseBy(0, (int)Math.Round(halfHeight));
                 await Delay(125, ct);
-                Simulation.SendInput.Mouse.MoveMouseBy((int)Math.Round(centerX), 0);
+                TaskControlPlatform.Current.MoveMouseBy((int)Math.Round(centerX), 0);
                 await Delay(125, ct);
                 continue;
             }
 
             if (icon.X < minTargetX || icon.X > maxTargetX)
             {
-                Simulation.SendInput.Mouse.MoveMouseBy((int)Math.Round(icon.X - centerX), 0);
+                TaskControlPlatform.Current.MoveMouseBy((int)Math.Round(icon.X - centerX), 0);
             }
 
             await Delay(250, ct);
@@ -1325,22 +1350,22 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
                 {
                     if (isMovingForward)
                     {
-                        Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                        TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                         isMovingForward = false;
                     }
 
                     _logger.LogInformation("{Name}：检测到攀爬状态，尝试脱离", Name);
-                    Simulation.SendInput.SimulateAction(GIActions.Drop);
+                    TaskControlPlatform.Current.SimulateAction(GIActions.Drop);
                     await Delay(1000, ct);
-                    Simulation.SendInput.SimulateAction(GIActions.MoveLeft, KeyType.KeyDown);
+                    TaskControlPlatform.Current.SimulateAction(GIActions.MoveLeft, KeyType.KeyDown);
                     await Delay(800, ct);
-                    Simulation.SendInput.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
+                    TaskControlPlatform.Current.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
                     continue;
                 }
 
                 if (!isMovingForward)
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+                    TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
                     isMovingForward = true;
                 }
 
@@ -1348,19 +1373,19 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
                 jumpCount++;
                 if (jumpCount % 2 == 0)
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.Jump);
+                    TaskControlPlatform.Current.SimulateAction(GIActions.Jump);
                     await Delay(100, ct);
                 }
 
-                Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                 isMovingForward = false;
                 await Delay(200, ct);
             }
         }
         finally
         {
-            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
-            Simulation.SendInput.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
+            TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+            TaskControlPlatform.Current.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
         }
     }
 
@@ -1380,7 +1405,7 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
 
         await TryRecognizeRewardResult(page);
         await CloseRewardResult();
-        Notify.Event("AutoBoss").Success($"{Name}奖励领取");
+        _runtime.Notify(AutoBossNotification.Reward, $"{Name}奖励领取");
         return true;
     }
 

@@ -12,7 +12,7 @@ using BetterGenshinImpact.GameTask;
 
 namespace BetterGenshinImpact.GameTask.AutoWood.Utils;
 
-internal sealed class Login3rdParty
+internal sealed class Login3rdParty : IAutoWoodLoginSession
 {
     public enum The3rdPartyType
     {
@@ -21,6 +21,8 @@ internal sealed class Login3rdParty
     }
 
     public bool IsAvailabled => Type != The3rdPartyType.None;
+    public bool IsAvailable => IsAvailabled;
+    public bool IsBilibili => Type == The3rdPartyType.Bilibili;
     public The3rdPartyType Type { get; private set; } = default;
     private (double x1080, double y1080)? lastAgreementClickPos = null;
 
@@ -76,6 +78,8 @@ internal sealed class Login3rdParty
             ///
         }
     }
+
+    public void RefreshAvailability() => RefreshAvailabled();
 
     public void Login(CancellationToken ct)
     {

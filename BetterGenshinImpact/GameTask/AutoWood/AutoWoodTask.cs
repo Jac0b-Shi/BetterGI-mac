@@ -1,13 +1,10 @@
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.Core.Simulator;
+using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
-using BetterGenshinImpact.GameTask.AutoWood.Utils;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.Model.Area;
-using BetterGenshinImpact.Genshin.Settings;
-using BetterGenshinImpact.View.Drawable;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -18,10 +15,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using BetterGenshinImpact.Core.Simulator.Extensions;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
-using static Vanara.PInvoke.User32;
 using GC = System.GC;
 
 namespace BetterGenshinImpact.GameTask.AutoWood;
@@ -35,9 +29,13 @@ public partial class AutoWoodTask : ISoloTask
 
     private bool _first = true;
 
-    private WoodStatisticsPrinter _printer;
+    private readonly WoodStatisticsPrinter _printer;
 
-    private readonly Login3rdParty _login3rdParty;
+    private readonly IAutoWoodRuntimePlatform _runtimePlatform;
+
+    private readonly AutoWoodConfig _config;
+
+    private readonly IAutoWoodLoginSession _login3rdParty;
 
     // private VK _zKey = VK.VK_Z;
 
@@ -45,12 +43,19 @@ public partial class AutoWoodTask : ISoloTask
 
     private CancellationToken _ct;
 
-    private EnterAndExitWonderlandJob _enterAndExitWonderlandJob;
+    private readonly EnterAndExitWonderlandJob _enterAndExitWonderlandJob;
 
-    public AutoWoodTask(WoodTaskParam taskParam)
+    public AutoWoodTask(
+        WoodTaskParam taskParam,
+        AutoWoodConfig config,
+        IAutoWoodRuntimePlatform runtimePlatform)
     {
-        this._taskParam = taskParam;
-        _login3rdParty = new();
+        _taskParam = taskParam;
+        _config = config;
+        _runtimePlatform = runtimePlatform;
+        _login3rdParty = runtimePlatform.CreateLoginSession();
+        _printer = new WoodStatisticsPrinter(config);
+        _enterAndExitWonderlandJob = new EnterAndExitWonderlandJob();
     }
 
     private static RecognitionObject GetRecognitionObject(string objectName, Region region)
@@ -60,19 +65,17 @@ public partial class AutoWoodTask : ISoloTask
 
     public async Task Start(CancellationToken ct)
     {
-        _printer = new WoodStatisticsPrinter();
-        _enterAndExitWonderlandJob = new EnterAndExitWonderlandJob();
         var runTimeWatch = new Stopwatch();
         _ct = ct;
         _printer.Ct = _ct;
 
+        using var sleepPrevention = _runtimePlatform.AcquireSleepPrevention();
         try
         {
-            Kernel32.SetThreadExecutionState(Kernel32.EXECUTION_STATE.ES_CONTINUOUS | Kernel32.EXECUTION_STATE.ES_SYSTEM_REQUIRED | Kernel32.EXECUTION_STATE.ES_DISPLAY_REQUIRED);
             Logger.LogInformation("→ {Text} 设置伐木总次数：{Cnt}，设置木材数量上限：{MaxCnt}", "自动伐木，启动！", _taskParam.WoodRoundNum, _taskParam.WoodDailyMaxCount);
 
-            _login3rdParty.RefreshAvailabled();
-            if (_login3rdParty.Type == Login3rdParty.The3rdPartyType.Bilibili)
+            _login3rdParty.RefreshAvailability();
+            if (_login3rdParty.IsBilibili)
             {
                 Logger.LogInformation("自动伐木启用B服模式");
             }
@@ -92,12 +95,12 @@ public partial class AutoWoodTask : ISoloTask
             //     }
             // }
 
-            SystemControl.ActivateWindow();
+            TaskControlPlatform.Current.EnsureGameActive();
             // 伐木开始计时
             runTimeWatch.Start();
             for (var i = 0; i < _taskParam.WoodRoundNum; i++)
             {
-                if (TaskContext.Instance().Config.AutoWoodConfig.WoodCountOcrEnabled)
+                if (_config.WoodCountOcrEnabled)
                 {
                     if (_printer.WoodStatisticsAlwaysEmpty())
                     {
@@ -119,17 +122,13 @@ public partial class AutoWoodTask : ISoloTask
                 }
 
                 await Felling(_taskParam, i + 1 == _taskParam.WoodRoundNum);
-                VisionContext.Instance().DrawContent.ClearAll();
+                BetterGenshinImpact.Core.Recognition.OverlayDrawPlatform.Current.ClearAll();
                 Sleep(500, _ct);
             }
-
-            return;
         }
         finally
         {
-            // 伐木结束计时
             runTimeWatch.Stop();
-            Kernel32.SetThreadExecutionState(Kernel32.EXECUTION_STATE.ES_CONTINUOUS);
             var elapsedTime = runTimeWatch.Elapsed;
             Logger.LogInformation(@"本次伐木总耗时：{Time:hh\:mm\:ss}", elapsedTime);
         }
@@ -137,6 +136,13 @@ public partial class AutoWoodTask : ISoloTask
 
     private partial class WoodStatisticsPrinter
     {
+        private readonly AutoWoodConfig _config;
+
+        public WoodStatisticsPrinter(AutoWoodConfig config)
+        {
+            _config = config;
+        }
+
         public bool ReachedWoodMaxCount;
         public int NothingCount;
         public readonly ConcurrentDictionary<string, int> WoodTotalDict = new();
@@ -173,7 +179,7 @@ public partial class AutoWoodTask : ISoloTask
                 Logger.LogWarning("未能识别到伐木的统计数据");
                 if (_woodMetricsDict.Count == 0)
                 {
-                    TaskContext.Instance().Config.AutoWoodConfig.WoodCountOcrEnabled = false;
+                    _config.WoodCountOcrEnabled = false;
                     throw new NormalEndException("首次伐木就未识别到木材数据，已经自动关闭【OCR识别并累计木材数】的功能，请重新启动【自动伐木】功能！");
                 }
 
@@ -241,7 +247,7 @@ public partial class AutoWoodTask : ISoloTask
                 (int)(300 * assetScale),
                 (int)(250 * assetScale));
             using var woodCountRegion = gameCaptureRegion.DeriveCrop(woodCountRect);
-            return OcrFactory.Paddle.Ocr(woodCountRegion.SrcMat);
+            return ImageRegionOcrPlatform.Current.Ocr(woodCountRegion.SrcMat);
         }
 
         private bool HasDetectedWoodText(string recognizedText)
@@ -406,13 +412,13 @@ public partial class AutoWoodTask : ISoloTask
         }
 
         // 打印伐木的统计数据（可选）
-        if (TaskContext.Instance().Config.AutoWoodConfig.WoodCountOcrEnabled)
+        if (_config.WoodCountOcrEnabled)
         {
             _printer.PrintWoodStatistics(taskParam);
             if (_printer.WoodStatisticsAlwaysEmpty() || _printer.ReachedWoodMaxCount) return;
         }
 
-        if (TaskContext.Instance().Config.AutoWoodConfig.UseWonderlandRefresh)
+        if (_config.UseWonderlandRefresh)
         {
             // 使用进出千星奇域刷新CD
             await _enterAndExitWonderlandJob.Start(_ct);
@@ -433,7 +439,7 @@ public partial class AutoWoodTask : ISoloTask
     private void PressZ(WoodTaskParam taskParam)
     {
         // IMPORTANT: MUST try focus before press Z
-        SystemControl.FocusWindow(TaskContext.Instance().GameHandle);
+        TaskControlPlatform.Current.EnsureGameActive();
 
         if (_first)
         {
@@ -445,14 +451,14 @@ public partial class AutoWoodTask : ISoloTask
                 throw new NormalEndException("请先装备小道具「王树瑞佑」！如果已经装备仍旧出现此提示，请重新仔细阅读文档中的《快速上手》！");
 #else
                 System.Threading.Thread.Sleep(2000);
-                Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget);
+                TaskControlPlatform.Current.SimulateAction(GIActions.QuickUseGadget);
                 Debug.WriteLine("[AutoWood] Z");
                 _first = false;
 #endif
             }
             else
             {
-                Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget);
+                TaskControlPlatform.Current.SimulateAction(GIActions.QuickUseGadget);
                 Debug.WriteLine("[AutoWood] Z");
                 _first = false;
             }
@@ -473,25 +479,20 @@ public partial class AutoWoodTask : ISoloTask
 #endif
                 }
 
-                Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget);
+                TaskControlPlatform.Current.SimulateAction(GIActions.QuickUseGadget);
                 Debug.WriteLine("[AutoWood] Z");
                 Sleep(500, _ct);
             }, TimeSpan.FromSeconds(1), 120);
         }
 
         Sleep(300, _ct);
-        Sleep(TaskContext.Instance().Config.AutoWoodConfig.AfterZSleepDelay, _ct);
+        Sleep(_config.AfterZSleepDelay, _ct);
     }
 
     private void PressEsc(WoodTaskParam taskParam)
     {
-        SystemControl.FocusWindow(TaskContext.Instance().GameHandle);
-        Simulation.SendInput.Keyboard.KeyPress(VK.VK_ESCAPE);
-        // if (TaskContext.Instance().Config.AutoWoodConfig.PressTwoEscEnabled)
-        // {
-        //     Sleep(1500, _cts);
-        //     Simulation.SendInput.Keyboard.KeyPress(VK.VK_ESCAPE);
-        // }
+        TaskControlPlatform.Current.EnsureGameActive();
+        TaskControlPlatform.Current.PressEscape();
         Debug.WriteLine("[AutoWood] Esc");
         Sleep(800, _ct);
         // 确认在菜单界面
@@ -504,7 +505,7 @@ public partial class AutoWoodTask : ISoloTask
                 using var ra = contentRegion.Find(GetRecognitionObject("MenuBag", contentRegion));
                 if (ra.IsEmpty())
                 {
-                    Simulation.SendInput.Keyboard.KeyPress(VK.VK_ESCAPE);
+                    TaskControlPlatform.Current.PressEscape();
                     throw new RetryException("未检测到弹出菜单");
                 }
             }, TimeSpan.FromSeconds(1.2), 5);
@@ -534,7 +535,7 @@ public partial class AutoWoodTask : ISoloTask
 
     private void EnterGame(WoodTaskParam taskParam)
     {
-        if (_login3rdParty.IsAvailabled)
+        if (_login3rdParty.IsAvailable)
         {
             Sleep(1, _ct);
             _login3rdParty.Login(_ct);

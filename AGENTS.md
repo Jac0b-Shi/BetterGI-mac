@@ -85,6 +85,29 @@
 dotnet build BetterGenshinImpact.sln -c Debug
 ```
 
+## Implementation and testing priorities
+
+Prioritize functional migration and production implementation over expanding the test suite.
+
+For BetterGI-mac:
+
+- Spend the majority of effort and token budget on completing real functionality, platform adaptation, and end-to-end integration.
+- Add only the minimum tests necessary to protect critical behavior, regression-prone logic, public contracts, and Swift/Rust FFI boundaries.
+- Do not add tests merely to increase coverage.
+- Avoid broad test refactors, exhaustive edge-case matrices, duplicated assertions, snapshot-heavy testing, or test infrastructure work unless they are required to unblock implementation.
+- When implementation and testing compete for time or context, complete the functional path first, then add targeted tests for the highest-risk parts.
+- Prefer a small number of high-value integration or behavioral tests over a large number of low-value unit tests.
+- Do not treat missing tests as the primary task unless the user explicitly requests test work.
+
+## BetterGI-mac verification workflow
+
+- Trigger settings, independent-task settings and scheduler editing: run `scripts/verify-core-fast.sh <suite>`.
+- AutoPathing executor, handlers or runtime route data: run `scripts/verify-pathing-library.sh`.
+- Architecture and production-fallback checks: run `scripts/verify-core-static.sh`.
+- Recognition, model, native dependency or phase-completion changes: run `scripts/verify-core-full.sh`.
+- Build dependencies explicitly, then run verifiers with `--no-build`; do not use an implicit `dotnet run` build in the edit loop.
+- Add new pure contracts to the Fast verifier and new route closure checks to the Pathing verifier. Do not expand the legacy 4,000-line integration programs for behavior that fits an isolated project.
+
 ## Code Review Rules
 
 ### Output language

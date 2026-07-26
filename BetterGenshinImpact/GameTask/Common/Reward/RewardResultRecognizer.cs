@@ -1,6 +1,5 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition.OCR;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.Model.Area;
@@ -26,7 +25,7 @@ public class RewardResultRecognizer
     public static RewardResultRecognizer Instance => _instance.Value;
 
     private readonly ItemRecognizer _itemRecognizer;
-    private readonly ILogger<RewardResultRecognizer> _logger = App.GetLogger<RewardResultRecognizer>();
+    private readonly ILogger<RewardResultRecognizer> _logger = RewardResultRuntimePlatform.Current.Logger;
     private static readonly Scalar RewardMaskLower = new(0, 0, 190);
     private static readonly Scalar RewardMaskUpper = new(179, 20, 249);
 
@@ -186,8 +185,7 @@ public class RewardResultRecognizer
     /// <param name="cardRects">奖励卡片矩形。</param>
     private void SaveRewardDebugImage(int page, Mat screenMat, List<Rect> cardRects)
     {
-        var commonConfig = TaskContext.Instance().Config.CommonConfig;
-        if (!commonConfig.ScreenshotEnabled || !commonConfig.RewardRecognitionScreenshotEnabled)
+        if (!RewardResultRuntimePlatform.Current.SaveDebugScreenshots)
         {
             return;
         }
@@ -276,7 +274,7 @@ public class RewardResultRecognizer
         GameCaptureRegion.GameRegion1080PPosMove(startX, y);
         Thread.Sleep(100);
 
-        Simulation.SendInput.Mouse.LeftButtonDown();
+        TaskControlPlatform.Current.LeftButtonDown();
         Thread.Sleep(100);
 
         int steps = 20;
@@ -287,7 +285,7 @@ public class RewardResultRecognizer
             Thread.Sleep(30);
         }
 
-        Simulation.SendInput.Mouse.LeftButtonUp();
+        TaskControlPlatform.Current.LeftButtonUp();
 
         // 等待末页不足10个奖励时的回退动画完成。
         Thread.Sleep(1200);
@@ -323,7 +321,7 @@ public class RewardResultRecognizer
     /// <param name="ocrService">OCR 服务，为空时使用 Paddle OCR。</param>
     private List<RecognizedReward> RecognizeRewards(Mat bandMat, List<Rect> cardRects, IOcrService? ocrService = null)
     {
-        ocrService ??= OcrFactory.Paddle;
+        ocrService ??= RewardResultRuntimePlatform.Current.OcrService;
 
         if (cardRects.Count == 0)
         {

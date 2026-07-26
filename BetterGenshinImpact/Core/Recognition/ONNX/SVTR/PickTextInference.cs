@@ -1,4 +1,5 @@
 using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Abstractions.Runtime;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using OpenCvSharp;
@@ -9,7 +10,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using BetterGenshinImpact.Core.Recognition.OCR.Engine;
-using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 
 namespace BetterGenshinImpact.Core.Recognition.ONNX.SVTR;
@@ -20,19 +20,39 @@ namespace BetterGenshinImpact.Core.Recognition.ONNX.SVTR;
 /// </summary>
 public class PickTextInference : ITextInference
 {
+    /// <summary>
+    /// Manifest-registered Yap dictionary relative path.
+    /// Must match the sidecar path in model-artifacts.manifest.json.
+    /// </summary>
+    public const string YapDictionaryRelativePath =
+        "Assets/Model/Yap/index_2_word.json";
+
     private readonly InferenceSession _session;
     private readonly Dictionary<int, string> _wordDictionary;
 
-    public PickTextInference()
+#if BGI_PLATFORM_MAC
+    public PickTextInference(BgiOnnxFactory onnxFactory, IOcrResourcePathResolver resourceResolver)
     {
-        _session = App.ServiceProvider.GetRequiredService<BgiOnnxFactory>().CreateInferenceSession(BgiOnnxModel.YapModelTraining,true);
+        ArgumentNullException.ThrowIfNull(onnxFactory);
+        ArgumentNullException.ThrowIfNull(resourceResolver);
+        _session = onnxFactory.CreateInferenceSession(BgiOnnxModel.YapModelTraining, true);
+        _wordDictionary = LoadWordDictionary(resourceResolver.ResolveSidecarPath(YapDictionaryRelativePath));
+    }
+#else
+    public PickTextInference(BgiOnnxFactory onnxFactory)
+    {
+        ArgumentNullException.ThrowIfNull(onnxFactory);
+        _session = onnxFactory.CreateInferenceSession(BgiOnnxModel.YapModelTraining, true);
+        _wordDictionary = LoadWordDictionary(Global.Absolute(@"Assets\Model\Yap\index_2_word.json"));
+    }
+#endif
 
-        var wordJsonPath = Global.Absolute(@"Assets\Model\Yap\index_2_word.json");
+    private static Dictionary<int, string> LoadWordDictionary(string wordJsonPath)
+    {
         if (!File.Exists(wordJsonPath)) throw new FileNotFoundException("Yap字典文件不存在", wordJsonPath);
-
         var json = File.ReadAllText(wordJsonPath);
-        _wordDictionary = JsonConvert.DeserializeObject<Dictionary<int, string>>(json) ??
-                          throw new Exception("index_2_word.json deserialize failed");
+        return JsonConvert.DeserializeObject<Dictionary<int, string>>(json) ??
+                          throw new InvalidDataException("index_2_word.json deserialize failed");
     }
 
     public string Inference(Mat mat)

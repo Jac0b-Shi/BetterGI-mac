@@ -1,7 +1,5 @@
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
-using Fischless.WindowsInput;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -18,7 +16,6 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
         private readonly GridParams @params;
         private readonly CancellationToken ct;
         private readonly ILogger logger;
-        private readonly InputSimulator input = Simulation.SendInput;
         internal Action? OnBeforeScroll { get; set; }
 
         /// <summary>
@@ -38,7 +35,7 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
         }
         public IAsyncEnumerator<Tuple<ImageRegion, Rect>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
         {
-            return new GridEnumerator(this, @params.Roi, @params.Columns, new GridScroller(@params, logger, input, ct), ct);
+            return new GridEnumerator(this, @params.Roi, @params.Columns, new GridScroller(@params, logger, ct), ct);
         }
 
         public class GridEnumerator : IAsyncEnumerator<Tuple<ImageRegion, Rect>>

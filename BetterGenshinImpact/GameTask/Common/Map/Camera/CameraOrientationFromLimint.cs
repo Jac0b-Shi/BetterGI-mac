@@ -80,10 +80,10 @@ public class CameraOrientationFromLimint
 
             Cv2.Divide(cmax - cmin - cmin - bgrChannels[0] + bgrChannels[1] + bgrChannels[2], cmax - cmin, hueMat, 60, MatType.CV_32F);
 
-            Cv2.Compare(cmax, cmin, mask, CmpType.EQ);
+            Cv2.Compare(cmax, cmin, mask, CmpTypes.EQ);
             hueMat.SetTo(-1, mask);
 
-            Cv2.Compare(bgrChannels[0], bgrChannels[1], mask, CmpType.GT);
+            Cv2.Compare(bgrChannels[0], bgrChannels[1], mask, CmpTypes.GT);
             Cv2.Subtract(360, hueMat, hueMat, mask, MatType.CV_32F);
             return hueMat;
         }

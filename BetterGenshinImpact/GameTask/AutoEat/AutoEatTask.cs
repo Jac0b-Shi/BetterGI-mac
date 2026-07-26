@@ -1,5 +1,5 @@
 using BetterGenshinImpact.Core.Recognition.OCR;
-using BetterGenshinImpact.Core.Simulator;
+using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
@@ -10,8 +10,6 @@ using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Model.GameUI;
 using BetterGenshinImpact.Helpers;
-using BetterGenshinImpact.View.Drawable;
-using Fischless.WindowsInput;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
 using OpenCvSharp;
@@ -27,20 +25,45 @@ namespace BetterGenshinImpact.GameTask.AutoEat;
 /// 自动吃药任务
 /// 检测红血自动使用便携营养袋
 /// </summary>
-public class AutoEatTask : BaseIndependentTask, ISoloTask<int?>
+public class AutoEatTask : ISoloTask<int?>
 {
     public string Name => "自动吃药";
 
     private readonly AutoEatParam _taskParam;
     private readonly AutoEatConfig _config;
-    private readonly ILogger _logger = App.GetLogger<AutoEatTask>();
-    private readonly InputSimulator _input = Simulation.SendInput;
+    private readonly ISystemInfo _systemInfo;
+    private readonly IOcrService _ocrService;
+    private readonly IAutoEatRuntimePlatform _runtimePlatform;
+    private readonly ILogger<AutoEatTask> _logger;
     private CancellationToken _ct;
 
+#if !BGI_PLATFORM_MAC
     public AutoEatTask(AutoEatParam taskParam)
+        : this(
+            taskParam,
+            TaskContext.Instance().Config.AutoEatConfig,
+            TaskContext.Instance().SystemInfo,
+            OcrFactory.Paddle,
+            AutoEatRuntimePlatform.Current,
+            App.GetLogger<AutoEatTask>())
     {
-        _taskParam = taskParam;
-        _config = TaskContext.Instance().Config.AutoEatConfig;
+    }
+#endif
+
+    public AutoEatTask(
+        AutoEatParam taskParam,
+        AutoEatConfig config,
+        ISystemInfo systemInfo,
+        IOcrService ocrService,
+        IAutoEatRuntimePlatform runtimePlatform,
+        ILogger<AutoEatTask> logger)
+    {
+        _taskParam = taskParam ?? throw new ArgumentNullException(nameof(taskParam));
+        _config = config ?? throw new ArgumentNullException(nameof(config));
+        _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
+        _ocrService = ocrService ?? throw new ArgumentNullException(nameof(ocrService));
+        _runtimePlatform = runtimePlatform ?? throw new ArgumentNullException(nameof(runtimePlatform));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     async Task ISoloTask.Start(CancellationToken ct)
@@ -83,13 +106,13 @@ public class AutoEatTask : BaseIndependentTask, ISoloTask<int?>
         {
             _logger.LogInformation("打开背包寻找{name}……", _taskParam.FoodName);
             await new ReturnMainUiTask().Start(ct);
-            await AutoArtifactSalvageTask.OpenInventory(GridScreenName.Food, _input, _logger, _ct);
+            await AutoArtifactSalvageTask.OpenInventory(GridScreenName.Food, _logger, _ct);
 
-            using InferenceSession session = GridIconsAccuracyTestTask.LoadModel(out Dictionary<string, float[]> prototypes);
+            using InferenceSession session = GridIconClassifier.LoadModel(out Dictionary<string, float[]> prototypes);
 
             GridScreen gridScreen = new GridScreen(GridParams.Templates[GridScreenName.Food], _logger, _ct);
             gridScreen.OnAfterTurnToNewPage += GridScreen.DrawItemsAfterTurnToNewPage;
-            gridScreen.OnBeforeScroll += () => VisionContext.Instance().DrawContent.ClearAll();
+            gridScreen.OnBeforeScroll += () => OverlayDrawPlatform.Current.ClearAll();
             int? count = null;
             try
             {
@@ -97,15 +120,15 @@ public class AutoEatTask : BaseIndependentTask, ISoloTask<int?>
                 {
                     using ImageRegion itemRegion = pageRegion.DeriveCrop(itemRect);
                     using Mat icon = itemRegion.SrcMat.GetGridIcon();
-                    var result = GridIconsAccuracyTestTask.Infer(icon, session, prototypes);
-                    string predName = result.Item1;
+                    var result = GridIconClassifier.Infer(icon, session, prototypes);
+                    string? predName = result.Item1;
                     if (predName == _taskParam.FoodName)
                     {
                         // 点击item
                         itemRegion.Click();
 
                         #region 识别数量
-                        string ocrText = itemRegion.SrcMat.GetGridItemIconText(OcrFactory.Paddle);
+                        string ocrText = itemRegion.SrcMat.GetGridItemIconText(_ocrService);
                         string numStr = StringUtils.ConvertFullWidthNumToHalfWidth(ocrText);
                         if (int.TryParse(numStr, out int num))
                         {
@@ -133,7 +156,7 @@ public class AutoEatTask : BaseIndependentTask, ISoloTask<int?>
             }
             finally
             {
-                VisionContext.Instance().DrawContent.ClearAll();
+                OverlayDrawPlatform.Current.ClearAll();
             }
             if (count == null)
             {
@@ -171,7 +194,7 @@ public class AutoEatTask : BaseIndependentTask, ISoloTask<int?>
                     if ((now - lastEatTime).TotalMilliseconds >= _config.EatInterval)
                     {
                         // 模拟按键 "Z" 使用便携营养袋
-                        Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget);
+                        _runtimePlatform.SimulateAction(GIActions.QuickUseGadget);
                         lastEatTime = now;
 
                         _logger.LogInformation("检测到红血，自动吃药");
@@ -203,9 +226,9 @@ public class AutoEatTask : BaseIndependentTask, ISoloTask<int?>
             // 获取图像
             using var ra = CaptureToRectArea();
             // 识别道具图标下是否是数字
-            var s = TaskContext.Instance().SystemInfo.AssetScale;
+            var s = _systemInfo.AssetScale;
             var countArea = ra.DeriveCrop(1800 * s, 845 * s, 40 * s, 20 * s);
-            var count = OcrFactory.Paddle.OcrWithoutDetector(countArea.CacheGreyMat);
+            var count = _ocrService.OcrWithoutDetector(countArea.CacheGreyMat);
             return int.TryParse(count, out _);
         }
         catch (Exception e)

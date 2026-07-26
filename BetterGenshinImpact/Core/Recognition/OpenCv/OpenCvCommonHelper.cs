@@ -54,7 +54,7 @@ public class OpenCvCommonHelper
         Debug.Assert(mat.Depth() == MatType.CV_8U);
         Debug.Assert(mat.Channels() == 1);
         using var dst = new Mat();
-        Cv2.Compare(mat, color, dst, CmpType.EQ);
+        Cv2.Compare(mat, color, dst, CmpTypes.EQ);
         return Cv2.CountNonZero(dst);
     }
 

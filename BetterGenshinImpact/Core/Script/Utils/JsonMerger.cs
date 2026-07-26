@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using BetterGenshinImpact.GameTask.Common;
+using BetterGenshinImpact.Service;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 
@@ -10,11 +10,11 @@ namespace BetterGenshinImpact.Core.Script.Utils;
 
 public class JsonMerger
 {
-    private static string ControlFileName = "control.json5";
+    private const string ControlFileName = "control.json5";
     private class CacheItem
     {
         public DateTime LastWriteTimeUtc { get; set; }
-        public JObject? JObject { get; set; }
+        public required JObject JObject { get; set; }
     }
 
     // 用于存储多个文件的缓存
@@ -28,7 +28,7 @@ public class JsonMerger
     public static JObject? GetCtrJObject(string path)
     {
 
-;       string filePath = path;
+        string filePath = path;
         
         if (File.Exists(path))
         {
@@ -50,7 +50,7 @@ public class JsonMerger
             if (cacheItem.LastWriteTimeUtc == lastWriteTimeUtc)
             {
                 // 文件未变更，直接返回缓存的 JObject
-                return GetRefFile(cacheItem.JObject,filePath);;
+                return GetRefFile(cacheItem.JObject, filePath);
             }
         }
         string jsonText = File.ReadAllText(filePath);
@@ -69,7 +69,9 @@ public class JsonMerger
         string refValue = jObject["ref"]?.ToString() ?? string.Empty;
         if (refValue!=string.Empty)
         {
-            string newfile=Path.Combine(Path.GetDirectoryName(filePath),refValue);
+            var directory = Path.GetDirectoryName(filePath)
+                ?? throw new InvalidDataException($"控制文件缺少父目录：{filePath}");
+            string newfile = Path.Combine(directory, refValue);
             return GetCtrJObject(newfile);
         }
         //TaskControl.Logger.LogInformation($"路径追踪匹配控制文件：{filePath}");
@@ -86,7 +88,8 @@ public class JsonMerger
          var json = File.ReadAllText(pathingPath);
          try
          {
-             string dirpath = Path.GetDirectoryName(pathingPath);
+             string dirpath = Path.GetDirectoryName(pathingPath)
+                 ?? throw new InvalidDataException($"追踪文件缺少父目录：{pathingPath}");
              //第一级别肯定是文件
              string  ctrFileName = Path.Combine(dirpath, ControlFileName);
              if (!File.Exists(ctrFileName))
@@ -103,7 +106,7 @@ public class JsonMerger
          }
          catch (Exception e)
          {
-             TaskControl.Logger.LogError($"加载追踪控制文件或合并异常，请检查{pathingPath} 所在目录：{e.Message}");
+             ScriptServicePlatform.Current.Logger.LogError(e, "加载追踪控制文件或合并异常，请检查{Path}所在目录", pathingPath);
          }
          
          return json;
@@ -120,21 +123,21 @@ public class JsonMerger
     public static string MergeJson( JObject control,JObject original, string name)
     {
         // 1. 应用全局覆盖规则
-        JToken globalCover = control["global_cover"];
+        JToken? globalCover = control["global_cover"];
         if (globalCover != null && globalCover.Type == JTokenType.Object)
         {
             MergeObject((JObject)globalCover, original, new List<string>());
         }
 
         // 2. 查找匹配名称的覆盖规则
-        JArray jsonList = control["json_list"] as JArray;
+        JArray? jsonList = control["json_list"] as JArray;
         if (jsonList != null)
         {
             foreach (JToken item in jsonList)
             {
                 if (item["name"]?.ToString() == name)
                 {
-                    JToken cover = item["cover"];
+                    JToken? cover = item["cover"];
                     if (cover != null && cover.Type == JTokenType.Object)
                     {
                         MergeObject((JObject)cover, original, new List<string>());
@@ -162,7 +165,7 @@ public class JsonMerger
             if (skipKeys.Contains(key)) continue;
             
             JToken controlValue = prop.Value;
-            JToken targetValue = target[key];
+            JToken? targetValue = target[key];
 
             // 处理对象类型
             if (controlValue.Type == JTokenType.Object)
@@ -193,7 +196,7 @@ public class JsonMerger
     private static void ProcessSpecialInstructions(JObject control, JObject target, HashSet<string> skipKeys)
     {
         // 处理_obj_cover指令（对象覆盖）
-        JToken objOver = control["_obj_cover"];
+        JToken? objOver = control["_obj_cover"];
         if (objOver != null && objOver.Type == JTokenType.Array)
         {
             foreach (JToken item in (JArray)objOver)
@@ -201,7 +204,7 @@ public class JsonMerger
                 string propName = item.ToString();
                 if (control[propName] != null)
                 {
-                    target[propName] = control[propName].DeepClone();
+                    target[propName] = control[propName]!.DeepClone();
                     skipKeys.Add(propName);
                 }
             }
@@ -209,17 +212,17 @@ public class JsonMerger
         }
 
         // 处理_arr_add指令（数组合并）
-        JToken arrAdd = control["_arr_add"];
+        JToken? arrAdd = control["_arr_add"];
         if (arrAdd != null && arrAdd.Type == JTokenType.Array)
         {
             foreach (JToken item in (JArray)arrAdd)
             {
                 string propName = item.ToString();
-                JToken controlArray = control[propName];
+                JToken? controlArray = control[propName];
                 
                 if (controlArray != null && controlArray.Type == JTokenType.Array)
                 {
-                    JToken targetArray = target[propName];
+                    JToken? targetArray = target[propName];
                     if (targetArray != null && targetArray.Type == JTokenType.Array)
                     {
                         target[propName] = MergeArrays((JArray)controlArray, (JArray)targetArray);

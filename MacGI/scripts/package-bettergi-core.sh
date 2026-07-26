@@ -1,0 +1,64 @@
+#!/bin/zsh
+set -euo pipefail
+
+script_dir=${0:A:h}
+macgi_root=${script_dir:h}
+bettergi_root=${BETTERGI_SOURCE_ROOT:-${macgi_root:h}}
+project=${bettergi_root}/BetterGenshinImpact.Core.Host/BetterGenshinImpact.Core.Host.csproj
+configuration=${CONFIGURATION:-Release}
+rid=${BETTERGI_CORE_RID:-osx-arm64}
+publish_dir=${BUILT_PRODUCTS_DIR:-${macgi_root}/.build}/BetterGICore
+codesign_timestamp=${MACGI_CODESIGN_TIMESTAMP:-0}
+
+if [[ ! -f ${project} ]]; then
+  print -u2 "BetterGI Core Host project not found: ${project}"
+  exit 2
+fi
+
+rm -rf ${publish_dir}
+dotnet publish ${project} \
+  -c ${configuration} \
+  -r ${rid} \
+  --self-contained true \
+  -p:PublishSingleFile=false \
+  -o ${publish_dir}
+
+host=${publish_dir}/BetterGenshinImpact.Core.Host
+if [[ ! -x ${host} ]]; then
+  print -u2 "Published Core Host executable is missing: ${host}"
+  exit 3
+fi
+
+${host} --dependency-smoke
+
+if [[ -n ${TARGET_BUILD_DIR:-} && -n ${WRAPPER_NAME:-} ]]; then
+  destination=${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources/BetterGICore
+  rm -rf ${destination}
+  mkdir -p ${destination:h}
+  cp -R ${publish_dir} ${destination}
+  if [[ -n ${EXPANDED_CODE_SIGN_IDENTITY:-} ]]; then
+    sign_options=(--force --sign ${EXPANDED_CODE_SIGN_IDENTITY})
+    if [[ ${codesign_timestamp} == 1 ]]; then
+      sign_options+=(--timestamp)
+    else
+      sign_options+=(--timestamp=none)
+    fi
+    if [[ ${EXPANDED_CODE_SIGN_IDENTITY} != "-" ]]; then
+      sign_options+=(--options runtime)
+    fi
+    while IFS= read -r binary; do
+      if file ${binary} | grep -q 'Mach-O'; then
+        if [[ ${binary} == ${destination}/BetterGenshinImpact.Core.Host &&
+              ${EXPANDED_CODE_SIGN_IDENTITY} != "-" ]]; then
+          codesign ${sign_options[@]} --entitlements ${script_dir}/BetterGICore.entitlements ${binary}
+        else
+          codesign ${sign_options[@]} ${binary}
+        fi
+        codesign --verify --strict --verbose=2 ${binary}
+      fi
+    done < <(find ${destination} -type f | sort)
+    ${destination}/BetterGenshinImpact.Core.Host --dependency-smoke
+  fi
+fi
+
+print "BetterGI Core Host published at ${publish_dir}"

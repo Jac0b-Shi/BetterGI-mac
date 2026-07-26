@@ -47,10 +47,10 @@ internal sealed class AvatarGridIconRecognizer : IDisposable
     /// <summary>
     /// 初始化头像 ONNX 模型会话并加载角色头像原型表。
     /// </summary>
-    public AvatarGridIconRecognizer()
+    public AvatarGridIconRecognizer(BgiOnnxFactory onnxFactory)
     {
-        _session = App.ServiceProvider.GetRequiredService<BgiOnnxFactory>()
-            .CreateInferenceSession(BgiOnnxModel.AvatarGridIcon);
+        ArgumentNullException.ThrowIfNull(onnxFactory);
+        _session = onnxFactory.CreateInferenceSession(BgiOnnxModel.AvatarGridIcon);
         _prototypes = LoadPrototypes();
     }
 

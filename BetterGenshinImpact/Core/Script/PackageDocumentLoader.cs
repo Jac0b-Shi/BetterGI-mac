@@ -29,7 +29,7 @@ namespace BetterGenshinImpact.Core.Script
                 if (!Path.IsPathRooted(stripped))
                 {
                     var fullPath = Path.GetFullPath(Path.Combine(_scriptRootPath, stripped));
-                    if (fullPath.StartsWith(_scriptRootPath, StringComparison.OrdinalIgnoreCase)
+                    if (IsWithinScriptRoot(fullPath)
                         && File.Exists(fullPath))
                     {
                         targetPath = fullPath;
@@ -171,11 +171,20 @@ namespace BetterGenshinImpact.Core.Script
             try
             {
                 var normalized = Path.GetFullPath(path);
+                if (!IsWithinScriptRoot(normalized)) return null;
                 if (File.Exists(normalized)) return normalized;
                 if (File.Exists(normalized + ".js")) return normalized + ".js";
             }
             catch { }
             return null;
+        }
+
+        private bool IsWithinScriptRoot(string candidatePath)
+        {
+            var root = _scriptRootPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            var candidate = Path.GetFullPath(candidatePath);
+            return candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsImageFile(string path)

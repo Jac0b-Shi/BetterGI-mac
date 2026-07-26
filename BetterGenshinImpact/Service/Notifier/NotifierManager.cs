@@ -1,4 +1,5 @@
-﻿using BetterGenshinImpact.Service.Notifier.Interface;
+﻿using System;
+using BetterGenshinImpact.Service.Notifier.Interface;
 using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,11 +11,16 @@ namespace BetterGenshinImpact.Service.Notifier;
 public class NotifierManager
 {
     private readonly List<INotifier> _notifiers = [];
+    private readonly ILogger _logger;
 
-    public static ILogger Logger { get; } = App.GetLogger<NotifierManager>();
-
-    public NotifierManager()
+    public NotifierManager(ILogger<NotifierManager> logger)
+        : this((ILogger)logger)
     {
+    }
+
+    public NotifierManager(ILogger logger)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public void RegisterNotifier(INotifier notifier)
@@ -24,11 +30,22 @@ public class NotifierManager
 
     public void RemoveNotifier<T>() where T : INotifier
     {
-        _notifiers.RemoveAll(o => o is T);
+        var matches = _notifiers.Where(notifier => notifier is T).ToArray();
+        foreach (var notifier in matches)
+        {
+            _notifiers.Remove(notifier);
+            if (notifier is IDisposable disposable)
+                disposable.Dispose();
+        }
     }
 
     public void RemoveAllNotifiers()
     {
+        foreach (var notifier in _notifiers)
+        {
+            if (notifier is IDisposable disposable)
+                disposable.Dispose();
+        }
         _notifiers.Clear();
     }
 
@@ -45,7 +62,10 @@ public class NotifierManager
         }
         catch (System.Exception ex)
         {
-            Logger.LogWarning("{name} 通知发送失败: {ex}", notifier.Name, ex.Message);
+            _logger.LogWarning(
+                "{name} 通知发送失败: {ex}",
+                notifier.Name,
+                ex.Message);
         }
     }
 

@@ -2,20 +2,32 @@
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Config;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Model;
 using BetterGenshinImpact.Helpers;
-using BetterGenshinImpact.View.Windows;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Windows.Forms;
 
 namespace BetterGenshinImpact.GameTask.AutoGeniusInvokation;
 
 public class ScriptParser
 {
-    private static readonly ILogger<ScriptParser> MyLogger = App.GetLogger<ScriptParser>();
+    private readonly IAutoGeniusInvokationRuntimePlatform _platform;
+    private readonly GeniusInvokationControl _control;
+    private readonly AutoGeniusInvokationConfig _config;
+    private readonly ILogger<ScriptParser> _logger;
 
-    public static Duel Parse(string script)
+    public ScriptParser(
+        IAutoGeniusInvokationRuntimePlatform platform,
+        GeniusInvokationControl control,
+        AutoGeniusInvokationConfig config)
+    {
+        _platform = platform;
+        _control = control;
+        _config = config;
+        _logger = platform.GetLogger<ScriptParser>();
+    }
+
+    public Duel Parse(string script)
     {
         var lines = script.Split(["\r\n", "\r", "\n"], StringSplitOptions.None);
         var result = new List<string>();
@@ -28,9 +40,9 @@ public class ScriptParser
         return Parse(result);
     }
 
-    public static Duel Parse(List<string> lines)
+    public Duel Parse(List<string> lines)
     {
-        Duel duel = new();
+        Duel duel = new(_control, _platform, _config);
         string stage = "";
 
         int i = 0;
@@ -115,9 +127,10 @@ public class ScriptParser
         }
         catch (System.Exception ex)
         {
-            MyLogger.LogError($"解析脚本错误，行号：{i + 1}，错误信息：{ex}");
-            ThemedMessageBox.Error($"解析脚本错误，行号：{i + 1}，错误信息：{ex}", "策略解析失败");
-            return default!;
+            var message = $"解析脚本错误，行号：{i + 1}，错误信息：{ex}";
+            _logger.LogError("{Message}", message);
+            _platform.ReportStrategyParseFailure(message);
+            throw new FormatException(message, ex);
         }
 
         return duel;
@@ -131,9 +144,9 @@ public class ScriptParser
     /// </summary>
     /// <param name="line"></param>
     /// <returns></returns>
-    public static Character ParseCharacter(string line)
+    public Character ParseCharacter(string line)
     {
-        var character = new Character();
+        var character = new Character(_control, _platform.GetLogger<Character>());
 
         var characterAndSkill = line.Split('{');
 
@@ -171,7 +184,7 @@ public class ScriptParser
 
             if (DefaultTcgConfig.CharacterCardMap.TryGetValue(standardName, out var characterCard))
             {
-                CharacterCard.CopyCardProperty(character, characterCard);
+                CharacterCard.CopyCardProperty(character, characterCard, _logger);
             }
             else
             {

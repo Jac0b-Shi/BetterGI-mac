@@ -1,4 +1,5 @@
-﻿using BetterGenshinImpact.GameTask.Model;
+﻿using System;
+using BetterGenshinImpact.GameTask.Model;
 
 namespace BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
 
@@ -8,9 +9,9 @@ public class AutoLeyLineOutcropParam:BaseTaskParam<AutoLeyLineOutcropTask>
     // 刷取次数
     public int Count { get; set; }
     // 地区
-    public string Country { get; set; }
+    public string Country { get; set; } = string.Empty;
     //地脉花类型
-    public string LeyLineOutcropType { get; set; }
+    public string LeyLineOutcropType { get; set; } = string.Empty;
     // 开启取小值模式
     public bool OpenModeCountMin { get; set; }
     // 是否开启树脂耗尽模式
@@ -18,9 +19,9 @@ public class AutoLeyLineOutcropParam:BaseTaskParam<AutoLeyLineOutcropTask>
     //是否使用冒险之证寻找地脉花
     public bool UseAdventurerHandbook { get; set; }
     //好感队名称
-    public string FriendshipTeam { get; set; }
+    public string FriendshipTeam { get; set; } = string.Empty;
     //战斗的队伍名称
-    public string Team { get; set; }
+    public string Team { get; set; } = string.Empty;
     //战斗超时时间
     public int Timeout { get; set; }
     //地脉花独立战斗配置
@@ -45,8 +46,13 @@ public class AutoLeyLineOutcropParam:BaseTaskParam<AutoLeyLineOutcropTask>
     
     public void SetDefault()
     {
+#if BGI_PLATFORM_MAC
+        throw new InvalidOperationException(
+            "AutoLeyLineOutcropParam defaults must be supplied by the Core composition on macOS.");
+#else
         var config = TaskContext.Instance().Config.AutoLeyLineOutcropConfig;
         SetAutoLeyLineOutcropConfig(config);
+#endif
     }
 
     public void SetAutoLeyLineOutcropConfig(AutoLeyLineOutcropConfig config)
@@ -72,6 +78,11 @@ public class AutoLeyLineOutcropParam:BaseTaskParam<AutoLeyLineOutcropTask>
     public AutoLeyLineOutcropParam() : base(null, null)
     {
         SetDefault();
+    }
+
+    public AutoLeyLineOutcropParam(AutoLeyLineOutcropConfig config) : base(null, null)
+    {
+        SetAutoLeyLineOutcropConfig(config ?? throw new ArgumentNullException(nameof(config)));
     }
     
     public AutoLeyLineOutcropParam(int count, string country, string leyLineOutcropType) : base(null, null)

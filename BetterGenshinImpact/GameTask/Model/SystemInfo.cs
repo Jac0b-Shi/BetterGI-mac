@@ -1,5 +1,6 @@
-﻿using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Helpers;
+using BetterGenshinImpact.Platform.Abstractions;
 using OpenCvSharp;
 using System;
 using System.Diagnostics;
@@ -18,7 +19,7 @@ namespace BetterGenshinImpact.GameTask.Model
         /// <summary>
         /// 游戏窗口内分辨率
         /// </summary>
-        public RECT GameScreenSize { get; }
+        public BgiRect GameScreenSize { get; }
 
         /// <summary>
         /// 以1080P为标准的素材缩放比例,不会大于1
@@ -41,12 +42,12 @@ namespace BetterGenshinImpact.GameTask.Model
         /// 捕获窗口区域 和实际游戏画面一致
         /// CaptureAreaRect = GameScreenSize or GameWindowRect
         /// </summary>
-        public RECT CaptureAreaRect { get; set; }
+        public BgiRect CaptureAreaRect { get; set; }
 
         /// <summary>
         /// 捕获窗口区域 大于1080P则为1920x1080
         /// </summary>
-        public Rect ScaleMax1080PCaptureRect { get; set; }
+        public BgiRect ScaleMax1080PCaptureRect { get; set; }
 
         public Process GameProcess { get; }
 
@@ -74,7 +75,8 @@ namespace BetterGenshinImpact.GameTask.Model
 
             // 注意截图区域要和游戏窗口实际区域一致
             // todo 窗口移动后？
-            GameScreenSize = SystemControl.GetGameScreenRect(hWnd);
+            var gameScreenRect = SystemControl.GetGameScreenRect(hWnd);
+            GameScreenSize = new Rect(gameScreenRect.X, gameScreenRect.Y, gameScreenRect.Width, gameScreenRect.Height);
             if (GameScreenSize.Width < 800 || GameScreenSize.Height < 600)
             {
                 throw new ArgumentException("游戏窗口分辨率不得小于 800x600 ！");
@@ -88,7 +90,8 @@ namespace BetterGenshinImpact.GameTask.Model
             }
             ScaleTo1080PRatio = GameScreenSize.Width / 1920d; // 1080P 为标准
 
-            CaptureAreaRect = SystemControl.GetCaptureRect(hWnd);
+            var captureRect = SystemControl.GetCaptureRect(hWnd);
+            CaptureAreaRect = new Rect(captureRect.X, captureRect.Y, captureRect.Width, captureRect.Height);
             if (CaptureAreaRect.Width > 1920)
             {
                 var scale = CaptureAreaRect.Width / 1920d;

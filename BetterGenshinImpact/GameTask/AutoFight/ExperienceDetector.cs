@@ -114,7 +114,7 @@ public sealed class ExperienceDetector : IDisposable
                     // 模板匹配成功，执行像素颜色二次验证
                     if (ValidateExpPixelColor(capture, matchResult))
                     {
-                        Logger.LogInformation("基于经验值判断：检测到 {Name} 经验值图标，启用战后拾取", ro.Name.Replace("Experience_", ""));
+                        Logger.LogInformation("基于经验值判断：检测到 {Name} 经验值图标，启用战后拾取", ro.Name?.Replace("Experience_", "") ?? "Unknown");
                         _resultTcs.TrySetResult(true);
                         return; // 检测到后退出循环
                     }

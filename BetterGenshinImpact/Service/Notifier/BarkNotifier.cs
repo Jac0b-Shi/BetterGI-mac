@@ -19,22 +19,22 @@ namespace BetterGenshinImpact.Service.Notifier
         /// <summary>
         /// 推送标题
         /// </summary>
-        public string Title { get; set; }
+        public string? Title { get; set; }
 
         /// <summary>
         /// 推送副标题
         /// </summary>
-        public string Subtitle { get; set; }
+        public string? Subtitle { get; set; }
 
         /// <summary>
         /// 推送内容
         /// </summary>
-        public string Body { get; set; }
+        public string? Body { get; set; }
 
         /// <summary>
         /// 设备Key
         /// </summary>
-        public string DeviceKey { get; set; }
+        public string? DeviceKey { get; set; }
 
         /// <summary>
         /// 推送中断级别：critical(重要警告), active(默认值), timeSensitive(时效性通知), passive(仅添加到通知列表)
@@ -59,22 +59,22 @@ namespace BetterGenshinImpact.Service.Notifier
         /// <summary>
         /// 通知铃声重复播放，传1开启
         /// </summary>
-        public string Call { get; set; }
+        public string? Call { get; set; }
 
         /// <summary>
         /// iOS14.5以下自动复制推送内容，传1开启
         /// </summary>
-        public string AutoCopy { get; set; }
+        public string? AutoCopy { get; set; }
 
         /// <summary>
         /// 复制推送时指定复制的内容
         /// </summary>
-        public string Copy { get; set; }
+        public string? Copy { get; set; }
 
         /// <summary>
         /// 为推送设置自定义图标，设置的图标将替换默认Bark图标
         /// </summary>
-        public string Icon { get; set; }
+        public string? Icon { get; set; }
 
         /// <summary>
         /// 对消息进行分组，推送将按group分组显示在通知中心中
@@ -84,22 +84,22 @@ namespace BetterGenshinImpact.Service.Notifier
         /// <summary>
         /// 加密推送的密文
         /// </summary>
-        public string Ciphertext { get; set; }
+        public string? Ciphertext { get; set; }
 
         /// <summary>
         /// 传1保存推送，传其他的不保存推送
         /// </summary>
-        public string IsArchive { get; set; }
+        public string? IsArchive { get; set; }
 
         /// <summary>
         /// 点击推送时跳转的URL
         /// </summary>
-        public string Url { get; set; }
+        public string? Url { get; set; }
 
         /// <summary>
         /// 传"none"时，点击推送不会弹窗
         /// </summary>
-        public string Action { get; set; }
+        public string? Action { get; set; }
     }
 
     public class BarkNotifier : INotifier
@@ -109,8 +109,6 @@ namespace BetterGenshinImpact.Service.Notifier
         // Bark API配置
         private readonly string _apiBaseUrl;
         private readonly string[] _deviceKeys;
-        private readonly string[] _group;
-        private readonly string[] _sound;
         private readonly HttpClient _httpClient;
         private readonly BarkOptions _defaultOptions;
 
@@ -126,7 +124,7 @@ namespace BetterGenshinImpact.Service.Notifier
             string group,
             string sound,
             string icon,
-            BarkOptions options = null)
+            BarkOptions? options = null)
         {
             // 输入验证
             if (string.IsNullOrEmpty(deviceKeys))
@@ -170,7 +168,9 @@ namespace BetterGenshinImpact.Service.Notifier
         /// </summary>
         /// <param name="content">通知内容</param>
         /// <param name="options">自定义Bark选项</param>
-        public async Task SendAsync(BaseNotificationData content, BarkOptions options)
+        public async Task SendAsync(
+            BaseNotificationData content,
+            BarkOptions? options)
         {
             try
             {
@@ -296,7 +296,9 @@ namespace BetterGenshinImpact.Service.Notifier
         /// <summary>
         /// 合并默认选项和自定义选项
         /// </summary>
-        private BarkOptions MergeOptions(BarkOptions defaultOptions, BarkOptions customOptions)
+        private static BarkOptions MergeOptions(
+            BarkOptions defaultOptions,
+            BarkOptions? customOptions)
         {
             if (customOptions == null)
                 return defaultOptions;

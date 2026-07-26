@@ -93,7 +93,7 @@ public class PartyAvatarSideIndexHelper
     /// <returns>目标编号矩形</returns>
     public static Rect GetIndexRectFromKnownIndexRect(int knownIndex, Rect knownRect, int targetIndex)
     {
-        var s = TaskContext.Instance().SystemInfo.AssetScale;
+        var s = AutoFightRuntimePlatform.Current.SystemInfo.AssetScale;
 
         //  y_k + (n - k) * d
         int y = knownRect.Y + (targetIndex - knownIndex) * (int)(IndexRectDistanceY * s);
@@ -103,7 +103,7 @@ public class PartyAvatarSideIndexHelper
 
     public static Rect GetIndexRectFromKnownCurrentAvatarFlag(Rect currRect)
     {
-        var s = TaskContext.Instance().SystemInfo.AssetScale;
+        var s = AutoFightRuntimePlatform.Current.SystemInfo.AssetScale;
         return new Rect(currRect.X + (int)(126 * s), currRect.Y - (int)(194 * s), (int)(16 * s), (int)(17 * s));
     }
 

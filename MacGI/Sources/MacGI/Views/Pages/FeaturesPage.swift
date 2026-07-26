@@ -1,0 +1,1564 @@
+import AppKit
+import SwiftUI
+
+struct FeaturesPage: View {
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            BGIPageTitle(title: "实时触发的自动化任务设置")
+            ForEach(appState.features) { feature in
+                if feature.id != "GameLoading" {
+                    if feature.settingsAvailable {
+                        BGIExpandableTaskCard(
+                            icon: feature.icon, title: feature.name, subtitle: feature.detail
+                        ) {
+                            featureToggle(feature)
+                        } content: {
+                            triggerSettings(for: feature.id)
+                        }
+                    } else {
+                        BGITaskCard(icon: feature.icon, title: feature.name, subtitle: feature.detail) {
+                            featureToggle(feature)
+                        }
+                    }
+
+                    if feature.id == "AutoSkip" {
+                        autoHangoutCard
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func featureToggle(_ feature: MacGIFeature) -> some View {
+        Toggle("", isOn: Binding(
+            get: { appState.featureEnabled(feature.id) },
+            set: { appState.setFeature(feature.id, enabled: $0) }))
+            .toggleStyle(.switch)
+            .labelsHidden()
+            .disabled(!appState.canControlFeature(feature.id))
+    }
+
+    @ViewBuilder
+    private func triggerSettings(for name: String) -> some View {
+        switch name {
+        case "AutoPick": autoPickSettings
+        case "AutoSkip": AutoSkipTriggerSettingsView()
+        case "AutoFish":
+            BGISettingLine(
+                title: "全自动钓鱼已迁移至独立任务下",
+                subtitle: "请到独立任务页配合快捷键使用"
+            ) { EmptyView() }
+        case "AutoEat": autoEatSettings
+        case "QuickTeleport": quickTeleportSettings
+        case "MapMask": mapMaskSettings
+        case "SkillCd": SkillCdTriggerSettingsView()
+        default: EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private var autoPickSettings: some View {
+        if let settings = appState.autoPickTriggerSettings {
+            BGISettingLine(
+                title: "选择自动拾取文字识别引擎",
+                subtitle: "Paddle可识别所有文字,速度慢,消耗少;Yap可识别部分文字,快且准,消耗大"
+            ) {
+                Picker("", selection: Binding(
+                    get: { settings.ocrEngine },
+                    set: { appState.saveAutoPickTriggerConfiguration(ocrEngine: $0) })) {
+                    ForEach(settings.ocrEngineOptions, id: \.self) { Text($0).tag($0) }
+                }
+                .labelsHidden().frame(width: 100)
+            }
+            BGISettingLine(title: "黑名单", subtitle: "排除 NPC 对话、各类交互选项、不需要拾取的物品等") {
+                Toggle("", isOn: Binding(
+                    get: { settings.blackListEnabled },
+                    set: { appState.saveAutoPickTriggerConfiguration(blackListEnabled: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(title: "精确匹配黑名单", subtitle: "每行一条记录") {
+                TextEditor(text: $appState.autoPickExactBlackListDraft)
+                    .font(.body.monospaced()).frame(width: 360, height: 100)
+                    .overlay(Rectangle().stroke(BGIColors.border, lineWidth: 1))
+            }
+            BGISettingLine(title: "模糊匹配黑名单", subtitle: "每行一条记录") {
+                VStack(alignment: .trailing, spacing: 8) {
+                    TextEditor(text: $appState.autoPickFuzzyBlackListDraft)
+                        .font(.body.monospaced()).frame(width: 360, height: 100)
+                        .overlay(Rectangle().stroke(BGIColors.border, lineWidth: 1))
+                    Button("保存黑名单") { appState.saveAutoPickBlackLists() }
+                }
+            }
+            BGISettingLine(title: "白名单", subtitle: "需要主动按下 F 交互的内容，请配合黑名单使用") {
+                Toggle("", isOn: Binding(
+                    get: { settings.whiteListEnabled },
+                    set: { appState.saveAutoPickTriggerConfiguration(whiteListEnabled: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(title: "白名单配置", subtitle: "每行一条记录") {
+                VStack(alignment: .trailing, spacing: 8) {
+                    TextEditor(text: $appState.autoPickWhiteListDraft)
+                        .font(.body.monospaced()).frame(width: 360, height: 100)
+                        .overlay(Rectangle().stroke(BGIColors.border, lineWidth: 1))
+                    Button("保存白名单") { appState.saveAutoPickWhiteList() }
+                }
+            }
+            BGISettingLine(title: "自定义拾取按键", subtitle: "默认为 F，自带了 E 和 G 按键，需要改成其他键的请阅读文档") {
+                Picker("", selection: Binding(
+                    get: { settings.pickKey },
+                    set: { appState.saveAutoPickTriggerConfiguration(pickKey: $0) })) {
+                    ForEach(settings.pickKeyOptions, id: \.self) { Text($0).tag($0) }
+                }
+                .labelsHidden().frame(width: 80)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var autoHangoutCard: some View {
+        if let settings = appState.autoSkipTriggerSettings {
+            BGIExpandableTaskCard(
+                icon: .symbol("person.2"),
+                title: "自动邀约",
+                subtitle: "自动剧情开启的情况下此功能才会生效，自动选择邀约选项"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.autoHangoutEventEnabled },
+                    set: { appState.saveAutoSkipTriggerSettings(autoHangoutEventEnabled: $0) }))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            } content: {
+                AutoHangoutTriggerSettingsView()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var autoEatSettings: some View {
+        if let settings = appState.autoEatTriggerSettings {
+            BGISettingLine(title: "触发时间间隔（毫秒）", subtitle: "多少时间检查一次是否红血或需要复活") {
+                TextField("", value: Binding(
+                    get: { settings.checkInterval },
+                    set: { appState.saveAutoEatTriggerSettings(checkInterval: $0) }), format: .number)
+                    .frame(width: 90).multilineTextAlignment(.trailing)
+            }
+            BGISettingLine(title: "吃药时间间隔（毫秒）", subtitle: "防止频繁吃药") {
+                TextField("", value: Binding(
+                    get: { settings.eatInterval },
+                    set: { appState.saveAutoEatTriggerSettings(eatInterval: $0) }), format: .number)
+                    .frame(width: 90).multilineTextAlignment(.trailing)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var quickTeleportSettings: some View {
+        if let settings = appState.quickTeleportTriggerSettings {
+            BGISettingLine(title: "点击候选列表传送点的间隔时间（毫秒）", subtitle: "普通用户请不要修改此配置，需要根据文字识别耗时配置，太低会导致点击失败") {
+                TextField("", value: Binding(
+                    get: { settings.teleportListClickDelay },
+                    set: { appState.saveQuickTeleportTriggerSettings(teleportListClickDelay: $0) }), format: .number)
+                    .frame(width: 90).multilineTextAlignment(.trailing)
+            }
+            BGISettingLine(title: "等待右侧传送弹出界面的时间（毫秒）", subtitle: "普通用户请不要修改此配置，不建议低于80ms，太低会导致传送按钮识别不到") {
+                TextField("", value: Binding(
+                    get: { settings.waitTeleportPanelDelay },
+                    set: { appState.saveQuickTeleportTriggerSettings(waitTeleportPanelDelay: $0) }), format: .number)
+                    .frame(width: 90).multilineTextAlignment(.trailing)
+            }
+            BGISettingLine(title: "启用快捷键传送", subtitle: "按下手动触发快速传送快捷键后才进行快速传送") {
+                Toggle("", isOn: Binding(
+                    get: { settings.hotkeyTpEnabled },
+                    set: { appState.saveQuickTeleportTriggerSettings(hotkeyTpEnabled: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var mapMaskSettings: some View {
+        if let settings = appState.mapMaskTriggerSettings {
+            BGISettingLine(title: "启用小地图遮罩", subtitle: "在小地图上显示点位") {
+                Toggle("", isOn: Binding(
+                    get: { settings.miniMapMaskEnabled },
+                    set: { appState.saveMapMaskTriggerSettings(miniMapMaskEnabled: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+        }
+    }
+}
+
+struct SoloTasksPage: View {
+    @EnvironmentObject private var appState: AppState
+    @State private var confirmingScanDropsAfterReward = false
+    @State private var showingScriptRepository = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            BGIPageTitle(title: "独立任务设置")
+            ForEach(appState.soloTasks) { task in
+                if task.settingsAvailable {
+                    BGIExpandableTaskCard(
+                        icon: icon(for: task.name), title: task.displayName,
+                        subtitle: task.unavailableReason ?? task.description,
+                        subtitleLinkTitle: task.tutorialURL == nil ? nil : "点击查看使用教程",
+                        subtitleLinkURL: task.tutorialURL.flatMap(URL.init(string:))
+                    ) {
+                        taskAction(task)
+                    } content: {
+                        settingsContent(for: task)
+                    }
+                } else {
+                    BGITaskCard(icon: icon(for: task.name), title: task.displayName,
+                                subtitle: task.unavailableReason ?? task.description) {
+                        taskAction(task)
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showingScriptRepository) {
+            ScriptRepositorySheet()
+                .environmentObject(appState)
+        }
+        .alert("风险提示", isPresented: $confirmingScanDropsAfterReward) {
+            Button("不接受，保持关闭", role: .cancel) {
+                confirmingScanDropsAfterReward = false
+            }
+            Button("接受风险并开启") {
+                appState.saveAutoLeyLineOutcropSettings(
+                    scanDropsAfterRewardEnabled: true)
+            }
+        } message: {
+            Text(
+                "开启“领取奖励后扫描掉落物光柱”后，角色会在领奖完成后主动移动拾取。部分地脉花点位或特定配队下，可能因为移动范围较大而卡住。\n\n如果你愿意接受这个风险，请继续开启；否则将保持关闭。"
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func settingsContent(for task: BetterGICoreSoloTask) -> some View {
+        if task.inputKind == "multilineText" {
+            BGISettingLine(
+                title: task.inputTitle ?? "输入",
+                subtitle: task.inputPlaceholder ?? ""
+            ) {
+                TextEditor(text: Binding(
+                    get: { appState.soloTaskInputDrafts[task.name, default: ""] },
+                    set: { appState.soloTaskInputDrafts[task.name] = $0 }))
+                    .font(.body.monospaced())
+                    .frame(width: 360, height: 120)
+                    .overlay(Rectangle().stroke(BGIColors.border, lineWidth: 1))
+                }
+        }
+        if task.showsScriptRepository || task.scriptDirectoryPath != nil {
+            BGISettingLine(
+                title: "脚本资源",
+                subtitle: scriptResourceSubtitle(for: task)
+            ) {
+                HStack(spacing: 8) {
+                    if task.showsScriptRepository {
+                        Button {
+                            showingScriptRepository = true
+                        } label: {
+                            Label("脚本仓库", systemImage: "archivebox")
+                        }
+                    }
+                    if let path = task.scriptDirectoryPath {
+                        Button {
+                            appState.openSoloTaskScriptDirectory(path: path)
+                        } label: {
+                            Label("打开目录", systemImage: "folder")
+                        }
+                    }
+                }
+            }
+        }
+        ForEach(task.actions) { action in
+            BGISettingLine(title: action.title, subtitle: action.description) {
+                soloTaskActionButton(name: action.name)
+            }
+        }
+        switch task.name {
+        case "AutoGeniusInvokation": autoGeniusInvokationSettings
+        case "AutoFishing": autoFishingSettings
+        case "AutoCook": autoCookSettings
+        case "AutoWood": autoWoodSettings
+        case "AutoMusicGame": autoMusicGameSettings
+        case "AutoBoss": autoBossSettings
+        case "AutoLeyLineOutcrop": autoLeyLineOutcropSettings
+        case "AutoStygianOnslaught": autoStygianOnslaughtSettings
+        case "AutoDomain": autoDomainSettings
+        case "AutoArtifactSalvage": autoArtifactSalvageSettings
+        case "AutoFight": autoFightSettings
+        case "AutoRedeemCode": autoRedeemCodeSettings
+        case "GetGridIcons": getGridIconsSettings
+        default:
+            BGISettingLine(title: "设置", subtitle: "该任务的设置暂不可用") {
+                BGIStatusBadge(text: "不可用", tint: BGIColors.muted)
+            }
+        }
+    }
+
+    private func scriptResourceSubtitle(for task: BetterGICoreSoloTask) -> String {
+        if task.showsScriptRepository, task.scriptDirectoryPath != nil {
+            return "从脚本仓库更新策略，或在 Finder 中打开本地任务目录"
+        }
+        if task.showsScriptRepository {
+            return "从脚本仓库更新任务所需策略"
+        }
+        return "在 Finder 中打开本地任务目录"
+    }
+
+    @ViewBuilder
+    private var autoGeniusInvokationSettings: some View {
+        if let settings = appState.autoGeniusInvokationSettings {
+            BGISettingLine(title: "选择卡组", subtitle: "选择你想要使用的卡组与策略") {
+                Picker("", selection: Binding(
+                    get: { settings.strategyName },
+                    set: { appState.saveAutoGeniusInvokationSettings(strategyName: $0) })) {
+                    Text("请选择策略").tag("")
+                    ForEach(settings.strategyOptions, id: \.self) { Text($0).tag($0) }
+                }
+                .labelsHidden().frame(width: 220)
+            }
+            BGISettingLine(
+                title: "设置延时（毫秒）",
+                subtitle: "如果频繁出现操作速度过快，操作动画未播放完毕的情况可以添加延时"
+            ) {
+                Stepper(value: Binding(
+                    get: { settings.sleepDelay },
+                    set: { appState.saveAutoGeniusInvokationSettings(sleepDelay: $0) }),
+                    in: 0...5000) {
+                    Text("\(settings.sleepDelay)").frame(minWidth: 52)
+                }
+            }
+        } else { settingsLoading }
+    }
+
+    @ViewBuilder
+    private var autoFishingSettings: some View {
+        if let settings = appState.autoFishingSettings {
+            BGISettingLine(
+                title: "上钩等待超时时间",
+                subtitle: "超过这个时间将自动提竿，并重新识别并选择鱼饵进行抛竿"
+            ) {
+                Stepper(value: Binding(
+                    get: { settings.autoThrowRodTimeOut },
+                    set: { appState.saveAutoFishingSettings(autoThrowRodTimeOut: $0) }),
+                    in: 5...60) {
+                    Text("\(settings.autoThrowRodTimeOut) 秒").frame(minWidth: 60)
+                }
+            }
+            BGISettingLine(title: "整个任务超时时间", subtitle: "超过这个时间将强制结束任务") {
+                Stepper(value: Binding(
+                    get: { settings.wholeProcessTimeoutSeconds },
+                    set: { appState.saveAutoFishingSettings(wholeProcessTimeoutSeconds: $0) }),
+                    in: 0...1800) {
+                    Text("\(settings.wholeProcessTimeoutSeconds) 秒").frame(minWidth: 72)
+                }
+            }
+            BGISettingLine(
+                title: "昼夜策略",
+                subtitle: "钓全天的鱼、还是只钓白天或夜晚的鱼、亦或不调整时间"
+            ) {
+                Picker("", selection: Binding(
+                    get: { settings.fishingTimePolicy },
+                    set: { appState.saveAutoFishingSettings(fishingTimePolicy: $0) })) {
+                    ForEach(settings.fishingTimePolicyOptions) { option in
+                        Text(option.displayName).tag(option.value)
+                    }
+                }
+                .labelsHidden().frame(width: 110)
+            }
+            BGISettingLine(
+                title: "关键帧保存截图（开发者）",
+                subtitle: "在流程判断的关键时刻保存当时的截图，供分析判断。会大量写入，非调试时请关闭。需要启用保存截图功能"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.saveScreenshotOnKeyTick },
+                    set: { appState.saveAutoFishingSettings(saveScreenshotOnKeyTick: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+                    .disabled(!settings.screenshotEnabled)
+            }
+        } else { settingsLoading }
+    }
+
+    @ViewBuilder
+    private func taskAction(_ task: BetterGICoreSoloTask) -> some View {
+        if task.headerAction {
+            if task.available {
+                soloTaskActionButton(
+                    name: task.name,
+                    inputText: task.inputKind == nil
+                        ? nil
+                        : appState.soloTaskInputDrafts[task.name, default: ""])
+            } else {
+                Text("暂不可用")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func soloTaskActionButton(name: String, inputText: String? = nil) -> some View {
+        Button {
+            appState.toggleSoloTask(name, inputText: inputText)
+        } label: {
+            Image(systemName: isRunning(name) ? "stop.fill" : "play.fill")
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(appState.soloTaskStatus.state == "stopping")
+        .help(isRunning(name) ? "停止" : "启动")
+    }
+
+    @ViewBuilder
+    private var autoCookSettings: some View {
+        if let settings = appState.autoCookSettings {
+            BGISettingLine(title: "检测间隔（毫秒）", subtitle: "每次截图检测的时间间隔，最小 1ms") {
+                Stepper(
+                    value: Binding(
+                        get: { settings.checkIntervalMs },
+                        set: { appState.saveAutoCookSettings(checkIntervalMs: $0) }
+                    ),
+                    in: 1...1000
+                ) {
+                    Text("\(settings.checkIntervalMs)")
+                        .frame(minWidth: 42, alignment: .trailing)
+                }
+            }
+            BGISettingLine(
+                title: "自动结束烹饪任务",
+                subtitle: "开启后检测到“自动烹饪”按钮会点击并结束当前任务"
+            ) {
+                Toggle(
+                    "",
+                    isOn: Binding(
+                        get: { settings.stopTaskWhenRecoverButtonDetected },
+                        set: { appState.saveAutoCookSettings(stopWhenDetected: $0) }
+                    )
+                )
+                .toggleStyle(.switch)
+                .labelsHidden()
+            }
+        } else {
+            BGISettingLine(title: "设置", subtitle: "正在读取") {
+                ProgressView().controlSize(.small)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var autoRedeemCodeSettings: some View {
+        if let settings = appState.autoRedeemCodeSettings {
+            BGISettingLine(
+                title: "获取剪切板上的兑换码",
+                subtitle: "在切换到软件界面时候，自动提取兑换码并提示"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.clipboardListenerEnabled },
+                    set: {
+                        appState.saveAutoRedeemCodeSettings(
+                            clipboardListenerEnabled: $0)
+                    }))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+        } else {
+            settingsLoading
+        }
+    }
+
+    @ViewBuilder
+    private var getGridIconsSettings: some View {
+        if let settings = appState.getGridIconsSettings {
+            BGISettingLine(
+                title: "界面名称",
+                subtitle: "不同界面的参数不一样，请选择你要扫描的界面"
+            ) {
+                Picker("", selection: Binding(
+                    get: { settings.gridName },
+                    set: { appState.saveGetGridIconsSettings(gridName: $0) })) {
+                    ForEach(settings.gridNameOptions) { option in
+                        Text(option.displayName).tag(option.value)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 170)
+            }
+            BGISettingLine(
+                title: "使用星星作为名称后缀",
+                subtitle: "有些物品具有相同的名称，但具有不同的图标和星星数"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.starAsSuffix },
+                    set: { appState.saveGetGridIconsSettings(starAsSuffix: $0) }))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+            BGISettingLine(
+                title: "使用等级作为名称后缀（待开发）",
+                subtitle: "有些物品具有相同的名称，但具有不同的图标和等级"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.lvAsSuffix },
+                    set: { appState.saveGetGridIconsSettings(lvAsSuffix: $0) }))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .disabled(true)
+            }
+            BGISettingLine(
+                title: "最大截取数量",
+                subtitle: "达到最大截取数量后会停止"
+            ) {
+                TextField("", value: Binding(
+                    get: { settings.maxNumToGet },
+                    set: {
+                        appState.saveGetGridIconsSettings(
+                            maxNumToGet: max(1, $0))
+                    }), format: .number)
+                    .frame(width: 110)
+                    .multilineTextAlignment(.trailing)
+            }
+        } else {
+            settingsLoading
+        }
+    }
+
+    @ViewBuilder
+    private var autoWoodSettings: some View {
+        if let settings = appState.autoWoodSettings {
+            BGISettingLine(title: "使用进出千星奇域刷新树木CD", subtitle: "需要确保已解锁并进入过千星奇域") {
+                Toggle("", isOn: Binding(
+                    get: { settings.useWonderlandRefresh },
+                    set: { appState.saveAutoWoodSettings(useWonderlandRefresh: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(title: "循环次数", subtitle: "循环伐木多少次，输入 0 则为无限循环直到手动终止") {
+                TextField("", value: Binding(
+                    get: { settings.roundNum },
+                    set: { appState.saveAutoWoodSettings(roundNum: $0) }), format: .number)
+                    .frame(width: 90).multilineTextAlignment(.trailing)
+            }
+            BGISettingLine(
+                title: "启用OCR伐木数量限制（需1080P以上分辨率）",
+                subtitle: "伐木后OCR识别并累计木材数，达到上限后自动停止伐木"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.woodCountOcrEnabled },
+                    set: { appState.saveAutoWoodSettings(woodCountOcrEnabled: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(
+                title: "伐木数量上限（原神每日每种木材最多2000）",
+                subtitle: "启用伐木数量限制后生效，达到配置上限后自动停止伐木"
+            ) {
+                TextField("", value: Binding(
+                    get: { settings.dailyMaxCount },
+                    set: { appState.saveAutoWoodSettings(dailyMaxCount: $0) }), format: .number)
+                    .frame(width: 90).multilineTextAlignment(.trailing)
+            }
+            BGISettingLine(
+                title: "使用小道具后的额外延迟（毫秒）",
+                subtitle: "如果希望看到使用小道具后获得木材的提示，可以调整这个值"
+            ) {
+                TextField("", value: Binding(
+                    get: { settings.afterZSleepDelay },
+                    set: { appState.saveAutoWoodSettings(afterZSleepDelay: $0) }), format: .number)
+                    .frame(width: 90).multilineTextAlignment(.trailing)
+            }
+        } else { settingsLoading }
+    }
+
+    @ViewBuilder
+    private var autoMusicGameSettings: some View {
+        if let settings = appState.autoMusicGameSettings {
+            BGISettingLine(
+                title: "【专辑】 自动演奏未达成【大音天籁】的乐曲",
+                subtitle: "关闭时，奖励已经领取就会跳过乐曲。开启时，达成了【大音天籁】才会跳过乐曲"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.mustCanorusLevel },
+                    set: { appState.saveAutoMusicGameSettings(mustCanorusLevel: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(
+                title: "【专辑】 自动演奏的目标难度选择",
+                subtitle: "设置为【传说】，【大师】即可获取所有奖励，设置【所有】则会对乐曲的所有难度进行自动演奏"
+            ) {
+                Picker("", selection: Binding(
+                    get: { settings.musicLevel },
+                    set: { appState.saveAutoMusicGameSettings(musicLevel: $0) })) {
+                    ForEach(settings.musicLevelOptions, id: \.self) { Text($0).tag($0) }
+                }
+                .labelsHidden().frame(width: 120)
+            }
+        } else { settingsLoading }
+    }
+
+    @ViewBuilder
+    private var autoBossSettings: some View {
+        if let settings = appState.autoBossSettings {
+            BGISettingLine(title: "选择战斗策略", subtitle: "仅用于首领讨伐，不覆盖其他策略设置") {
+                Picker("", selection: Binding(
+                    get: { settings.strategyName },
+                    set: { appState.saveAutoBossSettings(strategyName: $0) })) {
+                    ForEach(settings.strategyOptions, id: \.self) { Text($0).tag($0) }
+                }.labelsHidden().frame(width: 220)
+            }
+            BGISettingLine(title: "选择首领", subtitle: "部分首领因机制问题未添加") {
+                Picker("", selection: Binding(
+                    get: { settings.bossName },
+                    set: { appState.saveAutoBossSettings(bossName: $0) })) {
+                    Text("未选择").tag("")
+                    ForEach(settings.bossOptions, id: \.self) { Text($0).tag($0) }
+                }.labelsHidden().frame(width: 220)
+            }
+            BGISettingLine(title: "切换队伍", subtitle: "留空则不更换队伍") {
+                TextField("例如：首领队", text: Binding(
+                    get: { settings.teamName },
+                    set: { appState.saveAutoBossSettings(teamName: $0) }))
+                    .frame(width: 200)
+            }
+            BGISettingLine(
+                title: "指定讨伐次数",
+                subtitle: "关闭时刷取至原粹树脂耗尽，开启后按成功领取奖励次数停止"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.specifyRunCount },
+                    set: { appState.saveAutoBossSettings(specifyRunCount: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            if settings.specifyRunCount {
+                BGISettingLine(title: "讨伐次数", subtitle: "按成功领取奖励次数停止") {
+                    Stepper(value: Binding(
+                        get: { settings.runCount },
+                        set: { appState.saveAutoBossSettings(runCount: $0) }), in: 1...999) {
+                        Text("\(settings.runCount)").frame(minWidth: 36, alignment: .trailing)
+                    }
+                }
+                BGISettingLine(title: "原粹不足时使用须臾树脂补充", subtitle: "仅在指定讨伐次数时生效") {
+                    Toggle("", isOn: Binding(
+                        get: { settings.useTransientResin },
+                        set: { appState.saveAutoBossSettings(useTransientResin: $0) }))
+                        .toggleStyle(.switch).labelsHidden()
+                }
+                BGISettingLine(title: "原粹不足时使用脆弱树脂补充", subtitle: "仅在指定讨伐次数时生效") {
+                    Toggle("", isOn: Binding(
+                        get: { settings.useFragileResin },
+                        set: { appState.saveAutoBossSettings(useFragileResin: $0) }))
+                        .toggleStyle(.switch).labelsHidden()
+                }
+            }
+            BGISettingLine(
+                title: "每轮讨伐后返回七天神像",
+                subtitle: "开启后每次领奖后先回血，再重新前往首领"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.returnToStatueAfterEachRound },
+                    set: { appState.saveAutoBossSettings(returnToStatueAfterEachRound: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(
+                title: "启用奖励识别",
+                subtitle: "每轮领取后识别奖励名称与数量（图标匹配+OCR双路），任务结束打印汇总"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.rewardRecognitionEnabled },
+                    set: { appState.saveAutoBossSettings(rewardRecognitionEnabled: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(
+                title: "角色死亡后重试次数",
+                subtitle: "战斗中存在角色死亡时，复活后重新讨伐当前首领"
+            ) {
+                Stepper(value: Binding(
+                    get: { settings.reviveRetryCount },
+                    set: { appState.saveAutoBossSettings(reviveRetryCount: $0) }), in: 0...99) {
+                    Text("\(settings.reviveRetryCount)").frame(minWidth: 30, alignment: .trailing)
+                }
+            }
+        } else { settingsLoading }
+    }
+
+    @ViewBuilder
+    private var autoDomainSettings: some View {
+        if let settings = appState.autoDomainSettings {
+            BGISettingLine(title: "选择战斗策略", subtitle: "用于战斗") {
+                Picker("", selection: Binding(
+                    get: { settings.strategyName },
+                    set: { appState.saveAutoDomainSettings(strategyName: $0) })) {
+                    ForEach(settings.strategyOptions, id: \.self) { Text($0).tag($0) }
+                }.labelsHidden().frame(width: 220)
+            }
+            BGISettingLine(title: "自动切换到指定队伍", subtitle: "注意队伍名称是游戏内你手动设置的名称") {
+                TextField("队伍名称", text: Binding(
+                    get: { settings.partyName },
+                    set: { appState.saveAutoDomainSettings(partyName: $0) }))
+                    .frame(width: 200)
+            }
+            BGISettingLine(title: "指定要前往的秘境", subtitle: "自动传送到刷取的秘境") {
+                Picker("", selection: Binding(
+                    get: { settings.domainName },
+                    set: { appState.saveAutoDomainSettings(domainName: $0) })) {
+                    Text("未选择").tag("")
+                    ForEach(settings.domainOptions, id: \.self) { Text($0).tag($0) }
+                }.labelsHidden().frame(width: 220)
+            }
+            BGISettingLine(
+                title: "刷取至树脂耗尽",
+                subtitle: "优先使用浓缩树脂，然后使用原粹树脂，其余树脂不使用"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { !settings.specifyResinUse },
+                    set: {
+                        appState.saveAutoDomainSettings(
+                            specifyResinUse: !$0)
+                    }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(
+                title: "指定每种树脂刷取次数",
+                subtitle: "开启后会根据配置的次数使用对应的树脂"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.specifyResinUse },
+                    set: { appState.saveAutoDomainSettings(specifyResinUse: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            if settings.specifyResinUse {
+                domainCountLine("原粹树脂刷取次数", value: Binding(
+                    get: { settings.originalResinUseCount },
+                    set: { appState.saveAutoDomainSettings(originalResinUseCount: $0) }))
+                domainCountLine("浓缩树脂刷取次数", value: Binding(
+                    get: { settings.condensedResinUseCount },
+                    set: { appState.saveAutoDomainSettings(condensedResinUseCount: $0) }))
+                domainCountLine("须臾树脂刷取次数", value: Binding(
+                    get: { settings.transientResinUseCount },
+                    set: { appState.saveAutoDomainSettings(transientResinUseCount: $0) }))
+                domainCountLine("脆弱树脂刷取次数", value: Binding(
+                    get: { settings.fragileResinUseCount },
+                    set: { appState.saveAutoDomainSettings(fragileResinUseCount: $0) }))
+            }
+            BGISettingLine(title: "结束后自动分解圣遗物", subtitle: "需要快速分解圣遗物的最高星级") {
+                HStack(spacing: 12) {
+                    Picker("", selection: Binding(
+                        get: { settings.maxArtifactStar },
+                        set: { appState.saveAutoDomainSettings(maxArtifactStar: $0) })) {
+                        ForEach(settings.maxArtifactStarOptions, id: \.self) { Text($0).tag($0) }
+                    }.labelsHidden().frame(width: 70)
+                    Toggle("", isOn: Binding(
+                        get: { settings.autoArtifactSalvage },
+                        set: { appState.saveAutoDomainSettings(autoArtifactSalvage: $0) }))
+                        .toggleStyle(.switch).labelsHidden()
+                }
+            }
+            BGISettingLine(
+                title: "战斗完成后等待时间（秒）",
+                subtitle: "战斗结束后，寻找石化古树前的延迟时间，等一些角色技能完全结束"
+            ) {
+                TextField("", value: Binding(
+                    get: { settings.fightEndDelay },
+                    set: { appState.saveAutoDomainSettings(fightEndDelay: $0) }), format: .number)
+                    .frame(width: 90).multilineTextAlignment(.trailing)
+            }
+            BGISettingLine(
+                title: "寻找古树时使用小步伐行走（正常用户请不要启用）",
+                subtitle: "如果电脑性能较差，寻找古树时间过久，可以尝试使用这个功能"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.shortMovement },
+                    set: { appState.saveAutoDomainSettings(shortMovement: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(
+                title: "步行前往开启秘境和领取奖励",
+                subtitle: "如果电脑性能较差，开启秘境或者领取奖励的F点击不到，可以尝试此功能"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.walkToF },
+                    set: { appState.saveAutoDomainSettings(walkToF: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(
+                title: "寻找古树时确认位置左右移动的次数（正常用户不要修改）",
+                subtitle: "小步伐行走的时候左右确认位置的次数"
+            ) {
+                TextField("", value: Binding(
+                    get: { settings.leftRightMoveTimes },
+                    set: { appState.saveAutoDomainSettings(leftRightMoveTimes: $0) }), format: .number)
+                    .frame(width: 90).multilineTextAlignment(.trailing)
+            }
+            BGISettingLine(title: "自动吃药", subtitle: "请先装备 “便携营养袋” ，在红血时候后自动按Z键吃药") {
+                Toggle("", isOn: Binding(
+                    get: { settings.autoEat },
+                    set: { appState.saveAutoDomainSettings(autoEat: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(
+                title: "启用奖励识别",
+                subtitle: "每轮领取后识别奖励名称与数量（图标匹配+OCR双路），任务结束打印汇总"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.rewardRecognitionEnabled },
+                    set: { appState.saveAutoDomainSettings(rewardRecognitionEnabled: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(title: "角色死亡后重试次数", subtitle: "秘境战斗中，发生角色死亡重试的次数") {
+                TextField("", value: Binding(
+                    get: { settings.reviveRetryCount },
+                    set: { appState.saveAutoDomainSettings(reviveRetryCount: $0) }), format: .number)
+                    .frame(width: 90).multilineTextAlignment(.trailing)
+            }
+        } else { settingsLoading }
+    }
+
+    @ViewBuilder
+    private var autoLeyLineOutcropSettings: some View {
+        if let settings = appState.autoLeyLineOutcropSettings {
+            BGISettingLine(
+                title: "地脉花类型",
+                subtitle: "选择刷取的地脉花，启示之花（经验书）或藏金之花（摩拉）。"
+            ) {
+                Picker("", selection: Binding(
+                    get: { settings.leyLineOutcropType },
+                    set: { appState.saveAutoLeyLineOutcropSettings(leyLineOutcropType: $0) })) {
+                    ForEach(settings.leyLineOutcropTypeOptions, id: \.self) { Text($0).tag($0) }
+                }.labelsHidden().frame(width: 150)
+            }
+            BGISettingLine(title: "国家", subtitle: "按国家选择刷取对应的地脉花。") {
+                Picker("", selection: Binding(
+                    get: { settings.country },
+                    set: { appState.saveAutoLeyLineOutcropSettings(country: $0) })) {
+                    ForEach(settings.countryOptions, id: \.self) { Text($0).tag($0) }
+                }.labelsHidden().frame(width: 130)
+            }
+            BGISettingLine(title: "选择战斗策略", subtitle: "用于战斗") {
+                Picker("", selection: Binding(
+                    get: { settings.strategyName },
+                    set: { appState.saveAutoLeyLineOutcropSettings(strategyName: $0) })) {
+                    Text("跟随自动战斗配置").tag("")
+                    ForEach(settings.strategyOptions, id: \.self) { Text($0).tag($0) }
+                }.labelsHidden().frame(width: 220)
+            }
+            CoreTextSettingLine(
+                title: "根据技能CD优化出招人员",
+                subtitle: "根据填入人或人和cd，来决定当此人元素战技cd未结束时，跳过此人出招，来优化战斗流程，可填入人名或人名数字（用逗号分隔），多种用分号分隔，例如:白术;钟离,12;，如果人名，则用内置cd检查（或填入数字也小于0），如果是人名和数字，则把数字当做出招cd(秒)。",
+                value: settings.actionSchedulerByCd,
+                onSave: { appState.saveAutoLeyLineOutcropSettings(actionSchedulerByCd: $0) })
+            leyLineToggle(
+                "旋转寻找敌人位置",
+                "(实验性功能) 战斗时按下方设置的间隔尝试靠近或旋转寻找敌人。",
+                value: Binding(get: { settings.seekEnemyEnabled },
+                    set: { appState.saveAutoLeyLineOutcropSettings(seekEnemyEnabled: $0) }))
+            if settings.seekEnemyEnabled {
+                BGISettingLine(title: "旋转寻找敌人速度", subtitle: "建议单次旋转约 360 度") {
+                    Slider(value: Binding(
+                        get: { Double(settings.seekEnemyRotaryFactor) },
+                        set: { appState.saveAutoLeyLineOutcropSettings(
+                            seekEnemyRotaryFactor: Int($0.rounded())) }), in: 1...13, step: 1)
+                        .frame(width: 180)
+                }
+                BGISettingLine(
+                    title: "寻敌间隔（秒）",
+                    subtitle: "仅在已启用“旋转寻找敌人位置”后生效，最小 1 秒。"
+                ) {
+                    Stepper(value: Binding(
+                        get: { settings.seekEnemyIntervalSeconds },
+                        set: { appState.saveAutoLeyLineOutcropSettings(
+                            seekEnemyIntervalSeconds: $0) }), in: 1...60) {
+                        Text("\(settings.seekEnemyIntervalSeconds)").frame(minWidth: 36)
+                    }
+                }
+            }
+            leyLineToggle("聚集材料动作", "战斗结束后，如存在(万叶/琴)，则执行长E聚集材料动作",
+                value: Binding(get: { settings.kazuhaPickupEnabled },
+                    set: { appState.saveAutoLeyLineOutcropSettings(kazuhaPickupEnabled: $0) }))
+            if settings.kazuhaPickupEnabled {
+                leyLineToggle("琴二次拾取", "首次拾取为空时再次执行拾取",
+                    value: Binding(get: { settings.qinDoublePickUp },
+                        set: { appState.saveAutoLeyLineOutcropSettings(qinDoublePickUp: $0) }))
+            }
+            leyLineToggle(
+                "领取奖励后扫描掉落物光柱",
+                "在地脉花领奖完成后，短时间扫描周围掉落物光柱并靠近拾取；不依赖万叶或琴。部分点位或特定配队下可能因移动范围较大而卡住，请按需开启。",
+                value: Binding(get: { settings.scanDropsAfterRewardEnabled },
+                    set: {
+                        if $0 {
+                            confirmingScanDropsAfterReward = true
+                        } else {
+                            appState.saveAutoLeyLineOutcropSettings(
+                                scanDropsAfterRewardEnabled: false)
+                        }
+                    }))
+            if settings.scanDropsAfterRewardEnabled {
+                BGISettingLine(
+                    title: "领奖后扫描时长（秒）",
+                    subtitle: "控制领奖后扫描掉落物光柱的最长时长。设为 0 表示不扫描。"
+                ) {
+                    Stepper(value: Binding(
+                        get: { settings.scanDropsAfterRewardSeconds },
+                        set: { appState.saveAutoLeyLineOutcropSettings(
+                            scanDropsAfterRewardSeconds: $0) }), in: 0...60) {
+                        Text("\(settings.scanDropsAfterRewardSeconds)").frame(minWidth: 36)
+                    }
+                }
+            }
+            leyLineToggle("树脂耗尽模式", "按当前树脂与库存自动计算可刷次数，结束后自动停止。",
+                value: Binding(get: { settings.isResinExhaustionMode },
+                    set: { appState.saveAutoLeyLineOutcropSettings(
+                        isResinExhaustionMode: $0) }))
+            leyLineToggle("刷取次数取小值", "与手动次数取最小值，避免超过树脂可用次数。",
+                value: Binding(get: { settings.openModeCountMin },
+                    set: { appState.saveAutoLeyLineOutcropSettings(openModeCountMin: $0) }))
+            BGISettingLine(title: "刷取次数", subtitle: "树脂耗尽模式关闭或统计失败时使用的固定次数。") {
+                Stepper(value: Binding(get: { settings.count },
+                    set: { appState.saveAutoLeyLineOutcropSettings(count: $0) }), in: 1...999) {
+                    Text("\(settings.count)").frame(minWidth: 36)
+                }
+            }
+            leyLineToggle("使用须臾树脂", "原粹与浓缩耗尽后，允许使用须臾树脂继续刷取。",
+                value: Binding(get: { settings.useTransientResin },
+                    set: { appState.saveAutoLeyLineOutcropSettings(useTransientResin: $0) }))
+            leyLineToggle("使用脆弱树脂", "原粹与浓缩耗尽后，允许使用脆弱树脂继续刷取。",
+                value: Binding(get: { settings.useFragileResin },
+                    set: { appState.saveAutoLeyLineOutcropSettings(useFragileResin: $0) }))
+            CoreTextSettingLine(
+                title: "战斗队伍名称",
+                subtitle: "进入战斗前切换到该队伍，留空则不切换。 如果配置了好感队则必须填写。",
+                value: settings.team,
+                onSave: { appState.saveAutoLeyLineOutcropSettings(team: $0) })
+            CoreTextSettingLine(
+                title: "好感队名称",
+                subtitle: "领取奖励前切换到该队伍，留空则不切换。",
+                value: settings.friendshipTeam,
+                onSave: { appState.saveAutoLeyLineOutcropSettings(friendshipTeam: $0) })
+            BGISettingLine(title: "战斗超时时间（秒）", subtitle: "到达指定时间后，自动停止战斗。") {
+                Stepper(value: Binding(get: { settings.timeout },
+                    set: { appState.saveAutoLeyLineOutcropSettings(timeout: $0) }), in: 1...9999) {
+                    Text("\(settings.timeout)").frame(minWidth: 48)
+                }
+            }
+            leyLineToggle("不使用冒险之证寻路", "勾选后改用内置路线，不通过冒险之证定位地脉花。",
+                value: Binding(get: { settings.useAdventurerHandbook },
+                    set: { appState.saveAutoLeyLineOutcropSettings(useAdventurerHandbook: $0) }))
+            leyLineToggle("发送通知", "任务完成或失败时通过通知系统发送提醒。",
+                value: Binding(get: { settings.isNotification },
+                    set: { appState.saveAutoLeyLineOutcropSettings(isNotification: $0) }))
+        } else { settingsLoading }
+    }
+
+    @ViewBuilder
+    private var autoStygianOnslaughtSettings: some View {
+        if let settings = appState.autoStygianOnslaughtSettings {
+            BGISettingLine(title: "选择战斗策略", subtitle: "用于战斗") {
+                Picker("", selection: Binding(
+                    get: { settings.strategyName },
+                    set: { appState.saveAutoStygianOnslaughtSettings(strategyName: $0) })) {
+                    Text("跟随自动战斗配置").tag("")
+                    ForEach(settings.strategyOptions, id: \.self) { Text($0).tag($0) }
+                }.labelsHidden().frame(width: 220)
+            }
+            BGISettingLine(title: "指定刷取的战场", subtitle: "从上到下战场一、二、三") {
+                Picker("", selection: Binding(
+                    get: { settings.bossNum },
+                    set: { appState.saveAutoStygianOnslaughtSettings(bossNum: $0) })) {
+                    ForEach(settings.bossNumOptions, id: \.self) { Text("\($0)").tag($0) }
+                }.labelsHidden().frame(width: 90)
+            }
+            CoreTextSettingLine(
+                title: "指定战斗队伍",
+                subtitle: "输入预设队伍的名称，留空则不更换队伍",
+                value: settings.fightTeamName,
+                onSave: { appState.saveAutoStygianOnslaughtSettings(fightTeamName: $0) })
+            BGISettingLine(
+                title: "刷取至树脂耗尽",
+                subtitle: "优先使用浓缩树脂，然后使用原粹树脂，其余树脂不使用"
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { !settings.specifyResinUse },
+                    set: { appState.saveAutoStygianOnslaughtSettings(specifyResinUse: !$0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(title: "指定每种树脂刷取次数", subtitle: "开启后会根据配置的次数使用对应的树脂") {
+                Toggle("", isOn: Binding(
+                    get: { settings.specifyResinUse },
+                    set: { appState.saveAutoStygianOnslaughtSettings(specifyResinUse: $0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            if settings.specifyResinUse {
+                stygianResinCountLine("原粹树脂刷取次数", value: Binding(
+                    get: { settings.originalResinUseCount },
+                    set: { appState.saveAutoStygianOnslaughtSettings(originalResinUseCount: $0) }))
+                stygianResinCountLine("浓缩树脂刷取次数", value: Binding(
+                    get: { settings.condensedResinUseCount },
+                    set: { appState.saveAutoStygianOnslaughtSettings(condensedResinUseCount: $0) }))
+                stygianResinCountLine("须臾树脂刷取次数", value: Binding(
+                    get: { settings.transientResinUseCount },
+                    set: { appState.saveAutoStygianOnslaughtSettings(transientResinUseCount: $0) }))
+                stygianResinCountLine("脆弱树脂刷取次数", value: Binding(
+                    get: { settings.fragileResinUseCount },
+                    set: { appState.saveAutoStygianOnslaughtSettings(fragileResinUseCount: $0) }))
+            }
+            BGISettingLine(title: "结束后自动分解圣遗物", subtitle: "需要快速分解圣遗物的最高星级") {
+                HStack(spacing: 10) {
+                    Picker("", selection: Binding(
+                        get: { settings.maxArtifactStar },
+                        set: { appState.saveAutoStygianOnslaughtSettings(maxArtifactStar: $0) })) {
+                        ForEach(settings.maxArtifactStarOptions, id: \.self) { Text($0).tag($0) }
+                    }.labelsHidden().frame(width: 80)
+                    Toggle("", isOn: Binding(
+                        get: { settings.autoArtifactSalvage },
+                        set: { appState.saveAutoStygianOnslaughtSettings(autoArtifactSalvage: $0) }))
+                        .toggleStyle(.switch).labelsHidden()
+                }
+            }
+        } else { settingsLoading }
+    }
+
+    private func stygianResinCountLine(_ title: String, value: Binding<Int>) -> some View {
+        BGISettingLine(title: title, subtitle: "最小 0 次") {
+            TextField("", value: value, format: .number)
+                .frame(width: 90)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private func leyLineToggle(
+        _ title: String, _ subtitle: String, value: Binding<Bool>
+    ) -> some View {
+        BGISettingLine(title: title, subtitle: subtitle) {
+            Toggle("", isOn: value).toggleStyle(.switch).labelsHidden()
+        }
+    }
+
+    @ViewBuilder
+    private var autoArtifactSalvageSettings: some View {
+        if let settings = appState.autoArtifactSalvageSettings {
+            AutoArtifactSalvageSettingsEditor(settings: settings)
+        } else { settingsLoading }
+    }
+
+    @ViewBuilder
+    private var autoFightSettings: some View {
+        if let settings = appState.autoFightSettings {
+            BGISettingLine(title: "选择战斗策略", subtitle: "用于战斗") {
+                Picker("", selection: Binding(
+                    get: { settings.strategyName },
+                    set: { appState.saveAutoFightSettings(strategyName: $0) })) {
+                    ForEach(settings.strategyOptions, id: \.self) { Text($0).tag($0) }
+                }.labelsHidden().frame(width: 220)
+            }
+            CoreTextSettingLine(
+                title: "根据技能CD优化出招人员",
+                subtitle: "根据填入人或人和cd，来决定当此人元素战技cd未结束时，跳过此人出招，来优化战斗流程，可填入人名或人名数字（用逗号分隔），多种用分号分隔，例如:白术;钟离,12;，如果人名，则用内置cd检查（或填入数字也小于0），如果是人名和数字，则把数字当做出招cd(秒)。",
+                value: settings.actionSchedulerByCd,
+                onSave: { appState.saveAutoFightSettings(actionSchedulerByCd: $0) })
+
+            fightSectionTitle("自动检测战斗结束")
+            fightToggleLine("自动检测战斗结束", "检测到战斗已经结束的情况下，停止自动战斗功能",
+                value: Binding(get: { settings.fightFinishDetectEnabled },
+                    set: { appState.saveAutoFightSettings(fightFinishDetectEnabled: $0) }))
+            fightToggleLine(
+                "更快检查结束战斗",
+                "快速检查战斗结束，在一轮脚本中，可以每隔一定秒数（默认为5）或指定角色操作后，去检查（在每个角色完成该轮脚本时）。",
+                value: Binding(get: { settings.fastCheckEnabled },
+                    set: { appState.saveAutoFightSettings(fastCheckEnabled: $0) }))
+            if settings.fastCheckEnabled {
+                CoreTextSettingLine(
+                    title: "更快检查结束战斗参数",
+                    subtitle: "快速检查战斗结束的参数，可填入数字和人名，多种用分号分隔，例如:5;白术;钟离;，如果是数字（小于等于0则不会根据时间去检查，单位为秒），则指定检查间隔，如果是人名，则该角色执行一轮操作后进行检查。同时每轮结束后检查不变。",
+                    value: settings.fastCheckParams,
+                    onSave: { appState.saveAutoFightSettings(fastCheckParams: $0) })
+            }
+            fightToggleLine(
+                "旋转寻找敌人位置",
+                "(建议配合1秒左右“更快检测结束战斗”) 打开队伍界面检测战斗结束前，先检测敌人，判断是否需靠近敌或旋转寻找敌人。(Q前检查：释放Q技能前检测是否结束战斗。尝试面敌：开战寻敌，战斗尝试面向敌人)",
+                value: Binding(get: { settings.rotateFindEnemyEnabled },
+                    set: { appState.saveAutoFightSettings(rotateFindEnemyEnabled: $0) }))
+            if settings.rotateFindEnemyEnabled {
+                BGISettingLine(title: "旋转速度", subtitle: "范围 1-13，建议单次约 360°") {
+                    HStack(spacing: 10) {
+                        Slider(value: Binding(
+                            get: { Double(settings.rotaryFactor) },
+                            set: { appState.saveAutoFightSettings(rotaryFactor: Int($0.rounded())) }),
+                            in: 1...13, step: 1).frame(width: 150)
+                        Text("\(settings.rotaryFactor)").frame(width: 24)
+                    }
+                }
+                fightToggleLine("Q 前检测", "释放元素爆发前检查战斗是否结束",
+                    value: Binding(get: { settings.checkBeforeBurst },
+                        set: { appState.saveAutoFightSettings(checkBeforeBurst: $0) }))
+                fightToggleLine("尝试面敌", "开战寻敌时尝试面向敌人",
+                    value: Binding(get: { settings.isFirstCheck },
+                        set: { appState.saveAutoFightSettings(isFirstCheck: $0) }))
+            }
+            CoreTextSettingLine(
+                title: "检查战斗结束的延时",
+                subtitle: "检查战斗结束的延时，不同角色招式结束后的延时不一定相同，默认为1.5秒。也可以指定特定角色之后延时多少秒检查，未指定角色名，则默认为该值。格式如：2.5;白术,1.5;钟离,1.0;",
+                value: settings.checkEndDelay,
+                onSave: { appState.saveAutoFightSettings(checkEndDelay: $0) })
+            CoreTextSettingLine(
+                title: "按键触发后检查延时",
+                subtitle: "按下切换队伍后去检查屏幕色块的延时，默认为0.45秒。若频繁误判可以适当提高这个值，比如到0.75。确保这个延时不会真的把队伍配置界面切出来。",
+                value: settings.beforeDetectDelay,
+                onSave: { appState.saveAutoFightSettings(beforeDetectDelay: $0) })
+
+            fightSectionTitle("盾奶位角色优先释放技能")
+            BGISettingLine(title: "盾奶位角色在队伍中的位置", subtitle: "实时检测盾奶位战技CD") {
+                Picker("", selection: Binding(
+                    get: { settings.guardianAvatar },
+                    set: { appState.saveAutoFightSettings(guardianAvatar: $0) })) {
+                    ForEach(settings.guardianAvatarOptions, id: \.self) {
+                        Text($0.isEmpty ? "关闭" : $0).tag($0)
+                    }
+                }.labelsHidden().frame(width: 90)
+            }
+            if !settings.guardianAvatar.isEmpty {
+                fightToggleLine("禁用该角色的战斗策略", "自动释放E或Q战技",
+                    value: Binding(get: { settings.guardianCombatSkip },
+                        set: { appState.saveAutoFightSettings(guardianCombatSkip: $0) }))
+                fightToggleLine("自动释放 Q 爆发", "盾奶位可用时自动释放元素爆发",
+                    value: Binding(get: { settings.burstEnabled },
+                        set: { appState.saveAutoFightSettings(burstEnabled: $0) }))
+                fightToggleLine("盾奶位 E 长按", "关闭为短按，开启为长按",
+                    value: Binding(get: { settings.guardianAvatarHold },
+                        set: { appState.saveAutoFightSettings(guardianAvatarHold: $0) }))
+            }
+
+            fightSectionTitle("战后拾取")
+            fightToggleLine(
+                "扫描掉落物光柱",
+                "战斗结束后旋转视角寻找掉落物光柱并靠近（仅在无万叶时备用）",
+                value: Binding(get: { settings.pickDropsAfterFightEnabled },
+                    set: { appState.saveAutoFightSettings(pickDropsAfterFightEnabled: $0) }))
+            if settings.pickDropsAfterFightEnabled {
+                BGISettingLine(title: "扫描掉落物光柱时长", subtitle: "单位为秒。0表示不扫描掉落物光柱。") {
+                    Stepper(value: Binding(
+                        get: { settings.pickDropsAfterFightSeconds },
+                        set: { appState.saveAutoFightSettings(pickDropsAfterFightSeconds: $0) }),
+                        in: 0...300) {
+                        Text("\(settings.pickDropsAfterFightSeconds)").frame(minWidth: 38)
+                    }
+                }
+            }
+            fightToggleLine("聚集材料动作", "战斗结束后，如存在(万叶/琴)，则执行长E聚集材料动作",
+                value: Binding(get: { settings.kazuhaPickupEnabled },
+                    set: { appState.saveAutoFightSettings(kazuhaPickupEnabled: $0) }))
+            if settings.kazuhaPickupEnabled {
+                fightToggleLine("琴二次拾取", "首次拾取为空时再次执行拾取",
+                    value: Binding(get: { settings.qinDoublePickUp },
+                        set: { appState.saveAutoFightSettings(qinDoublePickUp: $0) }))
+                fightToggleLine(
+                    "基于经验值判断拾取(经验值57/58/60，不含传奇120等数字)",
+                    "战斗中检测精英怪死亡经验值图标，未检测到时跳过拾取，避免无价值战斗后浪费时间",
+                    value: Binding(get: { settings.expBasedPickupEnabled },
+                        set: { appState.saveAutoFightSettings(expBasedPickupEnabled: $0) }))
+            }
+            BGISettingLine(title: "自动战斗超时(秒)", subtitle: "到达指定时间后，自动停止战斗") {
+                Stepper(value: Binding(
+                    get: { settings.timeout },
+                    set: { appState.saveAutoFightSettings(timeout: $0) }), in: 1...3600) {
+                    Text("\(settings.timeout)").frame(minWidth: 48)
+                }
+            }
+            fightToggleLine("游泳检测(自动战斗过程中)", "先回战斗节点，失败则去七天神像",
+                value: Binding(get: { settings.swimmingEnabled },
+                    set: { appState.saveAutoFightSettings(swimmingEnabled: $0) }))
+        } else { settingsLoading }
+    }
+
+    private func fightSectionTitle(_ title: String) -> some View {
+        Text(title).font(.headline).foregroundStyle(BGIColors.primaryText).padding(.top, 6)
+    }
+
+    private func fightToggleLine(
+        _ title: String, _ subtitle: String, value: Binding<Bool>
+    ) -> some View {
+        BGISettingLine(title: title, subtitle: subtitle) {
+            Toggle("", isOn: value)
+                .toggleStyle(.switch).labelsHidden()
+        }
+    }
+
+    private func domainCountLine(_ title: String, value: Binding<Int>) -> some View {
+        BGISettingLine(title: title, subtitle: "最小 0 次") {
+            Stepper(value: value, in: 0...999) {
+                Text("\(value.wrappedValue)").frame(minWidth: 36, alignment: .trailing)
+            }
+        }
+    }
+
+    private var settingsLoading: some View {
+        BGISettingLine(title: "设置", subtitle: "正在读取") {
+            ProgressView().controlSize(.small)
+        }
+    }
+
+    private func isRunning(_ name: String) -> Bool {
+        appState.soloTaskStatus.name == name &&
+            ["running", "stopping"].contains(appState.soloTaskStatus.state)
+    }
+
+    private func icon(for name: String) -> BGIIcon {
+        switch name {
+        case "AutoFishing": .fgi("\u{e3a8}")
+        case "AutoRedeemCode": .symbol("barcode.viewfinder")
+        case "GetGridIcons": .symbol("wrench.and.screwdriver")
+        default: .symbol("gearshape.2")
+        }
+    }
+
+}
+
+private struct AutoArtifactSalvageSettingsEditor: View {
+    @EnvironmentObject private var appState: AppState
+    let settings: BetterGICoreAutoArtifactSalvageSettings
+    @State private var javaScript: String
+    @State private var artifactSetFilter: String
+    @State private var showingScriptImport = false
+    @State private var showingRecognitionPreview = false
+
+    init(settings: BetterGICoreAutoArtifactSalvageSettings) {
+        self.settings = settings
+        _javaScript = State(initialValue: settings.javaScript)
+        _artifactSetFilter = State(initialValue: settings.artifactSetFilter)
+    }
+
+    var body: some View {
+        BGISettingLine(
+            title: "测试识别效果",
+            subtitle: "请先将游戏界面切换至圣遗物分解界面"
+        ) {
+            Button {
+                showingRecognitionPreview = true
+            } label: {
+                Label("打开测试窗口", systemImage: "viewfinder")
+            }
+        }
+        .sheet(isPresented: $showingRecognitionPreview) {
+            ArtifactSalvageRecognitionSheet(javaScript: javaScript)
+        }
+        BGISettingLine(title: "JavaScript -", subtitle: "只要满足的圣遗物都会被选中") {
+            HStack(spacing: 8) {
+                Button {
+                    showingScriptImport = true
+                } label: {
+                    Label("从脚本仓库复制", systemImage: "doc.on.doc")
+                }
+                Button("保存脚本") {
+                    appState.saveAutoArtifactSalvageSettings(
+                        javaScript: javaScript, artifactSetFilter: artifactSetFilter)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .sheet(isPresented: $showingScriptImport) {
+            ArtifactScriptImportSheet(
+                projects: appState.scriptProjects,
+                loadCode: { folderName in
+                    try await appState.loadScriptProjectCode(folderName: folderName)
+                },
+                onImport: { code in
+                    javaScript = code
+                    appState.saveAutoArtifactSalvageSettings(
+                        javaScript: code,
+                        artifactSetFilter: artifactSetFilter)
+                })
+        }
+        TextEditor(text: $javaScript)
+            .font(.system(.body, design: .monospaced))
+            .frame(minHeight: 130)
+            .padding(8)
+            .background(BGIColors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        BGISettingLine(
+            title: "按套装筛选",
+            subtitle: "利用游戏自带的筛选功能先行筛选 一般填写套装内生之花名，可填入多个名称；留空则不用"
+        ) {
+            TextField("套装名称", text: $artifactSetFilter)
+                .frame(width: 260)
+                .onSubmit {
+                    appState.saveAutoArtifactSalvageSettings(
+                        javaScript: javaScript, artifactSetFilter: artifactSetFilter)
+                }
+        }
+        BGISettingLine(title: "需要快速分解圣遗物的最高星级", subtitle: "先会进行一次快速分解选择") {
+            Picker("", selection: Binding(
+                get: { settings.maxArtifactStar },
+                set: { appState.saveAutoArtifactSalvageSettings(maxArtifactStar: $0) })) {
+                ForEach(settings.maxArtifactStarOptions, id: \.self) { Text($0).tag($0) }
+            }
+            .labelsHidden().frame(width: 80)
+        }
+        BGISettingLine(title: "最大检查数量", subtitle: "达到最大检查数量后也会停止") {
+            Stepper(value: Binding(
+                get: { settings.maxNumToCheck },
+                set: { appState.saveAutoArtifactSalvageSettings(maxNumToCheck: $0) }),
+                    in: 1...9999) {
+                Text("\(settings.maxNumToCheck)").frame(minWidth: 48, alignment: .trailing)
+            }
+        }
+        BGISettingLine(title: "识别失败策略", subtitle: "识别单个圣遗物面板信息失败时，是跳过还是终止") {
+            Picker("", selection: Binding(
+                get: { settings.recognitionFailurePolicy },
+                set: { appState.saveAutoArtifactSalvageSettings(recognitionFailurePolicy: $0) })) {
+                ForEach(settings.recognitionFailurePolicyOptions) { option in
+                    Text(option.displayName).tag(option.value)
+                }
+            }
+            .labelsHidden().frame(width: 100)
+        }
+    }
+}
+
+private struct ArtifactSalvageRecognitionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appState: AppState
+    let javaScript: String
+
+    @State private var preview: BetterGICoreArtifactSalvagePreview?
+    @State private var loading = false
+    @State private var errorMessage = ""
+    @State private var captureGeneration = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("圣遗物分解").font(.title2.bold())
+                Spacer()
+                if let preview {
+                    BGIStatusBadge(
+                        text: preview.isMatch ? "匹配" : "不匹配",
+                        tint: preview.isMatch ? BGIColors.success : BGIColors.muted)
+                }
+            }
+            Divider()
+            if loading {
+                ProgressView("正在截图并识别")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let preview {
+                HStack(alignment: .top, spacing: 14) {
+                    previewImage(preview)
+                        .frame(minWidth: 360, maxWidth: 520, maxHeight: .infinity)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            recognitionSection("识别文字", preview.recognizedText)
+                            recognitionSection("模型结构", preview.structuredResult)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            } else {
+                Text(errorMessage.isEmpty ? "等待识别" : errorMessage)
+                    .foregroundStyle(
+                        errorMessage.isEmpty
+                            ? BGIColors.secondaryText
+                            : BGIColors.danger)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            Divider()
+            HStack {
+                Spacer()
+                Button("关闭", role: .cancel) { dismiss() }
+                Button {
+                    captureGeneration += 1
+                } label: {
+                    Label("重新识别", systemImage: "arrow.clockwise")
+                }
+                .disabled(loading)
+            }
+        }
+        .padding(18)
+        .frame(minWidth: 900, minHeight: 600)
+        .task(id: captureGeneration) {
+            await capture()
+        }
+    }
+
+    @ViewBuilder
+    private func previewImage(
+        _ preview: BetterGICoreArtifactSalvagePreview
+    ) -> some View {
+        if let data = Data(base64Encoded: preview.imagePngBase64),
+           let image = NSImage(data: data) {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+        } else {
+            Text("识别截图无法解码")
+                .foregroundStyle(BGIColors.danger)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func recognitionSection(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.headline)
+            Text(value)
+                .font(.body.monospaced())
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(BGIColors.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+    }
+
+    private func capture() async {
+        loading = true
+        preview = nil
+        errorMessage = ""
+        do {
+            preview = try await appState.captureArtifactSalvagePreview(
+                javaScript: javaScript)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        loading = false
+    }
+}
+
+private struct ArtifactScriptImportSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let projects: [BetterGIScriptProjectSummary]
+    let loadCode: (String) async throws -> BetterGIScriptProjectCode
+    let onImport: (String) -> Void
+
+    @State private var selectedFolderName: String?
+    @State private var document: BetterGIScriptProjectCode?
+    @State private var loading = false
+    @State private var errorMessage = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("请选择需要复制的JS脚本")
+                .font(.title2.bold())
+            Divider()
+            HStack(alignment: .top, spacing: 14) {
+                List(projects) { project in
+                    Button {
+                        selectedFolderName = project.folderName
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(project.name)
+                                .foregroundStyle(BGIColors.primaryText)
+                            Text("\(project.folderName) · \(project.version)")
+                                .font(.caption)
+                                .foregroundStyle(BGIColors.secondaryText)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 3)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(
+                        selectedFolderName == project.folderName
+                            ? BGIColors.accent.opacity(0.16)
+                            : Color.clear)
+                }
+                .frame(width: 260)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    if loading {
+                        ProgressView("读取脚本")
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if let document {
+                        Text(document.name).font(.headline)
+                        if !document.description.isEmpty {
+                            Text(document.description)
+                                .font(.caption)
+                                .foregroundStyle(BGIColors.secondaryText)
+                        }
+                        ScrollView {
+                            Text(document.code)
+                                .font(.body.monospaced())
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(10)
+                        }
+                        .background(BGIColors.cardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    } else if !errorMessage.isEmpty {
+                        Text(errorMessage)
+                            .foregroundStyle(BGIColors.danger)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        Text(projects.isEmpty ? "没有已安装的 JS 脚本" : "选择脚本以预览")
+                            .foregroundStyle(BGIColors.secondaryText)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            Divider()
+            HStack {
+                Spacer()
+                Button("取消", role: .cancel) { dismiss() }
+                Button("覆盖现有 JavaScript") {
+                    guard let document else { return }
+                    onImport(document.code)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(document == nil || loading)
+            }
+        }
+        .padding(18)
+        .frame(minWidth: 760, minHeight: 520)
+        .task {
+            selectedFolderName = projects.first?.folderName
+        }
+        .task(id: selectedFolderName) {
+            guard let selectedFolderName else {
+                document = nil
+                return
+            }
+            loading = true
+            document = nil
+            errorMessage = ""
+            do {
+                let loaded = try await loadCode(selectedFolderName)
+                guard !Task.isCancelled,
+                      self.selectedFolderName == selectedFolderName else { return }
+                document = loaded
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled,
+                      self.selectedFolderName == selectedFolderName else { return }
+                errorMessage = error.localizedDescription
+            }
+            loading = false
+        }
+    }
+}
+
+private struct CoreTextSettingLine: View {
+    let title: String
+    let subtitle: String
+    let onSave: (String) -> Void
+    @State private var draft: String
+    @FocusState private var focused: Bool
+
+    init(title: String, subtitle: String, value: String, onSave: @escaping (String) -> Void) {
+        self.title = title
+        self.subtitle = subtitle
+        self.onSave = onSave
+        _draft = State(initialValue: value)
+    }
+
+    var body: some View {
+        BGISettingLine(title: title, subtitle: subtitle) {
+            TextField("", text: $draft)
+                .frame(width: 260)
+                .focused($focused)
+                .onSubmit { onSave(draft) }
+                .onChange(of: focused) { wasFocused, isFocused in
+                    if wasFocused && !isFocused { onSave(draft) }
+                }
+        }
+    }
+}

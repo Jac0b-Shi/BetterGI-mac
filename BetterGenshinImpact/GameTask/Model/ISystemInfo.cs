@@ -1,7 +1,6 @@
 ﻿using BetterGenshinImpact.GameTask.Model.Area;
-using OpenCvSharp;
+using BetterGenshinImpact.Platform.Abstractions;
 using System.Diagnostics;
-using Vanara.PInvoke;
 using Size = System.Drawing.Size;
 
 namespace BetterGenshinImpact.GameTask.Model
@@ -16,7 +15,7 @@ namespace BetterGenshinImpact.GameTask.Model
         /// <summary>
         /// 游戏窗口内分辨率
         /// </summary>
-        public RECT GameScreenSize { get; }
+        public BgiRect GameScreenSize { get; }
 
         /// <summary>
         /// 以1080P为标准的素材缩放比例,不会大于1
@@ -39,14 +38,14 @@ namespace BetterGenshinImpact.GameTask.Model
         /// 捕获窗口区域 和实际游戏画面一致
         /// CaptureAreaRect = GameScreenSize or GameWindowRect
         /// </summary>
-        public RECT CaptureAreaRect { get; set; }
+        public BgiRect CaptureAreaRect { get; set; }
 
         /// <summary>
         /// 捕获窗口区域 大于1080P则为1920x1080
         /// </summary>
-        public Rect ScaleMax1080PCaptureRect { get; set; }
+        public BgiRect ScaleMax1080PCaptureRect { get; set; }
 
-        public Process GameProcess { get; }
+        public Process? GameProcess { get; }
 
         public string GameProcessName { get; }
 

@@ -1,0 +1,8 @@
+{
+  "manifest_version": 1,
+  "name": "退出游戏多模式",
+  "version": "1.2",
+  "description": "用于各种各样的退出游戏",
+  "main": "main.js",
+  "settings_ui": "settings.json"
+}

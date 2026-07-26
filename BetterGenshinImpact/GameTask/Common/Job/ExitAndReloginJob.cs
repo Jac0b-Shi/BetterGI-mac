@@ -1,21 +1,16 @@
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
-using BetterGenshinImpact.GameTask.AutoWood.Utils;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Model.Area;
 using Microsoft.Extensions.Logging;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.Common.Job;
 
 public class ExitAndReloginJob
 {
-    private readonly Login3rdParty _login3rdParty = new();
-
     private static RecognitionObject GetAutoWoodRecognitionObject(string objectName)
     {
         return RecognitionAssets.Get("AutoWood", objectName);
@@ -24,12 +19,12 @@ public class ExitAndReloginJob
     public async Task Start(CancellationToken ct)
     {
         Logger.LogInformation("退出至登录页面");
-        SystemControl.FocusWindow(TaskContext.Instance().GameHandle);
+        ExitAndReloginPlatform.Current.FocusGameWindow();
 
         // 等待菜单界面出现
         await NewRetry.WaitForElementAppear(
             GetAutoWoodRecognitionObject("MenuBag"),
-            () => Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE),
+            () => TaskControlPlatform.Current.PressEscape(),
             ct,
             10,
             1200
@@ -64,12 +59,8 @@ public class ExitAndReloginJob
 
         //============== 重新登录流程 ==============
         Logger.LogInformation("点击登录");
-        _login3rdParty.RefreshAvailabled();
-        if (_login3rdParty is { Type: Login3rdParty.The3rdPartyType.Bilibili, IsAvailabled: true })
+        if (ExitAndReloginPlatform.Current.TryLoginThirdParty(ct))
         {
-            // await Delay(1, ct);
-            Thread.Sleep(100);
-            _login3rdParty.Login(ct);
             Logger.LogInformation("退出重登启用 B 服模式");
         }
 

@@ -1,38 +1,23 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script.Dependence.Model;
-using BetterGenshinImpact.GameTask;
-using BetterGenshinImpact.GameTask.AutoBoss;
-using BetterGenshinImpact.GameTask.AutoDomain;
 using BetterGenshinImpact.GameTask.AutoEat;
-using BetterGenshinImpact.GameTask.AutoFishing;
-using BetterGenshinImpact.GameTask.AutoCook;
-using BetterGenshinImpact.GameTask.AutoGeniusInvokation;
-using BetterGenshinImpact.GameTask.AutoPathing.Handler;
-using BetterGenshinImpact.GameTask.AutoWood;
-using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.Model.GameUI;
 using BetterGenshinImpact.Helpers;
-using BetterGenshinImpact.ViewModel.Pages;
 using Microsoft.ClearScript;
 using Microsoft.Extensions.Logging;
 using System;
-using System.Collections.Generic;
-using System.Dynamic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
-using BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
-using BetterGenshinImpact.GameTask.AutoStygianOnslaught;
 using BetterGenshinImpact.GameTask.Common;
 
 namespace BetterGenshinImpact.Core.Script.Dependence;
 
 public class Dispatcher
 {
-    private readonly ILogger<Dispatcher> _logger = App.GetLogger<Dispatcher>();
-
+    private readonly ILogger _logger = ScriptHostServices.CreateLogger<Dispatcher>();
     private readonly object _config;
 
     public Dispatcher(object config)
@@ -70,7 +55,7 @@ public class Dispatcher
     /// </summary>
     public void ClearAllTriggers()
     {
-        TaskTriggerDispatcher.Instance().ClearTriggers();
+        DispatcherRuntimePlatform.Current.ClearTriggers();
     }
 
     /// <summary>
@@ -92,7 +77,7 @@ public class Dispatcher
             throw new ArgumentNullException(nameof(realtimeTimer.Name), "实时任务名称不能为空");
         }
 
-        if (!TaskTriggerDispatcher.Instance().AddTrigger(realtimeTimer.Name, realtimeTimer.Config))
+        if (!DispatcherRuntimePlatform.Current.AddTrigger(realtimeTimer.Name, realtimeTimer.Config))
         {
             throw new ArgumentException($"添加实时任务失败: {realtimeTimer.Name}", nameof(realtimeTimer.Name));
         }
@@ -103,7 +88,7 @@ public class Dispatcher
         // 创建链接的取消令牌源，任何一个取消都会触发
         CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             customCts.Token,
-            CancellationContext.Instance.Cts.Token);
+            DispatcherRuntimePlatform.Current.GlobalCancellationToken);
         await RunTask(soloTask, linkedCts.Token);
     }
 
@@ -128,193 +113,92 @@ public class Dispatcher
             throw new ArgumentNullException(nameof(soloTask), "独立任务对象不能为空");
         }
 
-        var taskSettingsPageViewModel = App.GetService<TaskSettingsPageViewModel>();
-        if (taskSettingsPageViewModel == null)
-        {
-            throw new ArgumentNullException(nameof(taskSettingsPageViewModel), "内部视图模型对象为空");
-        }
+        if (soloTask.Name is not (
+            "AutoGeniusInvokation" or "AutoWood" or "AutoFight" or "AutoDomain" or
+            "AutoBoss" or "AutoFishing" or "AutoCook" or "AutoEat" or "CountInventoryItem"))
+            throw new ArgumentException($"未知的任务名称: {soloTask.Name}", nameof(soloTask.Name));
 
-
-        CancellationToken cancellationToken;
-
-        if (customCt != null)
-        {
-            cancellationToken = customCt.Value;
-        }
-        else
-        {
-            // 如果没有自定义令牌，就使用全局令牌
-            cancellationToken = CancellationContext.Instance.Cts.Token;
-        }
-
-        // 根据名称执行任务
+        var platform = DispatcherRuntimePlatform.Current;
+        var cancellationToken = customCt ?? platform.GlobalCancellationToken;
+        DispatcherSoloTaskRequest request;
         switch (soloTask.Name)
         {
             case "AutoGeniusInvokation":
-                string content;
-                // 检查是否有自定义策略内容  
-                if (soloTask.Config != null)
+                var strategy = soloTask.Config is ScriptObject geniusConfig
+                    ? ScriptObjectConverter.GetValue(geniusConfig, "strategy", "")
+                    : "";
+                if (string.IsNullOrEmpty(strategy) && platform.GetTcgStrategy(out strategy)) return null;
+                request = new DispatcherGeniusTaskRequest(strategy);
+                break;
+            case "AutoWood":
+                request = new DispatcherWoodTaskRequest(platform.AutoWoodRoundNum, platform.AutoWoodDailyMaxCount);
+                break;
+            case "AutoFight":
+                request = new DispatcherFightTaskRequest(_config);
+                break;
+            case "AutoDomain":
+                if (platform.GetFightStrategy(null, out var domainPath)) return null;
+                request = new DispatcherDomainTaskRequest(domainPath);
+                break;
+            case "AutoBoss":
+                if (platform.GetFightStrategy(platform.AutoBossStrategyName, out var bossPath)) return null;
+                request = new DispatcherBossTaskRequest(bossPath);
+                break;
+            case "AutoFishing":
+                request = new DispatcherFishingTaskRequest(soloTask.Config);
+                break;
+            case "AutoCook":
+                request = new DispatcherCookTaskRequest();
+                break;
+            case "AutoEat":
+                var eatConfig = soloTask.Config as ScriptObject;
+                var foodName = eatConfig is null
+                    ? null : ScriptObjectConverter.GetValue(eatConfig, "foodName", (string?)null);
+                var effect = eatConfig is null
+                    ? null : (FoodEffectType?)ScriptObjectConverter.GetValue(
+                        eatConfig, "foodEffectType", (int?)null);
+                if (foodName is not null && effect is not null)
+                    throw new NotSupportedException("不能同时指定foodName和foodEffectType");
+                if (foodName is null && effect is not null)
                 {
-                    var jsObject = (ScriptObject)soloTask.Config;
-                    content = ScriptObjectConverter.GetValue(jsObject, "strategy", "");
-                    if (string.IsNullOrEmpty(content))
+                    if (_config is not PathingPartyConfig partyConfig)
+                        throw new NotSupportedException("foodEffectType参数需要调度器配置，请在调度器下使用");
+                    foodName = effect switch
                     {
-                        // 回退到原有逻辑  
-                        if (taskSettingsPageViewModel.GetTcgStrategy(out content))
-                        {
-                            return null;
-                        }
-                    }
-                }
-                else
-                {
-                    // 回退到原有逻辑  
-                    if (taskSettingsPageViewModel.GetTcgStrategy(out content))
+                        FoodEffectType.ATKBoostingDish => partyConfig.AutoEatConfig.DefaultAtkBoostingDishName,
+                        FoodEffectType.AdventurersDish => partyConfig.AutoEatConfig.DefaultAdventurersDishName,
+                        FoodEffectType.DEFBoostingDish => partyConfig.AutoEatConfig.DefaultDefBoostingDishName,
+                        _ => throw new NotSupportedException("JS脚本入参错误：错误的foodEffectType")
+                    };
+                    if (foodName is null)
                     {
+                        _logger.LogInformation("缺少默认料理配置，跳过吃Buff");
                         return null;
                     }
                 }
-
-                await new AutoGeniusInvokationTask(new GeniusInvokationTaskParam(content)).Start(cancellationToken);
-                return null;
-
-            case "AutoWood":
-                await new AutoWoodTask(new WoodTaskParam(taskSettingsPageViewModel.AutoWoodRoundNum,
-                    taskSettingsPageViewModel.AutoWoodDailyMaxCount)).Start(cancellationToken);
-                return null;
-
-            case "AutoFight":
-                await new AutoFightHandler().RunAsyncByScript(cancellationToken, null, _config);
-                return null;
-
-            case "AutoDomain":
-                if (taskSettingsPageViewModel.GetFightStrategy(out var path))
-                {
-                    return null;
-                }
-
-                return await new AutoDomainTask(new AutoDomainParam(0, path)).Start(cancellationToken);
-
-            case "AutoBoss":
-                var autoBossConfig = TaskContext.Instance().Config.AutoBossConfig;
-                if (taskSettingsPageViewModel.GetFightStrategy(autoBossConfig.StrategyName, out var autoBossPath))
-                {
-                    return null;
-                }
-
-                return await new AutoBossTask(new AutoBossParam(autoBossPath)).Start(cancellationToken);
-
-            case "AutoFishing":
-                await new AutoFishingTask(AutoFishingTaskParam.BuildFromSoloTaskConfig(soloTask.Config)).Start(
-                    cancellationToken);
-                return null;
-            case "AutoCook":
-                await new AutoCookTask().Start(cancellationToken);
-                return null;
-            case "AutoEat":
-                {
-                    string? foodName = soloTask.Config == null ? null : ScriptObjectConverter.GetValue((ScriptObject)soloTask.Config, "foodName", (string?)null);
-                    FoodEffectType? foodEffectType = soloTask.Config == null ? null : (FoodEffectType?)ScriptObjectConverter.GetValue((ScriptObject)soloTask.Config, "foodEffectType", (int?)null);
-
-                    if (foodName != null && foodEffectType != null)
-                    {
-                        throw new NotSupportedException("不能同时指定foodName和foodEffectType");
-                    }
-
-                    if (foodName == null)
-                    {
-                        if (foodEffectType != null)
-                        {
-                            PathingPartyConfig? pathingPartyConfig = _config as PathingPartyConfig;
-                            if (pathingPartyConfig == null)
-                            {
-                                throw new NotSupportedException("foodEffectType参数需要调度器配置，请在调度器下使用");
-                            }
-                            else
-                            {
-                                switch (foodEffectType)
-                                {
-                                    case FoodEffectType.ATKBoostingDish:
-                                        foodName = pathingPartyConfig.AutoEatConfig.DefaultAtkBoostingDishName;
-                                        if (foodName == null)
-                                        {
-                                            _logger.LogInformation("缺少{Text}配置，跳过吃Buff", "默认的攻击类料理");
-                                            return null;
-                                        }
-                                        break;
-                                    case FoodEffectType.AdventurersDish:
-                                        foodName = pathingPartyConfig.AutoEatConfig.DefaultAdventurersDishName;
-                                        if (foodName == null)
-                                        {
-                                            _logger.LogInformation("缺少{Text}配置，跳过吃Buff", "默认的冒险类料理");
-                                            return null;
-                                        }
-                                        break;
-                                    case FoodEffectType.DEFBoostingDish:
-                                        foodName = pathingPartyConfig.AutoEatConfig.DefaultDefBoostingDishName;
-                                        if (foodName == null)
-                                        {
-                                            _logger.LogInformation("缺少{Text}配置，跳过吃Buff", "默认的防御类料理");
-                                            return null;
-                                        }
-                                        break;
-                                    default:
-                                        throw new NotSupportedException("JS脚本入参错误：错误的foodEffectType");
-                                }
-                            }
-                        }
-                    }
-
-                    var autoEatConfig = TaskContext.Instance().Config.AutoEatConfig;
-                    return await new AutoEatTask(new AutoEatParam()
-                    {
-                        CheckInterval = autoEatConfig.CheckInterval,
-                        EatInterval = autoEatConfig.EatInterval,
-                        ShowNotification = autoEatConfig.ShowNotification,
-                        FoodName = foodName
-                    }).Start(cancellationToken);
-                }
+                request = new DispatcherEatTaskRequest(foodName, platform.AutoEatSettings);
+                break;
             case "CountInventoryItem":
-                {
-                    if (soloTask.Config == null)
-                    {
-                        throw new NullReferenceException($"{nameof(soloTask.Config)}为空");
-                    }
-                    GridScreenName gridScreenName = ScriptObjectConverter.GetValue((ScriptObject)soloTask.Config, "gridScreenName", (GridScreenName?)null) ?? throw new Exception("gridScreenName为空或错误");
-                    string? itemName = ScriptObjectConverter.GetValue((ScriptObject)soloTask.Config, "itemName", (string?)null);
-                    IEnumerable<string>? itemNames = ScriptObjectConverter.GetValue<string>((ScriptObject)soloTask.Config, "itemNames");
-                    CountInventoryItemParam param = new()
-                    {
-                        GridScreenName = gridScreenName,
-                        ItemName = itemName,
-                        ItemNames = itemNames?.ToList() ?? []
-                    };
-
-                    var result = await new CountInventoryItem(param).Start(cancellationToken);
-                    if (param.ItemName != null)
-                    {
-                        return result;
-                    }
-                    else
-                    {
-                        dynamic expando = new ExpandoObject();
-                        var expandoDict = (IDictionary<string, object>)expando;
-                        foreach (var kvp in (Dictionary<string, int>)result)
-                        {
-                            expandoDict[kvp.Key] = kvp.Value;
-                        }
-                        return expandoDict;
-                    }
-                }
+                if (soloTask.Config is not ScriptObject countConfig)
+                    throw new NullReferenceException($"{nameof(soloTask.Config)}为空");
+                var screenName = ScriptObjectConverter.GetValue(
+                    countConfig, "gridScreenName", (GridScreenName?)null)
+                    ?? throw new Exception("gridScreenName为空或错误");
+                request = new DispatcherCountInventoryTaskRequest(
+                    (int)screenName,
+                    ScriptObjectConverter.GetValue(countConfig, "itemName", (string?)null),
+                    ScriptObjectConverter.GetValue<string>(countConfig, "itemNames")?.ToList() ?? []);
+                break;
             default:
                 throw new ArgumentException($"未知的任务名称: {soloTask.Name}", nameof(soloTask.Name));
         }
+        return await platform.ExecuteSoloTask(request, cancellationToken);
     }
 
     public CancellationTokenSource GetLinkedCancellationTokenSource()
     {
         // 创建一个新的链接令牌源，链接到全局令牌
-        return CancellationTokenSource.CreateLinkedTokenSource(CancellationContext.Instance.Cts.Token);
+        return CancellationTokenSource.CreateLinkedTokenSource(DispatcherRuntimePlatform.Current.GlobalCancellationToken);
     }
 
 
@@ -322,23 +206,23 @@ public class Dispatcher
     {
         return GetLinkedCancellationTokenSource().Token;
     }
-    
-    /// <summary>  
+
+    /// <summary>
     /// 运行自动秘境任务
-    /// </summary>  
-    /// <param name="param">秘境任务参数</param>  
-    /// <param name="customCt">自定义取消令牌</param>  
-    /// <returns></returns>  
-    public async Task<Dictionary<string, int>> RunAutoDomainTask(AutoDomainParam param, CancellationToken? customCt = null)
-    {  
-        if (param == null)  
-        {  
-            throw new ArgumentNullException(nameof(param), "秘境任务参数不能为空");  
-        }  
-  
-        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;  
-        return await new AutoDomainTask(param).Start(cancellationToken);
-    }  
+    /// </summary>
+    /// <param name="param">秘境任务参数</param>
+    /// <param name="customCt">自定义取消令牌</param>
+    /// <returns></returns>
+    public async Task<object?> RunAutoDomainTask(object param, CancellationToken? customCt = null)
+    {
+        if (param == null)
+        {
+            throw new ArgumentNullException(nameof(param), "秘境任务参数不能为空");
+        }
+
+        CancellationToken cancellationToken = customCt ?? DispatcherRuntimePlatform.Current.GlobalCancellationToken;
+        return await DispatcherRuntimePlatform.Current.RunParameterizedTask("AutoDomain", param, cancellationToken);
+    }
 
     /// <summary>
     /// 运行自动首领讨伐任务
@@ -346,36 +230,34 @@ public class Dispatcher
     /// <param name="param">自动首领讨伐任务参数</param>
     /// <param name="customCt">自定义取消令牌</param>
     /// <returns></returns>
-    public async Task<Dictionary<string, int>> RunAutoBossTask(AutoBossParam param, CancellationToken? customCt = null)
+    public async Task<object?> RunAutoBossTask(object param, CancellationToken? customCt = null)
     {
         if (param == null)
         {
             throw new ArgumentNullException(nameof(param), "自动首领讨伐任务参数不能为空");
         }
 
-        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;
-        return await new AutoBossTask(param).Start(cancellationToken);
+        CancellationToken cancellationToken = customCt ?? DispatcherRuntimePlatform.Current.GlobalCancellationToken;
+        return await DispatcherRuntimePlatform.Current.RunParameterizedTask("AutoBoss", param, cancellationToken);
     }
 
-    /// <summary>  
+    /// <summary>
     /// 运行自动战斗任务
-    /// </summary>  
-    /// <param name="param">战斗任务参数</param>  
-    /// <param name="customCt">自定义取消令牌</param>  
-    /// <returns></returns>  
-    public async Task RunAutoFightTask(AutoFightParam param, CancellationToken? customCt = null)  
-    {  
-        if (param == null)  
-        {  
-            throw new ArgumentNullException(nameof(param), "战斗任务参数不能为空");  
-        }  
-  
-        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;  
-        var factory = GameTask.AutoFight.Factory.CombatTaskFactoryProvider.GetFactory(param.CombatStrategyPath);
-        var fightTask = factory.CreateTask(param);
-        await fightTask.Start(cancellationToken);  
+    /// </summary>
+    /// <param name="param">战斗任务参数</param>
+    /// <param name="customCt">自定义取消令牌</param>
+    /// <returns></returns>
+    public async Task RunAutoFightTask(AutoFightParam param, CancellationToken? customCt = null)
+    {
+        if (param == null)
+        {
+            throw new ArgumentNullException(nameof(param), "战斗任务参数不能为空");
+        }
+
+        CancellationToken cancellationToken = customCt ?? DispatcherRuntimePlatform.Current.GlobalCancellationToken;
+        await DispatcherRuntimePlatform.Current.RunParameterizedTask("AutoFight", param, cancellationToken);
     }
-    
+
     /// <summary>
     /// 运行简易战斗策略脚本。
     /// 使用策略语言直接控制角色执行动作（如 e、q、attack 等），适合快速操作。
@@ -390,7 +272,7 @@ public class Dispatcher
             throw new ArgumentException("策略字符串不能为空", nameof(script));
         }
 
-        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;
+        CancellationToken cancellationToken = customCt ?? DispatcherRuntimePlatform.Current.GlobalCancellationToken;
 
         // 1. 解析策略字符串（ParseContext 已处理全角符号、注释、分号/逗号分隔）
         var combatScript = CombatScriptParser.ParseContext(script, validate: false, defaultAvatarName: avatarName);
@@ -400,72 +282,57 @@ public class Dispatcher
 
         await CombatScriptExecutor.ExecuteAsync(combatScript, cancellationToken, _logger);
     }
-    
-    /// <summary>  
+
+    /// <summary>
     /// 运行自动地脉花任务
-    /// </summary>  
-    /// <param name="param">自动地脉花任务参数</param>  
-    /// <param name="customCt">自定义取消令牌</param>  
-    /// <returns></returns>  
-    public async Task RunAutoLeyLineOutcropTask(AutoLeyLineOutcropParam param, CancellationToken? customCt = null)  
-    {  
-        if (param == null)  
-        {  
-            throw new ArgumentNullException(nameof(param), "自动地脉花任务参数不能为空");  
-        }  
-  
-        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;  
-        await new AutoLeyLineOutcropTask(param).Start(cancellationToken);  
+    /// </summary>
+    /// <param name="param">自动地脉花任务参数</param>
+    /// <param name="customCt">自定义取消令牌</param>
+    /// <returns></returns>
+    public async Task RunAutoLeyLineOutcropTask(object param, CancellationToken? customCt = null)
+    {
+        if (param == null)
+        {
+            throw new ArgumentNullException(nameof(param), "自动地脉花任务参数不能为空");
+        }
+
+        CancellationToken cancellationToken = customCt ?? DispatcherRuntimePlatform.Current.GlobalCancellationToken;
+        await DispatcherRuntimePlatform.Current.RunParameterizedTask("AutoLeyLineOutcrop", param, cancellationToken);
     }
 
 
-    /// <summary>  
+    /// <summary>
     /// 运行自动幽境危战任务
-    /// </summary>  
-    /// <param name="param">自动幽境危战任务参数</param>  
-    /// <param name="customCt">自定义取消令牌</param>  
-    /// <returns></returns>  
-    public async Task RunAutoStygianOnslaughtTask(AutoStygianOnslaughtParam param, CancellationToken? customCt = null)
+    /// </summary>
+    /// <param name="param">自动幽境危战任务参数</param>
+    /// <param name="customCt">自定义取消令牌</param>
+    /// <returns></returns>
+    public async Task RunAutoStygianOnslaughtTask(object param, CancellationToken? customCt = null)
     {
         if (param == null)
         {
             throw new ArgumentNullException(nameof(param), "自动幽境危战任务参数不能为空");
         }
 
-        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;
-        await new AutoStygianOnslaughtTask(param).Start(cancellationToken);
+        CancellationToken cancellationToken = customCt ?? DispatcherRuntimePlatform.Current.GlobalCancellationToken;
+        await DispatcherRuntimePlatform.Current.RunParameterizedTask("AutoStygianOnslaught", param, cancellationToken);
     }
-    
+
     /// <summary>
     /// 运行背包物品计数任务。
     /// </summary>
     /// <param name="param">背包物品计数参数。</param>
     /// <param name="customCt">自定义取消令牌。</param>
     /// <returns>单物品返回数量；多物品返回名称到数量的脚本对象。</returns>
-    public async Task<object?> RunCountInventoryItemTask(CountInventoryItemParam param, CancellationToken? customCt = null)
+    public async Task<object?> RunCountInventoryItemTask(object param, CancellationToken? customCt = null)
     {
         if (param == null)
         {
             throw new ArgumentNullException(nameof(param), "背包物品计数参数不能为空");
         }
 
-        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;
-        object result = await new CountInventoryItem(param).Start(cancellationToken);
-
-        if (param.ItemName != null)
-        {
-            return result;
-        }
-        else
-        {
-            dynamic expando = new ExpandoObject();
-            var expandoDict = (IDictionary<string, object>)expando;
-            foreach (var kvp in (Dictionary<string, int>)result)
-            {
-                expandoDict[kvp.Key] = kvp.Value;
-            }
-
-            return expandoDict;
-        }
+        CancellationToken cancellationToken = customCt ?? DispatcherRuntimePlatform.Current.GlobalCancellationToken;
+        return await DispatcherRuntimePlatform.Current.RunParameterizedTask(
+            "CountInventoryItem", param, cancellationToken);
     }
 }

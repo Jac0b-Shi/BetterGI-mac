@@ -11,9 +11,9 @@ using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing.Handler;
 
-internal class AutoFightHandler : IActionHandler
+public class AutoFightHandler : IActionHandler
 {
-    private readonly ILogger<AutoFightHandler> _logger = App.GetLogger<AutoFightHandler>();
+    private readonly ILogger<AutoFightHandler> _logger = AutoFightRuntimePlatform.Current.GetLogger<AutoFightHandler>();
     public async Task RunAsyncByScript(CancellationToken ct, WaypointForTrack? waypointForTrack = null, object? config = null)
     {
         await StartFight(ct, config,waypointForTrack);
@@ -28,7 +28,7 @@ internal class AutoFightHandler : IActionHandler
     {
         TaskControl.Logger.LogInformation("执行 {Text}", "自动战斗");
         // 爷们要战斗
-        AutoFightParam taskParams = null;
+        AutoFightParam taskParams;
         if (config is PathingPartyConfig { Enabled: true, AutoFightEnabled: true } partyConfig)
         {
             //替换配置为地图追踪
@@ -37,7 +37,7 @@ internal class AutoFightHandler : IActionHandler
         }
         else
         {
-            taskParams = new AutoFightParam(GetFightStrategy(), TaskContext.Instance().Config.AutoFightConfig);
+            taskParams = new AutoFightParam(GetFightStrategy(), AutoFightRuntimePlatform.Current.AutoFightConfig);
         }
 
         //根据怪物标签，调整拾取配置
@@ -74,7 +74,7 @@ internal class AutoFightHandler : IActionHandler
         await fightSoloTask.Start(ct);
     }
 
-    private AutoFightParam GetFightAutoFightParam(AutoFightConfig? config)
+    private AutoFightParam GetFightAutoFightParam(AutoFightConfig config)
     {
         AutoFightParam autoFightParam = new AutoFightParam(GetFightStrategy(config), config);
         return autoFightParam;
@@ -98,6 +98,6 @@ internal class AutoFightHandler : IActionHandler
 
     private string GetFightStrategy()
     {
-        return GetFightStrategy(TaskContext.Instance().Config.AutoFightConfig);
+        return GetFightStrategy(AutoFightRuntimePlatform.Current.AutoFightConfig);
     }
 }

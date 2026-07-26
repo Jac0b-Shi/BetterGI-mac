@@ -4,8 +4,8 @@ using OpenCvSharp;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Text.Json;
-using BetterGenshinImpact.View.Drawable;
 using Compunet.YoloSharp;
 using Microsoft.ML.OnnxRuntime;
 
@@ -13,6 +13,7 @@ namespace BetterGenshinImpact.Core.Recognition.ONNX;
 
 public class BgiYoloPredictor : IDisposable
 {
+    private int _disposed;
     private readonly BgiOnnxModel _model;
 
 
@@ -61,25 +62,21 @@ public class BgiYoloPredictor : IDisposable
 
         Debug.WriteLine("YOLO识别结果:" + JsonSerializer.Serialize(dict));
 
-        var list = result
+        var rectangles = result
             .Select(box => new Rect(box.Bounds.X, box.Bounds.Y, box.Bounds.Width, box.Bounds.Height))
-            .Select(rect => region.ToRectDrawable(rect, _model.Name)).ToList();
-
-        VisionContext.Instance().DrawContent.PutOrRemoveRectList(_model.Name, list);
+            .ToList();
+        OverlayDrawPlatform.Current.SetRectangles(_model.Name, region, rectangles);
 
         return dict;
     }
 
     public void Dispose()
     {
-        if (_lazyPredictor.IsValueCreated)
+        if (Interlocked.Exchange(ref _disposed, 1) == 0 && _lazyPredictor.IsValueCreated)
         {
             Predictor.Dispose();
         }
+        GC.SuppressFinalize(this);
     }
 
-    ~BgiYoloPredictor()
-    {
-        Dispose();
-    }
 }

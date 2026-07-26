@@ -39,6 +39,8 @@ public interface ITaskTrigger
     
     GameUiCategory SupportedGameUiCategory => GameUiCategory.Unknown;
 
+    bool SupportsGameUiCategory(GameUiCategory category) => SupportedGameUiCategory == category;
+
     /// <summary>
     /// 初始化
     /// </summary>

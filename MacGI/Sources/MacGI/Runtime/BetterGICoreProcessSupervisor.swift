@@ -1,0 +1,3522 @@
+import Darwin
+import Foundation
+import Security
+
+struct BetterGICoreTriggerState: Sendable, Equatable {
+    let name: String
+    let displayName: String
+    let enabled: Bool
+    let canSetEnabled: Bool
+    let priority: Int
+    let exclusive: Bool
+    let settingsAvailable: Bool
+    let autoHangoutEventEnabled: Bool?
+}
+
+struct BetterGIKeyMouseScript: Sendable, Equatable, Identifiable {
+    let id: String
+    let name: String
+    let createdAt: String
+}
+
+struct BetterGIKeyMousePlaybackStatus: Sendable, Equatable {
+    let taskID: String?
+    let scriptID: String?
+    let state: String
+    let error: String?
+}
+
+struct BetterGINotificationSettings: Sendable, Equatable {
+    let includeScreenShot: Bool
+    let jsNotificationEnabled: Bool
+    let macOSNotificationEnabled: Bool
+    let notificationEventSubscribe: String
+    let events: [BetterGINotificationEvent]
+    let webhookEnabled: Bool
+    let webhookEndpoint: String
+    let webhookSendTo: String
+    let channels: [BetterGINotificationChannel]
+}
+
+struct BetterGINotificationEvent: Sendable, Equatable, Identifiable {
+    let code: String
+    let displayName: String
+    let selected: Bool
+
+    var id: String { code }
+}
+
+enum BetterGINotificationFieldValue: Sendable, Equatable {
+    case boolean(Bool)
+    case integer(Int)
+    case string(String)
+
+    var rpcValue: Any {
+        switch self {
+        case .boolean(let value): value
+        case .integer(let value): value
+        case .string(let value): value
+        }
+    }
+}
+
+struct BetterGINotificationField: Sendable, Equatable, Identifiable {
+    let id: String
+    let label: String
+    let kind: String
+    let placeholder: String
+    let options: [String]
+    let value: BetterGINotificationFieldValue
+}
+
+struct BetterGINotificationChannel: Sendable, Equatable, Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let enabledField: String
+    let enabled: Bool
+    let fields: [BetterGINotificationField]
+
+    var rpcValues: [String: Any] {
+        var result: [String: Any] = [enabledField: enabled]
+        for field in fields {
+            result[field.id] = field.value.rpcValue
+        }
+        return result
+    }
+
+    func stringValue(_ fieldID: String) -> String {
+        guard let field = fields.first(where: { $0.id == fieldID }),
+              case .string(let value) = field.value
+        else {
+            return ""
+        }
+        return value
+    }
+}
+
+struct BetterGIHotKeyBinding: Sendable, Equatable, Identifiable {
+    let id: String
+    let category: String
+    let functionName: String
+    let hotKey: String
+    let hotKeyType: String
+    let action: String
+    let executionOwner: String
+    let isHold: Bool
+    let dispatchOnPress: Bool
+    let dispatchOnRelease: Bool
+
+    var hotKeyTypeName: String {
+        hotKeyType == "GlobalRegister" ? "全局热键" : "键鼠监听"
+    }
+
+    var displayHotKey: String {
+        guard !hotKey.isEmpty, hotKey != "< None >" else { return "未设置" }
+        return hotKey
+            .replacingOccurrences(of: "Ctrl", with: "⌃")
+            .replacingOccurrences(of: "Shift", with: "⇧")
+            .replacingOccurrences(of: "Alt", with: "⌥")
+            .replacingOccurrences(of: "Win", with: "⌘")
+            .replacingOccurrences(of: " + ", with: "")
+    }
+}
+
+struct BetterGIKeyBindingOption: Sendable, Equatable, Identifiable {
+    let value: Int
+    let displayName: String
+
+    var id: Int { value }
+}
+
+struct BetterGIKeyBinding: Sendable, Equatable, Identifiable {
+    let id: String
+    let category: String
+    let actionName: String
+    let value: Int
+    let displayValue: String
+    let supported: Bool
+}
+
+struct BetterGIKeyBindingSettings: Sendable, Equatable {
+    let globalKeyMappingEnabled: Bool
+    let bindings: [BetterGIKeyBinding]
+    let options: [BetterGIKeyBindingOption]
+}
+
+struct BetterGIMacroSettings: Sendable, Equatable {
+    let fPressHoldToContinuationEnabled: Bool
+    let fFireInterval: Int
+    let spacePressHoldToContinuationEnabled: Bool
+    let spaceFireInterval: Int
+    let runaroundMouseXInterval: Int
+    let runaroundInterval: Int
+    let enhanceWaitDelay: Int
+    let combatMacroEnabled: Bool
+    let combatMacroHotkeyMode: String
+    let combatMacroHotkeyModeOptions: [String]
+    let combatMacroPriority: Int
+    let oneKeyClaimRewardHotkeyMode: String
+    let oneKeyClaimRewardHotkeyModeOptions: [String]
+    let oneKeyClaimRewardHoldMode: String
+    let oneKeyClaimRewardScrollDownEnabled: Bool
+    let oneKeyClaimRewardScrollDownAmount: Int
+    let pickUpOrInteractKey: KeyCode
+    let jumpKey: KeyCode
+}
+
+struct BetterGICoreAutoEatTriggerSettings: Sendable, Equatable {
+    let checkInterval: Int
+    let eatInterval: Int
+}
+
+struct BetterGICoreAutoPickTriggerSettings: Sendable, Equatable {
+    let ocrEngine: String
+    let ocrEngineOptions: [String]
+    let fastModeEnabled: Bool
+    let blackListEnabled: Bool
+    let exactBlackList: String
+    let fuzzyBlackList: String
+    let whiteListEnabled: Bool
+    let whiteList: String
+    let pickKey: String
+    let pickKeyOptions: [String]
+}
+
+struct BetterGICoreAutoSkipTriggerSettings: Sendable, Equatable {
+    let quicklySkipConversationsEnabled: Bool
+    let afterChooseOptionSleepDelay: Int
+    let autoWaitDialogueOptionVoiceEnabled: Bool
+    let dialogueOptionVoiceMaxWaitSeconds: Int
+    let beforeClickConfirmDelay: Int
+    let autoGetDailyRewardsEnabled: Bool
+    let autoReExploreEnabled: Bool
+    let clickChatOption: String
+    let clickChatOptionOptions: [String]
+    let customPriorityOptionsEnabled: Bool
+    let customPriorityOptions: String
+    let autoHangoutEventEnabled: Bool
+    let autoHangoutEndChoose: String
+    let autoHangoutEndChooseOptions: [String]
+    let autoHangoutChooseOptionSleepDelay: Int
+    let autoHangoutPressSkipEnabled: Bool
+    let submitGoodsEnabled: Bool
+    let closePopupPagedEnabled: Bool
+}
+
+struct BetterGICoreQuickTeleportTriggerSettings: Sendable, Equatable {
+    let teleportListClickDelay: Int
+    let waitTeleportPanelDelay: Int
+    let hotkeyTpEnabled: Bool
+}
+
+struct BetterGICoreMapMaskTriggerSettings: Sendable, Equatable {
+    let miniMapMaskEnabled: Bool
+}
+
+struct BetterGICoreSkillCdRule: Sendable, Equatable {
+    var roleName: String
+    var cdValueText: String
+}
+
+struct BetterGICoreSkillCdTriggerSettings: Sendable, Equatable {
+    let customCdList: [BetterGICoreSkillCdRule]
+    let triggerOnSkillUse: Bool
+    let hideWhenZero: Bool
+    let pX: Double
+    let pY: Double
+    let gap: Double
+    let scale: Double
+    let textNormalColor: String
+    let backgroundNormalColor: String
+    let textReadyColor: String
+    let backgroundReadyColor: String
+}
+
+struct BetterGICoreMapMaskPickerSettings: Sendable, Equatable {
+    let mapPointApiProvider: String
+    let mapPointApiProviderOptions: [String]
+    let hoYoLabLanguage: String
+    let hoYoLabLanguageOptions: [String]
+}
+
+struct BetterGICoreMapMaskLabel: Sendable, Equatable, Identifiable {
+    let id: String
+    let parentID: String
+    let name: String
+    let iconURL: String
+    let pointCount: Int
+    let children: [BetterGICoreMapMaskLabel]
+}
+
+struct BetterGICoreMapMaskPointLink: Sendable, Equatable, Identifiable {
+    let text: String
+    let url: String
+    var id: String { "\(text)\u{0}\(url)" }
+}
+
+struct BetterGICoreMapMaskPointDetail: Sendable, Equatable {
+    let pointID: String
+    let title: String
+    let text: String
+    let imageURL: String
+    let links: [BetterGICoreMapMaskPointLink]
+}
+
+struct BetterGICoreSoloTask: Sendable, Equatable, Identifiable {
+    let name: String
+    let displayName: String
+    let description: String
+    let available: Bool
+    let unavailableReason: String?
+    let settingsAvailable: Bool
+    let headerAction: Bool
+    let actions: [BetterGICoreSoloTaskAction]
+    let inputKind: String?
+    let inputTitle: String?
+    let inputPlaceholder: String?
+    let tutorialURL: String?
+    let showsScriptRepository: Bool
+    let scriptDirectoryPath: String?
+    var id: String { name }
+}
+
+struct BetterGICoreSoloTaskAction: Sendable, Equatable, Identifiable {
+    let name: String
+    let title: String
+    let description: String
+    var id: String { name }
+}
+
+struct BetterGICoreAutoCookSettings: Sendable, Equatable {
+    let checkIntervalMs: Int
+    let stopTaskWhenRecoverButtonDetected: Bool
+}
+
+struct BetterGICoreAutoRedeemCodeSettings: Sendable, Equatable {
+    let clipboardListenerEnabled: Bool
+}
+
+struct BetterGICoreGetGridIconsSettings: Sendable, Equatable {
+    let gridName: String
+    let gridNameOptions: [BetterGICoreNamedOption]
+    let starAsSuffix: Bool
+    let lvAsSuffix: Bool
+    let maxNumToGet: Int
+}
+
+struct BetterGICoreAutoGeniusInvokationSettings: Sendable, Equatable {
+    let strategyName: String
+    let strategyOptions: [String]
+    let sleepDelay: Int
+}
+
+struct BetterGICoreAutoFishingSettings: Sendable, Equatable {
+    let autoThrowRodTimeOut: Int
+    let wholeProcessTimeoutSeconds: Int
+    let fishingTimePolicy: String
+    let fishingTimePolicyOptions: [BetterGICoreNamedOption]
+    let screenshotEnabled: Bool
+    let saveScreenshotOnKeyTick: Bool
+}
+
+struct BetterGICoreCommonSettings: Sendable, Equatable {
+    let screenshotEnabled: Bool
+    let screenshotUidCoverEnabled: Bool
+    let mapMatchingMethod: String
+    let mapMatchingMethodOptions: [String]
+    let autoFetchDispatchCountry: String
+    let autoFetchDispatchCountryOptions: [String]
+    let serverTimeZoneOffsetHours: Int
+    let serverTimeZoneOffsetOptions: [Int]
+    let autoRestartEnabled: Bool
+    let autoRestartFailureCount: Int
+    let autoRestartGameTogether: Bool
+    let fightFailureExceptional: Bool
+    let pathingFailureExceptional: Bool
+    let farmingPlanEnabled: Bool
+    let farmingDailyEliteCap: Int
+    let farmingDailyMobCap: Int
+    let miyousheDataEnabled: Bool
+    let miyousheDailyEliteCap: Int
+    let miyousheDailyMobCap: Int
+    let miyousheCookie: String
+    let miyousheLogSyncCookie: Bool
+    let autoUpdateSubscribedScripts: Bool
+    let autoUpdateBeforeCommandLineRun: Bool
+    let scriptRepositoryChannel: String
+    let scriptRepositoryChannelOptions: [String]
+    let scriptRepositoryChannelURLs: [String: String]
+    let scriptRepositoryCustomURL: String
+}
+
+struct BetterGICoreAutoWoodSettings: Sendable, Equatable {
+    let roundNum: Int
+    let dailyMaxCount: Int
+    let useWonderlandRefresh: Bool
+    let woodCountOcrEnabled: Bool
+    let afterZSleepDelay: Int
+}
+
+struct BetterGICoreAutoMusicGameSettings: Sendable, Equatable {
+    let mustCanorusLevel: Bool
+    let musicLevel: String
+    let musicLevelOptions: [String]
+}
+
+struct BetterGICoreAutoBossSettings: Sendable, Equatable {
+    let bossName: String
+    let bossOptions: [String]
+    let strategyName: String
+    let strategyOptions: [String]
+    let teamName: String
+    let specifyRunCount: Bool
+    let runCount: Int
+    let useTransientResin: Bool
+    let useFragileResin: Bool
+    let returnToStatueAfterEachRound: Bool
+    let rewardRecognitionEnabled: Bool
+    let reviveRetryCount: Int
+}
+
+struct BetterGICoreAutoLeyLineOutcropSettings: Sendable, Equatable {
+    let leyLineOutcropType: String
+    let leyLineOutcropTypeOptions: [String]
+    let country: String
+    let countryOptions: [String]
+    let strategyName: String
+    let strategyOptions: [String]
+    let actionSchedulerByCd: String
+    let seekEnemyEnabled: Bool
+    let seekEnemyRotaryFactor: Int
+    let seekEnemyIntervalSeconds: Int
+    let kazuhaPickupEnabled: Bool
+    let qinDoublePickUp: Bool
+    let scanDropsAfterRewardEnabled: Bool
+    let scanDropsAfterRewardSeconds: Int
+    let isResinExhaustionMode: Bool
+    let openModeCountMin: Bool
+    let count: Int
+    let useTransientResin: Bool
+    let useFragileResin: Bool
+    let team: String
+    let friendshipTeam: String
+    let timeout: Int
+    let useAdventurerHandbook: Bool
+    let isNotification: Bool
+}
+
+struct BetterGICoreAutoStygianOnslaughtSettings: Sendable, Equatable {
+    let strategyName: String
+    let strategyOptions: [String]
+    let bossNum: Int
+    let bossNumOptions: [Int]
+    let fightTeamName: String
+    let specifyResinUse: Bool
+    let originalResinUseCount: Int
+    let condensedResinUseCount: Int
+    let transientResinUseCount: Int
+    let fragileResinUseCount: Int
+    let autoArtifactSalvage: Bool
+    let maxArtifactStar: String
+    let maxArtifactStarOptions: [String]
+}
+
+struct BetterGICoreAutoDomainSettings: Sendable, Equatable {
+    let strategyName: String
+    let strategyOptions: [String]
+    let partyName: String
+    let domainName: String
+    let domainOptions: [String]
+    let specifyResinUse: Bool
+    let originalResinUseCount: Int
+    let condensedResinUseCount: Int
+    let transientResinUseCount: Int
+    let fragileResinUseCount: Int
+    let autoArtifactSalvage: Bool
+    let maxArtifactStar: String
+    let maxArtifactStarOptions: [String]
+    let fightEndDelay: Double
+    let shortMovement: Bool
+    let walkToF: Bool
+    let leftRightMoveTimes: Int
+    let autoEat: Bool
+    let rewardRecognitionEnabled: Bool
+    let reviveRetryCount: Int
+}
+
+struct BetterGICoreNamedOption: Sendable, Equatable, Identifiable {
+    let value: String
+    let displayName: String
+    var id: String { value }
+}
+
+struct BetterGICoreAutoArtifactSalvageSettings: Sendable, Equatable {
+    let javaScript: String
+    let artifactSetFilter: String
+    let maxArtifactStar: String
+    let maxArtifactStarOptions: [String]
+    let maxNumToCheck: Int
+    let recognitionFailurePolicy: String
+    let recognitionFailurePolicyOptions: [BetterGICoreNamedOption]
+}
+
+struct BetterGICoreArtifactSalvagePreview: Sendable, Equatable {
+    let imagePngBase64: String
+    let recognizedText: String
+    let structuredResult: String
+    let isMatch: Bool
+}
+
+struct BetterGICoreAutoFightSettings: Sendable, Equatable {
+    let strategyName: String
+    let strategyOptions: [String]
+    let actionSchedulerByCd: String
+    let fightFinishDetectEnabled: Bool
+    let fastCheckEnabled: Bool
+    let fastCheckParams: String
+    let rotateFindEnemyEnabled: Bool
+    let rotaryFactor: Int
+    let checkBeforeBurst: Bool
+    let isFirstCheck: Bool
+    let checkEndDelay: String
+    let beforeDetectDelay: String
+    let guardianAvatar: String
+    let guardianAvatarOptions: [String]
+    let guardianCombatSkip: Bool
+    let burstEnabled: Bool
+    let guardianAvatarHold: Bool
+    let pickDropsAfterFightEnabled: Bool
+    let pickDropsAfterFightSeconds: Int
+    let kazuhaPickupEnabled: Bool
+    let qinDoublePickUp: Bool
+    let expBasedPickupEnabled: Bool
+    let timeout: Int
+    let swimmingEnabled: Bool
+}
+
+struct BetterGICoreSoloTaskStatus: Sendable, Equatable {
+    let taskID: String?
+    let name: String?
+    let state: String
+    let error: String?
+}
+
+struct BetterGICoreSchedulerStatus: Sendable, Equatable {
+    let taskID: String?
+    let groupName: String?
+    let state: String
+    let error: String?
+}
+
+struct BetterGIOneDragonConfigSummary: Sendable, Equatable, Identifiable {
+    let name: String
+    let taskCount: Int
+    let enabledTaskCount: Int
+    let selected: Bool
+
+    var id: String { name }
+}
+
+struct BetterGIOneDragonTask: Sendable, Equatable, Identifiable {
+    let id: String
+    let name: String
+    var isEnabled: Bool
+    var isResumeStep: Bool
+}
+
+struct BetterGIOneDragonConfigDocument: Sendable, Equatable {
+    var name: String
+    var config: [String: BetterGIJSONValue]
+    var tasks: [BetterGIOneDragonTask]
+    let builtInTaskNames: [String]
+    let options: BetterGIOneDragonConfigOptions
+}
+
+struct BetterGIOneDragonConfigOptions: Sendable, Equatable {
+    let craftingBenchCountries: [String]
+    let adventurersGuildCountries: [String]
+    let domainNames: [String]
+    let sundayRewardOptions: [String]
+    let bossNames: [String]
+    let fightStrategies: [String]
+    let leyLineTypes: [String]
+    let leyLineCountries: [String]
+    let secretTreasureObjects: [String]
+    let sereniteaPotTpTypes: [String]
+    let completionActions: [String]
+
+    static let empty = BetterGIOneDragonConfigOptions(
+        craftingBenchCountries: [],
+        adventurersGuildCountries: [],
+        domainNames: [],
+        sundayRewardOptions: [],
+        bossNames: [],
+        fightStrategies: [],
+        leyLineTypes: [],
+        leyLineCountries: [],
+        secretTreasureObjects: [],
+        sereniteaPotTpTypes: [],
+        completionActions: [])
+}
+
+struct BetterGIOneDragonStatus: Sendable, Equatable {
+    let taskID: String?
+    let configName: String?
+    let state: String
+    let error: String?
+}
+
+actor BetterGICoreProcessSupervisor {
+    private static let startupPollLimit = 4_800
+    enum StartupPhase: Sendable {
+        case starting
+        case waitingForSocket
+        case provisioning
+        case ready
+        case failed(String)
+    }
+
+    enum State: Equatable, Sendable {
+        case stopped
+        case running(BetterGICoreHandshake)
+        case failed(String)
+    }
+
+    private(set) var state: State = .stopped
+    private let store: BGIRuntimeResourceStore
+    private let executableURL: URL
+    private var process: Process?
+    private var client: BetterGICoreRPCClient?
+    private var callbackClient: BetterGICorePlatformCallbackClient?
+    private var callbackTask: Task<Void, Never>?
+    private var platformHandler: BetterGICorePlatformCallbackClient.Handler?
+    private var progressHandler: (@Sendable (StartupPhase) -> Void)?
+    private var logHandler: (@Sendable (String) -> Void)?
+    private var processGeneration = 0
+    private var controlledRestartCount = 0
+    private var intentionalStop = false
+    private var outputPipe: Pipe?
+
+    init(store: BGIRuntimeResourceStore = .defaultStore(), executableURL: URL? = nil) throws {
+        self.store = store
+        NSLog("BetterGI Core resolving executable URL")
+        self.executableURL = try executableURL ?? Self.resolveExecutableURL()
+        NSLog("BetterGI Core executable resolved: %@", self.executableURL.path)
+    }
+
+    func start(
+        progressHandler: @escaping @Sendable (StartupPhase) -> Void,
+        logHandler: @escaping @Sendable (String) -> Void,
+        platformHandler: @escaping BetterGICorePlatformCallbackClient.Handler
+    ) async throws -> BetterGICoreHandshake {
+        if case .running(let handshake) = state { return handshake }
+        progressHandler(.starting)
+        self.platformHandler = platformHandler
+        self.progressHandler = progressHandler
+        self.logHandler = logHandler
+        intentionalStop = false
+        try store.createDirectorySkeleton()
+        try store.synchronizeBundledGameTaskResources()
+        let runURL = store.rootURL.appendingPathComponent("Run", isDirectory: true)
+        try FileManager.default.createDirectory(at: runURL, withIntermediateDirectories: true)
+        let socketURL = runURL.appendingPathComponent("core.sock")
+        try? FileManager.default.removeItem(at: socketURL)
+        let token = Self.makeSessionToken()
+        let process = Process()
+        processGeneration += 1
+        let generation = processGeneration
+        process.terminationHandler = { [weak self] _ in
+            Task { await self?.processTerminated(generation: generation) }
+        }
+        process.executableURL = executableURL
+        process.arguments = [
+            "--runtime-root", store.rootURL.path,
+            "--socket", socketURL.path,
+            "--session-token", token,
+            "--parent-pid", String(ProcessInfo.processInfo.processIdentifier)
+        ]
+        let outputPipe = Pipe()
+        let outputForwarder = CoreOutputForwarder(handler: logHandler)
+        outputPipe.fileHandleForReading.readabilityHandler = { handle in
+            outputForwarder.consume(handle.availableData)
+        }
+        process.standardOutput = outputPipe
+        process.standardError = outputPipe
+        self.outputPipe = outputPipe
+        do {
+            try process.run()
+            self.process = process
+            let client = BetterGICoreRPCClient(socketPath: socketURL.path, sessionToken: token)
+            self.client = client
+            progressHandler(.waitingForSocket)
+            try await waitForSocket(socketURL, process: process)
+            let callbackClient = BetterGICorePlatformCallbackClient(
+                socketPath: socketURL.path,
+                sessionToken: token
+            )
+            self.callbackClient = callbackClient
+            callbackTask = Task.detached { [weak self] in
+                do {
+                    try callbackClient.run(handler: platformHandler)
+                } catch {
+                    await self?.callbackFailed(error)
+                }
+            }
+            try client.connect()
+            let handshake = try client.handshake()
+            progressHandler(.provisioning)
+            var callbackAttached = false
+            for _ in 0..<Self.startupPollLimit {
+                let initialized = try client.initialize(runtimeRoot: store.rootURL)
+                if initialized["platformCallbackAttached"] as? Bool == true {
+                    guard initialized["scriptHostServicesAttached"] as? Bool == true,
+                          initialized["scriptServicePlatformAttached"] as? Bool == true,
+                          initialized["platformAssetsInitialized"] as? Bool == true,
+                          ["SIFT", "TemplateMatch"].contains(
+                            initialized["mapMatchingMethod"] as? String ?? "")
+                    else {
+                        throw BetterGICoreRPCError.protocolViolation(
+                            "Core did not attach the required script services."
+                        )
+                    }
+                    callbackAttached = true
+                    break
+                }
+                try await Task.sleep(for: .milliseconds(25))
+            }
+            guard callbackAttached else {
+                throw BetterGICoreRPCError.socket("Swift platform callback channel did not attach to Core.")
+            }
+            state = .running(handshake)
+            progressHandler(.ready)
+            return handshake
+        } catch {
+            intentionalStop = true
+            _ = try? client?.request(method: "core.shutdown")
+            client?.disconnect()
+            callbackClient?.stop()
+            callbackTask?.cancel()
+            await Self.stopProcess(process)
+            self.process = nil
+            client = nil
+            callbackClient = nil
+            callbackTask = nil
+            outputPipe.fileHandleForReading.readabilityHandler = nil
+            self.outputPipe = nil
+            state = .failed(error.localizedDescription)
+            progressHandler(.failed(error.localizedDescription))
+            intentionalStop = false
+            throw error
+        }
+    }
+
+    func listScriptGroups() throws -> [BetterGIScriptGroupSummary] {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        return try client.listScriptGroups()
+    }
+
+    func createScriptGroup(name: String) throws {
+        try requireScriptGroupResult(
+            method: "catalog.createScriptGroup",
+            expectedName: name,
+            parameters: ["name": name]
+        )
+    }
+
+    func copyScriptGroup(sourceName: String, targetName: String) throws {
+        try requireScriptGroupResult(
+            method: "catalog.copyScriptGroup",
+            expectedName: targetName,
+            parameters: ["sourceName": sourceName, "targetName": targetName]
+        )
+    }
+
+    func renameScriptGroup(sourceName: String, targetName: String) throws {
+        try requireScriptGroupResult(
+            method: "catalog.renameScriptGroup",
+            expectedName: targetName,
+            parameters: ["sourceName": sourceName, "targetName": targetName]
+        )
+    }
+
+    func deleteScriptGroup(name: String) throws {
+        guard let result = try runningClient().request(
+            method: "catalog.deleteScriptGroup",
+            parameters: ["name": name]
+        ) as? [String: Any], result["deletedName"] as? String == name else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid catalog.deleteScriptGroup result."
+            )
+        }
+    }
+
+    private func requireScriptGroupResult(
+        method: String,
+        expectedName: String,
+        parameters: [String: Any]
+    ) throws {
+        guard let result = try runningClient().request(
+            method: method,
+            parameters: parameters
+        ) as? [String: Any], result["name"] as? String == expectedName else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid \(method) result.")
+        }
+    }
+
+    func setScriptGroupProjectEnabled(groupName: String, projectIndex: Int, enabled: Bool) throws {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        guard let result = try client.request(
+            method: "catalog.setScriptGroupProjectEnabled",
+            parameters: ["name": groupName, "projectIndex": projectIndex, "enabled": enabled]
+        ) as? [String: Any], result["name"] as? String == groupName else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid catalog.setScriptGroupProjectEnabled result."
+            )
+        }
+    }
+
+    private func runningClient() throws -> BetterGICoreRPCClient {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        return client
+    }
+
+    func projectCommonSettings(groupName: String, projectIndex: Int) throws -> BetterGIProjectCommonSettings {
+        try runningClient().projectCommonSettings(groupName: groupName, projectIndex: projectIndex)
+    }
+
+    func logParseSettings(groupName: String) throws -> BetterGILogParseSettings {
+        try runningClient().logParseSettings(groupName: groupName)
+    }
+
+    func generateLogParse(
+        groupName: String,
+        settings: BetterGILogParseSettings
+    ) throws -> BetterGILogParseGenerationResult {
+        try runningClient().generateLogParse(
+            groupName: groupName,
+            settings: settings)
+    }
+
+    func logParseCookieHelpPath() throws -> String {
+        try runningClient().logParseCookieHelpPath()
+    }
+
+    func projectCustomSettings(groupName: String, projectIndex: Int) throws -> BetterGIProjectCustomSettings {
+        try runningClient().projectCustomSettings(groupName: groupName, projectIndex: projectIndex)
+    }
+
+    func listAddCandidates(type: String) throws -> [BetterGIAddCandidate] {
+        try runningClient().listAddCandidates(type: type)
+    }
+
+    func listPathingEntries() throws -> [BetterGIPathingEntry] {
+        try runningClient().listPathingEntries()
+    }
+
+    func listKeyMouseScripts() throws -> [BetterGIKeyMouseScript] {
+        guard let values = try runningClient().request(method: "keyMouse.list") as? [[String: Any]]
+        else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid keyMouse.list result.")
+        }
+        return try values.map { value in
+            guard let id = value["id"] as? String,
+                  let name = value["name"] as? String,
+                  let createdAt = value["createdAt"] as? String
+            else {
+                throw BetterGICoreRPCError.protocolViolation("Invalid key/mouse script descriptor.")
+            }
+            return BetterGIKeyMouseScript(id: id, name: name, createdAt: createdAt)
+        }
+    }
+
+    func saveKeyMouseRecording(_ recording: MacKeyMouseRecording) throws {
+        guard let result = try runningClient().request(
+            method: "keyMouse.saveRecording",
+            parameters: [
+                "events": recording.events.map(\.rpcPayload),
+                "info": recording.infoPayload,
+            ]
+        ) as? [String: Any], result["id"] as? String != nil
+        else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid keyMouse.saveRecording result.")
+        }
+    }
+
+    func renameKeyMouseScript(id: String, name: String) throws {
+        guard let result = try runningClient().request(
+            method: "keyMouse.rename",
+            parameters: ["id": id, "name": name]
+        ) as? [String: Any], result["id"] as? String != nil
+        else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid keyMouse.rename result.")
+        }
+    }
+
+    func deleteKeyMouseScript(id: String) throws {
+        guard let result = try runningClient().request(
+            method: "keyMouse.delete",
+            parameters: ["id": id]
+        ) as? [String: Any], result["deleted"] as? Bool == true
+        else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid keyMouse.delete result.")
+        }
+    }
+
+    func keyMouseScriptRootLocation() throws -> String {
+        guard let result = try runningClient().request(
+            method: "keyMouse.rootLocation") as? [String: Any],
+              let path = result["path"] as? String
+        else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid keyMouse.rootLocation result.")
+        }
+        return path
+    }
+
+    func playKeyMouseScript(id: String) throws -> BetterGIKeyMousePlaybackStatus {
+        try parseKeyMousePlaybackStatus(runningClient().request(
+            method: "keyMouse.play", parameters: ["id": id]))
+    }
+
+    func stopKeyMouseScript() throws -> BetterGIKeyMousePlaybackStatus {
+        try parseKeyMousePlaybackStatus(runningClient().request(method: "keyMouse.stop"))
+    }
+
+    func keyMousePlaybackStatus() throws -> BetterGIKeyMousePlaybackStatus {
+        try parseKeyMousePlaybackStatus(runningClient().request(method: "keyMouse.status"))
+    }
+
+    func notificationSettings() throws -> BetterGINotificationSettings {
+        try parseNotificationSettings(runningClient().request(method: "notification.settings.get"))
+    }
+
+    func commonSettings() throws -> BetterGICoreCommonSettings {
+        try parseCommonSettings(runningClient().request(method: "common.settings.get"))
+    }
+
+    func saveCommonSettings(
+        _ settings: BetterGICoreCommonSettings
+    ) throws -> BetterGICoreCommonSettings {
+        try parseCommonSettings(runningClient().request(
+            method: "common.settings.save",
+            parameters: [
+                "settings": [
+                    "screenshotEnabled": settings.screenshotEnabled,
+                    "screenshotUidCoverEnabled": settings.screenshotUidCoverEnabled,
+                    "mapMatchingMethod": settings.mapMatchingMethod,
+                    "autoFetchDispatchCountry": settings.autoFetchDispatchCountry,
+                    "serverTimeZoneOffsetHours": settings.serverTimeZoneOffsetHours,
+                    "autoRestartEnabled": settings.autoRestartEnabled,
+                    "autoRestartFailureCount": settings.autoRestartFailureCount,
+                    "autoRestartGameTogether": settings.autoRestartGameTogether,
+                    "fightFailureExceptional": settings.fightFailureExceptional,
+                    "pathingFailureExceptional": settings.pathingFailureExceptional,
+                    "farmingPlanEnabled": settings.farmingPlanEnabled,
+                    "farmingDailyEliteCap": settings.farmingDailyEliteCap,
+                    "farmingDailyMobCap": settings.farmingDailyMobCap,
+                    "miyousheDataEnabled": settings.miyousheDataEnabled,
+                    "miyousheDailyEliteCap": settings.miyousheDailyEliteCap,
+                    "miyousheDailyMobCap": settings.miyousheDailyMobCap,
+                    "miyousheCookie": settings.miyousheCookie,
+                    "miyousheLogSyncCookie": settings.miyousheLogSyncCookie,
+                    "autoUpdateSubscribedScripts":
+                        settings.autoUpdateSubscribedScripts,
+                    "autoUpdateBeforeCommandLineRun":
+                        settings.autoUpdateBeforeCommandLineRun,
+                    "scriptRepositoryChannel":
+                        settings.scriptRepositoryChannel,
+                    "scriptRepositoryCustomUrl":
+                        settings.scriptRepositoryCustomURL,
+                ],
+            ]))
+    }
+
+    func saveNotificationSettings(
+        _ settings: BetterGINotificationSettings
+    ) throws -> BetterGINotificationSettings {
+        try parseNotificationSettings(runningClient().request(
+            method: "notification.settings.save",
+            parameters: [
+                "settings": [
+                    "includeScreenShot": settings.includeScreenShot,
+                    "jsNotificationEnabled": settings.jsNotificationEnabled,
+                    "macOSNotificationEnabled": settings.macOSNotificationEnabled,
+                    "notificationEventSubscribe":
+                        settings.notificationEventSubscribe,
+                    "webhookEnabled": settings.webhookEnabled,
+                    "webhookEndpoint": settings.webhookEndpoint,
+                    "webhookSendTo": settings.webhookSendTo,
+                ],
+            ]))
+    }
+
+    func saveNotificationChannel(
+        _ channel: BetterGINotificationChannel
+    ) throws -> BetterGINotificationSettings {
+        try parseNotificationSettings(runningClient().request(
+            method: "notification.channel.save",
+            parameters: [
+                "channelId": channel.id,
+                "values": channel.rpcValues,
+            ]))
+    }
+
+    func testNotification(channel: String) throws {
+        guard let result = try runningClient().request(
+            method: "notification.test",
+            parameters: ["channel": channel]) as? [String: Any],
+              result["sent"] as? Bool == true
+        else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid notification.test result.")
+        }
+    }
+
+    func hotKeyBindings() throws -> [BetterGIHotKeyBinding] {
+        try parseHotKeyBindings(
+            runningClient().request(method: "hotKey.settings.list"))
+    }
+
+    func saveHotKeyBinding(
+        id: String,
+        hotKey: String,
+        hotKeyType: String
+    ) throws -> [BetterGIHotKeyBinding] {
+        try parseHotKeyBindings(runningClient().request(
+            method: "hotKey.settings.save",
+            parameters: [
+                "binding": [
+                    "id": id,
+                    "hotKey": hotKey,
+                    "hotKeyType": hotKeyType,
+                ],
+            ]))
+    }
+
+    func keyBindingSettings() throws -> BetterGIKeyBindingSettings {
+        try parseKeyBindingSettings(
+            runningClient().request(method: "keyBinding.settings.get"))
+    }
+
+    func saveKeyBindingSettings(
+        _ settings: BetterGIKeyBindingSettings
+    ) throws -> BetterGIKeyBindingSettings {
+        try parseKeyBindingSettings(runningClient().request(
+            method: "keyBinding.settings.save",
+            parameters: [
+                "settings": [
+                    "globalKeyMappingEnabled":
+                        settings.globalKeyMappingEnabled,
+                    "bindings": settings.bindings.map {
+                        ["id": $0.id, "value": $0.value]
+                    },
+                ],
+            ]))
+    }
+
+    func invokeHotKey(id: String, isDown: Bool) throws -> String? {
+        guard let result = try runningClient().request(
+            method: "hotKey.invoke",
+            parameters: [
+                "id": id,
+                "isDown": isDown,
+            ]) as? [String: Any]
+        else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid hotKey.invoke result.")
+        }
+        return result["state"] as? String
+    }
+
+    func macroSettings() throws -> BetterGIMacroSettings {
+        try parseMacroSettings(runningClient().request(method: "macro.settings.get"))
+    }
+
+    func saveMacroSettings(_ settings: BetterGIMacroSettings) throws
+        -> BetterGIMacroSettings
+    {
+        try parseMacroSettings(runningClient().request(
+            method: "macro.settings.save",
+            parameters: [
+                "settings": [
+                    "fPressHoldToContinuationEnabled":
+                        settings.fPressHoldToContinuationEnabled,
+                    "fFireInterval": settings.fFireInterval,
+                    "spacePressHoldToContinuationEnabled":
+                        settings.spacePressHoldToContinuationEnabled,
+                    "spaceFireInterval": settings.spaceFireInterval,
+                    "runaroundMouseXInterval":
+                        settings.runaroundMouseXInterval,
+                    "runaroundInterval": settings.runaroundInterval,
+                    "enhanceWaitDelay": settings.enhanceWaitDelay,
+                    "combatMacroEnabled": settings.combatMacroEnabled,
+                    "combatMacroHotkeyMode":
+                        settings.combatMacroHotkeyMode,
+                    "combatMacroPriority":
+                        settings.combatMacroPriority,
+                    "oneKeyClaimRewardHotkeyMode":
+                        settings.oneKeyClaimRewardHotkeyMode,
+                    "oneKeyClaimRewardScrollDownEnabled":
+                        settings.oneKeyClaimRewardScrollDownEnabled,
+                    "oneKeyClaimRewardScrollDownAmount":
+                        settings.oneKeyClaimRewardScrollDownAmount,
+                ],
+            ]))
+    }
+
+    func avatarMacroLocation() throws -> String {
+        guard let result = try runningClient().request(
+            method: "macro.avatar.location") as? [String: Any],
+              let path = result["path"] as? String
+        else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid macro.avatar.location result.")
+        }
+        return path
+    }
+
+    func sendAuxiliaryControlEdge(
+        control: String,
+        isDown: Bool
+    ) throws -> String? {
+        guard let result = try runningClient().request(
+            method: "macro.keyEdge",
+            parameters: [
+                "control": control,
+                "isDown": isDown,
+            ]) as? [String: Any]
+        else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid macro.keyEdge result.")
+        }
+        return result["state"] as? String
+    }
+
+    private func parseMacroSettings(_ value: Any) throws -> BetterGIMacroSettings {
+        guard let result = value as? [String: Any],
+              let fEnabled = result["fPressHoldToContinuationEnabled"] as? Bool,
+              let fInterval = result["fFireInterval"] as? Int,
+              let spaceEnabled = result["spacePressHoldToContinuationEnabled"] as? Bool,
+              let spaceInterval = result["spaceFireInterval"] as? Int,
+              let runaroundMouseXInterval =
+                result["runaroundMouseXInterval"] as? Int,
+              let runaroundInterval = result["runaroundInterval"] as? Int,
+              let enhanceWaitDelay = result["enhanceWaitDelay"] as? Int,
+              let combatMacroEnabled =
+                result["combatMacroEnabled"] as? Bool,
+              let combatMacroHotkeyMode =
+                result["combatMacroHotkeyMode"] as? String,
+              let combatMacroHotkeyModeOptions =
+                result["combatMacroHotkeyModeOptions"] as? [String],
+              let combatMacroPriority =
+                result["combatMacroPriority"] as? Int,
+              let oneKeyClaimRewardHotkeyMode =
+                result["oneKeyClaimRewardHotkeyMode"] as? String,
+              let oneKeyClaimRewardHotkeyModeOptions =
+                result["oneKeyClaimRewardHotkeyModeOptions"] as? [String],
+              let oneKeyClaimRewardHoldMode =
+                result["oneKeyClaimRewardHoldMode"] as? String,
+              let oneKeyClaimRewardScrollDownEnabled =
+                result["oneKeyClaimRewardScrollDownEnabled"] as? Bool,
+              let oneKeyClaimRewardScrollDownAmount =
+                result["oneKeyClaimRewardScrollDownAmount"] as? Int,
+              let pickUpOrInteractVirtualKey =
+                result["pickUpOrInteractKeyCode"] as? Int,
+              let jumpVirtualKey = result["jumpKeyCode"] as? Int,
+              let pickUpOrInteractKey = BetterGICoreInputKeyMapper.keyCode(
+                fromWindowsVirtualKey: pickUpOrInteractVirtualKey),
+              let jumpKey = BetterGICoreInputKeyMapper.keyCode(
+                fromWindowsVirtualKey: jumpVirtualKey)
+        else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid macro settings.")
+        }
+        return BetterGIMacroSettings(
+            fPressHoldToContinuationEnabled: fEnabled,
+            fFireInterval: fInterval,
+            spacePressHoldToContinuationEnabled: spaceEnabled,
+            spaceFireInterval: spaceInterval,
+            runaroundMouseXInterval: runaroundMouseXInterval,
+            runaroundInterval: runaroundInterval,
+            enhanceWaitDelay: enhanceWaitDelay,
+            combatMacroEnabled: combatMacroEnabled,
+            combatMacroHotkeyMode: combatMacroHotkeyMode,
+            combatMacroHotkeyModeOptions:
+                combatMacroHotkeyModeOptions,
+            combatMacroPriority: combatMacroPriority,
+            oneKeyClaimRewardHotkeyMode: oneKeyClaimRewardHotkeyMode,
+            oneKeyClaimRewardHotkeyModeOptions:
+                oneKeyClaimRewardHotkeyModeOptions,
+            oneKeyClaimRewardHoldMode: oneKeyClaimRewardHoldMode,
+            oneKeyClaimRewardScrollDownEnabled:
+                oneKeyClaimRewardScrollDownEnabled,
+            oneKeyClaimRewardScrollDownAmount:
+                oneKeyClaimRewardScrollDownAmount,
+            pickUpOrInteractKey: pickUpOrInteractKey,
+            jumpKey: jumpKey)
+    }
+
+    private func parseNotificationSettings(_ value: Any) throws
+        -> BetterGINotificationSettings
+    {
+        guard let result = value as? [String: Any],
+              let includeScreenShot = result["includeScreenShot"] as? Bool,
+              let jsEnabled = result["jsNotificationEnabled"] as? Bool,
+              let nativeEnabled = result["macOSNotificationEnabled"] as? Bool,
+              let eventSubscribe =
+                result["notificationEventSubscribe"] as? String,
+              let eventValues = result["events"] as? [[String: Any]],
+              let webhookEnabled = result["webhookEnabled"] as? Bool,
+              let webhookEndpoint = result["webhookEndpoint"] as? String,
+              let webhookSendTo = result["webhookSendTo"] as? String,
+              let channelValues = result["channels"] as? [[String: Any]]
+        else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid notification settings.")
+        }
+        let events = try eventValues.map { value in
+            guard let code = value["code"] as? String,
+                  let displayName = value["displayName"] as? String,
+                  let selected = value["selected"] as? Bool
+            else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid notification event descriptor.")
+            }
+            return BetterGINotificationEvent(
+                code: code,
+                displayName: displayName,
+                selected: selected)
+        }
+        let channels = try channelValues.map { value in
+            guard let id = value["id"] as? String,
+                  let title = value["title"] as? String,
+                  let subtitle = value["subtitle"] as? String,
+                  let enabledField = value["enabledField"] as? String,
+                  let enabled = value["enabled"] as? Bool,
+                  let fieldValues = value["fields"] as? [[String: Any]]
+            else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid notification channel descriptor.")
+            }
+            let fields = try fieldValues.map { fieldValue in
+                guard let fieldID = fieldValue["id"] as? String,
+                      let label = fieldValue["label"] as? String,
+                      let kind = fieldValue["kind"] as? String,
+                      let placeholder =
+                        fieldValue["placeholder"] as? String,
+                      let options = fieldValue["options"] as? [String]
+                else {
+                    throw BetterGICoreRPCError.protocolViolation(
+                        "Invalid notification field descriptor.")
+                }
+                let field: BetterGINotificationFieldValue
+                switch kind {
+                case "boolean":
+                    guard let raw = fieldValue["value"] as? Bool else {
+                        throw BetterGICoreRPCError.protocolViolation(
+                            "Invalid boolean notification field.")
+                    }
+                    field = .boolean(raw)
+                case "integer":
+                    guard let raw = fieldValue["value"] as? Int else {
+                        throw BetterGICoreRPCError.protocolViolation(
+                            "Invalid integer notification field.")
+                    }
+                    field = .integer(raw)
+                default:
+                    guard let raw = fieldValue["value"] as? String else {
+                        throw BetterGICoreRPCError.protocolViolation(
+                            "Invalid string notification field.")
+                    }
+                    field = .string(raw)
+                }
+                return BetterGINotificationField(
+                    id: fieldID,
+                    label: label,
+                    kind: kind,
+                    placeholder: placeholder,
+                    options: options,
+                    value: field)
+            }
+            return BetterGINotificationChannel(
+                id: id,
+                title: title,
+                subtitle: subtitle,
+                enabledField: enabledField,
+                enabled: enabled,
+                fields: fields)
+        }
+        return BetterGINotificationSettings(
+            includeScreenShot: includeScreenShot,
+            jsNotificationEnabled: jsEnabled,
+            macOSNotificationEnabled: nativeEnabled,
+            notificationEventSubscribe: eventSubscribe,
+            events: events,
+            webhookEnabled: webhookEnabled,
+            webhookEndpoint: webhookEndpoint,
+            webhookSendTo: webhookSendTo,
+            channels: channels)
+    }
+
+    private func parseCommonSettings(_ value: Any) throws -> BetterGICoreCommonSettings {
+        guard let result = value as? [String: Any],
+              let screenshotEnabled = result["screenshotEnabled"] as? Bool,
+              let screenshotUidCoverEnabled =
+                result["screenshotUidCoverEnabled"] as? Bool,
+              let mapMatchingMethod = result["mapMatchingMethod"] as? String,
+              let mapMatchingMethodOptions =
+                result["mapMatchingMethodOptions"] as? [String],
+              let autoFetchDispatchCountry =
+                result["autoFetchDispatchCountry"] as? String,
+              let autoFetchDispatchCountryOptions =
+                result["autoFetchDispatchCountryOptions"] as? [String],
+              let serverTimeZoneOffsetHours =
+                result["serverTimeZoneOffsetHours"] as? Int,
+              let serverTimeZoneOffsetOptions =
+                result["serverTimeZoneOffsetOptions"] as? [Int],
+              let autoRestartEnabled = result["autoRestartEnabled"] as? Bool,
+              let autoRestartFailureCount =
+                result["autoRestartFailureCount"] as? Int,
+              let autoRestartGameTogether =
+                result["autoRestartGameTogether"] as? Bool,
+              let fightFailureExceptional =
+                result["fightFailureExceptional"] as? Bool,
+              let pathingFailureExceptional =
+                result["pathingFailureExceptional"] as? Bool,
+              let farmingPlanEnabled = result["farmingPlanEnabled"] as? Bool,
+              let farmingDailyEliteCap =
+                result["farmingDailyEliteCap"] as? Int,
+              let farmingDailyMobCap = result["farmingDailyMobCap"] as? Int,
+              let miyousheDataEnabled = result["miyousheDataEnabled"] as? Bool,
+              let miyousheDailyEliteCap =
+                result["miyousheDailyEliteCap"] as? Int,
+              let miyousheDailyMobCap = result["miyousheDailyMobCap"] as? Int,
+              let miyousheCookie = result["miyousheCookie"] as? String,
+              let miyousheLogSyncCookie =
+                result["miyousheLogSyncCookie"] as? Bool,
+              let autoUpdateSubscribedScripts =
+                result["autoUpdateSubscribedScripts"] as? Bool,
+              let autoUpdateBeforeCommandLineRun =
+                result["autoUpdateBeforeCommandLineRun"] as? Bool,
+              let scriptRepositoryChannel =
+                result["scriptRepositoryChannel"] as? String,
+              let scriptRepositoryChannelOptions =
+                result["scriptRepositoryChannelOptions"] as? [String],
+              let scriptRepositoryChannelURLs =
+                result["scriptRepositoryChannelUrls"] as? [String: String],
+              let scriptRepositoryCustomURL =
+                result["scriptRepositoryCustomUrl"] as? String
+        else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid common settings.")
+        }
+        return .init(
+            screenshotEnabled: screenshotEnabled,
+            screenshotUidCoverEnabled: screenshotUidCoverEnabled,
+            mapMatchingMethod: mapMatchingMethod,
+            mapMatchingMethodOptions: mapMatchingMethodOptions,
+            autoFetchDispatchCountry: autoFetchDispatchCountry,
+            autoFetchDispatchCountryOptions: autoFetchDispatchCountryOptions,
+            serverTimeZoneOffsetHours: serverTimeZoneOffsetHours,
+            serverTimeZoneOffsetOptions: serverTimeZoneOffsetOptions,
+            autoRestartEnabled: autoRestartEnabled,
+            autoRestartFailureCount: autoRestartFailureCount,
+            autoRestartGameTogether: autoRestartGameTogether,
+            fightFailureExceptional: fightFailureExceptional,
+            pathingFailureExceptional: pathingFailureExceptional,
+            farmingPlanEnabled: farmingPlanEnabled,
+            farmingDailyEliteCap: farmingDailyEliteCap,
+            farmingDailyMobCap: farmingDailyMobCap,
+            miyousheDataEnabled: miyousheDataEnabled,
+            miyousheDailyEliteCap: miyousheDailyEliteCap,
+            miyousheDailyMobCap: miyousheDailyMobCap,
+            miyousheCookie: miyousheCookie,
+            miyousheLogSyncCookie: miyousheLogSyncCookie,
+            autoUpdateSubscribedScripts: autoUpdateSubscribedScripts,
+            autoUpdateBeforeCommandLineRun: autoUpdateBeforeCommandLineRun,
+            scriptRepositoryChannel: scriptRepositoryChannel,
+            scriptRepositoryChannelOptions: scriptRepositoryChannelOptions,
+            scriptRepositoryChannelURLs: scriptRepositoryChannelURLs,
+            scriptRepositoryCustomURL: scriptRepositoryCustomURL)
+    }
+
+    private func parseHotKeyBindings(_ value: Any) throws
+        -> [BetterGIHotKeyBinding]
+    {
+        guard let values = value as? [[String: Any]] else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid hotkey settings result.")
+        }
+        return try values.map { value in
+            guard let id = value["id"] as? String,
+                  let category = value["category"] as? String,
+                  let functionName = value["functionName"] as? String,
+                  let hotKey = value["hotKey"] as? String,
+                  let hotKeyType = value["hotKeyType"] as? String,
+                  let action = value["action"] as? String,
+                  let executionOwner = value["executionOwner"] as? String,
+                  let isHold = value["isHold"] as? Bool,
+                  let dispatchOnPress = value["dispatchOnPress"] as? Bool,
+                  let dispatchOnRelease = value["dispatchOnRelease"] as? Bool
+            else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid hotkey binding descriptor.")
+            }
+            return BetterGIHotKeyBinding(
+                id: id,
+                category: category,
+                functionName: functionName,
+                hotKey: hotKey,
+                hotKeyType: hotKeyType,
+                action: action,
+                executionOwner: executionOwner,
+                isHold: isHold,
+                dispatchOnPress: dispatchOnPress,
+                dispatchOnRelease: dispatchOnRelease)
+        }
+    }
+
+    private func parseKeyBindingSettings(_ value: Any) throws
+        -> BetterGIKeyBindingSettings
+    {
+        guard let result = value as? [String: Any],
+              let globalKeyMappingEnabled =
+                result["globalKeyMappingEnabled"] as? Bool,
+              let rawBindings = result["bindings"] as? [[String: Any]],
+              let rawOptions = result["options"] as? [[String: Any]]
+        else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid key binding settings result.")
+        }
+        let bindings = try rawBindings.map { item in
+            guard let id = item["id"] as? String,
+                  let category = item["category"] as? String,
+                  let actionName = item["actionName"] as? String,
+                  let value = item["value"] as? Int,
+                  let displayValue = item["displayValue"] as? String,
+                  let supported = item["supported"] as? Bool
+            else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid game key binding descriptor.")
+            }
+            return BetterGIKeyBinding(
+                id: id,
+                category: category,
+                actionName: actionName,
+                value: value,
+                displayValue: displayValue,
+                supported: supported)
+        }
+        let options = try rawOptions.map { item in
+            guard let value = item["value"] as? Int,
+                  let displayName = item["displayName"] as? String
+            else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid game key binding option.")
+            }
+            return BetterGIKeyBindingOption(
+                value: value,
+                displayName: displayName)
+        }
+        return BetterGIKeyBindingSettings(
+            globalKeyMappingEnabled: globalKeyMappingEnabled,
+            bindings: bindings,
+            options: options)
+    }
+
+    private func parseKeyMousePlaybackStatus(_ value: Any) throws
+        -> BetterGIKeyMousePlaybackStatus
+    {
+        guard let result = value as? [String: Any],
+              let state = result["state"] as? String
+        else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid key/mouse playback status.")
+        }
+        return BetterGIKeyMousePlaybackStatus(
+            taskID: result["taskId"] as? String,
+            scriptID: result["scriptId"] as? String,
+            state: state,
+            error: result["error"] as? String
+        )
+    }
+
+    func pathingDetail(id: String) throws -> BetterGIPathingDetail {
+        try runningClient().pathingDetail(id: id)
+    }
+
+    func pathingSettings() throws -> BetterGIPathingSettings {
+        try runningClient().pathingSettings()
+    }
+
+    func savePathingSettings(
+        _ settings: BetterGIPathingSettings
+    ) throws -> BetterGIPathingSettings {
+        try runningClient().savePathingSettings(settings)
+    }
+
+    func pathingRootLocation() throws -> String {
+        guard let result = try runningClient().request(
+            method: "pathing.rootLocation") as? [String: Any],
+              let path = result["path"] as? String
+        else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid pathing root location.")
+        }
+        return path
+    }
+
+    func deletePathingEntry(id: String) throws {
+        guard let result = try runningClient().request(
+            method: "pathing.delete",
+            parameters: ["id": id]) as? [String: Any],
+              result["deleted"] as? Bool == true
+        else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid pathing delete result.")
+        }
+    }
+
+    func runPathingEntry(id: String) throws -> String {
+        guard let result = try runningClient().request(
+            method: "pathing.run",
+            parameters: ["id": id]) as? [String: Any],
+              let taskID = result["taskId"] as? String
+        else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid pathing run result.")
+        }
+        return taskID
+    }
+
+    @discardableResult
+    func catalogMutation(_ method: String, groupName: String, parameters: [String: Any] = [:]) throws -> [String: Any] {
+        var payload = parameters
+        payload["name"] = groupName
+        guard let result = try runningClient().request(method: method, parameters: payload) as? [String: Any]
+        else { throw BetterGICoreRPCError.protocolViolation("Invalid \(method) result.") }
+        return result
+    }
+
+    func saveProjectCommonSettings(groupName: String, settings: BetterGIProjectCommonSettings) throws {
+        try catalogMutation("catalog.saveScriptGroupProjectCommonSettings", groupName: groupName, parameters: [
+            "projectIndex": settings.projectIndex, "status": settings.status,
+            "allowJsNotification": settings.allowJsNotification, "allowJsHttp": settings.allowJsHTTP
+        ])
+    }
+
+    func saveProjectCustomSettings(groupName: String, settings: BetterGIProjectCustomSettings) throws {
+        try catalogMutation("catalog.saveScriptGroupProjectCustomSettings", groupName: groupName, parameters: [
+            "projectIndex": settings.projectIndex, "values": settings.values.mapValues(\.any)
+        ])
+    }
+
+    func groupConfig(groupName: String) throws -> BetterGIGroupConfigSettings {
+        guard let result = try runningClient().request(
+            method: "catalog.getScriptGroupConfig", parameters: ["name": groupName]) as? [String: Any]
+        else { throw BetterGICoreRPCError.protocolViolation("Invalid group config.") }
+        let pathing = result["pathingConfig"] as? [String: Any] ?? [:]
+        let autoEat = pathing["autoEatConfig"] as? [String: Any] ?? [:]
+        let autoFight = pathing["autoFightConfig"] as? [String: Any] ?? [:]
+        let finishDetect =
+            autoFight["finishDetectConfig"] as? [String: Any] ?? [:]
+        let taskCycle = pathing["taskCycleConfig"] as? [String: Any] ?? [:]
+        let completion = pathing["taskCompletionSkipRuleConfig"] as? [String: Any] ?? [:]
+        let priority = pathing["preExecutionPriorityConfig"] as? [String: Any] ?? [:]
+        let shell = result["shellConfig"] as? [String: Any] ?? [:]
+        let options = result["pathingOptions"] as? [String: Any] ?? [:]
+        let decodeOptions: (String) throws -> [BetterGICoreNamedOption] = { key in
+            guard let values = options[key] as? [[String: Any]] else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid group pathing option list \(key).")
+            }
+            return try values.map { value in
+                guard let optionValue = value["value"] as? String,
+                      let displayName = value["displayName"] as? String else {
+                    throw BetterGICoreRPCError.protocolViolation(
+                        "Invalid group pathing option in \(key).")
+                }
+                return BetterGICoreNamedOption(
+                    value: optionValue, displayName: displayName)
+            }
+        }
+        let recoverTiming = switch pathing["recoverTiming"] as? Int {
+        case 1: "OnlyTeleport"
+        case 2: "Never"
+        default: "AnyWaypoint"
+        }
+        return BetterGIGroupConfigSettings(
+            enabled: pathing["enabled"] as? Bool ?? true, autoPick: pathing["autoPickEnabled"] as? Bool ?? true,
+            autoEat: pathing["autoEatEnabled"] as? Bool ?? false, autoSkip: pathing["autoSkipEnabled"] as? Bool ?? true,
+            autoFight: pathing["autoFightEnabled"] as? Bool ?? true, autoRun: pathing["autoRunEnabled"] as? Bool ?? true,
+            defaultAtkBoostingDishName:
+                autoEat["defaultAtkBoostingDishName"] as? String ?? "",
+            defaultAdventurersDishName:
+                autoEat["defaultAdventurersDishName"] as? String ?? "",
+            defaultDefBoostingDishName:
+                autoEat["defaultDefBoostingDishName"] as? String ?? "",
+            fightStrategyName:
+                autoFight["strategyName"] as? String ?? "根据队伍自动选择",
+            fightActionSchedulerByCd:
+                autoFight["actionSchedulerByCd"] as? String ?? "",
+            fightFinishDetectEnabled:
+                autoFight["fightFinishDetectEnabled"] as? Bool ?? true,
+            fightFastCheckEnabled:
+                finishDetect["fastCheckEnabled"] as? Bool ?? false,
+            fightFastCheckParams:
+                finishDetect["fastCheckParams"] as? String ?? "",
+            fightRotateFindEnemyEnabled:
+                finishDetect["rotateFindEnemyEnabled"] as? Bool ?? false,
+            fightRotaryFactor: finishDetect["rotaryFactor"] as? Int ?? 12,
+            fightCheckBeforeBurst:
+                finishDetect["checkBeforeBurst"] as? Bool ?? false,
+            fightIsFirstCheck: finishDetect["isFirstCheck"] as? Bool ?? false,
+            fightCheckEndDelay:
+                finishDetect["checkEndDelay"] as? String ?? "0.4;钟离,1.4;",
+            fightBeforeDetectDelay:
+                finishDetect["beforeDetectDelay"] as? String ?? "0.4",
+            fightGuardianAvatar: autoFight["guardianAvatar"] as? String ?? "",
+            fightGuardianCombatSkip:
+                autoFight["guardianCombatSkip"] as? Bool ?? false,
+            fightBurstEnabled: autoFight["burstEnabled"] as? Bool ?? false,
+            fightGuardianAvatarHold:
+                autoFight["guardianAvatarHold"] as? Bool ?? false,
+            fightPickDropsAfterFightEnabled:
+                autoFight["pickDropsAfterFightEnabled"] as? Bool ?? false,
+            fightPickDropsAfterFightSeconds:
+                autoFight["pickDropsAfterFightSeconds"] as? Int ?? 15,
+            fightKazuhaPickupEnabled:
+                autoFight["kazuhaPickupEnabled"] as? Bool ?? true,
+            fightQinDoublePickUp:
+                autoFight["qinDoublePickUp"] as? Bool ?? false,
+            fightExpBasedPickupEnabled:
+                autoFight["expBasedPickupEnabled"] as? Bool ?? false,
+            fightBattleThresholdForLoot:
+                autoFight["battleThresholdForLoot"] as? Int,
+            fightOnlyPickEliteDropsMode:
+                autoFight["onlyPickEliteDropsMode"] as? String ?? "Closed",
+            fightKazuhaPartyName:
+                autoFight["kazuhaPartyName"] as? String ?? "",
+            fightTimeout: autoFight["timeout"] as? Int ?? 120,
+            fightSwimmingEnabled:
+                autoFight["swimmingEnabled"] as? Bool ?? true,
+            partyName: pathing["partyName"] as? String ?? "", visitStatue: pathing["isVisitStatueBeforeSwitchParty"] as? Bool ?? false,
+            mainAvatar: pathing["mainAvatarIndex"] as? String ?? "", guardianAvatar: pathing["guardianAvatarIndex"] as? String ?? "",
+            guardianInterval: pathing["guardianElementalSkillSecondInterval"] as? String ?? "",
+            guardianLongPress: pathing["guardianElementalSkillLongPress"] as? Bool ?? false,
+            gadgetInterval: pathing["useGadgetIntervalMs"] as? Int ?? 0,
+            recoverTiming: recoverTiming,
+            skipDuring: pathing["skipDuring"] as? String ?? "",
+            hideOnRepeat: pathing["hideOnRepeat"] as? Bool ?? false,
+            hurryOnAvatar: pathing["hurryOnAvatar"] as? String ?? "",
+            travelMode: pathing["travelMode"] as? String ?? "精准靠近",
+            distance: pathing["distance"] as? Int ?? 45,
+            approachStopDistance: pathing["approachStopDistance"] as? Int ?? 25,
+            switchToWalkEnabled: pathing["switchToWalkEnabled"] as? Bool ?? false,
+            mwkJumpFlyEnabled: pathing["mwkJumpFlyEnabled"] as? Bool ?? true,
+            mwkJumpFlyIntervalSeconds:
+                (pathing["mwkJumpFlyIntervalSeconds"] as? NSNumber)?.doubleValue ?? 1,
+            taskCycleEnabled: taskCycle["enable"] as? Bool ?? false,
+            taskCycleBoundaryTime: taskCycle["boundaryTime"] as? Int ?? 0,
+            taskCycleUsesServerTime:
+                taskCycle["isBoundaryTimeBasedOnServerTime"] as? Bool ?? false,
+            taskCycle: taskCycle["cycle"] as? Int ?? 1,
+            taskCycleIndex: taskCycle["index"] as? Int ?? 1,
+            completionSkipEnabled: completion["enable"] as? Bool ?? false,
+            completionSkipPolicy:
+                completion["skipPolicy"] as? String ?? "GroupPhysicalPathSkipPolicy",
+            completionBoundaryTime: completion["boundaryTime"] as? Int ?? 4,
+            completionUsesServerTime:
+                completion["isBoundaryTimeBasedOnServerTime"] as? Bool ?? false,
+            completionLastRunGapSeconds:
+                completion["lastRunGapSeconds"] as? Int ?? -1,
+            completionReferencePoint:
+                completion["referencePoint"] as? String ?? "EndTime",
+            priorityEnabled: priority["enabled"] as? Bool ?? false,
+            priorityGroupNames: priority["groupNames"] as? String ?? "",
+            priorityMaxRetryCount: priority["maxRetryCount"] as? Int ?? 1,
+            avatarIndexOptions: options["avatarIndexes"] as? [String] ?? [],
+            hurryOnAvatarOptions: options["hurryOnAvatars"] as? [String] ?? [],
+            travelModeOptions: options["travelModes"] as? [String] ?? [],
+            fightStrategyOptions: options["fightStrategies"] as? [String] ?? [],
+            onlyPickEliteDropsModeOptions: try decodeOptions(
+                "onlyPickEliteDropsModes"),
+            recoverTimingOptions: try decodeOptions("recoverTimings"),
+            completionSkipPolicyOptions: try decodeOptions(
+                "completionSkipPolicies"),
+            completionReferencePointOptions: try decodeOptions(
+                "completionReferencePoints"),
+            enableShellConfig: result["enableShellConfig"] as? Bool ?? false, shellDisable: shell["disable"] as? Bool ?? false,
+            shellTimeout: shell["timeout"] as? Int ?? 60, shellNoWindow: shell["noWindow"] as? Bool ?? true,
+            shellOutput: shell["output"] as? Bool ?? true)
+    }
+
+    func saveGroupConfig(groupName: String, settings: BetterGIGroupConfigSettings) throws {
+        let autoEatConfig: [String: Any] = [
+            "defaultAtkBoostingDishName": settings.defaultAtkBoostingDishName,
+            "defaultAdventurersDishName": settings.defaultAdventurersDishName,
+            "defaultDefBoostingDishName": settings.defaultDefBoostingDishName,
+        ]
+        let finishDetectConfig: [String: Any] = [
+            "fastCheckEnabled": settings.fightFastCheckEnabled,
+            "fastCheckParams": settings.fightFastCheckParams,
+            "rotateFindEnemyEnabled": settings.fightRotateFindEnemyEnabled,
+            "rotaryFactor": settings.fightRotaryFactor,
+            "checkBeforeBurst": settings.fightCheckBeforeBurst,
+            "isFirstCheck": settings.fightIsFirstCheck,
+            "checkEndDelay": settings.fightCheckEndDelay,
+            "beforeDetectDelay": settings.fightBeforeDetectDelay,
+        ]
+        let autoFightConfig: [String: Any] = [
+            "strategyName": settings.fightStrategyName,
+            "actionSchedulerByCd": settings.fightActionSchedulerByCd,
+            "fightFinishDetectEnabled": settings.fightFinishDetectEnabled,
+            "finishDetectConfig": finishDetectConfig,
+            "guardianAvatar": settings.fightGuardianAvatar,
+            "guardianCombatSkip": settings.fightGuardianCombatSkip,
+            "burstEnabled": settings.fightBurstEnabled,
+            "guardianAvatarHold": settings.fightGuardianAvatarHold,
+            "pickDropsAfterFightEnabled":
+                settings.fightPickDropsAfterFightEnabled,
+            "pickDropsAfterFightSeconds":
+                settings.fightPickDropsAfterFightSeconds,
+            "kazuhaPickupEnabled": settings.fightKazuhaPickupEnabled,
+            "qinDoublePickUp": settings.fightQinDoublePickUp,
+            "expBasedPickupEnabled": settings.fightExpBasedPickupEnabled,
+            "battleThresholdForLoot":
+                settings.fightBattleThresholdForLoot ?? NSNull(),
+            "onlyPickEliteDropsMode": settings.fightOnlyPickEliteDropsMode,
+            "kazuhaPartyName": settings.fightKazuhaPartyName,
+            "timeout": settings.fightTimeout,
+            "swimmingEnabled": settings.fightSwimmingEnabled,
+        ]
+        let taskCycleConfig: [String: Any] = [
+            "enable": settings.taskCycleEnabled,
+            "boundaryTime": settings.taskCycleBoundaryTime,
+            "isBoundaryTimeBasedOnServerTime": settings.taskCycleUsesServerTime,
+            "cycle": settings.taskCycle,
+            "index": settings.taskCycleIndex,
+        ]
+        let completionConfig: [String: Any] = [
+            "enable": settings.completionSkipEnabled,
+            "skipPolicy": settings.completionSkipPolicy,
+            "boundaryTime": settings.completionBoundaryTime,
+            "isBoundaryTimeBasedOnServerTime":
+                settings.completionUsesServerTime,
+            "lastRunGapSeconds": settings.completionLastRunGapSeconds,
+            "referencePoint": settings.completionReferencePoint,
+        ]
+        let priorityConfig: [String: Any] = [
+            "enabled": settings.priorityEnabled,
+            "groupNames": settings.priorityGroupNames,
+            "maxRetryCount": settings.priorityMaxRetryCount,
+        ]
+        let recoverTiming = [
+            "AnyWaypoint": 0, "OnlyTeleport": 1, "Never": 2,
+        ][settings.recoverTiming] ?? 0
+        let pathingConfig: [String: Any] = [
+            "enabled": settings.enabled,
+            "autoPickEnabled": settings.autoPick,
+            "autoEatEnabled": settings.autoEat,
+            "autoSkipEnabled": settings.autoSkip,
+            "autoFightEnabled": settings.autoFight,
+            "autoRunEnabled": settings.autoRun,
+            "autoEatConfig": autoEatConfig,
+            "autoFightConfig": autoFightConfig,
+            "partyName": settings.partyName,
+            "isVisitStatueBeforeSwitchParty": settings.visitStatue,
+            "mainAvatarIndex": settings.mainAvatar,
+            "guardianAvatarIndex": settings.guardianAvatar,
+            "guardianElementalSkillSecondInterval": settings.guardianInterval,
+            "guardianElementalSkillLongPress": settings.guardianLongPress,
+            "useGadgetIntervalMs": settings.gadgetInterval,
+            "recoverTiming": recoverTiming,
+            "skipDuring": settings.skipDuring,
+            "hideOnRepeat": settings.hideOnRepeat,
+            "hurryOnAvatar": settings.hurryOnAvatar,
+            "travelMode": settings.travelMode,
+            "distance": settings.distance,
+            "approachStopDistance": min(
+                settings.approachStopDistance, settings.distance),
+            "switchToWalkEnabled": settings.switchToWalkEnabled,
+            "mwkJumpFlyEnabled": settings.mwkJumpFlyEnabled,
+            "mwkJumpFlyIntervalSeconds": settings.mwkJumpFlyIntervalSeconds,
+            "taskCycleConfig": taskCycleConfig,
+            "taskCompletionSkipRuleConfig": completionConfig,
+            "preExecutionPriorityConfig": priorityConfig,
+        ]
+        let shellConfig: [String: Any] = [
+            "disable": settings.shellDisable,
+            "timeout": settings.shellTimeout,
+            "noWindow": settings.shellNoWindow,
+            "output": settings.shellOutput,
+        ]
+        let config: [String: Any] = [
+            "pathingConfig": pathingConfig,
+            "enableShellConfig": settings.enableShellConfig,
+            "shellConfig": shellConfig,
+        ]
+        try catalogMutation(
+            "catalog.saveScriptGroupConfig",
+            groupName: groupName,
+            parameters: ["config": config])
+    }
+
+    func mutateSchedulerCatalog(groupName: String, mutation: BetterGISchedulerCatalogMutation) throws {
+        switch mutation {
+        case .add(let type, let ids, let command):
+            try catalogMutation("catalog.addScriptGroupProjects", groupName: groupName, parameters: [
+                "type": type, "candidateIds": ids, "shellCommand": command ?? NSNull()])
+        case .remove(let index, let sameFolder):
+            try catalogMutation("catalog.removeScriptGroupProject", groupName: groupName,
+                                parameters: ["projectIndex": index, "sameFolder": sameFolder])
+        case .clear: try catalogMutation("catalog.clearScriptGroup", groupName: groupName)
+        case .reverse: try catalogMutation("catalog.reverseScriptGroup", groupName: groupName)
+        case .updatePathingFolders: try catalogMutation("catalog.updateScriptGroupPathingFolders", groupName: groupName)
+        case .setNext(let index):
+            try catalogMutation("catalog.setScriptGroupNextProject", groupName: groupName, parameters: ["projectIndex": index])
+        }
+    }
+
+    func projectLocation(groupName: String, projectIndex: Int) throws -> String {
+        guard let result = try runningClient().request(
+            method: "catalog.getScriptGroupProjectLocation",
+            parameters: ["name": groupName, "projectIndex": projectIndex]) as? [String: Any],
+              let path = result["path"] as? String
+        else { throw BetterGICoreRPCError.protocolViolation("Invalid project location.") }
+        return path
+    }
+
+    func exportMergedPathing(groupName: String) throws -> (path: String, count: Int) {
+        guard let result = try runningClient().request(
+            method: "catalog.exportMergedPathing", parameters: ["name": groupName]) as? [String: Any],
+              let path = result["path"] as? String,
+              let count = result["count"] as? Int
+        else { throw BetterGICoreRPCError.protocolViolation("Invalid merged pathing export result.") }
+        return (path, count)
+    }
+
+    func startRuntime() throws {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        guard let result = try client.request(method: "runtime.start") as? [String: Any],
+              result["running"] as? Bool == true else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid runtime.start result.")
+        }
+    }
+
+    func stopRuntime() throws {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        guard let result = try client.request(method: "runtime.stop") as? [String: Any],
+              result["running"] as? Bool == false else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid runtime.stop result.")
+        }
+    }
+
+    func refreshRuntimeGeometry() throws {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        guard let result = try client.request(method: "runtime.refreshGeometry") as? [String: Any],
+              result["assetsReloaded"] as? Bool == true else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid runtime.refreshGeometry result.")
+        }
+    }
+
+    func listScriptProjects() throws -> [BetterGIScriptProjectSummary] {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        return try client.listScriptProjects()
+    }
+
+    func scriptProjectCode(folderName: String) throws -> BetterGIScriptProjectCode {
+        try runningClient().scriptProjectCode(folderName: folderName)
+    }
+
+    func scriptProjectRootLocation() throws -> String {
+        try runningClient().scriptProjectRootLocation()
+    }
+
+    func scriptRepositoryState() throws -> BetterGIScriptRepositoryState {
+        try runningClient().scriptRepositoryState()
+    }
+
+    func updateScriptRepository(channel: String, url: String) throws -> BetterGIScriptRepositoryUpdateResult {
+        try runningClient().updateScriptRepository(channel: channel, url: url)
+    }
+
+    func updateSubscribedScripts(
+        channel: String,
+        url: String
+    ) throws -> BetterGIScriptRepositoryBatchUpdateResult {
+        try runningClient().updateSubscribedScripts(channel: channel, url: url)
+    }
+
+    func autoUpdateSubscribedScripts(
+        commandLineRun: Bool
+    ) throws -> BetterGIScriptRepositoryBatchUpdateResult {
+        try runningClient().autoUpdateSubscribedScripts(
+            commandLineRun: commandLineRun)
+    }
+
+    func resetScriptRepository() throws {
+        try runningClient().resetScriptRepository()
+    }
+
+    func inspectScriptRepositoryClipboard(
+        _ text: String
+    ) throws -> BetterGIScriptRepositoryImportPreview {
+        try runningClient().inspectScriptRepositoryClipboard(text)
+    }
+
+    func scriptRepositoryRepoJSON() throws -> String {
+        try runningClient().scriptRepositoryWebString(method: "repository.web.getRepoJson")
+    }
+
+    func scriptRepositorySubscribedPathsJSON() throws -> String {
+        try runningClient().scriptRepositoryWebString(method: "repository.web.getSubscribedScriptPaths")
+    }
+
+    func scriptRepositoryFile(path: String) throws -> String {
+        try runningClient().scriptRepositoryWebString(
+            method: "repository.web.getFile",
+            parameters: ["path": path]
+        )
+    }
+
+    func resetScriptRepositoryUpdateFlag(path: String) throws -> Bool {
+        try runningClient().scriptRepositoryWebBool(
+            method: "repository.web.updateSubscribed",
+            parameters: ["path": path]
+        )
+    }
+
+    func clearScriptRepositoryUpdateFlags() throws -> Bool {
+        try runningClient().scriptRepositoryWebBool(method: "repository.web.clearUpdate")
+    }
+
+    func scriptRepositoryGuideStatus() throws -> Bool {
+        try runningClient().scriptRepositoryWebBool(method: "repository.web.getGuideStatus")
+    }
+
+    func setScriptRepositoryGuideStatus(_ status: Bool) throws -> Bool {
+        try runningClient().scriptRepositoryWebBool(
+            method: "repository.web.setGuideStatus",
+            parameters: ["status": status]
+        )
+    }
+
+    func importScriptRepositoryURI(_ uri: String) throws -> Int {
+        try runningClient().importScriptRepositoryURI(uri)
+    }
+
+    func runSchedulerGroup(name: String) throws -> String {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        guard let result = try client.request(
+            method: "scheduler.run", parameters: ["groupName": name]
+        ) as? [String: Any], let taskID = result["taskId"] as? String else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid scheduler.run result.")
+        }
+        return taskID
+    }
+
+    func runSchedulerGroups(names: [String], loop: Bool = false) throws -> String {
+        guard !names.isEmpty else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "scheduler.runGroups requires at least one group name.")
+        }
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        guard let result = try client.request(
+            method: "scheduler.runGroups",
+            parameters: ["groupNames": names, "loop": loop]
+        ) as? [String: Any], let taskID = result["taskId"] as? String else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid scheduler.runGroups result.")
+        }
+        return taskID
+    }
+
+    func schedulerProgress() throws -> [BetterGISchedulerProgressSummary] {
+        guard let values = try runningClient().request(
+            method: "scheduler.listProgress"
+        ) as? [[String: Any]] else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid scheduler.listProgress result."
+            )
+        }
+        return try values.map { value in
+            guard let name = value["name"] as? String,
+                  let displayName = value["displayName"] as? String,
+                  let scriptGroupNames = value["scriptGroupNames"] as? [String],
+                  let loop = value["loop"] as? Bool,
+                  let loopCount = value["loopCount"] as? Int,
+                  let startTime = value["startTime"] as? String
+            else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid scheduler progress summary."
+                )
+            }
+            return BetterGISchedulerProgressSummary(
+                name: name,
+                displayName: displayName,
+                scriptGroupNames: scriptGroupNames,
+                currentScriptGroupName: value["currentScriptGroupName"] as? String,
+                currentProjectName: value["currentProjectName"] as? String,
+                loop: loop,
+                loopCount: loopCount,
+                startTime: startTime
+            )
+        }
+    }
+
+    func continueSchedulerProgress(name: String) throws -> String {
+        guard let result = try runningClient().request(
+            method: "scheduler.continueProgress",
+            parameters: ["name": name]
+        ) as? [String: Any], let taskID = result["taskId"] as? String else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid scheduler.continueProgress result."
+            )
+        }
+        return taskID
+    }
+
+    func schedulerStatus() throws -> BetterGICoreSchedulerStatus {
+        guard let result = try runningClient().request(method: "scheduler.status")
+            as? [String: Any],
+              let state = result["state"] as? String else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid scheduler.status result.")
+        }
+        return BetterGICoreSchedulerStatus(
+            taskID: result["taskId"] as? String,
+            groupName: result["groupName"] as? String,
+            state: state,
+            error: result["error"] as? String)
+    }
+
+    func listOneDragonConfigs() throws -> [BetterGIOneDragonConfigSummary] {
+        guard let items = try runningClient().request(method: "oneDragon.list")
+            as? [[String: Any]] else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid oneDragon.list result.")
+        }
+        return try items.map { item in
+            guard let name = item["name"] as? String,
+                  let taskCount = item["taskCount"] as? Int,
+                  let enabledTaskCount = item["enabledTaskCount"] as? Int,
+                  let selected = item["selected"] as? Bool else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid OneDragon config summary.")
+            }
+            return BetterGIOneDragonConfigSummary(
+                name: name,
+                taskCount: taskCount,
+                enabledTaskCount: enabledTaskCount,
+                selected: selected)
+        }
+    }
+
+    func oneDragonConfig(name: String) throws -> BetterGIOneDragonConfigDocument {
+        try decodeOneDragonConfig(try runningClient().request(
+            method: "oneDragon.get",
+            parameters: ["name": name]))
+    }
+
+    func selectOneDragonConfig(name: String) throws {
+        guard let result = try runningClient().request(
+            method: "oneDragon.select",
+            parameters: ["name": name]) as? [String: Any],
+              result["selectedName"] as? String == name else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid oneDragon.select result.")
+        }
+    }
+
+    func createOneDragonConfig(name: String) throws
+        -> BetterGIOneDragonConfigDocument
+    {
+        try decodeOneDragonConfig(try runningClient().request(
+            method: "oneDragon.create",
+            parameters: ["name": name]))
+    }
+
+    func saveOneDragonConfig(_ document: BetterGIOneDragonConfigDocument) throws
+        -> BetterGIOneDragonConfigDocument
+    {
+        try decodeOneDragonConfig(try runningClient().request(
+            method: "oneDragon.save",
+            parameters: [
+                "name": document.name,
+                "config": document.config.mapValues(\.any),
+            ]))
+    }
+
+    func renameOneDragonConfig(name: String, newName: String) throws
+        -> BetterGIOneDragonConfigDocument
+    {
+        try decodeOneDragonConfig(try runningClient().request(
+            method: "oneDragon.rename",
+            parameters: ["name": name, "newName": newName]))
+    }
+
+    func deleteOneDragonConfig(name: String) throws -> String {
+        guard let result = try runningClient().request(
+            method: "oneDragon.delete",
+            parameters: ["name": name]) as? [String: Any],
+              let selectedName = result["selectedName"] as? String else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid oneDragon.delete result.")
+        }
+        return selectedName
+    }
+
+    func startOneDragon(name: String) throws -> BetterGIOneDragonStatus {
+        try decodeOneDragonStatus(try runningClient().request(
+            method: "oneDragon.start",
+            parameters: ["name": name]))
+    }
+
+    func stopOneDragon(taskID: String) throws -> BetterGIOneDragonStatus {
+        try decodeOneDragonStatus(try runningClient().request(
+            method: "oneDragon.stop",
+            parameters: ["taskId": taskID]))
+    }
+
+    func oneDragonStatus() throws -> BetterGIOneDragonStatus {
+        try decodeOneDragonStatus(
+            try runningClient().request(method: "oneDragon.status"))
+    }
+
+    func listTriggers() throws -> [BetterGICoreTriggerState] {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        guard let items = try client.request(method: "trigger.list") as? [[String: Any]] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid trigger.list result.")
+        }
+        return try items.map { item in
+            guard let name = item["name"] as? String,
+                  let displayName = item["displayName"] as? String,
+                  let enabled = item["enabled"] as? Bool,
+                  let canSetEnabled = item["canSetEnabled"] as? Bool,
+                  let priority = item["priority"] as? Int,
+                  let exclusive = item["exclusive"] as? Bool,
+                  let settingsAvailable = item["settingsAvailable"] as? Bool else {
+                throw BetterGICoreRPCError.protocolViolation("Invalid trigger state.")
+            }
+            return BetterGICoreTriggerState(
+                name: name, displayName: displayName, enabled: enabled,
+                canSetEnabled: canSetEnabled,
+                priority: priority, exclusive: exclusive,
+                settingsAvailable: settingsAvailable,
+                autoHangoutEventEnabled: item["autoHangoutEventEnabled"] as? Bool
+            )
+        }
+    }
+
+    private func decodeOneDragonConfig(_ value: Any?)
+        throws -> BetterGIOneDragonConfigDocument
+    {
+        guard let result = value as? [String: Any],
+              let name = result["name"] as? String,
+              let rawConfig = result["config"] as? [String: Any],
+              let rawTasks = result["tasks"] as? [[String: Any]],
+              let builtInTaskNames = result["builtInTaskNames"] as? [String],
+              let rawOptions = result["options"] as? [String: Any],
+              let craftingBenchCountries =
+                  rawOptions["craftingBenchCountries"] as? [String],
+              let adventurersGuildCountries =
+                  rawOptions["adventurersGuildCountries"] as? [String],
+              let domainNames = rawOptions["domainNames"] as? [String],
+              let sundayRewardOptions =
+                  rawOptions["sundayRewardOptions"] as? [String],
+              let bossNames = rawOptions["bossNames"] as? [String],
+              let fightStrategies = rawOptions["fightStrategies"] as? [String],
+              let leyLineTypes = rawOptions["leyLineTypes"] as? [String],
+              let leyLineCountries = rawOptions["leyLineCountries"] as? [String],
+              let secretTreasureObjects =
+                  rawOptions["secretTreasureObjects"] as? [String],
+              let sereniteaPotTpTypes =
+                  rawOptions["sereniteaPotTpTypes"] as? [String],
+              let completionActions =
+                  rawOptions["completionActions"] as? [String] else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid OneDragon config document.")
+        }
+        let tasks = try rawTasks.map { item in
+            guard let id = item["id"] as? String,
+                  let name = item["name"] as? String,
+                  let isEnabled = item["isEnabled"] as? Bool,
+                  let isResumeStep = item["isResumeStep"] as? Bool else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid OneDragon task.")
+            }
+            return BetterGIOneDragonTask(
+                id: id,
+                name: name,
+                isEnabled: isEnabled,
+                isResumeStep: isResumeStep)
+        }
+        return BetterGIOneDragonConfigDocument(
+            name: name,
+            config: try rawConfig.mapValues(BetterGIJSONValue.init(any:)),
+            tasks: tasks,
+            builtInTaskNames: builtInTaskNames,
+            options: BetterGIOneDragonConfigOptions(
+                craftingBenchCountries: craftingBenchCountries,
+                adventurersGuildCountries: adventurersGuildCountries,
+                domainNames: domainNames,
+                sundayRewardOptions: sundayRewardOptions,
+                bossNames: bossNames,
+                fightStrategies: fightStrategies,
+                leyLineTypes: leyLineTypes,
+                leyLineCountries: leyLineCountries,
+                secretTreasureObjects: secretTreasureObjects,
+                sereniteaPotTpTypes: sereniteaPotTpTypes,
+                completionActions: completionActions))
+    }
+
+    private func decodeOneDragonStatus(_ value: Any?)
+        throws -> BetterGIOneDragonStatus
+    {
+        guard let result = value as? [String: Any],
+              let state = result["state"] as? String else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid OneDragon status.")
+        }
+        return BetterGIOneDragonStatus(
+            taskID: result["taskId"] as? String,
+            configName: result["configName"] as? String,
+            state: state,
+            error: result["error"] as? String)
+    }
+
+    func autoEatTriggerSettings() throws -> BetterGICoreAutoEatTriggerSettings {
+        let value = try requestTriggerSettings(method: "trigger.settings.get", name: "AutoEat")
+        guard let checkInterval = value["checkInterval"] as? Int,
+              let eatInterval = value["eatInterval"] as? Int else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoEat trigger settings.")
+        }
+        return .init(checkInterval: checkInterval, eatInterval: eatInterval)
+    }
+
+    func autoPickTriggerSettings() throws -> BetterGICoreAutoPickTriggerSettings {
+        try decodeAutoPickTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.get", name: "AutoPick"))
+    }
+
+    func autoSkipTriggerSettings() throws -> BetterGICoreAutoSkipTriggerSettings {
+        try decodeAutoSkipTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.get", name: "AutoSkip"))
+    }
+
+    func saveAutoSkipTriggerSettings(_ settings: BetterGICoreAutoSkipTriggerSettings) throws
+        -> BetterGICoreAutoSkipTriggerSettings {
+        try decodeAutoSkipTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.save", name: "AutoSkip", settings: [
+                "quicklySkipConversationsEnabled": settings.quicklySkipConversationsEnabled,
+                "afterChooseOptionSleepDelay": settings.afterChooseOptionSleepDelay,
+                "autoWaitDialogueOptionVoiceEnabled": settings.autoWaitDialogueOptionVoiceEnabled,
+                "dialogueOptionVoiceMaxWaitSeconds": settings.dialogueOptionVoiceMaxWaitSeconds,
+                "beforeClickConfirmDelay": settings.beforeClickConfirmDelay,
+                "autoGetDailyRewardsEnabled": settings.autoGetDailyRewardsEnabled,
+                "autoReExploreEnabled": settings.autoReExploreEnabled,
+                "clickChatOption": settings.clickChatOption,
+                "customPriorityOptionsEnabled": settings.customPriorityOptionsEnabled,
+                "customPriorityOptions": settings.customPriorityOptions,
+                "autoHangoutEventEnabled": settings.autoHangoutEventEnabled,
+                "autoHangoutEndChoose": settings.autoHangoutEndChoose,
+                "autoHangoutChooseOptionSleepDelay": settings.autoHangoutChooseOptionSleepDelay,
+                "autoHangoutPressSkipEnabled": settings.autoHangoutPressSkipEnabled,
+                "submitGoodsEnabled": settings.submitGoodsEnabled,
+                "closePopupPagedEnabled": settings.closePopupPagedEnabled,
+            ]))
+    }
+
+    func saveAutoPickTriggerSettings(_ settings: BetterGICoreAutoPickTriggerSettings) throws
+        -> BetterGICoreAutoPickTriggerSettings {
+        try decodeAutoPickTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.save", name: "AutoPick", settings: [
+                "ocrEngine": settings.ocrEngine,
+                "fastModeEnabled": settings.fastModeEnabled,
+                "blackListEnabled": settings.blackListEnabled,
+                "exactBlackList": settings.exactBlackList,
+                "fuzzyBlackList": settings.fuzzyBlackList,
+                "whiteListEnabled": settings.whiteListEnabled,
+                "whiteList": settings.whiteList,
+                "pickKey": settings.pickKey,
+            ]))
+    }
+
+    func saveAutoEatTriggerSettings(_ settings: BetterGICoreAutoEatTriggerSettings) throws
+        -> BetterGICoreAutoEatTriggerSettings {
+        let value = try requestTriggerSettings(method: "trigger.settings.save", name: "AutoEat", settings: [
+            "checkInterval": settings.checkInterval,
+            "eatInterval": settings.eatInterval,
+        ])
+        guard let checkInterval = value["checkInterval"] as? Int,
+              let eatInterval = value["eatInterval"] as? Int else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoEat trigger settings.")
+        }
+        return .init(checkInterval: checkInterval, eatInterval: eatInterval)
+    }
+
+    func quickTeleportTriggerSettings() throws -> BetterGICoreQuickTeleportTriggerSettings {
+        try decodeQuickTeleportTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.get", name: "QuickTeleport"))
+    }
+
+    func saveQuickTeleportTriggerSettings(_ settings: BetterGICoreQuickTeleportTriggerSettings) throws
+        -> BetterGICoreQuickTeleportTriggerSettings {
+        try decodeQuickTeleportTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.save", name: "QuickTeleport", settings: [
+                "teleportListClickDelay": settings.teleportListClickDelay,
+                "waitTeleportPanelDelay": settings.waitTeleportPanelDelay,
+                "hotkeyTpEnabled": settings.hotkeyTpEnabled,
+            ]))
+    }
+
+    func mapMaskTriggerSettings() throws -> BetterGICoreMapMaskTriggerSettings {
+        try decodeMapMaskTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.get", name: "MapMask"))
+    }
+
+    func skillCdTriggerSettings() throws -> BetterGICoreSkillCdTriggerSettings {
+        try decodeSkillCdTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.get", name: "SkillCd"))
+    }
+
+    func saveSkillCdTriggerSettings(_ settings: BetterGICoreSkillCdTriggerSettings) throws
+        -> BetterGICoreSkillCdTriggerSettings {
+        try decodeSkillCdTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.save", name: "SkillCd", settings: [
+                "customCdList": settings.customCdList.map {
+                    ["roleName": $0.roleName, "cdValueText": $0.cdValueText]
+                },
+                "triggerOnSkillUse": settings.triggerOnSkillUse,
+                "hideWhenZero": settings.hideWhenZero,
+                "pX": settings.pX,
+                "pY": settings.pY,
+                "gap": settings.gap,
+                "scale": settings.scale,
+                "textNormalColor": settings.textNormalColor,
+                "backgroundNormalColor": settings.backgroundNormalColor,
+                "textReadyColor": settings.textReadyColor,
+                "backgroundReadyColor": settings.backgroundReadyColor,
+            ]))
+    }
+
+    func saveMapMaskTriggerSettings(_ settings: BetterGICoreMapMaskTriggerSettings) throws
+        -> BetterGICoreMapMaskTriggerSettings {
+        try decodeMapMaskTriggerSettings(requestTriggerSettings(
+            method: "trigger.settings.save", name: "MapMask", settings: [
+                "miniMapMaskEnabled": settings.miniMapMaskEnabled,
+            ]))
+    }
+
+    func mapMaskPickerSettings() throws -> BetterGICoreMapMaskPickerSettings {
+        guard case .running = state, let client,
+              let value = try client.request(method: "mapMask.settings.get") as? [String: Any] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask picker settings result.")
+        }
+        return try decodeMapMaskPickerSettings(value)
+    }
+
+    func saveMapMaskPickerSettings(_ settings: BetterGICoreMapMaskPickerSettings) throws
+        -> BetterGICoreMapMaskPickerSettings {
+        guard case .running = state, let client,
+              let value = try client.request(method: "mapMask.settings.save", parameters: ["settings": [
+                "mapPointApiProvider": settings.mapPointApiProvider,
+                "hoYoLabLanguage": settings.hoYoLabLanguage,
+              ]]) as? [String: Any] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask picker settings result.")
+        }
+        return try decodeMapMaskPickerSettings(value)
+    }
+
+    func mapMaskPointCatalog() throws -> [BetterGICoreMapMaskLabel] {
+        guard case .running = state, let client,
+              let values = try client.request(method: "mapMask.catalog") as? [[String: Any]] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask catalog result.")
+        }
+        return try values.map(decodeMapMaskLabel)
+    }
+
+    func mapMaskPointSelection() throws -> Set<String> {
+        guard case .running = state, let client,
+              let value = try client.request(method: "mapMask.selection.get") as? [String: Any],
+              let selectedIDs = value["selectedIds"] as? [String] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask selection result.")
+        }
+        return Set(selectedIDs)
+    }
+
+    func saveMapMaskPointSelection(_ selectedIDs: Set<String>) throws -> Set<String> {
+        guard case .running = state, let client,
+              let value = try client.request(
+                method: "mapMask.selection.save",
+                parameters: ["selectedIds": selectedIDs.sorted()]) as? [String: Any],
+              let savedIDs = value["selectedIds"] as? [String] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask selection result.")
+        }
+        return Set(savedIDs)
+    }
+
+    func setAllMapMaskPointsHidden(_ hidden: Bool) throws {
+        guard case .running = state, let client,
+              let value = try client.request(
+                method: "mapMask.points.setAllHidden",
+                parameters: ["hidden": hidden]) as? [String: Any],
+              value["hidden"] as? Bool == hidden else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid MapMask visibility result.")
+        }
+    }
+
+    func setMapMaskPointHidden(_ pointID: String, hidden: Bool) throws {
+        guard case .running = state, let client,
+              let value = try client.request(
+                method: "mapMask.point.setHidden",
+                parameters: ["pointId": pointID, "hidden": hidden]) as? [String: Any],
+              value["pointId"] as? String == pointID,
+              value["hidden"] as? Bool == hidden else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid MapMask point visibility result.")
+        }
+    }
+
+    func mapMaskPointInfo(_ pointID: String) throws
+        -> BetterGICoreMapMaskPointDetail {
+        guard case .running = state, let client,
+              let value = try client.request(
+                method: "mapMask.point.info",
+                parameters: ["pointId": pointID]) as? [String: Any],
+              let returnedPointID = value["pointId"] as? String,
+              returnedPointID == pointID,
+              let title = value["title"] as? String,
+              let text = value["text"] as? String,
+              let imageURL = value["imageUrl"] as? String,
+              let rawLinks = value["links"] as? [[String: Any]] else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid MapMask point detail result.")
+        }
+        let links = try rawLinks.map { item in
+            guard let text = item["text"] as? String,
+                  let url = item["url"] as? String else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid MapMask point link.")
+            }
+            return BetterGICoreMapMaskPointLink(text: text, url: url)
+        }
+        return .init(
+            pointID: returnedPointID,
+            title: title,
+            text: text,
+            imageURL: imageURL,
+            links: links)
+    }
+
+    private func requestTriggerSettings(
+        method: String, name: String, settings: [String: Any]? = nil
+    ) throws -> [String: Any] {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        var parameters: [String: Any] = ["name": name]
+        if let settings { parameters["settings"] = settings }
+        guard let value = try client.request(method: method, parameters: parameters) as? [String: Any] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid trigger settings result.")
+        }
+        return value
+    }
+
+    private func decodeQuickTeleportTriggerSettings(_ value: [String: Any]) throws
+        -> BetterGICoreQuickTeleportTriggerSettings {
+        guard let listDelay = value["teleportListClickDelay"] as? Int,
+              let panelDelay = value["waitTeleportPanelDelay"] as? Int,
+              let hotkeyEnabled = value["hotkeyTpEnabled"] as? Bool else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid QuickTeleport trigger settings.")
+        }
+        return .init(teleportListClickDelay: listDelay,
+                     waitTeleportPanelDelay: panelDelay,
+                     hotkeyTpEnabled: hotkeyEnabled)
+    }
+
+    private func decodeAutoPickTriggerSettings(_ value: [String: Any]) throws
+        -> BetterGICoreAutoPickTriggerSettings {
+        guard let ocrEngine = value["ocrEngine"] as? String,
+              let ocrEngineOptions = value["ocrEngineOptions"] as? [String],
+              let fastModeEnabled = value["fastModeEnabled"] as? Bool,
+              let blackListEnabled = value["blackListEnabled"] as? Bool,
+              let exactBlackList = value["exactBlackList"] as? String,
+              let fuzzyBlackList = value["fuzzyBlackList"] as? String,
+              let whiteListEnabled = value["whiteListEnabled"] as? Bool,
+              let whiteList = value["whiteList"] as? String,
+              let pickKey = value["pickKey"] as? String,
+              let pickKeyOptions = value["pickKeyOptions"] as? [String] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoPick trigger settings.")
+        }
+        return .init(
+            ocrEngine: ocrEngine, ocrEngineOptions: ocrEngineOptions,
+            fastModeEnabled: fastModeEnabled,
+            blackListEnabled: blackListEnabled, exactBlackList: exactBlackList,
+            fuzzyBlackList: fuzzyBlackList, whiteListEnabled: whiteListEnabled,
+            whiteList: whiteList, pickKey: pickKey, pickKeyOptions: pickKeyOptions)
+    }
+
+    private func decodeAutoSkipTriggerSettings(_ value: [String: Any]) throws
+        -> BetterGICoreAutoSkipTriggerSettings {
+        guard let quicklySkipConversationsEnabled = value["quicklySkipConversationsEnabled"] as? Bool,
+              let afterChooseOptionSleepDelay = value["afterChooseOptionSleepDelay"] as? Int,
+              let autoWaitDialogueOptionVoiceEnabled = value["autoWaitDialogueOptionVoiceEnabled"] as? Bool,
+              let dialogueOptionVoiceMaxWaitSeconds = value["dialogueOptionVoiceMaxWaitSeconds"] as? Int,
+              let beforeClickConfirmDelay = value["beforeClickConfirmDelay"] as? Int,
+              let autoGetDailyRewardsEnabled = value["autoGetDailyRewardsEnabled"] as? Bool,
+              let autoReExploreEnabled = value["autoReExploreEnabled"] as? Bool,
+              let clickChatOption = value["clickChatOption"] as? String,
+              let clickChatOptionOptions = value["clickChatOptionOptions"] as? [String],
+              let customPriorityOptionsEnabled = value["customPriorityOptionsEnabled"] as? Bool,
+              let customPriorityOptions = value["customPriorityOptions"] as? String,
+              let autoHangoutEventEnabled = value["autoHangoutEventEnabled"] as? Bool,
+              let autoHangoutEndChoose = value["autoHangoutEndChoose"] as? String,
+              let autoHangoutEndChooseOptions = value["autoHangoutEndChooseOptions"] as? [String],
+              let autoHangoutChooseOptionSleepDelay = value["autoHangoutChooseOptionSleepDelay"] as? Int,
+              let autoHangoutPressSkipEnabled = value["autoHangoutPressSkipEnabled"] as? Bool,
+              let submitGoodsEnabled = value["submitGoodsEnabled"] as? Bool,
+              let closePopupPagedEnabled = value["closePopupPagedEnabled"] as? Bool else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoSkip trigger settings.")
+        }
+        return .init(
+            quicklySkipConversationsEnabled: quicklySkipConversationsEnabled,
+            afterChooseOptionSleepDelay: afterChooseOptionSleepDelay,
+            autoWaitDialogueOptionVoiceEnabled: autoWaitDialogueOptionVoiceEnabled,
+            dialogueOptionVoiceMaxWaitSeconds: dialogueOptionVoiceMaxWaitSeconds,
+            beforeClickConfirmDelay: beforeClickConfirmDelay,
+            autoGetDailyRewardsEnabled: autoGetDailyRewardsEnabled,
+            autoReExploreEnabled: autoReExploreEnabled,
+            clickChatOption: clickChatOption,
+            clickChatOptionOptions: clickChatOptionOptions,
+            customPriorityOptionsEnabled: customPriorityOptionsEnabled,
+            customPriorityOptions: customPriorityOptions,
+            autoHangoutEventEnabled: autoHangoutEventEnabled,
+            autoHangoutEndChoose: autoHangoutEndChoose,
+            autoHangoutEndChooseOptions: autoHangoutEndChooseOptions,
+            autoHangoutChooseOptionSleepDelay: autoHangoutChooseOptionSleepDelay,
+            autoHangoutPressSkipEnabled: autoHangoutPressSkipEnabled,
+            submitGoodsEnabled: submitGoodsEnabled,
+            closePopupPagedEnabled: closePopupPagedEnabled)
+    }
+
+    private func decodeMapMaskTriggerSettings(_ value: [String: Any]) throws
+        -> BetterGICoreMapMaskTriggerSettings {
+        guard let enabled = value["miniMapMaskEnabled"] as? Bool else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask trigger settings.")
+        }
+        return .init(miniMapMaskEnabled: enabled)
+    }
+
+    private func decodeSkillCdTriggerSettings(_ value: [String: Any]) throws
+        -> BetterGICoreSkillCdTriggerSettings {
+        guard let rawRules = value["customCdList"] as? [[String: Any]],
+              let triggerOnSkillUse = value["triggerOnSkillUse"] as? Bool,
+              let hideWhenZero = value["hideWhenZero"] as? Bool,
+              let pX = value["pX"] as? Double,
+              let pY = value["pY"] as? Double,
+              let gap = value["gap"] as? Double,
+              let scale = value["scale"] as? Double,
+              let textNormalColor = value["textNormalColor"] as? String,
+              let backgroundNormalColor = value["backgroundNormalColor"] as? String,
+              let textReadyColor = value["textReadyColor"] as? String,
+              let backgroundReadyColor = value["backgroundReadyColor"] as? String else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid SkillCd trigger settings.")
+        }
+        let rules = try rawRules.map { rule in
+            guard let roleName = rule["roleName"] as? String,
+                  let cdValueText = rule["cdValueText"] as? String else {
+                throw BetterGICoreRPCError.protocolViolation("Invalid SkillCd role rule.")
+            }
+            return BetterGICoreSkillCdRule(roleName: roleName, cdValueText: cdValueText)
+        }
+        return .init(
+            customCdList: rules,
+            triggerOnSkillUse: triggerOnSkillUse,
+            hideWhenZero: hideWhenZero,
+            pX: pX,
+            pY: pY,
+            gap: gap,
+            scale: scale,
+            textNormalColor: textNormalColor,
+            backgroundNormalColor: backgroundNormalColor,
+            textReadyColor: textReadyColor,
+            backgroundReadyColor: backgroundReadyColor)
+    }
+
+    private func decodeMapMaskPickerSettings(_ value: [String: Any]) throws
+        -> BetterGICoreMapMaskPickerSettings {
+        guard let provider = value["mapPointApiProvider"] as? String,
+              let providerOptions = value["mapPointApiProviderOptions"] as? [String],
+              let language = value["hoYoLabLanguage"] as? String,
+              let languageOptions = value["hoYoLabLanguageOptions"] as? [String] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask picker settings.")
+        }
+        return .init(
+            mapPointApiProvider: provider,
+            mapPointApiProviderOptions: providerOptions,
+            hoYoLabLanguage: language,
+            hoYoLabLanguageOptions: languageOptions)
+    }
+
+    private func decodeMapMaskLabel(_ value: [String: Any]) throws -> BetterGICoreMapMaskLabel {
+        guard let id = value["id"] as? String,
+              let parentID = value["parentId"] as? String,
+              let name = value["name"] as? String,
+              let iconURL = value["iconUrl"] as? String,
+              let pointCount = value["pointCount"] as? Int,
+              let childValues = value["children"] as? [[String: Any]] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid MapMask label result.")
+        }
+        return .init(
+            id: id, parentID: parentID, name: name, iconURL: iconURL,
+            pointCount: pointCount, children: try childValues.map(decodeMapMaskLabel))
+    }
+
+    func setTriggerEnabled(name: String, enabled: Bool) throws {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        guard let result = try client.request(
+            method: "trigger.setEnabled", parameters: ["name": name, "enabled": enabled]
+        ) as? [String: Any], result["name"] as? String == name,
+              result["enabled"] as? Bool == enabled else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid trigger.setEnabled result.")
+        }
+    }
+
+    func listSoloTasks() throws -> [BetterGICoreSoloTask] {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        guard let items = try client.request(method: "solo.list") as? [[String: Any]] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid solo.list result.")
+        }
+        return try items.map { item in
+            guard let name = item["name"] as? String,
+                  let displayName = item["displayName"] as? String,
+                  let description = item["description"] as? String,
+                  let available = item["available"] as? Bool,
+                  let headerAction = item["headerAction"] as? Bool,
+                  let rawActions = item["actions"] as? [[String: Any]] else {
+                throw BetterGICoreRPCError.protocolViolation("Invalid solo task descriptor.")
+            }
+            let actions = try rawActions.map { action in
+                guard let name = action["name"] as? String,
+                      let title = action["title"] as? String,
+                      let description = action["description"] as? String else {
+                    throw BetterGICoreRPCError.protocolViolation(
+                        "Invalid solo task action descriptor.")
+                }
+                return BetterGICoreSoloTaskAction(
+                    name: name, title: title, description: description)
+            }
+            return BetterGICoreSoloTask(
+                name: name, displayName: displayName, description: description,
+                available: available,
+                unavailableReason: item["unavailableReason"] as? String,
+                settingsAvailable: item["settingsAvailable"] as? Bool ?? false,
+                headerAction: headerAction,
+                actions: actions,
+                inputKind: item["inputKind"] as? String,
+                inputTitle: item["inputTitle"] as? String,
+                inputPlaceholder: item["inputPlaceholder"] as? String,
+                tutorialURL: item["tutorialUrl"] as? String,
+                showsScriptRepository: item["showsScriptRepository"] as? Bool ?? false,
+                scriptDirectoryPath: item["scriptDirectoryPath"] as? String
+            )
+        }
+    }
+
+    func autoCookSettings() throws -> BetterGICoreAutoCookSettings {
+        try decodeAutoCookSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "AutoCook"]
+        ))
+    }
+
+    func autoRedeemCodeSettings() throws -> BetterGICoreAutoRedeemCodeSettings {
+        try decodeAutoRedeemCodeSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "AutoRedeemCode"]
+        ))
+    }
+
+    func saveAutoRedeemCodeSettings(_ settings: BetterGICoreAutoRedeemCodeSettings) throws
+        -> BetterGICoreAutoRedeemCodeSettings {
+        try decodeAutoRedeemCodeSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "AutoRedeemCode", "settings": [
+                "clipboardListenerEnabled": settings.clipboardListenerEnabled,
+            ]]
+        ))
+    }
+
+    func getGridIconsSettings() throws -> BetterGICoreGetGridIconsSettings {
+        try decodeGetGridIconsSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "GetGridIcons"]
+        ))
+    }
+
+    func saveGetGridIconsSettings(_ settings: BetterGICoreGetGridIconsSettings) throws
+        -> BetterGICoreGetGridIconsSettings {
+        try decodeGetGridIconsSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "GetGridIcons", "settings": [
+                "gridName": settings.gridName,
+                "starAsSuffix": settings.starAsSuffix,
+                "lvAsSuffix": settings.lvAsSuffix,
+                "maxNumToGet": settings.maxNumToGet,
+            ]]
+        ))
+    }
+
+    func autoGeniusInvokationSettings() throws
+        -> BetterGICoreAutoGeniusInvokationSettings {
+        try decodeAutoGeniusInvokationSettings(requestSoloSettings(
+            method: "solo.settings.get",
+            parameters: ["name": "AutoGeniusInvokation"]
+        ))
+    }
+
+    func saveAutoGeniusInvokationSettings(
+        _ settings: BetterGICoreAutoGeniusInvokationSettings
+    ) throws -> BetterGICoreAutoGeniusInvokationSettings {
+        try decodeAutoGeniusInvokationSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "AutoGeniusInvokation", "settings": [
+                "strategyName": settings.strategyName,
+                "sleepDelay": settings.sleepDelay,
+            ]]
+        ))
+    }
+
+    func autoFishingSettings() throws -> BetterGICoreAutoFishingSettings {
+        try decodeAutoFishingSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "AutoFishing"]
+        ))
+    }
+
+    func saveAutoFishingSettings(_ settings: BetterGICoreAutoFishingSettings) throws
+        -> BetterGICoreAutoFishingSettings {
+        try decodeAutoFishingSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "AutoFishing", "settings": [
+                "autoThrowRodTimeOut": settings.autoThrowRodTimeOut,
+                "wholeProcessTimeoutSeconds": settings.wholeProcessTimeoutSeconds,
+                "fishingTimePolicy": settings.fishingTimePolicy,
+                "saveScreenshotOnKeyTick": settings.saveScreenshotOnKeyTick,
+            ]]
+        ))
+    }
+
+    func saveAutoCookSettings(_ settings: BetterGICoreAutoCookSettings) throws
+        -> BetterGICoreAutoCookSettings {
+        try decodeAutoCookSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: [
+                "name": "AutoCook",
+                "settings": [
+                    "checkIntervalMs": settings.checkIntervalMs,
+                    "stopTaskWhenRecoverButtonDetected": settings.stopTaskWhenRecoverButtonDetected,
+                ],
+            ]
+        ))
+    }
+
+    func autoWoodSettings() throws -> BetterGICoreAutoWoodSettings {
+        try decodeAutoWoodSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "AutoWood"]
+        ))
+    }
+
+    func saveAutoWoodSettings(_ settings: BetterGICoreAutoWoodSettings) throws
+        -> BetterGICoreAutoWoodSettings {
+        try decodeAutoWoodSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "AutoWood", "settings": [
+                "roundNum": settings.roundNum,
+                "dailyMaxCount": settings.dailyMaxCount,
+                "useWonderlandRefresh": settings.useWonderlandRefresh,
+                "woodCountOcrEnabled": settings.woodCountOcrEnabled,
+                "afterZSleepDelay": settings.afterZSleepDelay,
+            ]]
+        ))
+    }
+
+    func autoMusicGameSettings() throws -> BetterGICoreAutoMusicGameSettings {
+        try decodeAutoMusicGameSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "AutoMusicGame"]
+        ))
+    }
+
+    func saveAutoMusicGameSettings(_ settings: BetterGICoreAutoMusicGameSettings) throws
+        -> BetterGICoreAutoMusicGameSettings {
+        try decodeAutoMusicGameSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "AutoMusicGame", "settings": [
+                "mustCanorusLevel": settings.mustCanorusLevel,
+                "musicLevel": settings.musicLevel,
+            ]]
+        ))
+    }
+
+    func autoBossSettings() throws -> BetterGICoreAutoBossSettings {
+        try decodeAutoBossSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "AutoBoss"]
+        ))
+    }
+
+    func saveAutoBossSettings(_ settings: BetterGICoreAutoBossSettings) throws
+        -> BetterGICoreAutoBossSettings {
+        try decodeAutoBossSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "AutoBoss", "settings": [
+                "bossName": settings.bossName,
+                "strategyName": settings.strategyName,
+                "teamName": settings.teamName,
+                "specifyRunCount": settings.specifyRunCount,
+                "runCount": settings.runCount,
+                "useTransientResin": settings.useTransientResin,
+                "useFragileResin": settings.useFragileResin,
+                "returnToStatueAfterEachRound": settings.returnToStatueAfterEachRound,
+                "rewardRecognitionEnabled": settings.rewardRecognitionEnabled,
+                "reviveRetryCount": settings.reviveRetryCount,
+            ]]
+        ))
+    }
+
+    func autoDomainSettings() throws -> BetterGICoreAutoDomainSettings {
+        try decodeAutoDomainSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "AutoDomain"]
+        ))
+    }
+
+    func autoStygianOnslaughtSettings() throws -> BetterGICoreAutoStygianOnslaughtSettings {
+        try decodeAutoStygianOnslaughtSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "AutoStygianOnslaught"]
+        ))
+    }
+
+    func saveAutoStygianOnslaughtSettings(
+        _ settings: BetterGICoreAutoStygianOnslaughtSettings
+    ) throws -> BetterGICoreAutoStygianOnslaughtSettings {
+        try decodeAutoStygianOnslaughtSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "AutoStygianOnslaught", "settings": [
+                "strategyName": settings.strategyName,
+                "bossNum": settings.bossNum,
+                "fightTeamName": settings.fightTeamName,
+                "specifyResinUse": settings.specifyResinUse,
+                "originalResinUseCount": settings.originalResinUseCount,
+                "condensedResinUseCount": settings.condensedResinUseCount,
+                "transientResinUseCount": settings.transientResinUseCount,
+                "fragileResinUseCount": settings.fragileResinUseCount,
+                "autoArtifactSalvage": settings.autoArtifactSalvage,
+                "maxArtifactStar": settings.maxArtifactStar,
+            ]]
+        ))
+    }
+
+    func autoLeyLineOutcropSettings() throws -> BetterGICoreAutoLeyLineOutcropSettings {
+        try decodeAutoLeyLineOutcropSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "AutoLeyLineOutcrop"]
+        ))
+    }
+
+    func saveAutoLeyLineOutcropSettings(_ settings: BetterGICoreAutoLeyLineOutcropSettings) throws
+        -> BetterGICoreAutoLeyLineOutcropSettings {
+        try decodeAutoLeyLineOutcropSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "AutoLeyLineOutcrop", "settings": [
+                "leyLineOutcropType": settings.leyLineOutcropType,
+                "country": settings.country,
+                "strategyName": settings.strategyName,
+                "actionSchedulerByCd": settings.actionSchedulerByCd,
+                "seekEnemyEnabled": settings.seekEnemyEnabled,
+                "seekEnemyRotaryFactor": settings.seekEnemyRotaryFactor,
+                "seekEnemyIntervalSeconds": settings.seekEnemyIntervalSeconds,
+                "kazuhaPickupEnabled": settings.kazuhaPickupEnabled,
+                "qinDoublePickUp": settings.qinDoublePickUp,
+                "scanDropsAfterRewardEnabled": settings.scanDropsAfterRewardEnabled,
+                "scanDropsAfterRewardSeconds": settings.scanDropsAfterRewardSeconds,
+                "isResinExhaustionMode": settings.isResinExhaustionMode,
+                "openModeCountMin": settings.openModeCountMin,
+                "count": settings.count,
+                "useTransientResin": settings.useTransientResin,
+                "useFragileResin": settings.useFragileResin,
+                "team": settings.team,
+                "friendshipTeam": settings.friendshipTeam,
+                "timeout": settings.timeout,
+                "useAdventurerHandbook": settings.useAdventurerHandbook,
+                "isNotification": settings.isNotification,
+            ]]
+        ))
+    }
+
+    func saveAutoDomainSettings(_ settings: BetterGICoreAutoDomainSettings) throws
+        -> BetterGICoreAutoDomainSettings {
+        try decodeAutoDomainSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "AutoDomain", "settings": [
+                "strategyName": settings.strategyName,
+                "partyName": settings.partyName,
+                "domainName": settings.domainName,
+                "specifyResinUse": settings.specifyResinUse,
+                "originalResinUseCount": settings.originalResinUseCount,
+                "condensedResinUseCount": settings.condensedResinUseCount,
+                "transientResinUseCount": settings.transientResinUseCount,
+                "fragileResinUseCount": settings.fragileResinUseCount,
+                "autoArtifactSalvage": settings.autoArtifactSalvage,
+                "maxArtifactStar": settings.maxArtifactStar,
+                "fightEndDelay": settings.fightEndDelay,
+                "shortMovement": settings.shortMovement,
+                "walkToF": settings.walkToF,
+                "leftRightMoveTimes": settings.leftRightMoveTimes,
+                "autoEat": settings.autoEat,
+                "rewardRecognitionEnabled": settings.rewardRecognitionEnabled,
+                "reviveRetryCount": settings.reviveRetryCount,
+            ]]
+        ))
+    }
+
+    func autoArtifactSalvageSettings() throws -> BetterGICoreAutoArtifactSalvageSettings {
+        try decodeAutoArtifactSalvageSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "AutoArtifactSalvage"]
+        ))
+    }
+
+    func autoFightSettings() throws -> BetterGICoreAutoFightSettings {
+        try decodeAutoFightSettings(requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "AutoFight"]
+        ))
+    }
+
+    func saveAutoFightSettings(_ settings: BetterGICoreAutoFightSettings) throws
+        -> BetterGICoreAutoFightSettings {
+        try decodeAutoFightSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "AutoFight", "settings": [
+                "strategyName": settings.strategyName,
+                "actionSchedulerByCd": settings.actionSchedulerByCd,
+                "fightFinishDetectEnabled": settings.fightFinishDetectEnabled,
+                "fastCheckEnabled": settings.fastCheckEnabled,
+                "fastCheckParams": settings.fastCheckParams,
+                "rotateFindEnemyEnabled": settings.rotateFindEnemyEnabled,
+                "rotaryFactor": settings.rotaryFactor,
+                "checkBeforeBurst": settings.checkBeforeBurst,
+                "isFirstCheck": settings.isFirstCheck,
+                "checkEndDelay": settings.checkEndDelay,
+                "beforeDetectDelay": settings.beforeDetectDelay,
+                "guardianAvatar": settings.guardianAvatar,
+                "guardianCombatSkip": settings.guardianCombatSkip,
+                "burstEnabled": settings.burstEnabled,
+                "guardianAvatarHold": settings.guardianAvatarHold,
+                "pickDropsAfterFightEnabled": settings.pickDropsAfterFightEnabled,
+                "pickDropsAfterFightSeconds": settings.pickDropsAfterFightSeconds,
+                "kazuhaPickupEnabled": settings.kazuhaPickupEnabled,
+                "qinDoublePickUp": settings.qinDoublePickUp,
+                "expBasedPickupEnabled": settings.expBasedPickupEnabled,
+                "timeout": settings.timeout,
+                "swimmingEnabled": settings.swimmingEnabled,
+            ]]
+        ))
+    }
+
+    func saveAutoArtifactSalvageSettings(_ settings: BetterGICoreAutoArtifactSalvageSettings) throws
+        -> BetterGICoreAutoArtifactSalvageSettings {
+        try decodeAutoArtifactSalvageSettings(requestSoloSettings(
+            method: "solo.settings.save",
+            parameters: ["name": "AutoArtifactSalvage", "settings": [
+                "javaScript": settings.javaScript,
+                "artifactSetFilter": settings.artifactSetFilter,
+                "maxArtifactStar": settings.maxArtifactStar,
+                "maxNumToCheck": settings.maxNumToCheck,
+                "recognitionFailurePolicy": settings.recognitionFailurePolicy,
+            ]]
+        ))
+    }
+
+    func artifactSalvagePreview(
+        javaScript: String
+    ) throws -> BetterGICoreArtifactSalvagePreview {
+        guard let result = try runningClient().request(
+            method: "solo.artifactSalvage.preview",
+            parameters: ["javaScript": javaScript]) as? [String: Any],
+              let imagePngBase64 = result["imagePngBase64"] as? String,
+              let recognizedText = result["recognizedText"] as? String,
+              let structuredResult = result["structuredResult"] as? String,
+              let isMatch = result["isMatch"] as? Bool
+        else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid artifact salvage preview.")
+        }
+        return .init(
+            imagePngBase64: imagePngBase64,
+            recognizedText: recognizedText,
+            structuredResult: structuredResult,
+            isMatch: isMatch)
+    }
+
+    private func requestSoloSettings(method: String, parameters: [String: Any]) throws -> Any {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        return try client.request(method: method, parameters: parameters)
+    }
+
+    private func decodeAutoGeniusInvokationSettings(_ value: Any) throws
+        -> BetterGICoreAutoGeniusInvokationSettings {
+        guard let value = value as? [String: Any],
+              value["name"] as? String == "AutoGeniusInvokation",
+              let strategyName = value["strategyName"] as? String,
+              let strategyOptions = value["strategyOptions"] as? [String],
+              let sleepDelay = value["sleepDelay"] as? Int else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid AutoGeniusInvokation settings.")
+        }
+        return .init(
+            strategyName: strategyName,
+            strategyOptions: strategyOptions,
+            sleepDelay: sleepDelay)
+    }
+
+    private func decodeAutoCookSettings(_ value: Any) throws -> BetterGICoreAutoCookSettings {
+        guard let result = value as? [String: Any],
+              result["name"] as? String == "AutoCook",
+              let interval = result["checkIntervalMs"] as? Int,
+              let stopWhenDetected = result["stopTaskWhenRecoverButtonDetected"] as? Bool else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoCook settings.")
+        }
+        return BetterGICoreAutoCookSettings(
+            checkIntervalMs: interval,
+            stopTaskWhenRecoverButtonDetected: stopWhenDetected
+        )
+    }
+
+    private func decodeAutoRedeemCodeSettings(_ value: Any) throws
+        -> BetterGICoreAutoRedeemCodeSettings {
+        guard let result = value as? [String: Any],
+              result["name"] as? String == "AutoRedeemCode",
+              let clipboardListenerEnabled = result["clipboardListenerEnabled"] as? Bool else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoRedeemCode settings.")
+        }
+        return BetterGICoreAutoRedeemCodeSettings(
+            clipboardListenerEnabled: clipboardListenerEnabled)
+    }
+
+    private func decodeGetGridIconsSettings(_ value: Any) throws
+        -> BetterGICoreGetGridIconsSettings {
+        guard let result = value as? [String: Any],
+              result["name"] as? String == "GetGridIcons",
+              let gridName = result["gridName"] as? String,
+              let rawOptions = result["gridNameOptions"] as? [[String: Any]],
+              let starAsSuffix = result["starAsSuffix"] as? Bool,
+              let lvAsSuffix = result["lvAsSuffix"] as? Bool,
+              let maxNumToGet = result["maxNumToGet"] as? Int else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid GetGridIcons settings.")
+        }
+        let options = try rawOptions.map { option -> BetterGICoreNamedOption in
+            guard let value = option["value"] as? String,
+                  let displayName = option["displayName"] as? String else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid GetGridIcons grid option.")
+            }
+            return .init(value: value, displayName: displayName)
+        }
+        return .init(
+            gridName: gridName,
+            gridNameOptions: options,
+            starAsSuffix: starAsSuffix,
+            lvAsSuffix: lvAsSuffix,
+            maxNumToGet: maxNumToGet)
+    }
+
+    private func decodeAutoFishingSettings(_ value: Any) throws
+        -> BetterGICoreAutoFishingSettings {
+        guard let value = value as? [String: Any],
+              value["name"] as? String == "AutoFishing",
+              let autoThrowRodTimeOut = value["autoThrowRodTimeOut"] as? Int,
+              let wholeProcessTimeoutSeconds = value["wholeProcessTimeoutSeconds"] as? Int,
+              let fishingTimePolicy = value["fishingTimePolicy"] as? String,
+              let rawOptions = value["fishingTimePolicyOptions"] as? [[String: Any]],
+              let screenshotEnabled = value["screenshotEnabled"] as? Bool,
+              let saveScreenshotOnKeyTick = value["saveScreenshotOnKeyTick"] as? Bool else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoFishing settings.")
+        }
+        let options = try rawOptions.map { option -> BetterGICoreNamedOption in
+            guard let optionValue = option["value"] as? String,
+                  let displayName = option["displayName"] as? String else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid AutoFishing time policy option.")
+            }
+            return .init(value: optionValue, displayName: displayName)
+        }
+        return .init(autoThrowRodTimeOut: autoThrowRodTimeOut,
+                     wholeProcessTimeoutSeconds: wholeProcessTimeoutSeconds,
+                     fishingTimePolicy: fishingTimePolicy,
+                     fishingTimePolicyOptions: options,
+                     screenshotEnabled: screenshotEnabled,
+                     saveScreenshotOnKeyTick: saveScreenshotOnKeyTick)
+    }
+
+    private func decodeAutoWoodSettings(_ value: Any) throws -> BetterGICoreAutoWoodSettings {
+        guard let value = value as? [String: Any], value["name"] as? String == "AutoWood",
+              let roundNum = value["roundNum"] as? Int,
+              let dailyMaxCount = value["dailyMaxCount"] as? Int,
+              let useWonderlandRefresh = value["useWonderlandRefresh"] as? Bool,
+              let woodCountOcrEnabled = value["woodCountOcrEnabled"] as? Bool,
+              let afterZSleepDelay = value["afterZSleepDelay"] as? Int else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoWood settings.")
+        }
+        return .init(roundNum: roundNum, dailyMaxCount: dailyMaxCount,
+                     useWonderlandRefresh: useWonderlandRefresh,
+                     woodCountOcrEnabled: woodCountOcrEnabled,
+                     afterZSleepDelay: afterZSleepDelay)
+    }
+
+    private func decodeAutoMusicGameSettings(_ value: Any) throws
+        -> BetterGICoreAutoMusicGameSettings {
+        guard let value = value as? [String: Any],
+              value["name"] as? String == "AutoMusicGame",
+              let mustCanorusLevel = value["mustCanorusLevel"] as? Bool,
+              let musicLevel = value["musicLevel"] as? String,
+              let options = value["musicLevelOptions"] as? [String] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoMusicGame settings.")
+        }
+        return .init(mustCanorusLevel: mustCanorusLevel, musicLevel: musicLevel,
+                     musicLevelOptions: options)
+    }
+
+    private func decodeAutoBossSettings(_ value: Any) throws -> BetterGICoreAutoBossSettings {
+        guard let value = value as? [String: Any], value["name"] as? String == "AutoBoss",
+              let bossName = value["bossName"] as? String,
+              let bossOptions = value["bossOptions"] as? [String],
+              let strategyName = value["strategyName"] as? String,
+              let strategyOptions = value["strategyOptions"] as? [String],
+              let teamName = value["teamName"] as? String,
+              let specifyRunCount = value["specifyRunCount"] as? Bool,
+              let runCount = value["runCount"] as? Int,
+              let useTransientResin = value["useTransientResin"] as? Bool,
+              let useFragileResin = value["useFragileResin"] as? Bool,
+              let returnToStatue = value["returnToStatueAfterEachRound"] as? Bool,
+              let rewardRecognition = value["rewardRecognitionEnabled"] as? Bool,
+              let reviveRetryCount = value["reviveRetryCount"] as? Int else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoBoss settings.")
+        }
+        return .init(bossName: bossName, bossOptions: bossOptions,
+                     strategyName: strategyName, strategyOptions: strategyOptions,
+                     teamName: teamName, specifyRunCount: specifyRunCount,
+                     runCount: runCount, useTransientResin: useTransientResin,
+                     useFragileResin: useFragileResin,
+                     returnToStatueAfterEachRound: returnToStatue,
+                     rewardRecognitionEnabled: rewardRecognition,
+                     reviveRetryCount: reviveRetryCount)
+    }
+
+    private func decodeAutoDomainSettings(_ value: Any) throws -> BetterGICoreAutoDomainSettings {
+        guard let value = value as? [String: Any], value["name"] as? String == "AutoDomain",
+              let strategyName = value["strategyName"] as? String,
+              let strategyOptions = value["strategyOptions"] as? [String],
+              let partyName = value["partyName"] as? String,
+              let domainName = value["domainName"] as? String,
+              let domainOptions = value["domainOptions"] as? [String],
+              let specifyResinUse = value["specifyResinUse"] as? Bool,
+              let original = value["originalResinUseCount"] as? Int,
+              let condensed = value["condensedResinUseCount"] as? Int,
+              let transient = value["transientResinUseCount"] as? Int,
+              let fragile = value["fragileResinUseCount"] as? Int,
+              let salvage = value["autoArtifactSalvage"] as? Bool,
+              let maxStar = value["maxArtifactStar"] as? String,
+              let starOptions = value["maxArtifactStarOptions"] as? [String],
+              let fightEndDelay = value["fightEndDelay"] as? Double,
+              let shortMovement = value["shortMovement"] as? Bool,
+              let walkToF = value["walkToF"] as? Bool,
+              let moveTimes = value["leftRightMoveTimes"] as? Int,
+              let autoEat = value["autoEat"] as? Bool,
+              let rewardRecognition = value["rewardRecognitionEnabled"] as? Bool,
+              let reviveRetryCount = value["reviveRetryCount"] as? Int else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoDomain settings.")
+        }
+        return .init(strategyName: strategyName, strategyOptions: strategyOptions,
+                     partyName: partyName, domainName: domainName, domainOptions: domainOptions,
+                     specifyResinUse: specifyResinUse, originalResinUseCount: original,
+                     condensedResinUseCount: condensed, transientResinUseCount: transient,
+                     fragileResinUseCount: fragile, autoArtifactSalvage: salvage,
+                     maxArtifactStar: maxStar, maxArtifactStarOptions: starOptions,
+                     fightEndDelay: fightEndDelay, shortMovement: shortMovement,
+                     walkToF: walkToF, leftRightMoveTimes: moveTimes, autoEat: autoEat,
+                     rewardRecognitionEnabled: rewardRecognition,
+                     reviveRetryCount: reviveRetryCount)
+    }
+
+    private func decodeAutoLeyLineOutcropSettings(_ value: Any) throws
+        -> BetterGICoreAutoLeyLineOutcropSettings {
+        guard let value = value as? [String: Any],
+              value["name"] as? String == "AutoLeyLineOutcrop",
+              let leyLineOutcropType = value["leyLineOutcropType"] as? String,
+              let leyLineOutcropTypeOptions = value["leyLineOutcropTypeOptions"] as? [String],
+              let country = value["country"] as? String,
+              let countryOptions = value["countryOptions"] as? [String],
+              let strategyName = value["strategyName"] as? String,
+              let strategyOptions = value["strategyOptions"] as? [String],
+              let actionSchedulerByCd = value["actionSchedulerByCd"] as? String,
+              let seekEnemyEnabled = value["seekEnemyEnabled"] as? Bool,
+              let seekEnemyRotaryFactor = value["seekEnemyRotaryFactor"] as? Int,
+              let seekEnemyIntervalSeconds = value["seekEnemyIntervalSeconds"] as? Int,
+              let kazuhaPickupEnabled = value["kazuhaPickupEnabled"] as? Bool,
+              let qinDoublePickUp = value["qinDoublePickUp"] as? Bool,
+              let scanDropsAfterRewardEnabled = value["scanDropsAfterRewardEnabled"] as? Bool,
+              let scanDropsAfterRewardSeconds = value["scanDropsAfterRewardSeconds"] as? Int,
+              let isResinExhaustionMode = value["isResinExhaustionMode"] as? Bool,
+              let openModeCountMin = value["openModeCountMin"] as? Bool,
+              let count = value["count"] as? Int,
+              let useTransientResin = value["useTransientResin"] as? Bool,
+              let useFragileResin = value["useFragileResin"] as? Bool,
+              let team = value["team"] as? String,
+              let friendshipTeam = value["friendshipTeam"] as? String,
+              let timeout = value["timeout"] as? Int,
+              let useAdventurerHandbook = value["useAdventurerHandbook"] as? Bool,
+              let isNotification = value["isNotification"] as? Bool else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoLeyLineOutcrop settings.")
+        }
+        return .init(
+            leyLineOutcropType: leyLineOutcropType,
+            leyLineOutcropTypeOptions: leyLineOutcropTypeOptions,
+            country: country, countryOptions: countryOptions,
+            strategyName: strategyName, strategyOptions: strategyOptions,
+            actionSchedulerByCd: actionSchedulerByCd,
+            seekEnemyEnabled: seekEnemyEnabled,
+            seekEnemyRotaryFactor: seekEnemyRotaryFactor,
+            seekEnemyIntervalSeconds: seekEnemyIntervalSeconds,
+            kazuhaPickupEnabled: kazuhaPickupEnabled,
+            qinDoublePickUp: qinDoublePickUp,
+            scanDropsAfterRewardEnabled: scanDropsAfterRewardEnabled,
+            scanDropsAfterRewardSeconds: scanDropsAfterRewardSeconds,
+            isResinExhaustionMode: isResinExhaustionMode,
+            openModeCountMin: openModeCountMin, count: count,
+            useTransientResin: useTransientResin, useFragileResin: useFragileResin,
+            team: team, friendshipTeam: friendshipTeam, timeout: timeout,
+            useAdventurerHandbook: useAdventurerHandbook,
+            isNotification: isNotification)
+    }
+
+    private func decodeAutoStygianOnslaughtSettings(_ value: Any) throws
+        -> BetterGICoreAutoStygianOnslaughtSettings {
+        guard let value = value as? [String: Any],
+              value["name"] as? String == "AutoStygianOnslaught",
+              let strategyName = value["strategyName"] as? String,
+              let strategyOptions = value["strategyOptions"] as? [String],
+              let bossNum = value["bossNum"] as? Int,
+              let bossNumOptions = value["bossNumOptions"] as? [Int],
+              let fightTeamName = value["fightTeamName"] as? String,
+              let specifyResinUse = value["specifyResinUse"] as? Bool,
+              let originalResinUseCount = value["originalResinUseCount"] as? Int,
+              let condensedResinUseCount = value["condensedResinUseCount"] as? Int,
+              let transientResinUseCount = value["transientResinUseCount"] as? Int,
+              let fragileResinUseCount = value["fragileResinUseCount"] as? Int,
+              let autoArtifactSalvage = value["autoArtifactSalvage"] as? Bool,
+              let maxArtifactStar = value["maxArtifactStar"] as? String,
+              let maxArtifactStarOptions = value["maxArtifactStarOptions"] as? [String] else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid AutoStygianOnslaught settings.")
+        }
+        return .init(
+            strategyName: strategyName, strategyOptions: strategyOptions,
+            bossNum: bossNum, bossNumOptions: bossNumOptions,
+            fightTeamName: fightTeamName, specifyResinUse: specifyResinUse,
+            originalResinUseCount: originalResinUseCount,
+            condensedResinUseCount: condensedResinUseCount,
+            transientResinUseCount: transientResinUseCount,
+            fragileResinUseCount: fragileResinUseCount,
+            autoArtifactSalvage: autoArtifactSalvage,
+            maxArtifactStar: maxArtifactStar,
+            maxArtifactStarOptions: maxArtifactStarOptions)
+    }
+
+    private func decodeAutoArtifactSalvageSettings(_ value: Any) throws
+        -> BetterGICoreAutoArtifactSalvageSettings {
+        guard let value = value as? [String: Any],
+              value["name"] as? String == "AutoArtifactSalvage",
+              let javaScript = value["javaScript"] as? String,
+              let artifactSetFilter = value["artifactSetFilter"] as? String,
+              let maxArtifactStar = value["maxArtifactStar"] as? String,
+              let maxArtifactStarOptions = value["maxArtifactStarOptions"] as? [String],
+              let maxNumToCheck = value["maxNumToCheck"] as? Int,
+              let recognitionFailurePolicy = value["recognitionFailurePolicy"] as? String,
+              let rawOptions = value["recognitionFailurePolicyOptions"] as? [[String: Any]] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoArtifactSalvage settings.")
+        }
+        let options = try rawOptions.map { option -> BetterGICoreNamedOption in
+            guard let optionValue = option["value"] as? String,
+                  let displayName = option["displayName"] as? String else {
+                throw BetterGICoreRPCError.protocolViolation(
+                    "Invalid AutoArtifactSalvage recognition policy option.")
+            }
+            return .init(value: optionValue, displayName: displayName)
+        }
+        return .init(javaScript: javaScript, artifactSetFilter: artifactSetFilter,
+                     maxArtifactStar: maxArtifactStar,
+                     maxArtifactStarOptions: maxArtifactStarOptions,
+                     maxNumToCheck: maxNumToCheck,
+                     recognitionFailurePolicy: recognitionFailurePolicy,
+                     recognitionFailurePolicyOptions: options)
+    }
+
+    private func decodeAutoFightSettings(_ value: Any) throws -> BetterGICoreAutoFightSettings {
+        guard let value = value as? [String: Any], value["name"] as? String == "AutoFight",
+              let strategyName = value["strategyName"] as? String,
+              let strategyOptions = value["strategyOptions"] as? [String],
+              let actionSchedulerByCd = value["actionSchedulerByCd"] as? String,
+              let fightFinishDetectEnabled = value["fightFinishDetectEnabled"] as? Bool,
+              let fastCheckEnabled = value["fastCheckEnabled"] as? Bool,
+              let fastCheckParams = value["fastCheckParams"] as? String,
+              let rotateFindEnemyEnabled = value["rotateFindEnemyEnabled"] as? Bool,
+              let rotaryFactor = value["rotaryFactor"] as? Int,
+              let checkBeforeBurst = value["checkBeforeBurst"] as? Bool,
+              let isFirstCheck = value["isFirstCheck"] as? Bool,
+              let checkEndDelay = value["checkEndDelay"] as? String,
+              let beforeDetectDelay = value["beforeDetectDelay"] as? String,
+              let guardianAvatar = value["guardianAvatar"] as? String,
+              let guardianAvatarOptions = value["guardianAvatarOptions"] as? [String],
+              let guardianCombatSkip = value["guardianCombatSkip"] as? Bool,
+              let burstEnabled = value["burstEnabled"] as? Bool,
+              let guardianAvatarHold = value["guardianAvatarHold"] as? Bool,
+              let pickDropsAfterFightEnabled = value["pickDropsAfterFightEnabled"] as? Bool,
+              let pickDropsAfterFightSeconds = value["pickDropsAfterFightSeconds"] as? Int,
+              let kazuhaPickupEnabled = value["kazuhaPickupEnabled"] as? Bool,
+              let qinDoublePickUp = value["qinDoublePickUp"] as? Bool,
+              let expBasedPickupEnabled = value["expBasedPickupEnabled"] as? Bool,
+              let timeout = value["timeout"] as? Int,
+              let swimmingEnabled = value["swimmingEnabled"] as? Bool else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid AutoFight settings.")
+        }
+        return .init(strategyName: strategyName, strategyOptions: strategyOptions,
+                     actionSchedulerByCd: actionSchedulerByCd,
+                     fightFinishDetectEnabled: fightFinishDetectEnabled,
+                     fastCheckEnabled: fastCheckEnabled, fastCheckParams: fastCheckParams,
+                     rotateFindEnemyEnabled: rotateFindEnemyEnabled, rotaryFactor: rotaryFactor,
+                     checkBeforeBurst: checkBeforeBurst, isFirstCheck: isFirstCheck,
+                     checkEndDelay: checkEndDelay, beforeDetectDelay: beforeDetectDelay,
+                     guardianAvatar: guardianAvatar, guardianAvatarOptions: guardianAvatarOptions,
+                     guardianCombatSkip: guardianCombatSkip, burstEnabled: burstEnabled,
+                     guardianAvatarHold: guardianAvatarHold,
+                     pickDropsAfterFightEnabled: pickDropsAfterFightEnabled,
+                     pickDropsAfterFightSeconds: pickDropsAfterFightSeconds,
+                     kazuhaPickupEnabled: kazuhaPickupEnabled, qinDoublePickUp: qinDoublePickUp,
+                     expBasedPickupEnabled: expBasedPickupEnabled, timeout: timeout,
+                     swimmingEnabled: swimmingEnabled)
+    }
+
+    func startSoloTask(name: String, inputText: String? = nil) throws
+        -> BetterGICoreSoloTaskStatus {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        var parameters: [String: Any] = ["name": name]
+        if let inputText { parameters["inputText"] = inputText }
+        let result = try client.request(method: "solo.start", parameters: parameters)
+        return try Self.decodeSoloTaskStatus(result)
+    }
+
+    func stopSoloTask(taskID: String) throws {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        _ = try client.request(method: "solo.stop", parameters: ["taskId": taskID])
+    }
+
+    func soloTaskStatus() throws -> BetterGICoreSoloTaskStatus {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        return try Self.decodeSoloTaskStatus(try client.request(method: "solo.status"))
+    }
+
+    private static func decodeSoloTaskStatus(_ value: Any?) throws -> BetterGICoreSoloTaskStatus {
+        guard let result = value as? [String: Any], let state = result["state"] as? String else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid solo task status.")
+        }
+        return BetterGICoreSoloTaskStatus(
+            taskID: result["taskId"] as? String,
+            name: result["name"] as? String,
+            state: state,
+            error: result["error"] as? String
+        )
+    }
+
+    func stopScheduler(taskID: String) throws {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        _ = try client.request(method: "scheduler.stop", parameters: ["taskId": taskID])
+    }
+
+    func pauseScheduler(taskID: String) throws {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        _ = try client.request(method: "scheduler.pause", parameters: ["taskId": taskID])
+    }
+
+    func resumeScheduler(taskID: String) throws {
+        guard case .running = state, let client else {
+            throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
+        }
+        _ = try client.request(method: "scheduler.resume", parameters: ["taskId": taskID])
+    }
+
+    func stop() {
+        intentionalStop = true
+        if let client {
+            _ = try? client.request(method: "core.shutdown")
+            client.disconnect()
+        }
+        if let process, process.isRunning { process.terminate() }
+        callbackClient?.stop()
+        callbackTask?.cancel()
+        process = nil
+        client = nil
+        callbackClient = nil
+        callbackTask = nil
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        outputPipe = nil
+        state = .stopped
+    }
+
+    private func processTerminated(generation: Int) async {
+        guard generation == processGeneration, !intentionalStop else { return }
+        guard case .running = state else { return }
+
+        client?.disconnect()
+        callbackClient?.stop()
+        callbackTask?.cancel()
+        process = nil
+        client = nil
+        callbackClient = nil
+        callbackTask = nil
+        state = .failed("BetterGI Core exited unexpectedly.")
+        progressHandler?(.failed("BetterGI Core exited unexpectedly."))
+
+        guard controlledRestartCount == 0,
+              let platformHandler, let progressHandler, let logHandler else { return }
+        controlledRestartCount = 1
+        do {
+            _ = try await start(
+                progressHandler: progressHandler,
+                logHandler: logHandler,
+                platformHandler: platformHandler
+            )
+        } catch {
+            state = .failed("BetterGI Core controlled restart failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func callbackFailed(_ error: Error) {
+        guard case .running = state else { return }
+        state = .failed("Core platform callback failed: \(error.localizedDescription)")
+        progressHandler?(.failed("Core platform callback failed: \(error.localizedDescription)"))
+    }
+
+    private func waitForSocket(_ socketURL: URL, process: Process) async throws {
+        for _ in 0..<Self.startupPollLimit {
+            guard process.isRunning else {
+                throw BetterGICoreRPCError.socket("BetterGI Core exited before creating its RPC socket.")
+            }
+            if FileManager.default.fileExists(atPath: socketURL.path) { return }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        throw BetterGICoreRPCError.socket("Timed out waiting for BetterGI Core RPC socket.")
+    }
+
+    private static func stopProcess(_ process: Process) async {
+        guard process.isRunning else { return }
+        process.terminate()
+        for _ in 0..<80 {
+            if !process.isRunning { return }
+            try? await Task.sleep(for: .milliseconds(25))
+        }
+        if process.isRunning {
+            Darwin.kill(process.processIdentifier, SIGKILL)
+        }
+    }
+
+    private nonisolated static func resolveExecutableURL() throws -> URL {
+        if let configured = ProcessInfo.processInfo.environment["BETTERGI_CORE_HOST"], !configured.isEmpty {
+            return URL(fileURLWithPath: configured)
+        }
+        if let bundled = Bundle.main.executableURL?
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Resources/BetterGICore/BetterGenshinImpact.Core.Host"),
+           FileManager.default.isExecutableFile(atPath: bundled.path) {
+            return bundled
+        }
+#if DEBUG
+        if let appExecutableURL = Bundle.main.executableURL,
+           let development = resolveDevelopmentExecutableURL(from: appExecutableURL) {
+            return development
+        }
+#endif
+        throw BetterGICoreRPCError.socket(
+            "BetterGI Core Host is not bundled. Set BETTERGI_CORE_HOST for development builds."
+        )
+    }
+
+    static func resolveDevelopmentExecutableURL(from appExecutableURL: URL) -> URL? {
+        var directory = appExecutableURL.deletingLastPathComponent()
+        while directory.path != "/" {
+            if directory.lastPathComponent == ".build" {
+                let candidate = directory
+                    .appendingPathComponent("BetterGICore", isDirectory: true)
+                    .appendingPathComponent("BetterGenshinImpact.Core.Host")
+                return FileManager.default.isExecutableFile(atPath: candidate.path)
+                    ? candidate
+                    : nil
+            }
+            directory.deleteLastPathComponent()
+        }
+        return nil
+    }
+
+    private static func makeSessionToken() -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        return bytes.map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+private final class CoreOutputForwarder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var pending = ""
+    private let handler: @Sendable (String) -> Void
+
+    init(handler: @escaping @Sendable (String) -> Void) {
+        self.handler = handler
+    }
+
+    func consume(_ data: Data) {
+        guard !data.isEmpty, let chunk = String(data: data, encoding: .utf8) else { return }
+        let lines = lock.withLock { () -> [String] in
+            pending += chunk
+            var parts = pending.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+            pending = parts.removeLast()
+            return parts
+        }
+        for line in lines where !line.isEmpty {
+            handler(line)
+        }
+    }
+}

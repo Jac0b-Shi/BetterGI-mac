@@ -1,6 +1,7 @@
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
-using BetterGenshinImpact.Core.Simulator;
+using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Job;
@@ -8,11 +9,8 @@ using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Model.GameUI;
 using BetterGenshinImpact.Helpers.Extensions;
-using BetterGenshinImpact.View.Drawable;
-using Fischless.WindowsInput;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
-using OpenCvSharp.Extensions;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -28,8 +26,9 @@ namespace BetterGenshinImpact.GameTask.GetGridIcons;
 /// </summary>
 public class GetGridIconsTask : ISoloTask
 {
-    private readonly ILogger logger = App.GetLogger<GetGridIconsTask>();
-    private readonly InputSimulator input = Simulation.SendInput;
+    private readonly IOcrService ocrService;
+    private readonly ISystemInfo systemInfo;
+    private readonly ILogger logger;
 
     private CancellationToken ct;
 
@@ -41,11 +40,33 @@ public class GetGridIconsTask : ISoloTask
 
     private readonly bool starAsSuffix;
 
+#if BGI_FULL_WINDOWS
     public GetGridIconsTask(GridScreenName gridScreenName, bool starAsSuffix, int? maxNumToGet = null)
+        : this(
+            gridScreenName,
+            starAsSuffix,
+            maxNumToGet,
+            OcrFactory.Paddle,
+            TaskContext.Instance().SystemInfo,
+            App.GetLogger<GetGridIconsTask>())
+    {
+    }
+#endif
+
+    public GetGridIconsTask(
+        GridScreenName gridScreenName,
+        bool starAsSuffix,
+        int? maxNumToGet,
+        IOcrService ocrService,
+        ISystemInfo systemInfo,
+        ILogger logger)
     {
         this.gridScreenName = gridScreenName;
         this.starAsSuffix = starAsSuffix;
         this.maxNumToGet = maxNumToGet;
+        this.ocrService = ocrService;
+        this.systemInfo = systemInfo;
+        this.logger = logger;
     }
 
     public async Task Start(CancellationToken ct)
@@ -53,7 +74,8 @@ public class GetGridIconsTask : ISoloTask
         this.ct = ct;
 
         int count = this.maxNumToGet ?? int.MaxValue;
-        string directory = Path.Combine(AppContext.BaseDirectory, "log/gridIcons", $"{this.gridScreenName}{DateTime.Now:yyyyMMddHHmmss}");
+        string directory = Global.Absolute(Path.Combine(
+            "log", "gridIcons", $"{this.gridScreenName}{DateTime.Now:yyyyMMddHHmmss}"));
         Directory.CreateDirectory(directory);
 
         switch (this.gridScreenName)
@@ -68,7 +90,7 @@ public class GetGridIconsTask : ISoloTask
             case GridScreenName.PreciousItems:
             case GridScreenName.Furnishings:
                 await new ReturnMainUiTask().Start(ct);
-                await AutoArtifactSalvageTask.OpenInventory(this.gridScreenName, this.input, this.logger, this.ct);
+                await AutoArtifactSalvageTask.OpenInventory(this.gridScreenName, this.logger, this.ct);
                 break;
             case GridScreenName.ArtifactSetFilter:
                 logger.LogInformation("{name}暂不支持自动打开，请提前手动打开界面", gridScreenName.GetDescription());
@@ -86,7 +108,7 @@ public class GetGridIconsTask : ISoloTask
     {
         GridScreen gridScreen = new GridScreen(GridParams.Templates[this.gridScreenName], this.logger, this.ct);
         gridScreen.OnAfterTurnToNewPage += GridScreen.DrawItemsAfterTurnToNewPage;
-        gridScreen.OnBeforeScroll += () => VisionContext.Instance().DrawContent.ClearAll();
+        gridScreen.OnBeforeScroll += () => OverlayDrawPlatform.Current.ClearAll();
         HashSet<string> fileNames = new HashSet<string>();
         try
         {
@@ -98,7 +120,7 @@ public class GetGridIconsTask : ISoloTask
 
                 using var ra1 = CaptureToRectArea();
                 using ImageRegion nameRegion = ra1.DeriveCrop(new Rect((int)(ra1.Width * 0.682), (int)(ra1.Width * 0.0625), (int)(ra1.Width * 0.256), (int)(ra1.Width * 0.03125)));
-                var ocrResult = OcrFactory.Paddle.OcrResult(nameRegion.SrcMat);
+                var ocrResult = ocrService.OcrResult(nameRegion.SrcMat);
                 string itemName = ocrResult.Text;
                 string itemStar = "";
                 if (this.starAsSuffix)
@@ -111,23 +133,14 @@ public class GetGridIconsTask : ISoloTask
                 if (fileNames.Add(fileName))
                 {
                     string filePath = Path.Combine(directory, $"{fileName}.png");
-                    Thread saveThread = new Thread(() =>
+                    if (Cv2.ImWrite(filePath, itemRegion.SrcMat))
                     {
-                        try
-                        {
-                            using (FileStream fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
-                            {
-                                itemRegion.SrcMat.ToBitmap().Save(fs, System.Drawing.Imaging.ImageFormat.Png);
-                            }
-                            logger.LogInformation("图片保存成功：{Text}", fileName);
-                        }
-                        catch (Exception e)
-                        {
-                            logger.LogError(e, "图片保存失败：{Text}", fileName);
-                        }
-                    });
-                    saveThread.IsBackground = true; // 设置为后台线程
-                    saveThread.Start();
+                        logger.LogInformation("图片保存成功：{Text}", fileName);
+                    }
+                    else
+                    {
+                        logger.LogError("图片保存失败：{Text}", fileName);
+                    }
                 }
                 else
                 {
@@ -144,7 +157,7 @@ public class GetGridIconsTask : ISoloTask
         }
         finally
         {
-            VisionContext.Instance().DrawContent.ClearAll();
+            OverlayDrawPlatform.Current.ClearAll();
         }
     }
 
@@ -158,11 +171,11 @@ public class GetGridIconsTask : ISoloTask
             itemRegion.Click();
             await Delay(300, ct);
 
-            static bool tryGetFlower(out string flowerName)
+            bool tryGetFlower(out string flowerName)
             {
                 using var ra1 = CaptureToRectArea();
                 using ImageRegion nameRegion = ra1.DeriveCrop(new Rect((int)(ra1.Width * 0.714), (int)(ra1.Width * 0.284), (int)(ra1.Width * 0.256), (int)(ra1.Width * 0.208)));
-                var ocrResult = OcrFactory.Paddle.OcrResult(nameRegion.SrcMat);
+                var ocrResult = ocrService.OcrResult(nameRegion.SrcMat);
 
                 var flowerWithGlyph = ocrResult.Regions.OrderBy(r => r.Rect.Center.Y).SkipWhile(r => !r.Text.Contains("套装包含")).Skip(1).FirstOrDefault();
                 if (flowerWithGlyph == default)
@@ -179,7 +192,7 @@ public class GetGridIconsTask : ISoloTask
                 // 截取没有符号的区域再识别一次
                 Rect flowerWithoutGlyph = new Rect((int)(ra1.Width * 0.028), (int)(flowerWithGlyphRect.Y - flowerWithGlyphRect.Height * 0), (int)(ra1.Width * 0.228), (int)(flowerWithGlyphRect.Height * 1));
                 using Mat roi = nameRegion.SrcMat.SubMat(flowerWithoutGlyph);
-                var whiteOcrResult = OcrFactory.Paddle.OcrResult(roi);
+                var whiteOcrResult = ocrService.OcrResult(roi);
                 flowerName = whiteOcrResult.Text;
                 // 所以只好识别两次，Trim后根据字数取原截图OCR的结果……
                 flowerName = flowerWithGlyph.Text.Trim().Substring(flowerWithGlyph.Text.Trim().Length - flowerName.Trim().Length);
@@ -191,7 +204,7 @@ public class GetGridIconsTask : ISoloTask
                 await TaskControl.Delay(100, this.ct);
                 for (int i = 0; i < 5; i++)
                 {
-                    this.input.Mouse.VerticalScroll(-2);
+                    TaskControlPlatform.Current.VerticalScroll(-2);
                     await TaskControl.Delay(40, this.ct);
                 }
                 await TaskControl.Delay(300, this.ct);
@@ -206,24 +219,15 @@ public class GetGridIconsTask : ISoloTask
             if (fileNames.Add(fileName))
             {
                 string filePath = Path.Combine(directory, $"{fileName}.png");
-                Thread saveThread = new Thread(() =>
+                using Mat img125 = CropResizeArtifactSetFilterGridIcon(itemRegion, systemInfo);
+                if (Cv2.ImWrite(filePath, img125))
                 {
-                    try
-                    {
-                        using (FileStream fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
-                        {
-                            using Mat img125 = CropResizeArtifactSetFilterGridIcon(itemRegion);
-                            img125.ToBitmap().Save(fs, System.Drawing.Imaging.ImageFormat.Png);
-                        }
-                        logger.LogInformation("图片保存成功：{Text}", fileName);
-                    }
-                    catch (Exception e)
-                    {
-                        logger.LogError(e, "图片保存失败：{Text}", fileName);
-                    }
-                });
-                saveThread.IsBackground = true; // 设置为后台线程
-                saveThread.Start();
+                    logger.LogInformation("图片保存成功：{Text}", fileName);
+                }
+                else
+                {
+                    logger.LogError("图片保存失败：{Text}", fileName);
+                }
             }
             else
             {
@@ -241,7 +245,22 @@ public class GetGridIconsTask : ISoloTask
 
     internal static Mat CropResizeArtifactSetFilterGridIcon(ImageRegion itemRegion, ISystemInfo? systemInfo = null)
     {
-        double scale = (systemInfo ?? TaskContext.Instance().SystemInfo).AssetScale;
+        double scale;
+        if (systemInfo is not null)
+        {
+            scale = systemInfo.AssetScale;
+        }
+#if BGI_FULL_WINDOWS
+        else
+        {
+            scale = TaskContext.Instance().SystemInfo.AssetScale;
+        }
+#else
+        else
+        {
+            throw new InvalidOperationException("System info is required.");
+        }
+#endif
         double width = 60;
         double height = 60; // 宽高缩放似乎不一致，似乎在2.05:2.15之间，但不知道怎么测定
         // 低分辨率下 237 * scale 的偏移量可能大于 itemRegion 中心位置，导致 X 为负，加保护

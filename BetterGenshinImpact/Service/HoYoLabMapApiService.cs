@@ -17,14 +17,24 @@ namespace BetterGenshinImpact.Service;
 public class HoYoLabMapApiService : IHoYoLabMapApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly Func<MapMaskConfig> _mapMaskConfigProvider;
     private const string TreeEndpoint = "https://sg-public-api-static.hoyolab.com/common/map_user/ys_obc/v2/map/label/tree";
     private const string ListEndpoint = "https://sg-public-api-static.hoyolab.com/common/map_user/ys_obc/v3/map/point/list";
     private const string InfoEndpoint = "https://sg-public-api-static.hoyolab.com/common/map_user/ys_obc/v1/map/point/info";
     private const string DefaultLang = MapMaskConfig.HoYoLabLanguageEnUs;
 
+#if BGI_PLATFORM_MAC
+    public HoYoLabMapApiService(Func<MapMaskConfig> mapMaskConfigProvider)
+#else
     public HoYoLabMapApiService()
+#endif
     {
         _httpClient = HttpClientFactory.GetCommonSendClient();
+#if BGI_PLATFORM_MAC
+        _mapMaskConfigProvider = mapMaskConfigProvider;
+#else
+        _mapMaskConfigProvider = () => TaskContext.Instance().Config.MapMaskConfig;
+#endif
     }
 
     private static HttpRequestMessage CreateRequest(HttpMethod method, string url)
@@ -59,9 +69,9 @@ public class HoYoLabMapApiService : IHoYoLabMapApiService
         };
     }
 
-    private static string GetCurrentLanguage()
+    private string GetCurrentLanguage()
     {
-        var lang = TaskContext.Instance().Config.MapMaskConfig.HoYoLabLanguage;
+        var lang = _mapMaskConfigProvider().HoYoLabLanguage;
         return NormalizeLanguage(lang);
     }
 

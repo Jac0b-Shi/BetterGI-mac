@@ -3,6 +3,7 @@ using OpenCvSharp;
 using System;
 using BetterGenshinImpact.GameTask.Common.Map.Maps;
 using BetterGenshinImpact.GameTask.Common.Map.Maps.Base;
+using BetterGenshinImpact.Service;
 
 namespace BetterGenshinImpact.GameTask.AutoTrackPath.Model;
 
@@ -25,7 +26,7 @@ public class GiPathPoint
 
     public static GiPathPoint BuildFrom(Point2f point, int index)
     {
-        var matchingMethod = TaskContext.Instance().Config.PathingConditionConfig.MapMatchingMethod;
+        var matchingMethod = ScriptServicePlatform.Current.MapMatchingMethod;
         var pt = MapManager.GetMap(MapTypes.Teyvat, matchingMethod).ConvertImageCoordinatesToGenshinMapCoordinates(point);
         return new GiPathPoint
         {

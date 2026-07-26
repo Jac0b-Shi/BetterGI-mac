@@ -454,6 +454,7 @@ public class ConditionEvaluator
                     using var clone = new ImageRegion(clonedMat, 0, 0);
 
                     // ① 侧边栏检测：检测所有 4 个角色侧边栏 Q 图标（主要捕获后台角色）
+#pragma warning disable CS0612
                     var sidePanelReady = AutoFightSkill.AvatarQSkillAsync(clone).Result;
 
                     // ② 场上角色中央检测：仅检测当前场上角色的中央 Q 图标
@@ -464,6 +465,7 @@ public class ConditionEvaluator
                         // 仅对场上角色单独检测中央 Q 区域
                         centerReady = AutoFightSkill.AvatarQSkillAsync(clone,
                             new List<int> { currentOnFieldIndex }, currentOnFieldIndex).Result;
+#pragma warning restore CS0612
                     }
 
                     // ③ 合并：OR 逻辑，只要有一路检测到就视为就绪

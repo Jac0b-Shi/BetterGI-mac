@@ -7,17 +7,23 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+#if !BGI_PLATFORM_MAC
 using System.Windows;
 using System.Windows.Controls;
+#endif
 using BetterGenshinImpact.Core.Script.Dependence;
+#if !BGI_PLATFORM_MAC
 using BetterGenshinImpact.GameTask.Common;
+#endif
+#if !BGI_PLATFORM_MAC
 using BetterGenshinImpact.View;
+#endif
 using Microsoft.ClearScript.JavaScript;
 using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.Core.Script.Project;
 
-public class ScriptProject
+public partial class ScriptProject
 {
     public string ProjectPath { get; set; }
     public string ManifestFile { get; set; }
@@ -45,6 +51,7 @@ public class ScriptProject
         Manifest.Validate(ProjectPath);
     }
 
+#if !BGI_PLATFORM_MAC
     public ScrollViewer? LoadSettingUi(dynamic context)
     {
         var settingItems = Manifest.LoadSettingItems(ProjectPath);
@@ -75,8 +82,9 @@ public class ScriptProject
 
         return scrollViewer;
     }
+#endif
 
-    private IScriptEngine BuildScriptEngine(PathingPartyConfig? partyConfig)
+    private IScriptEngine BuildScriptEngine(object? partyConfig)
     {
         V8ScriptEngine engine = new V8ScriptEngine(V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding | V8ScriptEngineFlags.EnableTaskPromiseConversion);
 
@@ -93,14 +101,14 @@ public class ScriptProject
 
         var libraryList = libraries.ToList();
 
-        EngineExtend.InitHost(engine, ProjectPath, libraryList.ToArray(), partyConfig);
+        ScriptProjectHost.Initialize(engine, ProjectPath, libraryList.ToArray(), partyConfig);
         return engine;
     }
 
-    public async Task ExecuteAsync(dynamic? context = null, PathingPartyConfig? partyConfig = null)
+    public async Task ExecuteAsync(dynamic? context = null, object? partyConfig = null)
     {
         // 默认值
-        GlobalMethod.SetGameMetrics(1920, 1080);
+        ScriptProjectHost.SetGameMetrics(1920, 1080);
         // 加载代码
         var code = await LoadCode();
         var engine = BuildScriptEngine(partyConfig);
@@ -152,7 +160,11 @@ public class ScriptProject
             }
             catch (Exception e)
             {
+#if BGI_PLATFORM_MAC
+                Trace.TraceError("中断脚本执行异常：{0}", e);
+#else
                 TaskControl.Logger.LogError(e, "中断脚本执行异常：" + e.Message);
+#endif
             }
 
             engine.Dispose();

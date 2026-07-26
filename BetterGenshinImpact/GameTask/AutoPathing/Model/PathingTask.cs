@@ -1,5 +1,4 @@
 ﻿using BetterGenshinImpact.Core.Config;
-using BetterGenshinImpact.GameTask.Common;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,9 +8,9 @@ using System.Text.Json.Serialization;
 using System.Xml.Linq;
 using BetterGenshinImpact.Core.Script.Utils;
 using BetterGenshinImpact.GameTask.FarmingPlan;
-using BetterGenshinImpact.ViewModel.Pages;
 using Microsoft.Extensions.Logging;
 using BetterGenshinImpact.Model;
+using BetterGenshinImpact.Service;
 using System.Linq;
 
 
@@ -61,8 +60,8 @@ public class PathingTask
             return null;
         }
 
-        // 获取 MapPathingViewModel.PathJsonPath
-        var basePath = MapPathingViewModel.PathJsonPath;
+        // 路径根属于 Core 运行目录契约，不依赖 WPF ViewModel。
+        var basePath = Global.Absolute(@"User\AutoPathing");
 
         // 获取 FullPath 相对于 basePath 的相对路径
         var relativePath = Path.GetRelativePath(basePath, FullPath);
@@ -92,7 +91,7 @@ public class PathingTask
     public static PathingTask? BuildFromFilePath(string filePath)
     {
         //var json = File.ReadAllText(filePath);
-        var task = JsonSerializer.Deserialize<PathingTask>(JsonMerger.getMergePathingJson(filePath), PathRecorder.JsonOptions) ?? throw new Exception("Failed to deserialize PathingTask");
+        var task = JsonSerializer.Deserialize<PathingTask>(JsonMerger.getMergePathingJson(filePath), PathingJson.Options) ?? throw new Exception("Failed to deserialize PathingTask");
         task.FileName = Path.GetFileName(filePath);
         task.FullPath = filePath;
         //添加区分怪物拾取标志
@@ -103,9 +102,9 @@ public class PathingTask
         // 比较版本号大小 BgiVersion
         if (!string.IsNullOrWhiteSpace(task.Info.BgiVersion) && Global.IsNewVersion(task.Info.BgiVersion))
         {
-            TaskControl.Logger.LogError("地图追踪任务 {Name} 版本号要求 {BgiVersion} 大于当前 BetterGI 版本号 {CurrentVersion} ， 禁止运行，请更新 BetterGI 版本！", task.FileName, task.Info.BgiVersion, Global.Version);
-            TaskControl.Logger.LogError("地图追踪任务 {Name} 版本号要求 {BgiVersion} 大于当前 BetterGI 版本号 {CurrentVersion} ， 禁止运行，请更新 BetterGI 版本！", task.FileName, task.Info.BgiVersion, Global.Version);
-            TaskControl.Logger.LogError("地图追踪任务 {Name} 版本号要求 {BgiVersion} 大于当前 BetterGI 版本号 {CurrentVersion} ， 禁止运行，请更新 BetterGI 版本！", task.FileName, task.Info.BgiVersion, Global.Version);
+            ScriptServicePlatform.Current.Logger.LogError("地图追踪任务 {Name} 版本号要求 {BgiVersion} 大于当前 BetterGI 版本号 {CurrentVersion} ， 禁止运行，请更新 BetterGI 版本！", task.FileName, task.Info.BgiVersion, Global.Version);
+            ScriptServicePlatform.Current.Logger.LogError("地图追踪任务 {Name} 版本号要求 {BgiVersion} 大于当前 BetterGI 版本号 {CurrentVersion} ， 禁止运行，请更新 BetterGI 版本！", task.FileName, task.Info.BgiVersion, Global.Version);
+            ScriptServicePlatform.Current.Logger.LogError("地图追踪任务 {Name} 版本号要求 {BgiVersion} 大于当前 BetterGI 版本号 {CurrentVersion} ， 禁止运行，请更新 BetterGI 版本！", task.FileName, task.Info.BgiVersion, Global.Version);
             return null;
         }
         return task;
@@ -113,13 +112,13 @@ public class PathingTask
 
     public static PathingTask BuildFromJson(string json)
     {
-        var task = JsonSerializer.Deserialize<PathingTask>(json, PathRecorder.JsonOptions) ?? throw new Exception("Failed to deserialize PathingTask");
+        var task = JsonSerializer.Deserialize<PathingTask>(json, PathingJson.Options) ?? throw new Exception("Failed to deserialize PathingTask");
         return task;
     }
 
     public void SaveToFile(string filePath)
     {
-        var json = JsonSerializer.Serialize(this, PathRecorder.JsonOptions);
+        var json = JsonSerializer.Serialize(this, PathingJson.Options);
         File.WriteAllText(filePath, json, new UTF8Encoding(false));
     }
 }

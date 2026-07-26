@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using BetterGenshinImpact.Service;
+using BetterGenshinImpact.Core.Config;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json;
 using JsonSerializer = System.Text.Json.JsonSerializer;
@@ -43,7 +43,7 @@ public partial class ScriptGroup : ObservableObject
 
     public string ToJson()
     {
-        return JsonSerializer.Serialize(this, ConfigService.JsonOptions);
+        return JsonSerializer.Serialize(this, ConfigJson.Options);
     }
 
     public static ScriptGroup FromJson(string json)

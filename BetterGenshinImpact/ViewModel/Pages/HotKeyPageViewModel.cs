@@ -388,7 +388,7 @@ public partial class HotKeyPageViewModel : ObservableObject, IViewModel
         systemDirectory.Children.Add(takeScreenshotHotKeySettingModel);
 
         systemDirectory.Children.Add(new HotKeySettingModel(
-            "日志，状态窗与指标栏展示开关",
+            "日志与状态窗口展示开关",
             nameof(Config.HotKeyConfig.LogBoxDisplayHotkey),
             Config.HotKeyConfig.LogBoxDisplayHotkey,
             Config.HotKeyConfig.LogBoxDisplayHotkeyType,
@@ -397,8 +397,17 @@ public partial class HotKeyPageViewModel : ObservableObject, IViewModel
                 TaskContext.Instance().Config.MaskWindowConfig.ShowLogBox = !TaskContext.Instance().Config.MaskWindowConfig.ShowLogBox;
                 // 与状态窗口同步
                 TaskContext.Instance().Config.MaskWindowConfig.ShowStatus = TaskContext.Instance().Config.MaskWindowConfig.ShowLogBox;
-                // 与指标栏同步
-                TaskContext.Instance().Config.MaskWindowConfig.ShowOverlayMetrics = TaskContext.Instance().Config.MaskWindowConfig.ShowLogBox;
+            }
+        ));
+
+        systemDirectory.Children.Add(new HotKeySettingModel(
+            "遮罩指标栏展示开关",
+            nameof(Config.HotKeyConfig.OverlayMetricsDisplayHotkey),
+            Config.HotKeyConfig.OverlayMetricsDisplayHotkey,
+            Config.HotKeyConfig.OverlayMetricsDisplayHotkeyType,
+            (_, _) =>
+            {
+                TaskContext.Instance().Config.MaskWindowConfig.ShowOverlayMetrics = !TaskContext.Instance().Config.MaskWindowConfig.ShowOverlayMetrics;
             }
         ));
 
@@ -617,17 +626,7 @@ public partial class HotKeyPageViewModel : ObservableObject, IViewModel
             nameof(Config.HotKeyConfig.ClickGenshinConfirmButtonHotkey),
             Config.HotKeyConfig.ClickGenshinConfirmButtonHotkey,
             Config.HotKeyConfig.ClickGenshinConfirmButtonHotkeyType,
-            (_, _) =>
-            {
-                if (Bv.ClickConfirmButton(TaskControl.CaptureToRectArea()))
-                {
-                    TaskControl.Logger.LogInformation("触发快捷点击原神内{Btn}按钮：成功", "确认");
-                }
-                else
-                {
-                    TaskControl.Logger.LogInformation("触发快捷点击原神内{Btn}按钮：未找到按钮图片", "确认");
-                }
-            },
+            (_, _) => DialogButtonClickMacro.Done(DialogButtonType.Confirm),
             true
         ));
 
@@ -636,17 +635,7 @@ public partial class HotKeyPageViewModel : ObservableObject, IViewModel
             nameof(Config.HotKeyConfig.ClickGenshinCancelButtonHotkey),
             Config.HotKeyConfig.ClickGenshinCancelButtonHotkey,
             Config.HotKeyConfig.ClickGenshinCancelButtonHotkeyType,
-            (_, _) =>
-            {
-                if (Bv.ClickCancelButton(TaskControl.CaptureToRectArea()))
-                {
-                    TaskControl.Logger.LogInformation("触发快捷点击原神内{Btn}按钮：成功", "取消");
-                }
-                else
-                {
-                    TaskControl.Logger.LogInformation("触发快捷点击原神内{Btn}按钮：未找到按钮图片", "取消");
-                }
-            },
+            (_, _) => DialogButtonClickMacro.Done(DialogButtonType.Cancel),
             true
         ));
 
@@ -700,26 +689,13 @@ public partial class HotKeyPageViewModel : ObservableObject, IViewModel
         ));
 
         var pathRecorder = PathRecorder.Instance;
-        var pathRecording = false;
 
         devDirectory.Children.Add(new HotKeySettingModel(
             "启动/停止路径记录器",
             nameof(Config.HotKeyConfig.PathRecorderHotkey),
             Config.HotKeyConfig.PathRecorderHotkey,
             Config.HotKeyConfig.PathRecorderHotkeyType,
-            (_, _) =>
-            {
-                if (pathRecording)
-                {
-                    pathRecorder.Save();
-                }
-                else
-                {
-                    Task.Run(() => { pathRecorder.Start(); });
-                }
-
-                pathRecording = !pathRecording;
-            }
+            (_, _) => { Task.Run(() => pathRecorder.Toggle()); }
         ));
 
         devDirectory.Children.Add(new HotKeySettingModel(
@@ -729,11 +705,8 @@ public partial class HotKeyPageViewModel : ObservableObject, IViewModel
             Config.HotKeyConfig.AddWaypointHotkeyType,
             (_, _) =>
             {
-                if (pathRecording)
-                {
+                if (pathRecorder.IsRecording)
                     Task.Run(() => { pathRecorder.AddWaypoint(); });
-
-                }
             }
         ));
 

@@ -25,6 +25,7 @@ using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.AutoPathing.Handler;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
+using BetterGenshinImpact.GameTask.Common.BgiVision;
 
 namespace BetterGenshinImpact.GameTask.AutoFight;
 
@@ -38,15 +39,15 @@ public class AutoFightJsonTask : ISoloTask
 
     /// <summary>
     /// YOLO目标检测器（BgiWorld模型），用于战斗结束检测
-    /// 当前未使用（战斗结束检测已委托到 AutoFightEndDetection），保留声明以与 TXT 策略保持一致
+    /// 当前未使用（战斗结束像素判定由 AutoFightEndDetector 处理），保留声明以与 TXT 策略保持一致
     /// 初始化条件：_taskParam.FightFinishDetectEnabled == true
     /// </summary>
     private readonly BgiYoloPredictor? _predictor;
     private DateTime _lastFightFlagTime = DateTime.Now;
 
     private readonly ReturnMainUiTask _returnMainUiTask = new();
-    private readonly double _assetScale = TaskContext.Instance().SystemInfo.AssetScale;
-    private readonly double _dpi = TaskContext.Instance().DpiScale;
+    private readonly double _assetScale = AutoFightRuntimePlatform.Current.SystemInfo.AssetScale;
+    private readonly double _dpi = AutoFightRuntimePlatform.Current.DpiScale;
 
     private static readonly object PickLock = new object();
 
@@ -65,8 +66,8 @@ public class AutoFightJsonTask : ISoloTask
     /// </summary>
     private class PrioritizedAction
     {
-        public JsonAction Action { get; set; }
-        public string Expression { get; set; }
+        public required JsonAction Action { get; set; }
+        public required string Expression { get; set; }
         public int Priority { get; set; }
     }
 
@@ -210,7 +211,7 @@ public class AutoFightJsonTask : ISoloTask
 
         if (_taskParam.FightFinishDetectEnabled)
         {
-            _predictor = App.ServiceProvider.GetRequiredService<BgiOnnxFactory>().CreateYoloPredictor(BgiOnnxModel.BgiWorld);
+            _predictor = AutoFightRuntimePlatform.Current.CreateYoloPredictor(BgiOnnxModel.BgiWorld);
         }
 
         _finishDetectConfig = new TaskFightFinishDetectConfig(_taskParam.FinishDetectConfig);
@@ -403,9 +404,9 @@ public class AutoFightJsonTask : ISoloTask
                                     {
                                         Logger.LogWarning("{Name} 未检测到技能冷却，重新执行", action.Name);
                                         // 防止在纳塔飞天或爬墙
-                                        Simulation.ReleaseAllKey();
-                                        Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
-                                        Simulation.SendInput.SimulateAction(GIActions.Drop);
+                                        ReleaseAllKey();
+                                        SimulateAction(GIActions.NormalAttack);
+                                        SimulateAction(GIActions.Drop);
                                         await Delay(200, _ct);
                                         // 重新执行整个动作
                                         await ExecuteAction(combatScenes, action);
@@ -444,7 +445,7 @@ public class AutoFightJsonTask : ISoloTask
             }
             finally
             {
-                Simulation.ReleaseAllKey();
+                ReleaseAllKey();
                 AutoFightTask.FightStatusFlag = false;
             }
         }, cts2.Token);
@@ -540,12 +541,12 @@ public class AutoFightJsonTask : ISoloTask
         }
         finally
         {
-            Simulation.ReleaseAllKey();
+            ReleaseAllKey();
         }
     }
 
     /// <summary>战斗结束检测</summary>
-    private async Task<bool> CheckFightFinish(int delayTime = 1500, int detectDelayTime = 450)
+    internal async Task<bool> CheckFightFinish(int delayTime = 1500, int detectDelayTime = 450)
     {
         if (_finishDetectConfig.RotateFindEnemyEnabled)
         {
@@ -571,7 +572,7 @@ public class AutoFightJsonTask : ISoloTask
         if (!_finishDetectConfig.RotateFindEnemyEnabled) await Delay(delayTime, _ct);
 
         Logger.LogInformation("打开编队界面检查战斗是否结束");
-        Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+        SimulateAction(GIActions.OpenPartySetupScreen);
         await Delay(detectDelayTime, _ct);
 
         using var ra = CaptureToRectArea();
@@ -579,13 +580,12 @@ public class AutoFightJsonTask : ISoloTask
         // 与 TXT 版本逻辑保持一致，不进行缩放
         var b3 = ra.SrcMat.At<Vec3b>(50, 790); //进度条颜色
         var whiteTile = ra.SrcMat.At<Vec3b>(50, 768); //白块
-        Simulation.SendInput.SimulateAction(GIActions.Drop);
+        SimulateAction(GIActions.Drop);
 
-        if (IsWhite(whiteTile.Item2, whiteTile.Item1, whiteTile.Item0) &&
-            IsYellow(b3.Item2, b3.Item1, b3.Item0))
+        if (AutoFightEndDetector.IsFightFinished(ra.SrcMat))
         {
             Logger.LogInformation("识别到战斗结束");
-            Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+            SimulateAction(GIActions.OpenPartySetupScreen);
             return true;
         }
 
@@ -595,7 +595,7 @@ public class AutoFightJsonTask : ISoloTask
         {
             // 注意：此处使用 await 确保异常能被正确捕获
             // TXT 版本的 AutoFightTask.CheckFightFinish 中未使用 await，异常可能被吞掉
-            Task.Run(async () =>
+            _ = Task.Run(async () =>
             {
                 try
                 {
@@ -614,20 +614,6 @@ public class AutoFightJsonTask : ISoloTask
 
         _lastFightFlagTime = DateTime.Now;
         return false;
-    }
-
-    private bool IsYellow(int r, int g, int b)
-    {
-        return (r >= 200 && r <= 255) &&
-               (g >= 200 && g <= 255) &&
-               (b >= 0 && b <= 100);
-    }
-
-    private bool IsWhite(int r, int g, int b)
-    {
-        return (r >= 240 && r <= 255) &&
-               (g >= 240 && g <= 255) &&
-               (b >= 240 && b <= 255);
     }
 
     /// <summary>日志防刷：同一动作名在1秒内至多输出一次日志</summary>
@@ -701,7 +687,7 @@ public class AutoFightJsonTask : ISoloTask
 
                 for (int attempt = 0; attempt < 6; attempt++)
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                    SimulateAction(GIActions.OpenPartySetupScreen);
                     var enterGameAppear = await NewRetry.WaitForElementAppear(
                         ElementRecognition.Get("PartyBtnChooseView"),
                         () => { },
@@ -779,7 +765,7 @@ public class AutoFightJsonTask : ISoloTask
                         RunnerContext.Instance.PartyName = _taskParam.KazuhaPartyName;
                         RunnerContext.Instance.ClearCombatScenes();
                         var cs = await RunnerContext.Instance.GetCombatScenes(_ct);
-                        picker = cs.SelectAvatar("枫原万叶") ?? cs.SelectAvatar("琴");
+                        picker = cs?.SelectAvatar("枫原万叶") ?? cs?.SelectAvatar("琴");
                     }
                 }
                 catch (Exception e)
@@ -838,7 +824,7 @@ public class AutoFightJsonTask : ISoloTask
                                 foreach (var command in pickUpAction.CombatCommands)
                                 {
                                     command.Execute(combatScenes);
-                                    Task.Run(() =>
+                                    _ = Task.Run(() =>
                                     {
                                         if (Monitor.TryEnter(PickLock))
                                         {
@@ -848,7 +834,7 @@ public class AutoFightJsonTask : ISoloTask
                                                 {
                                                     using (var imagePick = CaptureToRectArea())
                                                     {
-                                                        if (imagePick.Find(AutoPickAssets.Get(imagePick, TaskContext.Instance().Config.AutoPickConfig.PickKey).PickRo).IsExist())
+                                                        if (imagePick.Find(AutoPickAssets.Get(imagePick, BvSimpleOperationPlatform.Current.AutoPickConfig.PickKey).PickRo).IsExist())
                                                         {
                                                             find = false;
                                                         }
@@ -879,7 +865,7 @@ public class AutoFightJsonTask : ISoloTask
                                 }
                             }
 
-                            Simulation.ReleaseAllKey();
+                            ReleaseAllKey();
                         }
                     }
                 }

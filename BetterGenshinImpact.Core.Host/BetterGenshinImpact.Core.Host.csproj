@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RuntimeIdentifier>osx-arm64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS9057</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BetterGenshinImpact.Core\BetterGenshinImpact.Core.csproj" />
+    <PackageReference Include="Microsoft.ClearScript.V8.Native.osx-arm64" Version="7.4.5" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.4" />
+    <PackageReference Include="OpenCvSharp4.runtime.osx.arm64" Version="4.13.0.20260627" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\BetterGenshinImpact\User\avatar_macro_default.json"
+             Link="User\avatar_macro_default.json"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="BetterGenshinImpact.Core.Host.Verification" />
+    <InternalsVisibleTo Include="BetterGenshinImpact.Core.Host.Fast.Verification" />
+    <InternalsVisibleTo Include="BetterGenshinImpact.RealUser.Verification" />
+  </ItemGroup>
+</Project>

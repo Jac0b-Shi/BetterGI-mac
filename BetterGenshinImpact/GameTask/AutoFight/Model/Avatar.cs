@@ -2,7 +2,6 @@ using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Core.Script.Dependence;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoFight.Config;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
@@ -18,11 +17,9 @@ using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.AutoTrackPath;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoFight.Assets;
-using BetterGenshinImpact.ViewModel.Pages;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Model;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
@@ -38,7 +35,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight.Model;
 /// <summary>
 /// 队伍内的角色
 /// </summary>
-public class Avatar
+public class Avatar : ICombatCommandAvatar
 {
     /// <summary>
     /// 配置文件中的角色信息
@@ -109,7 +106,7 @@ public class Avatar
     private static readonly Random UnstuckRandom = new();
 
     private static readonly Lazy<BgiYoloPredictor> QBurstClassifierLazy = new(() =>
-        App.ServiceProvider.GetRequiredService<BgiOnnxFactory>().CreateYoloPredictor(BgiOnnxModel.BgiQClassify));
+        AutoFightRuntimePlatform.Current.CreateYoloPredictor(BgiOnnxModel.BgiQClassify));
 
 
     public Avatar(CombatScenes combatScenes, string name, int index, Rect nameRect, double manualSkillCd = -1)
@@ -137,7 +134,7 @@ public class Avatar
         {
             Logger.LogWarning("检测到复苏界面，存在角色被击败，前往七天神像复活");
             // 先打开地图
-            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE); // NOTE: 此处按下Esc是为了关闭复苏界面，无需改键
+            TaskControlPlatform.Current.PressEscape(); // NOTE: 此处按下Esc是为了关闭复苏界面，无需改键
             Sleep(600, ct);
             TpForRecover(ct, new RetryException("检测到复苏界面，存在角色被击败，前往七天神像复活"));
         }
@@ -162,7 +159,9 @@ public class Avatar
                 
                 try
                 {
-                    var pathExecutor = new PathExecutor(cts.Token);
+                    var pathExecutor = new PathExecutor(
+                        cts.Token, PathExecutorPlatform.Current, PathExecutorAutoSkipPlatform.Current,
+                        ScriptGroupExecutionServices.Current);
                     
                     // FaceTo 朝向战斗点，超时 2 秒
                     cts.CancelAfter(2000);
@@ -172,7 +171,7 @@ public class Avatar
                     cts.CancelAfter(15000);
                     // 使用 Climb 模式：MoveTo 内部对 Climb 模式跳过卡死脱困检测，避免水中 TrapEscaper 死循环
                     AutoFightTask.FightWaypoint.MoveMode = MoveModeEnum.Climb.Code;
-                    Simulation.SendInput.Mouse.RightButtonDown();
+                    TaskControlPlatform.Current.RightButtonDown();
                     pathExecutor.MoveTo(AutoFightTask.FightWaypoint).GetAwaiter().GetResult();
                     Logger.LogInformation("游泳检测：移动结束");
                 }
@@ -194,8 +193,8 @@ public class Avatar
                     cts.Cancel(); // 终止 PathExecutor 内部截屏循环
                     AutoFightTask.FightWaypoint.MoveMode = originalMoveMode;
                     AutoFightTask.FightWaypoint = null;
-                    Simulation.SendInput.Mouse.RightButtonUp();
-                    Simulation.ReleaseAllKey();
+                    TaskControlPlatform.Current.RightButtonUp();
+                    TaskControlPlatform.Current.ReleasePressedInputs();
                 }
                 
                 using var bitmap2 = CaptureToRectArea();
@@ -336,23 +335,23 @@ public class Avatar
 
     private void SimulateSwitchAction(int index)
     {
-        Simulation.SendInput.SimulateAction(GIActions.Drop); //反正会重试就不等落地了
+        SimulateAction(GIActions.Drop); //反正会重试就不等落地了
         switch (index)
         {
             case 1:
-                Simulation.SendInput.SimulateAction(GIActions.SwitchMember1);
+                SimulateAction(GIActions.SwitchMember1);
                 break;
             case 2:
-                Simulation.SendInput.SimulateAction(GIActions.SwitchMember2);
+                SimulateAction(GIActions.SwitchMember2);
                 break;
             case 3:
-                Simulation.SendInput.SimulateAction(GIActions.SwitchMember3);
+                SimulateAction(GIActions.SwitchMember3);
                 break;
             case 4:
-                Simulation.SendInput.SimulateAction(GIActions.SwitchMember4);
+                SimulateAction(GIActions.SwitchMember4);
                 break;
             case 5:
-                Simulation.SendInput.SimulateAction(GIActions.SwitchMember5);
+                SimulateAction(GIActions.SwitchMember5);
                 break;
             default:
                 break;
@@ -367,13 +366,13 @@ public class Avatar
         var direction = UnstuckDirections[UnstuckRandom.Next(4)];
         Logger.LogWarning("切换角色卡住，执行脱困（方向：{Dir}）", direction);
 
-        Simulation.SendInput.SimulateAction(GIActions.Jump);
+        SimulateAction(GIActions.Jump);
         Sleep(200, ct);
-        Simulation.SendInput.SimulateAction(direction, KeyType.KeyDown);
+        SimulateAction(direction, KeyType.KeyDown);
         SimulateSwitchAction(Index);
         Sleep(1000, ct);
-        Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
-        Simulation.ReleaseAllKey();
+        SimulateAction(GIActions.NormalAttack);
+        TaskControlPlatform.Current.ReleasePressedInputs();
     }
 
     /// <summary>
@@ -440,7 +439,7 @@ public class Avatar
         // 通过寻找右侧人物编号来判断是否出战
         if (IndexRect == default)
         {
-            var assetScale = TaskContext.Instance().SystemInfo.AssetScale;
+            var assetScale = AutoFightRuntimePlatform.Current.SystemInfo.AssetScale;
             // 剪裁出队伍区域
             var teamRa = region.DeriveCrop(AutoFightAssets.Get(region).TeamRect);
             var blockX = NameRect.X + NameRect.Width * 2 - 10;
@@ -496,7 +495,7 @@ public class Avatar
                 return;
             }
 
-            Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+            SimulateAction(GIActions.NormalAttack);
             ms -= 200;
             Sleep(200, Ct);
         }
@@ -518,31 +517,31 @@ public class Avatar
             {
                 if (Name == "纳西妲")
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyDown);
+                    SimulateAction(GIActions.ElementalSkill, KeyType.KeyDown);
                     Sleep(300, Ct);
                     for (int j = 0; j < 10; j++)
                     {
-                        Simulation.SendInput.Mouse.MoveMouseBy(1000, 0);
+                        MoveMouseBy(1000, 0);
                         Sleep(50); // 持续操作不应该被cts取消
                     }
 
                     Sleep(300); // 持续操作不应该被cts取消
-                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
+                    SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
                 }
                 else if (Name == "坎蒂丝")
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyDown);
+                    SimulateAction(GIActions.ElementalSkill, KeyType.KeyDown);
                     Thread.Sleep(3000);
-                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
+                    SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
                 }
                 else
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.Hold);
+                    SimulateAction(GIActions.ElementalSkill, KeyType.Hold);
                 }
             }
             else
             {
-                Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                SimulateAction(GIActions.ElementalSkill);
             }
 
             Sleep(200, Ct);
@@ -590,7 +589,7 @@ public class Avatar
     {
         using var eRa = imageRegion.DeriveCrop(AutoFightAssets.Get(imageRegion).ECooldownRect);
         using var eRaWhite = OpenCvCommonHelper.InRangeHsv(eRa.SrcMat, new Scalar(0, 0, 235), new Scalar(0, 25, 255));
-        var text = OcrFactory.Paddle.OcrWithoutDetector(eRaWhite);
+        var text = AutoFightRuntimePlatform.Current.OcrService.OcrWithoutDetector(eRaWhite);
         var cd = StringUtils.TryParseDouble(text);
         if (cd > 0 && cd <= CombatAvatar.SkillCd)
         {
@@ -623,7 +622,7 @@ public class Avatar
             }
 
             // Logger.LogInformation("释放Q");
-            Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);
+            SimulateAction(GIActions.ElementalBurst);
             Sleep(200, Ct);
 
             using var region = CaptureToRectArea();
@@ -703,9 +702,9 @@ public class Avatar
             ms = 200;
         }
 
-        Simulation.SendInput.SimulateAction(GIActions.SprintMouse, KeyType.KeyDown);
+        SimulateAction(GIActions.SprintMouse, KeyType.KeyDown);
         Sleep(ms); // 冲刺不能被cts取消
-        Simulation.SendInput.SimulateAction(GIActions.SprintMouse, KeyType.KeyUp);
+        SimulateAction(GIActions.SprintMouse, KeyType.KeyUp);
     }
 
     public void Walk(string key, int ms)
@@ -715,32 +714,32 @@ public class Avatar
             return;
         }
 
-        User32.VK vk = User32.VK.VK_NONAME;
+        GIActions? action = null;
         if (key == "w")
         {
-            vk = GIActions.MoveForward.ToActionKey().ToVK();
+            action = GIActions.MoveForward;
         }
         else if (key == "s")
         {
-            vk = GIActions.MoveBackward.ToActionKey().ToVK();
+            action = GIActions.MoveBackward;
         }
         else if (key == "a")
         {
-            vk = GIActions.MoveLeft.ToActionKey().ToVK();
+            action = GIActions.MoveLeft;
         }
         else if (key == "d")
         {
-            vk = GIActions.MoveRight.ToActionKey().ToVK();
+            action = GIActions.MoveRight;
         }
 
-        if (vk == User32.VK.VK_NONAME)
+        if (action is null)
         {
             return;
         }
 
-        Simulation.SendInput.Keyboard.KeyDown(vk);
+        SimulateAction(action.Value, KeyType.KeyDown);
         Sleep(ms); // 行走不能被cts取消
-        Simulation.SendInput.Keyboard.KeyUp(vk);
+        SimulateAction(action.Value, KeyType.KeyUp);
     }
 
     /// <summary>
@@ -750,7 +749,7 @@ public class Avatar
     /// <param name="pixelDeltaY"></param>
     public void MoveCamera(int pixelDeltaX, int pixelDeltaY)
     {
-        Simulation.SendInput.Mouse.MoveMouseBy(pixelDeltaX, pixelDeltaY);
+        MoveMouseBy(pixelDeltaX, pixelDeltaY);
     }
 
     /// <summary>
@@ -871,7 +870,7 @@ public class Avatar
     /// </summary>
     public void Jump()
     {
-        Simulation.SendInput.SimulateAction(GIActions.Jump);
+        SimulateAction(GIActions.Jump);
     }
 
     /// <summary>
@@ -886,8 +885,8 @@ public class Avatar
 
         if (Name == "那维莱特")
         {
-            var dpi = TaskContext.Instance().DpiScale;
-            Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
+            var dpi = AutoFightRuntimePlatform.Current.DpiScale;
+            SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
             while (ms >= 0)
             {
                 if (Ct is { IsCancellationRequested: true })
@@ -895,17 +894,17 @@ public class Avatar
                     return;
                 }
 
-                Simulation.SendInput.Mouse.MoveMouseBy((int)(1000 * dpi), 0);
+                MoveMouseBy((int)(1000 * dpi), 0);
                 ms -= 50;
                 Sleep(50); // 持续操作不应该被cts取消
             }
 
-            Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
+            SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
         }
         else if (Name == "恰斯卡")
         {
-            var dpi = TaskContext.Instance().DpiScale;
-            Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
+            var dpi = AutoFightRuntimePlatform.Current.DpiScale;
+            SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
             int tick = -4; // 起飞那一刻需要多一点点时间用来矫正视角高度
             while (ms >= 0)
             {
@@ -951,14 +950,14 @@ public class Avatar
                     rateY = 0;
                 }
 
-                Simulation.SendInput.Mouse.MoveMouseBy((int)(rateX * 50 * dpi), (int)(rateY * 50 * dpi));
+                MoveMouseBy((int)(rateX * 50 * dpi), (int)(rateY * 50 * dpi));
 
                 tick = (tick + 1) % 100;
                 Sleep(25);
                 ms -= 25;
             }
 
-            Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
+            SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
         }
         else if (Name == "桑多涅")
         {
@@ -968,13 +967,13 @@ public class Avatar
             // 2. 若有血条存在，取离预瞄点(960, 480)最近的血条，移动鼠标对准
             // 3. 若无血条，且不存在传奇血条（y 50~96）时，向右旋转搜索敌人
             // 4. 绘制预瞄准星和血条框用于调试
-            var dpi = TaskContext.Instance().DpiScale;
+            var dpi = TaskControlPlatform.Current.DpiScale;
             const int preAimX = 960;   // 预瞄准星 X 坐标（屏幕中心）
             const int preAimY = 480;   // 预瞄准星 Y 坐标（屏幕垂直中心偏上）
             const int frameIntervalMs = 50;  // 每帧间隔（与主循环帧率对齐）
 
             // 按下重击键，进入蓄力状态
-            Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
+            TaskControlPlatform.Current.SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
 
             // 连续未找到血条的计时，超过1秒时提前退出
             var lastSeenTargetTime = DateTime.UtcNow;
@@ -998,9 +997,9 @@ public class Avatar
                         var valid = bars.Where(b => b.x > 200).ToList();
 
                         // 构建绘制列表，初始包含预瞄准星（红色方框，中心(960, 540)）
-                        var drawList = new System.Collections.Generic.List<View.Drawable.RectDrawable>
+                        var drawList = new System.Collections.Generic.List<OpenCvSharp.Rect>
                         {
-                            capture.ToRectDrawable(new OpenCvSharp.Rect(preAimX - 25, 540 - 25, 50, 50), "preAim", new System.Drawing.Pen(System.Drawing.Color.Red, 2))
+                            new(preAimX - 25, 540 - 25, 50, 50)
                         };
 
                         // 检测是否存在传奇血条（y < 96 直接判定，y 96-200 使用动态追踪）
@@ -1018,16 +1017,16 @@ public class Avatar
                             var offsetX = (nearest.x + nearest.width / 2) - preAimX;
                             var offsetY = (nearest.y + nearest.height / 2) - preAimY;
                             // 以 0.35 系数移动鼠标（平滑跟踪，避免剧烈抖动）
-                            Simulation.SendInput.Mouse.MoveMouseBy((int)(offsetX * 0.35 * dpi), (int)(offsetY * 0.25 * dpi));
+                            TaskControlPlatform.Current.MoveMouseBy((int)(offsetX * 0.35 * dpi), (int)(offsetY * 0.25 * dpi));
 
                             // 普通血条框绘制：追踪目标用绿色框，其他血条用红色框
                             foreach (var b in valid)
                             {
                                 var rect = new OpenCvSharp.Rect(b.x, b.y, b.width, b.height);
                                 if (b.x == nearest.x && b.y == nearest.y && b.width == nearest.width && b.height == nearest.height)
-                                    drawList.Add(capture.ToRectDrawable(rect, "target", new System.Drawing.Pen(System.Drawing.Color.LimeGreen, 2)));
+                                    drawList.Add(rect);
                                 else
-                                    drawList.Add(capture.ToRectDrawable(rect, "blood"));
+                                    drawList.Add(rect);
                             }
                         }
                         else
@@ -1041,7 +1040,7 @@ public class Avatar
                                 lastSeenTargetTime = DateTime.UtcNow;
                                 var offsetX = dcx - preAimX;
                                 var offsetY = dcy - preAimY;
-                                Simulation.SendInput.Mouse.MoveMouseBy((int)(offsetX * 0.35 * dpi), (int)(offsetY * 0.25 * dpi));
+                                TaskControlPlatform.Current.MoveMouseBy((int)(offsetX * 0.35 * dpi), (int)(offsetY * 0.25 * dpi));
                             }
 
                             // OCR 无结果时：向右旋转搜索敌人
@@ -1051,16 +1050,16 @@ public class Avatar
                                 if (!hasLegendaryBar && (DateTime.UtcNow - lastSeenTargetTime).TotalSeconds >= 1.5)
                                 {
                                     Logger.LogInformation("桑多涅重击特化：超过1.5秒未找到目标，提前退出");
-                                    View.Drawable.VisionContext.Instance().DrawContent.PutOrRemoveRectList("SandroneBloodBars", drawList);
+                                    OverlayDrawPlatform.Current.SetRectangles("SandroneBloodBars", capture, drawList);
                                     break;
                                 }
 
-                                Simulation.SendInput.Mouse.MoveMouseBy((int)(1000 * dpi), 0);
+                                TaskControlPlatform.Current.MoveMouseBy((int)(1000 * dpi), 0);
                             }
                         }
 
                         // 将本帧绘制列表提交到遮罩窗口显示
-                        View.Drawable.VisionContext.Instance().DrawContent.PutOrRemoveRectList("SandroneBloodBars", drawList);
+                        OverlayDrawPlatform.Current.SetRectangles("SandroneBloodBars", capture, drawList);
                     }
 
                     // 等待一帧间隔后继续
@@ -1070,15 +1069,15 @@ public class Avatar
             finally
             {
                 // 确保清理绘制并松开重击键
-                View.Drawable.VisionContext.Instance().DrawContent.RemoveRect("SandroneBloodBars");
-                Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
+                OverlayDrawPlatform.Current.RemoveRectangles("SandroneBloodBars");
+                TaskControlPlatform.Current.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
             }
         }
         else
         {
-            Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
+            SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
             Sleep(ms); // 持续操作不应该被cts取消
-            Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
+            SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
         }
     }
 
@@ -1087,15 +1086,15 @@ public class Avatar
         key = key.ToLower();
         if (key == "left")
         {
-            Simulation.SendInput.Mouse.LeftButtonDown();
+            TaskControlPlatform.Current.LeftButtonDown();
         }
         else if (key == "right")
         {
-            Simulation.SendInput.Mouse.RightButtonDown();
+            TaskControlPlatform.Current.RightButtonDown();
         }
         else if (key == "middle")
         {
-            Simulation.SendInput.Mouse.MiddleButtonDown();
+            TaskControlPlatform.Current.MiddleButtonDown();
         }
     }
 
@@ -1104,15 +1103,15 @@ public class Avatar
         key = key.ToLower();
         if (key == "left")
         {
-            Simulation.SendInput.Mouse.LeftButtonUp();
+            TaskControlPlatform.Current.LeftButtonUp();
         }
         else if (key == "right")
         {
-            Simulation.SendInput.Mouse.RightButtonUp();
+            TaskControlPlatform.Current.RightButtonUp();
         }
         else if (key == "middle")
         {
-            Simulation.SendInput.Mouse.MiddleButtonUp();
+            TaskControlPlatform.Current.MiddleButtonUp();
         }
     }
 
@@ -1121,15 +1120,15 @@ public class Avatar
         key = key.ToLower();
         if (key == "left")
         {
-            Simulation.SendInput.Mouse.LeftButtonClick();
+            TaskControlPlatform.Current.LeftButtonClick();
         }
         else if (key == "right")
         {
-            Simulation.SendInput.Mouse.RightButtonClick();
+            TaskControlPlatform.Current.RightButtonClick();
         }
         else if (key == "middle")
         {
-            Simulation.SendInput.Mouse.MiddleButtonClick();
+            TaskControlPlatform.Current.MiddleButtonClick();
         }
     }
 
@@ -1140,85 +1139,22 @@ public class Avatar
 
     public void Scroll(int scrollAmountInClicks)
     {
-        Simulation.SendInput.Mouse.VerticalScroll(scrollAmountInClicks);
+        TaskControlPlatform.Current.VerticalScroll(scrollAmountInClicks);
     }
 
     public void KeyDown(string key)
     {
-        var vk = KeyBindingsSettingsPageViewModel.MappingKey(User32Helper.ToVk(key));
-        switch (key)
-        {
-            case "VK_LBUTTON":
-                Simulation.SendInput.Mouse.LeftButtonDown();
-                break;
-            case "VK_RBUTTON":
-                Simulation.SendInput.Mouse.RightButtonDown();
-                break;
-            case "VK_MBUTTON":
-                Simulation.SendInput.Mouse.MiddleButtonDown();
-                break;
-            case "VK_XBUTTON1":
-                Simulation.SendInput.Mouse.XButtonDown(0x0001);
-                break;
-            case "VK_XBUTTON2":
-                Simulation.SendInput.Mouse.XButtonDown(0x0001);
-                break;
-            default:
-                Simulation.SendInput.Keyboard.KeyDown(vk);
-                break;
-        }
+        CombatCommandPlatform.Current.KeyDown(key);
     }
 
     public void KeyUp(string key)
     {
-        var vk = KeyBindingsSettingsPageViewModel.MappingKey(User32Helper.ToVk(key));
-        switch (key)
-        {
-            case "VK_LBUTTON":
-                Simulation.SendInput.Mouse.LeftButtonUp();
-                break;
-            case "VK_RBUTTON":
-                Simulation.SendInput.Mouse.RightButtonUp();
-                break;
-            case "VK_MBUTTON":
-                Simulation.SendInput.Mouse.MiddleButtonUp();
-                break;
-            case "VK_XBUTTON1":
-                Simulation.SendInput.Mouse.XButtonUp(0x0001);
-                break;
-            case "VK_XBUTTON2":
-                Simulation.SendInput.Mouse.XButtonUp(0x0001);
-                break;
-            default:
-                Simulation.SendInput.Keyboard.KeyUp(vk);
-                break;
-        }
+        CombatCommandPlatform.Current.KeyUp(key);
     }
 
     public void KeyPress(string key)
     {
-        var vk = KeyBindingsSettingsPageViewModel.MappingKey(User32Helper.ToVk(key));
-        switch (key)
-        {
-            case "VK_LBUTTON":
-                Simulation.SendInput.Mouse.LeftButtonClick();
-                break;
-            case "VK_RBUTTON":
-                Simulation.SendInput.Mouse.RightButtonClick();
-                break;
-            case "VK_MBUTTON":
-                Simulation.SendInput.Mouse.MiddleButtonClick();
-                break;
-            case "VK_XBUTTON1":
-                Simulation.SendInput.Mouse.XButtonClick(0x0001);
-                break;
-            case "VK_XBUTTON2":
-                Simulation.SendInput.Mouse.XButtonClick(0x0001);
-                break;
-            default:
-                Simulation.SendInput.Keyboard.KeyPress(vk);
-                break;
-        }
+        CombatCommandPlatform.Current.KeyPress(key);
     }
 
     /// <summary>

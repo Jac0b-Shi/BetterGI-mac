@@ -1,36 +1,119 @@
-## 如何编译并运行整个工程？
+# BetterGI-mac 源码构建
 
-### Rider (推荐)
-1. `git clone https://github.com/babalae/better-genshin-impact.git`
-2. 推荐使用 [Rider](https://www.jetbrains.com/zh-cn/rider/) 打开本项目。速度快且免费！
+本仓库同时包含：
 
-### Visual Studio 2022
-1. `git clone https://github.com/babalae/better-genshin-impact.git`
-2. 需要使用 [Visual Studio 2022](https://visualstudio.microsoft.com/zh-hans/downloads/) 打开本项目。
+- `BetterGenshinImpact/`：上游 Windows WPF 应用及共享业务源码。
+- `BetterGenshinImpact.Core/`：macOS Core Host 使用的共享 Core 项目。
+- `BetterGenshinImpact.Core.Host/`：随 macOS App 打包的自包含 C# Host。
+- `MacGI/`：SwiftUI/AppKit 前端、ScreenCaptureKit 截图与 macOS 输入平台层。
 
-~~请注意当前 `/Asset` 目录下的部分文件过大，比如地图特征数据（300M+），需要手动从 Release 包中获取并拷贝至对应的编译目录下，软件才能够正常运行对应的功能。（当前仅影响地图追踪、自动传送相关功能）~~  现在已经丢到 nuget 上可以直接编译构建了
+macOS 生产功能必须经过真实 C# Core 和平台 RPC，不应在 Swift UI 中增加业务规则
+副本或可见的假实现。
 
-## 如何通过 Github Action 直接构建完整包？
+## 获取源码
 
-首先 fork 这个项目并启用 GitHub Actions。然后提交 `<commit>` 并且推送到 `<branch>` 。
+```bash
+git clone https://github.com/Jac0b-Shi/BetterGI-mac.git
+cd BetterGI-mac
+```
 
-最后前往这里 `https://github.com/<your-user-name>/better-genshin-impact/actions/workflows/publish.yml` 并点击 `Run workflow`:
+稳定版本位于 `main`。功能开发应从独立分支开始，并在合入前同步本仓库所跟踪的
+BetterGI 上游提交。
 
-- `Use workflow from` 选择 `<branch>`
-- `BetterGI Version` 填写 `<current-version>+<commit hash>`
-- `Kachina Installer Channel` 选择 `release` （无需修改）
-- 不要勾选 `创建 GitHub Release 草稿`
+## 构建 macOS App
 
-点击绿色按钮 `Run workflow`，等待约10分钟。
+### 环境要求
 
-刷新当前页面，点击最新的 Run，`Artifacts` 中的 `BetterGI_7z` 就是构建的完整包。
+- Apple Silicon Mac。
+- macOS 14 或更高版本。
+- Xcode/Command Line Tools，以及 Swift 6.1 或兼容版本。
+- .NET 8 SDK。
+- 用于本地运行的 `Apple Development` 代码签名身份。
 
+先还原并编译 Core：
 
-## 运行项目闪退？
+```bash
+dotnet restore BetterGenshinImpact.Core.sln
+dotnet build BetterGenshinImpact.Core.sln -c Debug --no-restore
+```
 
-可能是 Windows SDK 版本不够。使用 Visual Studio Installer 安装 `10.0.22621.0` 及以上版本的 Windows SDK，或者编辑项目文件的 `TargetFramework` 降低版本。
+运行 Swift 平台层测试：
 
+```bash
+swift test --package-path MacGI
+```
 
-## 识别用的模板资源 Recognition.json 如何编写
+打包包含自包含 Core Host 的 `.app`：
 
-参考：[RecognitionJson编写说明](Docs/RecognitionJson.md)
+```bash
+MacGI/scripts/package-macgi-app.sh
+```
+
+默认输出：
+
+```text
+MacGI/.build/App/betterGI-mac.app
+```
+
+通过 LaunchServices 启动实际 App Bundle：
+
+```bash
+open MacGI/.build/App/betterGI-mac.app
+```
+
+不要使用 `swift run` 或直接执行 `.build` 中的 Unix 可执行文件验证屏幕录制权限。
+macOS TCC 根据 Bundle ID 和代码签名识别应用；本地开发应保持同一
+`Apple Development` 身份。`MACGI_ALLOW_ADHOC_SIGNING=1` 仅用于 CI 打包 smoke，
+不适合日常实机运行。
+
+## 构建 Windows 应用
+
+Windows WPF 应用需要 Windows 10/11、Visual Studio 2022 或 Rider，以及
+.NET 8 SDK：
+
+```powershell
+dotnet build BetterGenshinImpact.sln -c Debug
+```
+
+Windows 版的用户下载、使用说明和问题反馈请前往
+[BetterGI 上游项目](https://github.com/babalae/better-genshin-impact)。
+
+## 验证工作流
+
+构建依赖后再使用 `--no-build` 运行对应 verifier，避免每次隐式重建完整依赖图。
+
+| 改动范围 | 验证命令 |
+| --- | --- |
+| Trigger、独立任务设置、调度器编辑 | `scripts/verify-core-fast.sh <suite>` |
+| AutoPathing 执行器、handler、路线数据 | `scripts/verify-pathing-library.sh` |
+| 架构与生产 fallback | `scripts/verify-core-static.sh` |
+| 识别、模型、原生依赖、阶段完成 | `scripts/verify-core-full.sh` |
+
+Swift/AppKit 改动至少运行：
+
+```bash
+swift test --package-path MacGI
+```
+
+不要为了局部功能改动默认运行无关的完整模型验证，也不要通过 mock 或 fallback
+绕过缺失的真实依赖。
+
+## Release 构建
+
+稳定版从 `main` 上的 `v*` SemVer 标签自动构建。配置完整 Developer ID 和公证
+凭据时，GitHub Actions 会生成正式签名并公证的 arm64 DMG、ZIP 和 SHA256 清单；
+未配置任何凭据时，则生成文件名带 `-unsigned` 的 ad-hoc 临时发布。
+
+仓库管理员配置、标签格式和发布步骤见
+[`MacGI/docs/release.md`](../MacGI/docs/release.md)。
+
+## 资源与运行目录
+
+- macOS App 运行目录：`~/Library/Application Support/betterGI-mac/`
+- 用户脚本与调度配置：运行目录下的 `User/`
+- 随 App 打包的 Core Host：`BetterGI.app/Contents/Resources/BetterGICore/`
+- 识别、任务和地图资源：由打包脚本按真实 Core 依赖闭包写入 App Resources
+
+不需要手动从 Windows Release 复制地图或识别资源到编译目录。
+
+修改共享识别资源时，需要同时验证 Windows WPF 编译和 macOS 识别资源闭包。

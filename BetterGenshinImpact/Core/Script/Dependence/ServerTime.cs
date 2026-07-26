@@ -1,5 +1,4 @@
 ﻿using System;
-using BetterGenshinImpact.Helpers;
 
 namespace BetterGenshinImpact.Core.Script.Dependence;
 
@@ -14,6 +13,6 @@ public static class ServerTime
     /// </returns>
     public static int GetServerTimeZoneOffset()
     {
-        return (int)ServerTimeHelper.GetServerTimeOffset().TotalMilliseconds;
+        return (int)ScriptHostServices.ServerTimeZoneOffset.TotalMilliseconds;
     }
 }

@@ -1,5 +1,6 @@
 ﻿using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.Common.Map;
+using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
 using System;
 using System.Threading;
@@ -11,7 +12,7 @@ namespace BetterGenshinImpact.GameTask.AutoPathing;
 
 public class CameraRotateTask(CancellationToken ct)
 {
-    private readonly double _dpi = TaskContext.Instance().DpiScale;
+    private readonly double _dpi = TaskControlPlatform.Current.DpiScale;
 
     /// <summary>
     /// 向目标角度旋转
@@ -45,7 +46,7 @@ public class CameraRotateTask(CancellationToken ct)
             controlRatio = 2;
         }
 
-        Simulation.SendInput.Mouse.MoveMouseBy((int)Math.Round(-controlRatio * diff * _dpi), 0);
+        MoveMouseBy((int)Math.Round(-controlRatio * diff * _dpi), 0);
         return diff;
     }
 

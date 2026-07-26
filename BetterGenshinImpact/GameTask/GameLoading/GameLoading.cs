@@ -2,7 +2,6 @@ using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
@@ -10,11 +9,8 @@ using BetterGenshinImpact.GameTask.Model.Area;
 using Microsoft.Extensions.Logging;
 using System.IO;
 using System.Text.RegularExpressions;
-using Microsoft.Win32;
 using System.Linq;
 using System.Threading;
-using System.Text;
-using Vanara.PInvoke;
 
 namespace BetterGenshinImpact.GameTask.GameLoading;
 
@@ -35,8 +31,9 @@ public class GameLoadingTrigger : ITaskTrigger
 
     public bool IsBackgroundRunning => true;
 
-    private readonly GenshinStartConfig _config = TaskContext.Instance().Config.GenshinStartConfig;
-    private static ILogger<GameLoadingTrigger> _logger = App.GetLogger<GameLoadingTrigger>();
+    private readonly IGameLoadingRuntimePlatform _runtime;
+    private readonly GenshinStartConfig _config;
+    private readonly ILogger<GameLoadingTrigger> _logger;
 
 
     // private int _enterGameClickCount = 0;
@@ -54,13 +51,14 @@ public class GameLoadingTrigger : ITaskTrigger
     private string FileName = "";
 
     private bool biliLoginClicked = false;
-    private (double x1080, double y1080)? lastAgreementClickPos = null;
     private DateTime _prevAgePromptOcrTime = DateTime.MinValue;
-    private bool _agePromptTextMatched = false;
     private List<Region> _latestLoadingOcrRegions = [];
 
     public GameLoadingTrigger()
     {
+        _runtime = GameLoadingRuntimePlatform.Current;
+        _config = _runtime.Config;
+        _logger = _runtime.Logger;
     }
 
     public void InnerSetEnabled(bool enabled)
@@ -109,6 +107,7 @@ public class GameLoadingTrigger : ITaskTrigger
                 }
                 catch (Exception e)
                 {
+                    _logger.LogDebug(e, "读取游戏区服配置失败");
                 }
 
                 // channelValue = 1 ： 官服
@@ -126,12 +125,12 @@ public class GameLoadingTrigger : ITaskTrigger
                 }
 
 
-                Debug.WriteLine($"[GameLoading] 从文件读取到游戏区服：{GameServer}");
+                _logger.LogDebug("[GameLoading] 从文件读取到游戏区服：{GameServer}", GameServer);
                 // 这里注册表的优先级要比读取文件低，因为使用starward安装原神不会写入注册表
                 if (GameServer == null)
                 {
-                    GameServer = GetGameServerRegistry();
-                    Debug.WriteLine($"[GameLoading] 从注册表读取到游戏区服：{GameServer}");
+                    GameServer = _runtime.GetInstalledGameServer();
+                    _logger.LogDebug("[GameLoading] 从平台读取到游戏区服：{GameServer}", GameServer);
                     StartStarward();
                 }
             }
@@ -139,98 +138,13 @@ public class GameLoadingTrigger : ITaskTrigger
     }
 
     public bool StartStarward()
-    {
-        try
-        {
-            Debug.WriteLine($"[GameLoading] 服务器：{GameServer}");
-            if (IsStarwardProtocolRegistered())
-            {
-                Process.Start(new ProcessStartInfo($"starward://playtime/{GameServer}") { UseShellExecute = true });
-                return true;
-            }
-            else
-            {
-                // TaskControl.Logger.LogWarning("没有检测到 Starward 协议注册，请查看帮助文档！");
-                return false;
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine("[GameLoading] Starward记录时间失败");
-            return false;
-        }
-    }
+        => _runtime.TryStartPlaytimeTracking(GameServer);
 
     public string GetGameServerRegistry()
-    {
-        try
-        {
-            var cn =
-                Registry.GetValue($@"HKEY_CURRENT_USER\Software\miHoYo\HYP\1_1\hk4e_cn", "GameInstallPath",
-                    null) as string;
-            if (!string.IsNullOrEmpty(cn))
-            {
-                var filePath = Path.Combine(cn, "YuanShen.exe");
-                GameServer = "hk4e_cn";
-                return GameServer;
-            }
-
-            var global = Registry.GetValue($@"HKEY_CURRENT_USER\Software\Cognosphere\HYP\1_0\hk4e_global",
-                "GameInstallPath", null) as string;
-            if (!string.IsNullOrEmpty(global))
-            {
-                var filePath = Path.Combine(global, "GenshinImpact.exe");
-                GameServer = "hk4e_global";
-                return GameServer;
-            }
-
-            var bilibili =
-                Registry.GetValue($@"HKEY_CURRENT_USER\Software\miHoYo\HYP\standalone\14_0\hk4e_cn\umfgRO5gh5\hk4e_cn",
-                    "GameInstallPath", null) as string;
-            if (!string.IsNullOrEmpty(bilibili))
-            {
-                var filePath = Path.Combine(bilibili, "YuanShen.exe");
-                GameServer = "hk4e_bilibili";
-                return GameServer;
-            }
-        }
-        catch (Exception e)
-        {
-            TaskControl.Logger.LogDebug(e, "获取服务器失败");
-        }
-
-        return "";
-    }
+        => _runtime.GetInstalledGameServer();
 
     public bool IsStarwardProtocolRegistered()
-    {
-        try
-        {
-            // 打开注册表路径 HKEY_CLASSES_ROOT\starward
-            using (RegistryKey key = Registry.ClassesRoot.OpenSubKey("starward"))
-            {
-                // 如果键存在
-                if (key != null)
-                {
-                    // 检查是否存在 URL Protocol 值
-                    object urlProtocol = key.GetValue("URL Protocol");
-                    // 如果 URL Protocol 存在且值为空字符串（标准配置），认为协议已注册
-                    if (urlProtocol != null && urlProtocol.ToString() == "")
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            // 如果访问注册表时发生错误，记录调试信息
-            Debug.WriteLine($"[GameLoading] 检查 Starward 协议时发生错误: {ex.Message}");
-        }
-
-        // 如果键不存在或不符合条件，返回 false
-        return false;
-    }
+        => _runtime.IsPlaytimeTrackingAvailable();
 
     public void OnCapture(CaptureContent content)
     {
@@ -322,7 +236,7 @@ public class GameLoadingTrigger : ITaskTrigger
 
         if (!ra.IsEmpty())
         {
-            TaskContext.Instance().PostMessageSimulator.LeftButtonClickBackground();
+            _runtime.BackgroundClick();
             biliLoginClicked = true;
             return;
         }
@@ -331,32 +245,31 @@ public class GameLoadingTrigger : ITaskTrigger
         if (IsBili && !biliLoginClicked)
         {
             // B服流程：处理登录窗口
-            var process = Process.GetProcessesByName("YuanShen").FirstOrDefault();
-            var (loginWindow, windowType) = GetBiliLoginWindow(process);
+            var windowType = _runtime.GetBiliLoginWindowType();
 
-            if (process != null && loginWindow != IntPtr.Zero)
+            if (windowType != BiliLoginWindowType.None)
             {
-                var dpiScale = TaskContext.Instance().DpiScale;
-                if (windowType.Contains("协议"))
+                if (windowType == BiliLoginWindowType.Agreement)
                 {
-                    GameCaptureRegion.GameRegion1080PPosClick(960 + 70 * dpiScale, 540 + 75 * dpiScale);
+                    _runtime.ClickGame1080P(
+                        960 + 70 * _runtime.DpiScale,
+                        540 + 75 * _runtime.DpiScale);
                 }
 
-                if (windowType.Contains("登录"))
+                if (windowType == BiliLoginWindowType.Login)
                 {
                     Thread.Sleep(2000);
-                    GameCaptureRegion.GameRegion1080PPosClick(960, 540 + 90 * dpiScale);
+                    _runtime.ClickGame1080P(960, 540 + 90 * _runtime.DpiScale);
                     Thread.Sleep(2000);
 
                     // 检查窗口是否还存在
-                    var (remainingWindow, remainingType) = GetBiliLoginWindow(process);
-                    if (remainingWindow == IntPtr.Zero)
+                    if (_runtime.GetBiliLoginWindowType() == BiliLoginWindowType.None)
                     {
                         _logger.LogInformation("B服登录完成，准备进入游戏");
                         // 添加延时确保窗口完全消失
                         Thread.Sleep(2000);
                         // 点击屏幕尝试找回焦点
-                        TaskContext.Instance().PostMessageSimulator.LeftButtonClickBackground();
+                        _runtime.BackgroundClick();
                         biliLoginClicked = true;
                     }
                 }
@@ -365,9 +278,9 @@ public class GameLoadingTrigger : ITaskTrigger
 
         if (Bv.IsInBlessingOfTheWelkinMoon(content.CaptureRectArea))
         {
-            GameCaptureRegion.GameRegion1080PPosMove(100, 100);
-            TaskContext.Instance().PostMessageSimulator.LeftButtonClickBackground();
-            Debug.WriteLine("[GameLoading] Click blessing of the welkin moon");
+            _runtime.MoveToGame1080P(100, 100);
+            _runtime.BackgroundClick();
+            _logger.LogDebug("[GameLoading] Click blessing of the welkin moon");
             // TaskControl.Logger.LogInformation("自动点击月卡");
             return;
         }
@@ -376,80 +289,11 @@ public class GameLoadingTrigger : ITaskTrigger
         var ysRa = content.CaptureRectArea.Find(ElementRecognition.Get("Primogem", content.CaptureRectArea));
         if (!ysRa.IsEmpty())
         {
-            GameCaptureRegion.GameRegion1080PPosMove(100, 100);
-            TaskContext.Instance().PostMessageSimulator.LeftButtonClickBackground();
-            Debug.WriteLine("[GameLoading] 跳过原石");
+            _runtime.MoveToGame1080P(100, 100);
+            _runtime.BackgroundClick();
+            _logger.LogDebug("[GameLoading] 跳过原石");
             return;
         }
     }
 
-    // B服登录窗口检测
-    private static (IntPtr windowHandle, string windowType) GetBiliLoginWindow(Process process)
-    {
-        IntPtr bHWnd = IntPtr.Zero;
-        string windowType = "";
-
-        User32.EnumWindows((hWnd, lParam) =>
-        {
-            try
-            {
-                // 获取窗口标题
-                int titleLength = User32.GetWindowTextLength(hWnd);
-                if (titleLength > 0)
-                {
-                    StringBuilder title = new StringBuilder(titleLength + 1);
-                    User32.GetWindowText(hWnd, title, title.Capacity);
-
-                    string titleText = title.ToString();
-
-                    // 检查是否是B服登录窗口（通过标题匹配）
-                    if (titleText.Contains("bilibili", StringComparison.OrdinalIgnoreCase))
-                    {
-                        // 检查窗口所有者是否是原神进程
-                        var owner = User32.GetWindow(hWnd, User32.GetWindowCmd.GW_OWNER);
-                        if (owner != IntPtr.Zero)
-                        {
-                            User32.GetWindowThreadProcessId(owner, out uint ownerPid);
-                            if (ownerPid == process.Id)
-                            {
-                                // 检查窗口是否可见和启用
-                                bool isVisible = User32.IsWindowVisible(hWnd);
-                                bool isEnabled = User32.IsWindowEnabled(hWnd);
-
-                                // 检查协议窗口
-                                if (titleText.Contains("协议", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    if (isEnabled)
-                                    {
-                                        bHWnd = hWnd.DangerousGetHandle();
-                                        windowType = "协议";
-                                        return false;
-                                    }
-                                }
-
-                                // 检查登录窗口
-                                if (titleText.Contains("登录", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    if (isEnabled)
-                                    {
-                                        bHWnd = hWnd.DangerousGetHandle();
-                                        windowType = "登录";
-                                        return false;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug($"枚举窗口时出错: {ex.Message}");
-            }
-
-            return true;
-        }, IntPtr.Zero);
-
-        return (bHWnd, windowType);
-    }
 };

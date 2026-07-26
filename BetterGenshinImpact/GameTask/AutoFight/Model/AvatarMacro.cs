@@ -49,7 +49,7 @@ public class AvatarMacro
 
         // 如果角色设置了自己的宏优先级，使用角色的；否则使用全局配置
         var priority = MacroPriority > 0 ? MacroPriority :
-                      TaskContext.Instance().Config.MacroConfig.CombatMacroPriority;
+                      AutoFightRuntimePlatform.Current.CombatMacroPriority;
 
         // 确保最终优先级在有效范围内
         if (priority < 1 || priority > 5)

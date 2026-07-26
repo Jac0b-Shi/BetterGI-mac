@@ -1,0 +1,49 @@
+name: Full WPF Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - mac-core-extraction
+    paths:
+      - "BetterGenshinImpact/**"
+      - "BetterGenshinImpact.Core/**"
+      - "BetterGenshinImpact.Core.Host/**"
+      - "BetterGenshinImpact.Platform.Abstractions/**"
+      - "Fischless.WindowsInput/**"
+      - "Fischless.GameCapture/**"
+      - ".github/workflows/wpf-build.yml"
+  pull_request:
+    paths:
+      - "BetterGenshinImpact/**"
+      - "BetterGenshinImpact.Core/**"
+      - "BetterGenshinImpact.Core.Host/**"
+      - "BetterGenshinImpact.Platform.Abstractions/**"
+      - "Fischless.WindowsInput/**"
+      - "Fischless.GameCapture/**"
+      - ".github/workflows/wpf-build.yml"
+
+concurrency:
+  group: full-wpf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Restore
+        run: >
+          dotnet restore
+          BetterGenshinImpact/BetterGenshinImpact.csproj
+          -p:Platform=x64
+      - name: Build
+        run: >
+          dotnet build
+          BetterGenshinImpact/BetterGenshinImpact.csproj
+          -c Release
+          -p:Platform=x64
+          --no-restore

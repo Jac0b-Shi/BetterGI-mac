@@ -21,13 +21,15 @@
                  WindowBackdropType="Auto"
                  WindowStartupLocation="CenterScreen"
                  mc:Ignorable="d">
-    <Grid Background="Black">
+    <Grid x:Name="RootGrid"
+          Background="Black">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0"
+        <ui:TitleBar x:Name="WindowTitleBar"
+                     Grid.Row="0"
                      Background="{DynamicResource ApplicationBackgroundBrush}"
                      Height="32"
                      VerticalContentAlignment="Top">
@@ -85,6 +87,33 @@
                                CornerRadius="0"
                                Icon="{ui:SymbolIcon ArrowSwap24}"
                                ToolTip="向桌面分身发送 Win+Tab" />
+                    <ui:Button Width="110"
+                               Height="32"
+                               Background="Transparent"
+                               BorderBrush="Transparent"
+                               behavior:ResponsiveTitleBarBehavior.CollapseOrder="4"
+                               Command="{Binding ToggleGameMouseModeCommand}"
+                               Content="{Binding GameMouseModeButtonText}"
+                               CornerRadius="0"
+                               ToolTip="{Binding GameMouseModeButtonToolTip}">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon>
+                                <ui:SymbolIcon.Style>
+                                    <Style TargetType="{x:Type ui:SymbolIcon}">
+                                        <Setter Property="Symbol"
+                                                Value="Cursor24" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsGameMouseModeEnabled}"
+                                                         Value="True">
+                                                <Setter Property="Symbol"
+                                                        Value="Target24" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ui:SymbolIcon.Style>
+                            </ui:SymbolIcon>
+                        </ui:Button.Icon>
+                    </ui:Button>
                     <ui:DropDownButton Width="120"
                                        Height="32"
                                        Background="Transparent"
@@ -119,6 +148,12 @@
                                                  IsChecked="{Binding KeepAspectRatio, Mode=OneWay}" />
                                 </ui:MenuItem>
                                 <ui:MenuItem Header="快捷键">
+                                    <ui:MenuItem Header="系统组合键发送到桌面分身"
+                                                 Command="{Binding ToggleSendSystemShortcutsToRemoteCommand}"
+                                                 IsCheckable="True"
+                                                 IsChecked="{Binding SendSystemShortcutsToRemote, Mode=OneWay}"
+                                                 ToolTip="勾选后，Alt+Tab、Windows 键等系统组合键发送到桌面分身；取消勾选后在本机生效。切换时会自动重新连接 RDP。" />
+                                    <Separator />
                                     <ui:MenuItem Header="发送 Win+D 显示桌面"
                                                  Command="{Binding ShowDesktopCommand}" />
                                     <ui:MenuItem Header="发送 Win+Tab 切换窗口"
@@ -153,6 +188,29 @@
                 </StackPanel>
             </ui:TitleBar.TrailingContent>
         </ui:TitleBar>
+
+        <Popup Width="{Binding ActualWidth, ElementName=RootGrid}"
+               AllowsTransparency="True"
+               IsOpen="{Binding IsNotificationOpen, Mode=TwoWay}"
+               Placement="Bottom"
+               PlacementTarget="{Binding ElementName=WindowTitleBar}"
+               PopupAnimation="Fade"
+               StaysOpen="True">
+            <Grid Background="Transparent">
+                <Border MaxWidth="720"
+                        Margin="8"
+                        HorizontalAlignment="Center"
+                        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+                        CornerRadius="8">
+                    <ui:InfoBar Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+                                IsClosable="True"
+                                IsOpen="{Binding IsNotificationOpen, Mode=TwoWay}"
+                                Message="{Binding NotificationMessage}"
+                                Severity="{Binding NotificationSeverity}"
+                                Title="{Binding NotificationTitle}" />
+                </Border>
+            </Grid>
+        </Popup>
 
         <Grid Grid.Row="1"
               Background="Black">
@@ -267,7 +325,7 @@
                                        HorizontalAlignment="Center"
                                        Foreground="#80FFFFFF"
                                        FontSize="11"
-                                       Text="操作时按住 Alt，可临时释放并显示本地鼠标。"
+                                       Text="游戏鼠标模式下，按住 Alt 可临时释放并显示本地鼠标。"
                                        TextAlignment="Center" />
                         </StackPanel>
                     </StackPanel>

@@ -5,8 +5,8 @@ namespace BetterGenshinImpact.Model;
 
 public class EnumItem<T> where T : Enum
 {
-    public T Value { get; set; }
-    public string DisplayName { get; set; }
+    public T Value { get; set; } = default!;
+    public string DisplayName { get; set; } = string.Empty;
     public int Order { get; set; }
     public string EnumName => Value.ToString();
 

@@ -2,6 +2,7 @@ using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask.Model.Assets;
 using BetterGenshinImpact.GameTask.Model.Area;
 using OpenCvSharp;
+using System;
 using System.Collections.Generic;
 
 namespace BetterGenshinImpact.GameTask.QuickTeleport.Assets;

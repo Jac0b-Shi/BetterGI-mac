@@ -56,7 +56,8 @@ public class AutoDomainParam : BaseTaskParam<AutoDomainTask>
     /// </summary>
     public bool RewardRecognitionEnabled { get; set; } = false;
 
-    public AutoDomainParam(int domainRoundNum, string path) : base(null, null)
+    public AutoDomainParam(int domainRoundNum, string path, AutoDomainConfig config,
+        string maxArtifactStar) : base(null, null)
     {
         DomainRoundNum = domainRoundNum;
         if (domainRoundNum == 0)
@@ -65,17 +66,16 @@ public class AutoDomainParam : BaseTaskParam<AutoDomainTask>
         }
 
         CombatStrategyPath = path;
-        SetDefault();
+        SetDefault(config, maxArtifactStar);
     }
 
-    public void SetDefault()
+    public void SetDefault(AutoDomainConfig config, string maxArtifactStar)
     {
-        var config = TaskContext.Instance().Config.AutoDomainConfig;
         PartyName = config.PartyName;
         DomainName = config.DomainName;
         SundaySelectedValue = config.SundaySelectedValue;
         AutoArtifactSalvage = config.AutoArtifactSalvage;
-        MaxArtifactStar = TaskContext.Instance().Config.AutoArtifactSalvageConfig.MaxArtifactStar;
+        MaxArtifactStar = maxArtifactStar;
         ResinPriorityList = config.ResinPriorityList;
         OriginalResinUseCount = config.OriginalResinUseCount;
         CondensedResinUseCount = config.CondensedResinUseCount;
@@ -87,6 +87,13 @@ public class AutoDomainParam : BaseTaskParam<AutoDomainTask>
         RewardRecognitionEnabled = config.RewardRecognitionEnabled;
     }
 
+#if !BGI_PLATFORM_MAC
+    public AutoDomainParam(int domainRoundNum, string path) : this(
+        domainRoundNum, path, TaskContext.Instance().Config.AutoDomainConfig,
+        TaskContext.Instance().Config.AutoArtifactSalvageConfig.MaxArtifactStar)
+    {
+    }
+
     public AutoDomainParam(int domainRoundNum = 0) : base(null, null)
     {
         DomainRoundNum = domainRoundNum;
@@ -95,21 +102,19 @@ public class AutoDomainParam : BaseTaskParam<AutoDomainTask>
             DomainRoundNum = 9999;
         }
 
-        CombatStrategyPath = SetCombatStrategyPath();
-        SetDefault();
+        CombatStrategyPath = SetCombatStrategyPath(
+            TaskContext.Instance().Config.AutoFightConfig.StrategyName);
+        SetDefault(TaskContext.Instance().Config.AutoDomainConfig,
+            TaskContext.Instance().Config.AutoArtifactSalvageConfig.MaxArtifactStar);
     }
+#endif
 
     /// <summary>  
     /// 设置战斗策略路径
     /// </summary>  
     /// <param name="strategyName">策略名称</param>  
-    public string SetCombatStrategyPath(string? strategyName = null)
+    public string SetCombatStrategyPath(string strategyName)
     {
-        if (string.IsNullOrEmpty(strategyName))
-        {
-            strategyName = TaskContext.Instance().Config.AutoFightConfig.StrategyName;
-        }
-
         if ("根据队伍自动选择".Equals(strategyName))
         {
             return Global.Absolute(@"User\AutoFight\");

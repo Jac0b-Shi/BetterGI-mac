@@ -2,7 +2,7 @@
 
 	<PropertyGroup>
 		<AssemblyName>BetterGI</AssemblyName>
-		<Version>0.62.2-alpha.1</Version>
+		<Version>0.62.2-alpha.2</Version>
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 		<OutputType>WinExe</OutputType>
 		<TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
@@ -11,6 +11,7 @@
 		<UseWindowsForms>true</UseWindowsForms>
 		<LangVersion>12.0</LangVersion>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<DefineConstants>$(DefineConstants);BGI_FULL_WINDOWS</DefineConstants>
 		<ApplicationIcon>Resources\Images\logo.ico</ApplicationIcon>
 		<Platforms>x64</Platforms>
 		<DebugType>embedded</DebugType>
@@ -38,6 +39,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<Using Include="BetterGenshinImpact.Core.Simulator.Extensions" />
+		<Using Include="BetterGenshinImpact.Core.Runtime.Windows" />
 		<PackageReference Include="AvalonEdit" Version="6.3.1.120" />
 		<PackageReference Include="BehaviourTree" Version="1.0.73" />
 
@@ -45,7 +48,7 @@
 		<PackageReference Include="BetterGI.VCRuntime" Version="14.44.35208" />
 		<PackageReference Include="BetterGI.Assets.Map" Version="1.0.19" />
         <PackageReference Include="BetterGI.Assets.Model" Version="1.0.29" />
-		<PackageReference Include="BetterGI.Assets.Other" Version="1.0.17" />
+		<PackageReference Include="BetterGI.Assets.Other" Version="1.0.18" />
 		
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
 		<PackageReference Include="DeviceId" Version="6.9.0" />
@@ -73,9 +76,9 @@
 		<PackageReference Include="MimeKit" Version="4.16.0" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="Ookii.Dialogs.Wpf" Version="5.0.1" />
-		<PackageReference Include="OpenCvSharp4.WpfExtensions" Version="4.11.0.20250507" />
-		<PackageReference Include="OpenCvSharp4.Extensions" Version="4.11.0.20250507" />
-		<PackageReference Include="OpenCvSharp4.Windows" Version="4.11.0.20250507" />
+		<PackageReference Include="OpenCvSharp4.WpfExtensions" Version="4.13.0.20260627" />
+		<PackageReference Include="OpenCvSharp4.Extensions" Version="4.13.0.20260627" />
+		<PackageReference Include="OpenCvSharp4.Windows" Version="4.13.0.20260627" />
 		<PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.122" />
 		<PackageReference Include="Microsoft.ClearScript.V8" Version="7.4.5" />
 		<PackageReference Include="Microsoft.ClearScript.V8.Native.win-x64" Version="7.4.5" />
@@ -89,7 +92,7 @@
 		<PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
 		<PackageReference Include="Serilog.Sinks.RichTextBoxEx.Wpf" Version="1.1.0.1" />
 <!--		<PackageReference Include="supabase-csharp" Version="0.16.2" />-->
-		<PackageReference Include="System.Drawing.Common" Version="10.0.7" />
+		<PackageReference Include="System.Drawing.Common" Version="10.0.9" />
 		<PackageReference Include="System.IO.Hashing" Version="9.0.4" />
 		<PackageReference Include="Vanara.PInvoke.CoreAudio" Version="4.1.3" />
 		<PackageReference Include="Vanara.PInvoke.NtDll" Version="4.1.3" />
@@ -112,6 +115,7 @@
 		<ProjectReference Include="..\Fischless.GameCapture\Fischless.GameCapture.csproj" />
 		<ProjectReference Include="..\Fischless.HotkeyCapture\Fischless.HotkeyCapture.csproj" />
 		<ProjectReference Include="..\Fischless.WindowsInput\Fischless.WindowsInput.csproj" />
+		<ProjectReference Include="..\BetterGenshinImpact.Platform.Abstractions\BetterGenshinImpact.Platform.Abstractions.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

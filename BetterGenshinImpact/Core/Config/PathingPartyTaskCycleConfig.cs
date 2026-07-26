@@ -34,11 +34,11 @@ public partial class PathingPartyTaskCycleConfig : ObservableObject
     {
         try
         {
-            if (_cycle <= 0 || _boundaryTime <0  || _boundaryTime > 24 )
+            if (Cycle <= 0 || BoundaryTime < 0 || BoundaryTime > 24)
                 return -1;
 
             // 修正时间：如果当前时间小于当天的分界时间，则视为前一天
-            DateTime boundaryTimeToday = new DateTime(now.Year, now.Month, now.Day, _boundaryTime, 0, 0);
+            DateTime boundaryTimeToday = new DateTime(now.Year, now.Month, now.Day, BoundaryTime, 0, 0);
             if (now < boundaryTimeToday)
             {
                 now = now.AddDays(-1); // 归属到前一天
@@ -51,20 +51,13 @@ public partial class PathingPartyTaskCycleConfig : ObservableObject
             int totalDays = (int)daysSinceBase.TotalDays;
 
             // 执行序号 = (修正天数 % 周期) + 1
-            int executionOrder = (totalDays % _cycle) + 1;
+            int executionOrder = (totalDays % Cycle) + 1;
             return executionOrder;
         }
-        catch (Exception e)
+        catch (Exception)
         {
             return -1;
         }
 
     }
-    public int GetExecutionOrder()
-    {
-        return GetExecutionOrder(IsBoundaryTimeBasedOnServerTime
-            ? ServerTimeHelper.GetServerTimeNow()
-            : DateTimeOffset.Now);
-    }
-    
 }

@@ -1,88 +1,91 @@
-using System;
 using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.Core.Simulator;
-using BetterGenshinImpact.GameTask.Common;
-using BetterGenshinImpact.GameTask.Model.Area;
-using BetterGenshinImpact.View.Drawable;
-using Microsoft.Extensions.Logging;
-using Wpf.Ui.Violeta.Controls;
+using System;
+using System.Threading;
 
 namespace BetterGenshinImpact.GameTask.QuickBuy;
 
 public class QuickBuyTask
 {
-    private static readonly ILogger<QuickBuyTask> _logger = App.GetLogger<QuickBuyTask>();
-
-    
-    public static void Done()
+    public static void Done(CancellationToken cancellationToken = default)
     {
-        if (!TaskContext.Instance().IsInitialized)
+        cancellationToken.ThrowIfCancellationRequested();
+        var platform = QuickBuyRuntimePlatform.Current;
+        if (!platform.IsInitialized)
         {
-            Toast.Warning("请先启动");
+            platform.NotifyNotStarted();
             return;
         }
-        if (!SystemControl.IsGenshinImpactActiveByProcess())
+        if (!platform.IsGameProcessActive)
         {
             return;
         }
 
         try
         {
-            ImageRegion ra = TaskControl.CaptureToRectArea();
-            if (ra.Find(RecognitionAssets.Get("QuickBuy", "SereniteaPotCoin", ra)).IsExist())
-            {
-                // _logger.LogInformation("触发尘歌壶快速购买逻辑");
-                // 尘歌壶购买逻辑
-                // GameCaptureRegion.GameRegionClick((size, scale) => (200 * scale, 200 * scale));
-                // TaskControl.CheckAndSleep(100);
-                // 选中左边点 
-                GameCaptureRegion.GameRegion1080PPosMove(1450, 690);
-                TaskControl.CheckAndSleep(100);
-                Simulation.SendInput.Mouse.LeftButtonDown();
-                TaskControl.CheckAndSleep(50);
-
-                // 向右滑动
-                Simulation.SendInput.Mouse.MoveMouseBy(1000, 0);
-                TaskControl.CheckAndSleep(200);
-                Simulation.SendInput.Mouse.LeftButtonUp();
-                TaskControl.CheckAndSleep(200);
-
-                GameCaptureRegion.GameRegion1080PPosClick(1600, 1020);
-                TaskControl.CheckAndSleep(200); // 等待窗口消失
-                GameCaptureRegion.GameRegion1080PPosClick(960, 850);
-
-                return;
-            }
-
-            // 点击购买/兑换 右下225x60
-            GameCaptureRegion.GameRegionClick((size, scale) => (size.Width - 225 * scale, size.Height - 60 * scale));
-            TaskControl.CheckAndSleep(100); // 等待窗口弹出
-
-            // 选中左边点 742x601
-            GameCaptureRegion.GameRegion1080PPosMove(742, 601);
-            TaskControl.CheckAndSleep(100);
-            Simulation.SendInput.Mouse.LeftButtonDown();
-            TaskControl.CheckAndSleep(50);
-
-            // 向右滑动
-            Simulation.SendInput.Mouse.MoveMouseBy(1000, 0);
-            TaskControl.CheckAndSleep(200);
-            Simulation.SendInput.Mouse.LeftButtonUp();
-            TaskControl.CheckAndSleep(100);
-
-            // 点击弹出页的购买/兑换 1100x780
-            GameCaptureRegion.GameRegion1080PPosClick(1100, 780);
-            TaskControl.CheckAndSleep(200); // 等待窗口消失
-            GameCaptureRegion.GameRegionClick((size, scale) => (size.Width - 225 * scale, size.Height - 60 * scale));
-            TaskControl.CheckAndSleep(200);
+            using var capture = platform.Capture();
+            var isSereniteaPot = capture.Find(
+                RecognitionAssets.Get(
+                    "QuickBuy", "SereniteaPotCoin", capture)).IsExist();
+            Execute(platform, isSereniteaPot, cancellationToken);
         }
-        catch (Exception e)
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
         {
-            TaskControl.Logger.LogWarning(e.Message);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            platform.LogWarning(exception);
         }
         finally
         {
-            VisionContext.Instance().DrawContent.ClearAll();
+            platform.ClearOverlay();
+        }
+    }
+
+    internal static void Execute(
+        IQuickBuyRuntimePlatform platform,
+        bool isSereniteaPot,
+        CancellationToken cancellationToken)
+    {
+        if (isSereniteaPot)
+        {
+            platform.MoveGame1080P(1450, 690, cancellationToken);
+            platform.Wait(100, cancellationToken);
+            DragRight(platform, cancellationToken);
+            platform.Wait(200, cancellationToken);
+            platform.ClickGame1080P(1600, 1020, cancellationToken);
+            platform.Wait(200, cancellationToken);
+            platform.ClickGame1080P(960, 850, cancellationToken);
+            return;
+        }
+
+        platform.ClickFromBottomRight1080P(225, 60, cancellationToken);
+        platform.Wait(100, cancellationToken);
+        platform.MoveGame1080P(742, 601, cancellationToken);
+        platform.Wait(100, cancellationToken);
+        DragRight(platform, cancellationToken);
+        platform.Wait(100, cancellationToken);
+        platform.ClickGame1080P(1100, 780, cancellationToken);
+        platform.Wait(200, cancellationToken);
+        platform.ClickFromBottomRight1080P(225, 60, cancellationToken);
+        platform.Wait(200, cancellationToken);
+    }
+
+    private static void DragRight(
+        IQuickBuyRuntimePlatform platform,
+        CancellationToken cancellationToken)
+    {
+        platform.LeftButtonDown(cancellationToken);
+        try
+        {
+            platform.Wait(50, cancellationToken);
+            platform.MoveMouseBy(1000, 0, cancellationToken);
+            platform.Wait(200, cancellationToken);
+        }
+        finally
+        {
+            platform.LeftButtonUp(CancellationToken.None);
         }
     }
 }

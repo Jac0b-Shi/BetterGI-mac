@@ -2,15 +2,13 @@ using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Assets;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.Common;
-using BetterGenshinImpact.Service.Notification;
-using BetterGenshinImpact.View.Drawable;
+using BetterGenshinImpact.Core.Recognition;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using BetterGenshinImpact.Service.Notification.Model.Enum;
 
 namespace BetterGenshinImpact.GameTask.AutoGeniusInvokation.Model;
 
@@ -19,7 +17,21 @@ namespace BetterGenshinImpact.GameTask.AutoGeniusInvokation.Model;
 /// </summary>
 public class Duel
 {
-    private readonly ILogger<Duel> _logger = App.GetLogger<Duel>();
+    private readonly GeniusInvokationControl _control;
+    private readonly IAutoGeniusInvokationRuntimePlatform _platform;
+    private readonly AutoGeniusInvokationConfig _config;
+    private readonly ILogger<Duel> _logger;
+
+    public Duel(
+        GeniusInvokationControl control,
+        IAutoGeniusInvokationRuntimePlatform platform,
+        AutoGeniusInvokationConfig config)
+    {
+        _control = control;
+        _platform = platform;
+        _config = config;
+        _logger = platform.GetLogger<Duel>();
+    }
 
     public Character CurrentCharacter { get; set; } = default!;
     public Character[] Characters { get; set; } = new Character[4];
@@ -61,18 +73,15 @@ public class Duel
         LogScreenResolution();
         try
         {
-            Notify.Event(NotificationEvent.TcgStart).Success("自动七圣召唤启动");
-            
-            
-            GeniusInvokationControl.GetInstance().Init(ct);
+            _platform.Notify(AutoGeniusInvokationNotification.Start, "自动七圣召唤启动");
 
             // 对局准备 选择初始手牌
-            GeniusInvokationControl.GetInstance().CommonDuelPrepare();
+            _control.CommonDuelPrepare();
 
             // 获取角色区域
             try
             {
-                CharacterCardRects = NewRetry.Do(() => GeniusInvokationControl.GetInstance().GetCharacterRects(), TimeSpan.FromSeconds(1.5), 3);
+                CharacterCardRects = NewRetry.Do(() => _control.GetCharacterRects(), TimeSpan.FromSeconds(1.5), 3);
             }
             catch
             {
@@ -82,11 +91,14 @@ public class Duel
             if (CharacterCardRects is not { Count: 3 })
             {
                 CharacterCardRects = [];
-                var defaultCharacterCardRects = TaskContext.Instance().Config.AutoGeniusInvokationConfig.DefaultCharacterCardRects;
-                var assetScale = TaskContext.Instance().SystemInfo.AssetScale;
+                var defaultCharacterCardRects = _config.DefaultCharacterCardRects;
+                var assetScale = _platform.SystemInfo.AssetScale;
                 for (var i = 0; i < defaultCharacterCardRects.Count; i++)
                 {
-                    CharacterCardRects.Add(defaultCharacterCardRects[i].Multiply(assetScale));
+                    var rect = defaultCharacterCardRects[i];
+                    CharacterCardRects.Add(new Rect(
+                        (int)(rect.X * assetScale), (int)(rect.Y * assetScale),
+                        (int)(rect.Width * assetScale), (int)(rect.Height * assetScale)));
                 }
 
                 _logger.LogInformation("获取角色区域失败，使用默认区域");
@@ -121,10 +133,10 @@ public class Duel
                 var elementSet = PredictionDiceType();
 
                 // 0 投骰子
-                GeniusInvokationControl.GetInstance().ReRollDice([.. elementSet]);
+                _control.ReRollDice([.. elementSet]);
 
                 // 等待到我的回合 // 投骰子动画时间是不确定的  // 可能是对方先手
-                GeniusInvokationControl.GetInstance().WaitForMyTurn(this, 1000);
+                _control.WaitForMyTurn(this, 1000);
 
                 // 开始执行行动
                 while (true)
@@ -134,15 +146,15 @@ public class Duel
                     if (CurrentDiceCount <= 0)
                     {
                         _logger.LogInformation("骰子已经用完");
-                        GeniusInvokationControl.GetInstance().Sleep(2000);
+                        _control.Sleep(2000);
                         break;
                     }
 
                     // 每次行动前都要检查当前角色
-                    CurrentCharacter = GeniusInvokationControl.GetInstance().WhichCharacterActiveWithRetry(this);
+                    CurrentCharacter = _control.WhichCharacterActiveWithRetry(this);
 
                     // 行动前重新确认骰子数量
-                    var diceCountFromOcr = GeniusInvokationControl.GetInstance().GetDiceCountByOcr();
+                    var diceCountFromOcr = _control.GetDiceCountByOcr();
                     if (diceCountFromOcr != -10)
                     {
                         var diceDiff = Math.Abs(CurrentDiceCount - diceCountFromOcr);
@@ -235,8 +247,8 @@ public class Duel
                             else
                             {
                                 _logger.LogWarning("→指令执行失败(可能是手牌不够)：{Action}", actionCommand);
-                                GeniusInvokationControl.GetInstance().Sleep(1000);
-                                GeniusInvokationControl.GetInstance().ClickGameWindowCenter();
+                                _control.Sleep(1000);
+                                _control.ClickGameWindowCenter();
                             }
 
                             break;
@@ -256,7 +268,7 @@ public class Duel
                         alreadyExecutedActionIndex.Clear();
                         // 等待对方行动完成 （开大的时候等待时间久一点）
                         var sleepTime = ComputeWaitForMyTurnTime(alreadyExecutedActionCommand);
-                        GeniusInvokationControl.GetInstance().WaitForMyTurn(this, sleepTime);
+                        _control.WaitForMyTurn(this, sleepTime);
                         alreadyExecutedActionCommand.Clear();
                     }
                     else
@@ -267,7 +279,7 @@ public class Duel
                         //{
                         //    throw new DuelEndException("策略中所有指令已经执行完毕，结束自动打牌");
                         //}
-                        GeniusInvokationControl.GetInstance().Sleep(2000);
+                        _control.Sleep(2000);
                         break;
                     }
 
@@ -278,36 +290,36 @@ public class Duel
                 }
 
                 // 回合结束
-                GeniusInvokationControl.GetInstance().Sleep(1000);
+                _control.Sleep(1000);
                 _logger.LogInformation("我方点击回合结束");
-                GeniusInvokationControl.GetInstance().RoundEnd();
+                _control.RoundEnd();
 
                 // 等待对方行动+回合结算
-                GeniusInvokationControl.GetInstance().WaitOpponentAction(this);
+                _control.WaitOpponentAction(this);
 
-                VisionContext.Instance().DrawContent.ClearAll();
+                OverlayDrawPlatform.Current.ClearAll();
                 RoundNum++;
             }
         }
-        catch (TaskCanceledException ex)
+        catch (TaskCanceledException)
         {
             throw;
         }
-        catch (NormalEndException ex)
+        catch (NormalEndException)
         {
             _logger.LogInformation("对局结束");
             // throw;
         }
         catch (System.Exception ex)
         {
-            if (TaskContext.Instance().Config.DetailedErrorLogs)
+            if (_platform.DetailedErrorLogs)
             {
                 _logger.LogError(ex.StackTrace);
             }
             throw;
         }
         
-        Notify.Event(NotificationEvent.TcgEnd).Success("自动七圣召唤结束");
+        _platform.Notify(AutoGeniusInvokationNotification.End, "自动七圣召唤结束");
     }
 
     private HashSet<ElementalType> PredictionDiceType()
@@ -358,7 +370,7 @@ public class Duel
         }
 
         // 调整元素骰子识别素材顺序
-        GeniusInvokationControl.GetInstance().SortActionPhaseDiceMats(elementSet);
+        _control.SortActionPhaseDiceMats(elementSet);
 
         return elementSet;
     }
@@ -435,7 +447,7 @@ public class Duel
 
     private void LogScreenResolution()
     {
-        var gameScreenSize = SystemControl.GetGameScreenRect(TaskContext.Instance().GameHandle);
+        var gameScreenSize = _platform.SystemInfo.GameScreenSize;
         if (gameScreenSize.Width != 1920 || gameScreenSize.Height != 1080)
         {
             _logger.LogWarning("游戏窗口分辨率不是 1920x1080 ！当前分辨率为 {Width}x{Height} , 非 1920x1080 分辨率的游戏可能无法正常使用自动七圣召唤 !", gameScreenSize.Width, gameScreenSize.Height);

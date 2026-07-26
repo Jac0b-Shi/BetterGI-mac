@@ -7,7 +7,7 @@ using static Vanara.PInvoke.CoreAudio;
 
 namespace BetterGenshinImpact.GameTask.AutoSkip.Audio;
 
-internal sealed class ProcessLoopbackAudioCapture : IDisposable
+internal sealed class ProcessLoopbackAudioCapture : IAutoSkipAudioSampleCapture
 {
     private const string VirtualAudioDeviceProcessLoopback = @"VAD\Process_Loopback";
     private const long BufferDurationHundredNanoseconds = 1_000_000;

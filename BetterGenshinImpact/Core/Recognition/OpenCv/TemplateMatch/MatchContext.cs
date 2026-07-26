@@ -8,13 +8,13 @@ namespace BetterGenshinImpact.Core.Recognition.OpenCv.TemplateMatch;
 
 public class MatchContext : IDisposable
 {
-    public Mat[] MaskedMiniMapRoughs;
-    public Mat MaskRoughF;
+    public Mat[] MaskedMiniMapRoughs = null!;
+    public Mat MaskRoughF = null!;
     public Mat MiniMapExact = new Mat();
     public Mat MaskExact = new Mat();
-    public TemplateMatchNormalizer NormalizerRough;
-    public TemplateMatchNormalizer NormalizerRoughChan;
-    public TemplateMatchNormalizer NormalizerExact;
+    public TemplateMatchNormalizer NormalizerRough = null!;
+    public TemplateMatchNormalizer NormalizerRoughChan = null!;
+    public TemplateMatchNormalizer NormalizerExact = null!;
     public double TplSumSq;
     public double TplSumSqChan;
     public int[] Channels = [0, 1];

@@ -6,7 +6,7 @@ public static class TemplateMatchHelper
     public static (Point, double) MatchTemplate(Mat image, Mat template, TemplateMatchModes method, Mat? mask = null)
     {
         using var result = new Mat();
-        Cv2.MatchTemplate(image,template, result, method, mask);
+        Cv2.MatchTemplate(image,template, result, method, mask!);
         Point loc;
         double val;
         if (method is TemplateMatchModes.SqDiff or TemplateMatchModes.SqDiffNormed)
@@ -30,7 +30,7 @@ public static class TemplateMatchHelper
     public static (Point2f, double) MatchTemplateSubPix(Mat image, Mat template, TemplateMatchModes method, Mat? mask)
     {
         using var result = new Mat();
-        Cv2.MatchTemplate(image,template, result, method, mask);
+        Cv2.MatchTemplate(image,template, result, method, mask!);
         Point loc;
         double val;
         if (method is TemplateMatchModes.SqDiff or TemplateMatchModes.SqDiffNormed)

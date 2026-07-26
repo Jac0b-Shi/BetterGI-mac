@@ -59,13 +59,13 @@ public class UpDownGrabLeafHandler : IActionHandler
             else
             {
                 consecutiveDetections = 0;
-                Simulation.SendInput.Mouse.MoveMouseBy(0, verticalMovement);
+                MoveMouseBy(0, verticalMovement);
                 await Delay(DelayBetweenCycles, ct);
                 remainingCycles--;
             }
         }
         // 失败后视角回正
-        Simulation.SendInput.Mouse.MiddleButtonClick();
+        MiddleButtonClick();
         await Delay(300, ct);
         Logger.LogError("没有找到四叶印");
     }
@@ -93,9 +93,9 @@ public class UpDownGrabLeafHandler : IActionHandler
     private async Task InteractWithLeaf(CancellationToken ct)
     {
         Logger.LogInformation("连续检测到 {syy}，开始交互", "四叶印");
-        Simulation.SendInput.SimulateAction(GIActions.InteractionInSomeMode);
+        SimulateAction(GIActions.InteractionInSomeMode);
         await Delay(200, ct);
-        Simulation.SendInput.Mouse.MiddleButtonClick();
+        MiddleButtonClick();
         
         for (int i = 0; i < 20; i++)
         {
@@ -104,7 +104,7 @@ public class UpDownGrabLeafHandler : IActionHandler
             if (!isFlying)
             {
                 // 能按空格起飞说明到终点了
-                Simulation.SendInput.SimulateAction(GIActions.Jump);
+                SimulateAction(GIActions.Jump);
                 await Delay(500, ct);
             }
             else

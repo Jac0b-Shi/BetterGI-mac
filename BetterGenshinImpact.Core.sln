@@ -1,0 +1,75 @@
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGenshinImpact.Platform.Abstractions", "BetterGenshinImpact.Platform.Abstractions\BetterGenshinImpact.Platform.Abstractions.csproj", "{A364BC79-17BC-4B48-A40B-3BEB8B504E51}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGenshinImpact.RealUser.Verification", "Test\BetterGenshinImpact.RealUser.Verification\BetterGenshinImpact.RealUser.Verification.csproj", "{7A99AF98-591D-4D1C-A866-53EB8179A40A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGenshinImpact.Core", "BetterGenshinImpact.Core\BetterGenshinImpact.Core.csproj", "{0BCA5051-D695-4E7D-AFBA-E0C21EFA75D7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGenshinImpact.Core.Host", "BetterGenshinImpact.Core.Host\BetterGenshinImpact.Core.Host.csproj", "{767FD5A2-3875-4A88-ACD7-A56E913E56FC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGenshinImpact.Core.Verification", "Test\BetterGenshinImpact.Core.Verification\BetterGenshinImpact.Core.Verification.csproj", "{2145F66F-770F-4353-8AA1-D9B24F9E443E}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{F8012B43-387D-44AE-B174-532C7F0EEAA9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGenshinImpact.Core.Host.Verification", "Test\BetterGenshinImpact.Core.Host.Verification\BetterGenshinImpact.Core.Host.Verification.csproj", "{E398A716-C0DF-4D67-95C0-81E932BD433F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGenshinImpact.Verification.Framework", "Test\BetterGenshinImpact.Verification.Framework\BetterGenshinImpact.Verification.Framework.csproj", "{7F1E38CC-2864-46E4-9927-26362BA81419}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGenshinImpact.Core.Host.Fast.Verification", "Test\BetterGenshinImpact.Core.Host.Fast.Verification\BetterGenshinImpact.Core.Host.Fast.Verification.csproj", "{FBF62B53-2792-42ED-B565-CA38077AEF73}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGenshinImpact.Pathing.Verification", "Test\BetterGenshinImpact.Pathing.Verification\BetterGenshinImpact.Pathing.Verification.csproj", "{CF9BB6BE-750A-4291-8061-A4D0BB195899}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A364BC79-17BC-4B48-A40B-3BEB8B504E51}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A364BC79-17BC-4B48-A40B-3BEB8B504E51}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A364BC79-17BC-4B48-A40B-3BEB8B504E51}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A364BC79-17BC-4B48-A40B-3BEB8B504E51}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7A99AF98-591D-4D1C-A866-53EB8179A40A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7A99AF98-591D-4D1C-A866-53EB8179A40A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7A99AF98-591D-4D1C-A866-53EB8179A40A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7A99AF98-591D-4D1C-A866-53EB8179A40A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0BCA5051-D695-4E7D-AFBA-E0C21EFA75D7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0BCA5051-D695-4E7D-AFBA-E0C21EFA75D7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0BCA5051-D695-4E7D-AFBA-E0C21EFA75D7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0BCA5051-D695-4E7D-AFBA-E0C21EFA75D7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{767FD5A2-3875-4A88-ACD7-A56E913E56FC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{767FD5A2-3875-4A88-ACD7-A56E913E56FC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{767FD5A2-3875-4A88-ACD7-A56E913E56FC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{767FD5A2-3875-4A88-ACD7-A56E913E56FC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2145F66F-770F-4353-8AA1-D9B24F9E443E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2145F66F-770F-4353-8AA1-D9B24F9E443E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2145F66F-770F-4353-8AA1-D9B24F9E443E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2145F66F-770F-4353-8AA1-D9B24F9E443E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E398A716-C0DF-4D67-95C0-81E932BD433F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E398A716-C0DF-4D67-95C0-81E932BD433F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E398A716-C0DF-4D67-95C0-81E932BD433F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E398A716-C0DF-4D67-95C0-81E932BD433F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7F1E38CC-2864-46E4-9927-26362BA81419}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7F1E38CC-2864-46E4-9927-26362BA81419}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7F1E38CC-2864-46E4-9927-26362BA81419}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7F1E38CC-2864-46E4-9927-26362BA81419}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FBF62B53-2792-42ED-B565-CA38077AEF73}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FBF62B53-2792-42ED-B565-CA38077AEF73}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FBF62B53-2792-42ED-B565-CA38077AEF73}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FBF62B53-2792-42ED-B565-CA38077AEF73}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CF9BB6BE-750A-4291-8061-A4D0BB195899}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CF9BB6BE-750A-4291-8061-A4D0BB195899}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CF9BB6BE-750A-4291-8061-A4D0BB195899}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CF9BB6BE-750A-4291-8061-A4D0BB195899}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{7A99AF98-591D-4D1C-A866-53EB8179A40A} = {F8012B43-387D-44AE-B174-532C7F0EEAA9}
+		{E398A716-C0DF-4D67-95C0-81E932BD433F} = {F8012B43-387D-44AE-B174-532C7F0EEAA9}
+		{7F1E38CC-2864-46E4-9927-26362BA81419} = {F8012B43-387D-44AE-B174-532C7F0EEAA9}
+		{FBF62B53-2792-42ED-B565-CA38077AEF73} = {F8012B43-387D-44AE-B174-532C7F0EEAA9}
+		{CF9BB6BE-750A-4291-8061-A4D0BB195899} = {F8012B43-387D-44AE-B174-532C7F0EEAA9}
+	EndGlobalSection
+EndGlobal

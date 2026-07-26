@@ -90,6 +90,7 @@ public class AutoBossParam : BaseTaskParam<AutoBossTask>
     /// <summary>
     /// 使用当前全局 AutoBoss 配置创建参数，主要用于 JS 无参构造和一条龙默认启动。
     /// </summary>
+#if !BGI_PLATFORM_MAC
     public AutoBossParam() : this(true)
     {
     }
@@ -102,13 +103,22 @@ public class AutoBossParam : BaseTaskParam<AutoBossTask>
     {
         CombatStrategyPath = combatStrategyPath;
     }
+#endif
+
+    public AutoBossParam(string combatStrategyPath, AutoBossConfig config) : this(false)
+    {
+        CombatStrategyPath = combatStrategyPath;
+        SetAutoBossConfig(config);
+    }
 
     private AutoBossParam(bool loadDefaultConfig) : base(null, null)
     {
+#if !BGI_PLATFORM_MAC
         if (loadDefaultConfig)
         {
             SetDefault();
         }
+#endif
     }
 
     internal static AutoBossParam CreateWithoutDefaultConfig(string combatStrategyPath)
@@ -122,10 +132,12 @@ public class AutoBossParam : BaseTaskParam<AutoBossTask>
     /// <summary>
     /// 从当前全局 AutoBoss 配置填充默认参数。
     /// </summary>
+#if !BGI_PLATFORM_MAC
     public void SetDefault()
     {
         SetAutoBossConfig(TaskContext.Instance().Config.AutoBossConfig);
     }
+#endif
 
     /// <summary>
     /// 从指定 AutoBoss 配置复制可配置项，不覆盖已经通过构造参数或属性设置的自定义战斗策略路径。
@@ -151,10 +163,12 @@ public class AutoBossParam : BaseTaskParam<AutoBossTask>
     /// <param name="strategyName">战斗策略名称；为空时使用当前全局 AutoBoss 配置的策略名称。</param>
     public void SetCombatStrategyPath(string? strategyName = null)
     {
+#if !BGI_PLATFORM_MAC
         if (string.IsNullOrWhiteSpace(strategyName))
         {
             strategyName = TaskContext.Instance().Config.AutoBossConfig.StrategyName;
         }
+#endif
 
         _strategyName = string.IsNullOrWhiteSpace(strategyName) ? AutoStrategyName : strategyName;
         _combatStrategyPath = BuildCombatStrategyPath(_strategyName);

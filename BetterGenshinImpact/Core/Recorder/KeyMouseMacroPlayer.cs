@@ -1,46 +1,45 @@
 using BetterGenshinImpact.Core.Recorder.Model;
-using BetterGenshinImpact.Core.Simulator;
-using BetterGenshinImpact.GameTask;
-using BetterGenshinImpact.GameTask.Common;
-using BetterGenshinImpact.GameTask.Common.Map;
-using BetterGenshinImpact.Helpers;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
-using Fischless.WindowsInput;
-using Vanara.PInvoke;
-using Wpf.Ui.Violeta.Controls;
 
 namespace BetterGenshinImpact.Core.Recorder;
 
 public class KeyMouseMacroPlayer
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        AllowTrailingCommas = true
+    };
+
     public static async Task PlayMacro(string macro, CancellationToken ct, bool withDelay = true)
     {
-        if (!TaskContext.Instance().IsInitialized)
-        {
-            Toast.Warning("请先在启动页，启动截图器再使用本功能");
-            return;
-        }
+        var platform = KeyMouseMacroPlatform.Current;
+        if (!platform.IsInitialized)
+            throw new InvalidOperationException("请先启动截图器再执行键鼠脚本。");
 
-        var script = JsonSerializer.Deserialize<KeyMouseScript>(macro, KeyMouseRecorder.JsonOptions) ?? throw new Exception("Failed to deserialize macro");
-        script.Adapt(TaskContext.Instance().SystemInfo.CaptureAreaRect, TaskContext.Instance().DpiScale);
-        SystemControl.ActivateWindow();
+        var script = JsonSerializer.Deserialize<KeyMouseScript>(macro, JsonOptions)
+            ?? throw new JsonException("Failed to deserialize macro");
+        script.Adapt(platform.CaptureArea, platform.DpiScale);
+        platform.ActivateGameWindow();
 
         if (withDelay)
         {
             for (var i = 3; i >= 1; i--)
             {
-                TaskControl.Logger.LogInformation("{Sec}秒后进行重放...", i);
+                platform.Logger.LogInformation("{Sec}秒后进行重放...", i);
                 await Task.Delay(1000, ct);
             }
-
-            TaskControl.Logger.LogInformation("开始重放");
+            platform.Logger.LogInformation("开始重放");
         }
 
         await PlayMacro(script.MacroEvents, ct);
@@ -48,165 +47,77 @@ public class KeyMouseMacroPlayer
 
     public static async Task PlayMacro(List<MacroEvent> macroEvents, CancellationToken ct)
     {
-        WorkingArea = PrimaryScreen.WorkingArea;
-        var startTime = DateTime.UtcNow;
+        var platform = KeyMouseMacroPlatform.Current;
+        WorkingArea = platform.WorkingArea;
+        if (WorkingArea.Width <= 0 || WorkingArea.Height <= 0)
+            throw new InvalidOperationException("Macro working area must have positive dimensions.");
+
+        var startTime = Environment.TickCount64;
         foreach (var e in macroEvents)
         {
-            if (ct.IsCancellationRequested)
-            {
-                return;
-            }
-
-            var timeToWait = e.Time - (DateTime.UtcNow - startTime).TotalMilliseconds;
+            ct.ThrowIfCancellationRequested();
+            var timeToWait = e.Time - (Environment.TickCount64 - startTime);
             if (timeToWait < 0)
-            {
-                TaskControl.Logger.LogDebug("无法原速重放事件{Event}，落后{TimeToWait}ms", e.Type.ToString(), (-timeToWait).ToString("F0"));
-            }
+                platform.Logger.LogDebug("无法原速重放事件{Event}，落后{TimeToWait}ms", e.Type, (-timeToWait).ToString("F0"));
             else
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(timeToWait), ct);
-            }
+                await Task.Delay((int)timeToWait, ct);
 
             switch (e.Type)
             {
                 case MacroEventType.KeyDown:
-                    var vkDown = (User32.VK)e.KeyCode!;
-                    if (InputBuilder.IsExtendedKey(vkDown))
-                    {
-                        Simulation.SendInput.Keyboard.KeyDown(false, vkDown);
-                    }
-                    else
-                    {
-                        Simulation.SendInput.Keyboard.KeyDown(vkDown);
-                    }
-
+                    platform.KeyDown(e.KeyCode ?? throw new InvalidDataException("KeyDown event has no keyCode."));
                     break;
                 case MacroEventType.KeyUp:
-
-                    var vkUp = (User32.VK)e.KeyCode!;
-                    if (InputBuilder.IsExtendedKey(vkUp))
-                    {
-                        Simulation.SendInput.Keyboard.KeyUp(false, vkUp);
-                    }
-                    else
-                    {
-                        Simulation.SendInput.Keyboard.KeyUp(vkUp);
-                    }
-
+                    platform.KeyUp(e.KeyCode ?? throw new InvalidDataException("KeyUp event has no keyCode."));
                     break;
-
                 case MacroEventType.MouseDown:
-                    var buttonMouseDown = Enum.Parse<MouseButtons>(e.MouseButton!);
-                    var xMouseDown = ToVirtualDesktopX(e.MouseX);
-                    var yMouseDown = ToVirtualDesktopY(e.MouseY);
-                    switch (buttonMouseDown)
-                    {
-                        case MouseButtons.Left:
-                            Simulation.SendInput.Mouse.MoveMouseTo(xMouseDown, yMouseDown).LeftButtonDown();
-                            break;
-
-                        case MouseButtons.Right:
-                            Simulation.SendInput.Mouse.MoveMouseTo(xMouseDown, yMouseDown).RightButtonDown();
-                            break;
-
-                        case MouseButtons.Middle:
-                            Simulation.SendInput.Mouse.MoveMouseTo(xMouseDown, yMouseDown).MiddleButtonDown();
-                            break;
-
-                        case MouseButtons.None:
-                            break;
-
-                        case MouseButtons.XButton1:
-                            break;
-
-                        case MouseButtons.XButton2:
-                            break;
-
-                        default:
-                            throw new ArgumentOutOfRangeException();
-                    }
-
+                    platform.MoveMouseTo(ToVirtualDesktopX(e.MouseX), ToVirtualDesktopY(e.MouseY));
+                    platform.MouseDown(NormalizeButton(e.MouseButton));
                     break;
-
                 case MacroEventType.MouseUp:
-                    var buttonMouseUp = Enum.Parse<MouseButtons>(e.MouseButton!);
-                    var xMouseUp = ToVirtualDesktopX(e.MouseX);
-                    var yMouseUp = ToVirtualDesktopY(e.MouseY);
-                    switch (buttonMouseUp)
-                    {
-                        case MouseButtons.Left:
-                            Simulation.SendInput.Mouse.MoveMouseTo(xMouseUp, yMouseUp).LeftButtonUp();
-                            break;
-
-                        case MouseButtons.Right:
-                            Simulation.SendInput.Mouse.MoveMouseTo(xMouseUp, yMouseUp).RightButtonUp();
-                            break;
-
-                        case MouseButtons.Middle:
-                            Simulation.SendInput.Mouse.MoveMouseTo(xMouseUp, yMouseUp).MiddleButtonUp();
-                            break;
-
-                        case MouseButtons.None:
-                            break;
-
-                        case MouseButtons.XButton1:
-                            break;
-
-                        case MouseButtons.XButton2:
-                            break;
-
-                        default:
-                            throw new ArgumentOutOfRangeException();
-                    }
-
+                    platform.MoveMouseTo(ToVirtualDesktopX(e.MouseX), ToVirtualDesktopY(e.MouseY));
+                    platform.MouseUp(NormalizeButton(e.MouseButton));
                     break;
-
                 case MacroEventType.MouseMoveTo:
-                    Simulation.SendInput.Mouse.MoveMouseTo(ToVirtualDesktopX(e.MouseX), ToVirtualDesktopY(e.MouseY));
+                    platform.MoveMouseTo(ToVirtualDesktopX(e.MouseX), ToVirtualDesktopY(e.MouseY));
                     break;
-
                 case MacroEventType.MouseWheel:
-                    var num = (int)(e.MouseY / 120.0);
-                    if (num != 0)
-                    {
-                        // 不支持多次的场景，但是不会出现这种情况
-                        Simulation.SendInput.Mouse.VerticalScroll(num);
-                    }
-
+                    var clicks = (int)(e.MouseY / 120.0);
+                    if (clicks != 0) platform.VerticalScroll(clicks);
                     break;
-
                 case MacroEventType.MouseMoveBy:
                     if (e.CameraOrientation != null)
                     {
-                        var cao = CameraOrientation.Compute(TaskControl.CaptureToRectArea().SrcMat);
-                        var diff = ((int)Math.Round(cao) - (int)e.CameraOrientation + 180) % 360 - 180;
+                        var orientation = platform.GetCameraOrientation();
+                        var diff = ((int)Math.Round(orientation) - e.CameraOrientation.Value + 180) % 360 - 180;
                         diff += diff < -180 ? 360 : 0;
-                        //过滤一下特别大的角度偏差
-                        if (diff != 0 && diff < 8 && diff > -8)
+                        if (diff is < 8 and > -8 && diff != 0)
                         {
-                            TaskControl.Logger.LogWarning("视角重放偏差{diff}°，尝试修正", diff);
+                            platform.Logger.LogWarning("视角重放偏差{Diff}°，尝试修正", diff);
                             e.MouseX -= diff;
                         }
                     }
-
-                    Simulation.SendInput.Mouse.MoveMouseBy(e.MouseX, e.MouseY);
+                    platform.MoveMouseBy(e.MouseX, e.MouseY);
                     break;
-
                 default:
-                    throw new ArgumentOutOfRangeException();
+                    throw new ArgumentOutOfRangeException(nameof(e.Type), e.Type, "Unknown macro event type.");
             }
         }
     }
 
     public static Size WorkingArea;
+    public static double ToVirtualDesktopX(int x) => x * 65535d / WorkingArea.Width;
+    public static double ToVirtualDesktopY(int y) => y * 65535d / WorkingArea.Height;
 
-    public static double ToVirtualDesktopX(int x)
+    private static string NormalizeButton(string? button) => button?.ToLowerInvariant() switch
     {
-        return x * 65535 * 1d / WorkingArea.Width;
-    }
-
-    public static double ToVirtualDesktopY(int y)
-    {
-        return y * 65535 * 1d / WorkingArea.Height;
-    }
+        "left" => "left",
+        "right" => "right",
+        "middle" => "middle",
+        "xbutton1" => "side1",
+        "xbutton2" => "side2",
+        "none" => throw new NotSupportedException(
+            $"Mouse button '{button}' is not supported by BetterGI macro playback."),
+        _ => throw new InvalidDataException($"Invalid mouse button '{button}'.")
+    };
 }

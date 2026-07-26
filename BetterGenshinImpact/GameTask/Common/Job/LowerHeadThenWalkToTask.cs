@@ -3,16 +3,12 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.Core.Recognition.OCR;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
-using BetterGenshinImpact.Helpers;
-using BetterGenshinImpact.View.Drawable;
+using BetterGenshinImpact.GameTask.Model;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.Common.Job;
@@ -22,17 +18,21 @@ namespace BetterGenshinImpact.GameTask.Common.Job;
 /// </summary>
 public class LowerHeadThenWalkToTask
 {
-    private Rect CaptureRect => TaskContext.Instance().SystemInfo.ScaleMax1080PCaptureRect;
+    private readonly ISystemInfo _systemInfo;
 
-    private double AssetScale => TaskContext.Instance().SystemInfo.AssetScale;
+    private Rect CaptureRect => _systemInfo.ScaleMax1080PCaptureRect;
+
+    private double AssetScale => _systemInfo.AssetScale;
 
     private readonly RecognitionObject _trackPoint;
 
     private int _timeoutMilliseconds;
 
 
-    public LowerHeadThenWalkToTask(string targetMatName, int timeoutMilliseconds = 30000)
+    public LowerHeadThenWalkToTask(
+        string targetMatName, int timeoutMilliseconds, ISystemInfo systemInfo)
     {
+        _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
         _timeoutMilliseconds = timeoutMilliseconds;
         _trackPoint = new RecognitionObject
         {
@@ -44,6 +44,13 @@ public class LowerHeadThenWalkToTask
             DrawOnWindow = true
         }.InitTemplate();
     }
+
+#if !BGI_PLATFORM_MAC
+    public LowerHeadThenWalkToTask(string targetMatName, int timeoutMilliseconds = 30000)
+        : this(targetMatName, timeoutMilliseconds, TaskContext.Instance().SystemInfo)
+    {
+    }
+#endif
 
     public async Task<bool> Start(CancellationToken ct)
     {
@@ -60,7 +67,7 @@ public class LowerHeadThenWalkToTask
     {
         try
         {
-            double dpi = TaskContext.Instance().DpiScale;
+            double dpi = TaskControlPlatform.Current.DpiScale;
             var startTime = DateTime.Now;
             int prevMoveX = 0;
             while (!ct.IsCancellationRequested)
@@ -73,8 +80,8 @@ public class LowerHeadThenWalkToTask
                     var centerY = trackPointRa.Y + trackPointRa.Height / 2;
                     if (centerY > CaptureRect.Height / 2)
                     {
-                        Simulation.SendInput.Mouse.MoveMouseBy(-50, 0);
-                        Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                        MoveMouseBy(-50, 0);
+                        SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
 
                         Debug.WriteLine("使追踪点位于俯视角上方");
                         continue;
@@ -93,17 +100,17 @@ public class LowerHeadThenWalkToTask
                     };
                     if (moveX != 0)
                     {
-                        Simulation.SendInput.Mouse.MoveMouseBy(moveX, 0);
+                        MoveMouseBy(moveX, 0);
                         Debug.WriteLine("调整方向:" + moveX);
                     }
 
                     if (moveX == 0 || prevMoveX * moveX < 0)
                     {
-                        Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+                        SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
                     }
                     else
                     {
-                        Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                        SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                     }
 
                     // 识别F
@@ -111,7 +118,7 @@ public class LowerHeadThenWalkToTask
                     if (!string.IsNullOrEmpty(text) && text.Contains("激活"))
                     {
                         Logger.LogInformation("追踪：识别到[{Msg}]", text);
-                        Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                        SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                         return true;
                     }
 
@@ -129,7 +136,7 @@ public class LowerHeadThenWalkToTask
                     return false;
                 }
 
-                Simulation.SendInput.Mouse.MoveMouseBy(0, 800); // 保证俯视角（低头）
+                MoveMouseBy(0, 800); // 保证俯视角（低头）
                 await Delay(100, ct);
             }
 
@@ -137,8 +144,8 @@ public class LowerHeadThenWalkToTask
         }
         finally
         {
-            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
-            VisionContext.Instance().DrawContent.ClearAll();
+            SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+            OverlayDrawPlatform.Current.ClearAll();
         }
     }
 }

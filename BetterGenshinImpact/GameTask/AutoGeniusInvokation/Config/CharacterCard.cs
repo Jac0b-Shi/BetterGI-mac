@@ -103,7 +103,8 @@ public class CharacterCard
     /// </summary>
     public List<SkillsItem> Skills { get; set; } = [];
 
-    public static void CopyCardProperty(Character source, CharacterCard characterCard)
+    public static void CopyCardProperty(
+        Character source, CharacterCard characterCard, Microsoft.Extensions.Logging.ILogger logger)
     {
         try
         {
@@ -128,7 +129,7 @@ public class CharacterCard
         }
         catch (System.Exception e)
         {
-            TaskControl.Logger.LogError($"角色【{characterCard.Name}】卡牌配置解析失败：{e.Message}");
+            logger.LogError($"角色【{characterCard.Name}】卡牌配置解析失败：{e.Message}");
             throw new System.Exception($"角色【{characterCard.Name}】卡牌配置解析失败：{e.Message}。请自行进行角色定义", e);
         }
     }

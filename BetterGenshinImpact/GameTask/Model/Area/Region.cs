@@ -1,15 +1,25 @@
-﻿using BetterGenshinImpact.GameTask.Model.Area.Converter;
+using BetterGenshinImpact.GameTask.Model.Area.Converter;
+#if BGI_FULL_WINDOWS
 using BetterGenshinImpact.View.Drawable;
 using Fischless.WindowsInput;
+using Vanara.PInvoke;
+#endif
 using OpenCvSharp;
 using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.Threading;
 using BetterGenshinImpact.GameTask.Common;
-using Vanara.PInvoke;
+using BetterGenshinImpact.Core.Recognition;
 
 namespace BetterGenshinImpact.GameTask.Model.Area;
+
+public enum RegionDrawColor
+{
+    Default,
+    White,
+    LightPink,
+}
 
 /// <summary>
 /// 区域基类
@@ -56,7 +66,8 @@ public class Region : IDisposable
     {
     }
 
-    public Region(int x, int y, int width, int height, Region? owner = null, INodeConverter? converter = null, DrawContent? drawContent = null)
+    public Region(int x, int y, int width, int height, Region? owner = null, INodeConverter? converter = null,
+        IOverlayDrawPlatform? drawContent = null)
     {
         X = x;
         Y = y;
@@ -64,7 +75,7 @@ public class Region : IDisposable
         Height = height;
         Prev = owner;
         PrevConverter = converter;
-        this.drawContent = drawContent ?? VisionContext.Instance().DrawContent;
+        this.drawContent = drawContent ?? OverlayDrawPlatform.Current;
     }
 
     public Region(Rect rect, Region? owner = null, INodeConverter? converter = null) : this(rect.X, rect.Y, rect.Width, rect.Height, owner, converter)
@@ -79,15 +90,16 @@ public class Region : IDisposable
     public INodeConverter? PrevConverter { get; }
 
     /// <summary>
-    /// 绘图上下文
+    /// 绘图上下文 (Windows/WPF overlay only; no-op stub on other platforms via DrawableStubs)
     /// </summary>
-    protected readonly DrawContent drawContent;
+    protected readonly IOverlayDrawPlatform drawContent = null!;
 
     // public List<Region>? NextChildren { get; protected set; }
 
     /// <summary>
-    /// 后台点击【自己】的中心
+    /// 后台点击【自己】的中心 (Windows-only via Win32 API)
     /// </summary>
+#if BGI_FULL_WINDOWS
     public void BackgroundClick()
     {
         User32.GetCursorPos(out var p);
@@ -96,6 +108,7 @@ public class Region : IDisposable
         Thread.Sleep(10);
         DesktopRegion.DesktopRegionMove(p.X, p.Y); // 鼠标移动回原来位置
     }
+#endif
 
     /// <summary>
     /// 点击【自己】的中心
@@ -112,7 +125,11 @@ public class Region : IDisposable
     {
         // 相对自己是 0, 0 坐标
         ClickTo(0, 0, Width, Height);
+#if BGI_PLATFORM_MAC
+        Thread.Sleep(60);
+#else
         TaskControl.Sleep(60);
+#endif
         ClickTo(0, 0, Width, Height);
         return this;
     }
@@ -195,6 +212,20 @@ public class Region : IDisposable
         DrawRect(0, 0, Width, Height, name, pen);
     }
 
+    public void DrawSelf(string name, RegionDrawColor color)
+    {
+#if BGI_FULL_WINDOWS
+        DrawSelf(name, color switch
+        {
+            RegionDrawColor.White => Pens.White,
+            RegionDrawColor.LightPink => Pens.LightPink,
+            _ => null,
+        });
+#else
+        DrawSelf(name);
+#endif
+    }
+
     /// <summary>
     /// 直接在遮罩窗口绘制当前区域下的【指定区域】
     /// </summary>
@@ -206,16 +237,39 @@ public class Region : IDisposable
     /// <param name="pen"></param>
     public void DrawRect(int x, int y, int w, int h, string name, Pen? pen = null)
     {
+#if BGI_FULL_WINDOWS
         var drawable = ToRectDrawable(x, y, w, h, name, pen);
-        drawContent.PutRect(name, drawable);
+        VisionContext.Instance().DrawContent.PutRect(name, drawable);
+#else
+        drawContent.SetRectangles(name, this, [new Rect(x, y, w, h)]);
+#endif
     }
 
     public void DrawRect(Rect rect, string name, Pen? pen = null)
     {
+#if BGI_FULL_WINDOWS
         var drawable = ToRectDrawable(rect.X, rect.Y, rect.Width, rect.Height, name, pen);
-        drawContent.PutRect(name, drawable);
+        VisionContext.Instance().DrawContent.PutRect(name, drawable);
+#else
+        drawContent.SetRectangles(name, this, [rect]);
+#endif
     }
 
+    public void DrawRect(Rect rect, string name, RegionDrawColor color)
+    {
+#if BGI_FULL_WINDOWS
+        DrawRect(rect, name, color switch
+        {
+            RegionDrawColor.White => Pens.White,
+            RegionDrawColor.LightPink => Pens.LightPink,
+            _ => null,
+        });
+#else
+        DrawRect(rect, name);
+#endif
+    }
+
+#if BGI_FULL_WINDOWS
     /// <summary>
     /// 转换【自己】到遮罩窗口绘制矩形
     /// </summary>
@@ -277,8 +331,9 @@ public class Region : IDisposable
     public void DrawLine(int x1, int y1, int x2, int y2, string name, Pen? pen = null)
     {
         var drawable = ToLineDrawable(x1, y1, x2, y2, name, pen);
-        drawContent.PutLine(name, drawable);
+        VisionContext.Instance().DrawContent.PutLine(name, drawable);
     }
+#endif
 
     public Rect ConvertSelfPositionToGameCaptureRegion()
     {

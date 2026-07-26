@@ -86,6 +86,7 @@ public class CameraOrientationFromGia
         return angle;
     }
 
+#if BGI_FULL_WINDOWS
     public static void DrawDirection(ImageRegion region, double angle, string name = "camera", Pen? pen = null)
     {
         // 绘图
@@ -105,6 +106,7 @@ public class CameraOrientationFromGia
 
         region.DrawLine(center.X, center.Y, (int)x1, (int)y1, name, pen);
     }
+#endif
 
     static List<int> FindPeaks(float[] data)
     {

@@ -21,7 +21,7 @@ public abstract class BaseTaskParam<T> where T : class
     public IStringLocalizer<T> StringLocalizer { get; private set; }
     public BaseTaskParam(CultureInfo? gameCultureInfo, IStringLocalizer<T>? stringLocalizer)
     {
-        GameCultureInfo = gameCultureInfo ?? new CultureInfo(TaskContext.Instance().Config.OtherConfig.GameCultureInfoName);
-        StringLocalizer = stringLocalizer ?? App.GetService<IStringLocalizer<T>>() ?? throw new Exception();
+        GameCultureInfo = gameCultureInfo ?? new CultureInfo(TaskParameterPlatform.Current.GameCultureInfoName);
+        StringLocalizer = stringLocalizer ?? TaskParameterPlatform.Current.GetStringLocalizer<T>();
     }
 }

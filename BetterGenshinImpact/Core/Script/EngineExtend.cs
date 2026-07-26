@@ -15,6 +15,7 @@ using BetterGenshinImpact.GameTask.AutoDomain;
 using BetterGenshinImpact.GameTask.AutoBoss;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
+using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
 using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.AutoStygianOnslaught;
@@ -36,7 +37,8 @@ public class EngineExtend
 
         // 添加我的自定义实例化对象
         engine.AddHostObject("keyMouseScript", new KeyMouseScript(workDir));
-        engine.AddHostObject("pathingScript", new AutoPathingScript(workDir, config));
+        engine.AddHostObject("pathingScript", new AutoPathingScript(
+            workDir, config, ScriptGroupExecutionServices.Current));
         engine.AddHostObject("genshin", new Dependence.Genshin());
         engine.AddHostObject("log", new Log());
         engine.AddHostObject("file", new LimitedFile(workDir)); // 限制文件访问
@@ -139,30 +141,6 @@ public class EngineExtend
         //     engine.AddHostObject(methodName, method);
         // }
 
-#pragma warning disable CS8974 // Converting method group to non-delegate type
-        engine.AddHostObject("sleep", GlobalMethod.Sleep);
-        engine.AddHostObject("getVersion", GlobalMethod.GetVersion);
-        engine.AddHostObject("keyDown", GlobalMethod.KeyDown);
-        engine.AddHostObject("keyUp", GlobalMethod.KeyUp);
-        engine.AddHostObject("keyPress", GlobalMethod.KeyPress);
-        engine.AddHostObject("setGameMetrics", GlobalMethod.SetGameMetrics);
-        engine.AddHostObject("getGameMetrics", GlobalMethod.GetGameMetrics);
-        engine.AddHostObject("moveMouseBy", GlobalMethod.MoveMouseBy);
-        engine.AddHostObject("moveMouseTo", GlobalMethod.MoveMouseTo);
-        engine.AddHostObject("click", GlobalMethod.Click);
-        engine.AddHostObject("leftButtonClick", GlobalMethod.LeftButtonClick);
-        engine.AddHostObject("leftButtonDown", GlobalMethod.LeftButtonDown);
-        engine.AddHostObject("leftButtonUp", GlobalMethod.LeftButtonUp);
-        engine.AddHostObject("rightButtonClick", GlobalMethod.RightButtonClick);
-        engine.AddHostObject("rightButtonDown", GlobalMethod.RightButtonDown);
-        engine.AddHostObject("rightButtonUp", GlobalMethod.RightButtonUp);
-        engine.AddHostObject("middleButtonClick", GlobalMethod.MiddleButtonClick);
-        engine.AddHostObject("middleButtonDown", GlobalMethod.MiddleButtonDown);
-        engine.AddHostObject("middleButtonUp", GlobalMethod.MiddleButtonUp);
-        engine.AddHostObject("verticalScroll", GlobalMethod.VerticalScroll);
-        engine.AddHostObject("captureGameRegion", GlobalMethod.CaptureGameRegion);
-        engine.AddHostObject("getAvatars", GlobalMethod.GetAvatars);
-        engine.AddHostObject("inputText", GlobalMethod.InputText);
-#pragma warning restore CS8974 // Converting method group to non-delegate type
+        GlobalMethod.AddToScriptEngine(engine);
     }
 }

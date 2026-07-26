@@ -6,7 +6,7 @@ namespace BetterGenshinImpact.Core.Recognition.OpenCv;
 
 public class TemplateMatchStabilityDetector : IDisposable
 {
-    private Mat previousFrame;
+    private Mat? previousFrame;
     private readonly double similarityThreshold = 0.98; // 相似度阈值（0-1）
     private readonly int stableFrameCount = 2;
     private int currentStableCount = 0;

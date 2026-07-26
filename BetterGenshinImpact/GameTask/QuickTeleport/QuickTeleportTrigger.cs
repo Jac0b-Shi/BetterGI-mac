@@ -4,18 +4,15 @@ using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.QuickTeleport.Assets;
-using BetterGenshinImpact.Model;
-using Fischless.GameCapture;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
 using System.Linq;
-using System.Windows.Forms;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 
 namespace BetterGenshinImpact.GameTask.QuickTeleport;
 
-internal class QuickTeleportTrigger : ITaskTrigger
+public class QuickTeleportTrigger : ITaskTrigger
 {
     public string Name => "快速传送";
     public bool IsEnabled { get; set; }
@@ -32,12 +29,12 @@ internal class QuickTeleportTrigger : ITaskTrigger
     private DateTime _prevExecute = DateTime.MinValue;
 
     private readonly QuickTeleportConfig _config;
-    private readonly HotKeyConfig _hotkeyConfig;
+    private readonly IQuickTeleportRuntimePlatform _runtime;
 
     public QuickTeleportTrigger()
     {
-        _config = TaskContext.Instance().Config.QuickTeleportConfig;
-        _hotkeyConfig = TaskContext.Instance().Config.HotKeyConfig;
+        _runtime = QuickTeleportRuntimePlatform.Current;
+        _config = _runtime.Config;
     }
 
     public void Init()
@@ -62,7 +59,7 @@ internal class QuickTeleportTrigger : ITaskTrigger
         IsExclusive = false;
 
         // 快捷键传送配置启用的情况下，且快捷键按下的时候激活
-        if (_config.HotkeyTpEnabled && !string.IsNullOrEmpty(_hotkeyConfig.QuickTeleportTickHotkey))
+        if (_config.HotkeyTpEnabled && !string.IsNullOrEmpty(_runtime.TickHotkey))
         {
             if (!IsHotkeyPressed())
             {
@@ -131,7 +128,7 @@ internal class QuickTeleportTrigger : ITaskTrigger
     private bool CheckMapChooseIcon(CaptureContent content)
     {
         var hasMapChooseIcon = false;
-        var isHdrCapture = TaskContext.Instance().Config.CaptureMode == nameof(CaptureModes.WindowsGraphicsCaptureHdr);
+        var isHdrCapture = _runtime.IsHdrCapture;
 
         // 全匹配一遍
         var assets = _assets ?? QuickTeleportAssets.Get(content.CaptureRectArea);
@@ -149,9 +146,11 @@ internal class QuickTeleportTrigger : ITaskTrigger
                 using var ra = content.CaptureRectArea.DeriveCrop(assets.MapChooseIconRoi.X + iconRect.X + iconRect.Width, assets.MapChooseIconRoi.Y + iconRect.Y - 8, 200, iconRect.Height + 16);
                 using var textRegion = ra.Find(new RecognitionObject
                 {
-                    RecognitionType = isHdrCapture ? RecognitionTypes.Ocr : RecognitionTypes.ColorRangeAndOcr,
-                    LowerColor = new Scalar(249, 249, 249), // 只取白色文字
-                    UpperColor = new Scalar(255, 255, 255),
+                    // RecognitionType = RecognitionTypes.Ocr,
+                    RecognitionType = RecognitionTypes.ColorRangeAndOcr,
+                    ColorConversionCode = ColorConversionCodes.BGR2HLS,
+                    LowerColor = new Scalar(0, 245, 0),
+                    UpperColor = new Scalar(180, 255, 15),
                 });
                 if (string.IsNullOrEmpty(textRegion.Text) || textRegion.Text.Length == 1)
                 {
@@ -234,28 +233,5 @@ internal class QuickTeleportTrigger : ITaskTrigger
     // }
 
     private bool IsHotkeyPressed()
-    {
-        if (HotKey.IsMouseButton(_hotkeyConfig.QuickTeleportTickHotkey))
-        {
-            if (MouseHook.AllMouseHooks.TryGetValue((MouseButtons)Enum.Parse(typeof(MouseButtons), _hotkeyConfig.QuickTeleportTickHotkey), out var mouseHook))
-            {
-                if (mouseHook.IsPressed)
-                {
-                    return true;
-                }
-            }
-        }
-        else
-        {
-            if (KeyboardHook.AllKeyboardHooks.TryGetValue((Keys)Enum.Parse(typeof(Keys), _hotkeyConfig.QuickTeleportTickHotkey), out var keyboardHook))
-            {
-                if (keyboardHook.IsPressed)
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
+        => _runtime.IsTickHotkeyPressed();
 }

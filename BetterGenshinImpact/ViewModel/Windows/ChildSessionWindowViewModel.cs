@@ -10,14 +10,16 @@ using BetterGenshinImpact.View.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using Wpf.Ui.Controls;
 
 namespace BetterGenshinImpact.ViewModel.Windows;
 
 public partial class ChildSessionWindowViewModel : ViewModel
 {
-    private const string DesktopHelpUrl = "https://www.bettergi.com/doc.html";
+    private const string DesktopHelpUrl = "https://www.bettergi.com/feats/command/session.html";
 
     private readonly ChildSessionService _childSessionService;
+    private readonly DispatcherTimer _notificationTimer;
     private bool _startRequested;
 
     [ObservableProperty]
@@ -56,17 +58,61 @@ public partial class ChildSessionWindowViewModel : ViewModel
     [ObservableProperty]
     private bool _keepAspectRatio = true;
 
+    [ObservableProperty]
+    private bool _sendSystemShortcutsToRemote = true;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GameMouseModeButtonText))]
+    [NotifyPropertyChangedFor(nameof(GameMouseModeButtonToolTip))]
+    private bool _isGameMouseModeEnabled;
+
+    [ObservableProperty]
+    private bool _isNotificationOpen;
+
+    [ObservableProperty]
+    private string _notificationTitle = "";
+
+    [ObservableProperty]
+    private string _notificationMessage = "";
+
+    [ObservableProperty]
+    private InfoBarSeverity _notificationSeverity = InfoBarSeverity.Informational;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ToggleSendSystemShortcutsToRemoteCommand))]
+    private bool _isSystemShortcutsReconnectPending;
+
     public bool IsDefaultResolutionSelected => true;
 
     public string TopmostButtonToolTip => IsTopmost ? "取消置顶" : "置顶";
+
+    public string GameMouseModeButtonText =>
+        IsGameMouseModeEnabled ? "游戏鼠标" : "普通鼠标";
+
+    public string GameMouseModeButtonToolTip => IsGameMouseModeEnabled
+        ? "桌面分身内的 BetterGI 打开时生效；当前窗口处于焦点时，鼠标将会被锁定在窗口内；按住 Alt 可临时释放鼠标。"
+        : "切换至游戏鼠标模式。桌面分身内的 BetterGI 打开时生效；当前窗口处于前台时，鼠标将会被锁定在窗口内；按住 Alt 可临时释放鼠标。";
 
     public bool HasChildSession => _childSessionService.ChildSessionId is not null;
 
     public ChildSessionWindowViewModel(ChildSessionService childSessionService)
     {
         _childSessionService = childSessionService;
+        _isTopmost = _childSessionService.TopmostEnabled;
+        _isAdaptive = _childSessionService.SmartSizingEnabled;
+        _isOneToOne = !_isAdaptive;
+        _keepAspectRatio = _childSessionService.KeepAspectRatio;
+        _sendSystemShortcutsToRemote = _childSessionService.SendSystemShortcutsToRemote;
+        _isGameMouseModeEnabled = _childSessionService.IsGameMouseModeEnabled;
+        _notificationTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(5)
+        };
+        _notificationTimer.Tick += OnNotificationTimerTick;
         _childSessionService.StateChanged += OnChildSessionStateChanged;
         _childSessionService.ConnectionFailed += OnChildSessionConnectionFailed;
+        _childSessionService.SystemShortcutsReconnectCompleted +=
+            OnSystemShortcutsReconnectCompleted;
         UpdateConnectionStatus();
     }
 
@@ -153,7 +199,67 @@ public partial class ChildSessionWindowViewModel : ViewModel
     [RelayCommand]
     private void ToggleKeepAspectRatio()
     {
-        KeepAspectRatio = !KeepAspectRatio;
+        if (!Execute(() => _childSessionService.SetKeepAspectRatio(!KeepAspectRatio)))
+        {
+            return;
+        }
+
+        KeepAspectRatio = _childSessionService.KeepAspectRatio;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanToggleSendSystemShortcutsToRemote))]
+    private void ToggleSendSystemShortcutsToRemote()
+    {
+        try
+        {
+            var reconnectStarted = _childSessionService.SetSendSystemShortcutsToRemote(
+                !SendSystemShortcutsToRemote);
+            SendSystemShortcutsToRemote = _childSessionService.SendSystemShortcutsToRemote;
+            IsSystemShortcutsReconnectPending = reconnectStarted;
+            UpdateConnectionStatus();
+
+            ShowNotification(
+                reconnectStarted ? "正在应用设置" : "设置已保存",
+                reconnectStarted
+                    ? "RDP 正在自动重新连接，连接完成后系统组合键设置生效。"
+                    : "当前没有桌面分身会话，系统组合键设置将在下次连接时生效。",
+                InfoBarSeverity.Informational);
+        }
+        catch (Exception exception)
+        {
+            IsSystemShortcutsReconnectPending = false;
+            SendSystemShortcutsToRemote = _childSessionService.SendSystemShortcutsToRemote;
+            ShowNotification(
+                "设置切换失败",
+                exception.GetBaseException().Message,
+                InfoBarSeverity.Error,
+                TimeSpan.FromSeconds(8));
+            UpdateConnectionStatus();
+        }
+    }
+
+    private bool CanToggleSendSystemShortcutsToRemote()
+    {
+        return !IsSystemShortcutsReconnectPending;
+    }
+
+    [RelayCommand]
+    private void ToggleGameMouseMode()
+    {
+        var enabled = !IsGameMouseModeEnabled;
+        if (!Execute(() => _childSessionService.SetGameMouseModeEnabled(enabled)))
+        {
+            IsGameMouseModeEnabled = _childSessionService.IsGameMouseModeEnabled;
+            return;
+        }
+
+        IsGameMouseModeEnabled = _childSessionService.IsGameMouseModeEnabled;
+        ShowNotification(
+            enabled ? "游戏鼠标已开启" : "普通鼠标已开启",
+            enabled
+                ? "桌面分身内的 BetterGI 打开时生效。当前窗口处于焦点时，鼠标将会被锁定在窗口内，按住 Alt 临时释放鼠标。"
+                : "BetterGI 不再向桌面分身转发相对鼠标信息。",
+            enabled ? InfoBarSeverity.Informational : InfoBarSeverity.Success);
     }
 
     [RelayCommand]
@@ -193,7 +299,12 @@ public partial class ChildSessionWindowViewModel : ViewModel
     [RelayCommand]
     private void ToggleTopmost()
     {
-        IsTopmost = !IsTopmost;
+        if (!Execute(() => _childSessionService.SetTopmost(!IsTopmost)))
+        {
+            return;
+        }
+
+        IsTopmost = _childSessionService.TopmostEnabled;
     }
 
     [RelayCommand]
@@ -258,15 +369,64 @@ public partial class ChildSessionWindowViewModel : ViewModel
             DispatcherPriority.Normal,
             new Action(() =>
             {
+                IsSystemShortcutsReconnectPending = false;
                 UpdateConnectionStatus();
-                ThemedMessageBox.Error(e.Message, "BetterGI 桌面分身");
+                ShowNotification(
+                    "RDP 连接失败",
+                    e.Message,
+                    InfoBarSeverity.Error,
+                    TimeSpan.FromSeconds(10));
             }));
+    }
+
+    private void OnSystemShortcutsReconnectCompleted(object? sender, EventArgs e)
+    {
+        _ = Application.Current.Dispatcher.BeginInvoke(
+            DispatcherPriority.Normal,
+            new Action(() =>
+            {
+                IsSystemShortcutsReconnectPending = false;
+                UpdateConnectionStatus();
+                ShowNotification(
+                    "设置已生效",
+                    SendSystemShortcutsToRemote
+                        ? "系统组合键现在会发送到桌面分身。"
+                        : "系统组合键现在会在本机生效。",
+                    InfoBarSeverity.Success);
+            }));
+    }
+
+    private void ShowNotification(
+        string title,
+        string message,
+        InfoBarSeverity severity,
+        TimeSpan? duration = null)
+    {
+        _notificationTimer.Stop();
+        NotificationTitle = title;
+        NotificationMessage = message;
+        NotificationSeverity = severity;
+        IsNotificationOpen = true;
+        _notificationTimer.Interval = duration ?? TimeSpan.FromSeconds(5);
+        _notificationTimer.Start();
+    }
+
+    private void OnNotificationTimerTick(object? sender, EventArgs e)
+    {
+        _notificationTimer.Stop();
+        IsNotificationOpen = false;
     }
 
     private void UpdateConnectionStatus()
     {
         var connectedState = _childSessionService.ConnectedState;
         var childSessionId = _childSessionService.ChildSessionId;
+        IsTopmost = _childSessionService.TopmostEnabled;
+        IsAdaptive = _childSessionService.SmartSizingEnabled;
+        IsOneToOne = !IsAdaptive;
+        KeepAspectRatio = _childSessionService.KeepAspectRatio;
+        SendSystemShortcutsToRemote = _childSessionService.SendSystemShortcutsToRemote;
+        IsGameMouseModeEnabled = _childSessionService.IsGameMouseModeEnabled;
         IsRdpConnected = connectedState == 1;
         IsConnectionPromptVisible = connectedState == 0 && !_startRequested;
 

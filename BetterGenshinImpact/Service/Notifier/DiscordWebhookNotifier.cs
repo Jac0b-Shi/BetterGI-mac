@@ -10,6 +10,7 @@ using BetterGenshinImpact.Service.Notification.Model;
 using BetterGenshinImpact.Service.Notifier.Exception;
 using BetterGenshinImpact.Service.Notifier.Interface;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
@@ -19,10 +20,8 @@ namespace BetterGenshinImpact.Service.Notifier;
 
 public class DiscordWebhookNotifier : INotifier
 {
-    private static readonly ILogger<DiscordWebhookNotifier> Logger =
-        App.GetLogger<DiscordWebhookNotifier>();
-
     private readonly HttpClient _httpClient;
+    private readonly ILogger _logger;
     private readonly string _webhookUrl;
     private readonly string _username;
     private readonly string _avatarUrl;
@@ -41,10 +40,12 @@ public class DiscordWebhookNotifier : INotifier
         string webhookUrl,
         string username,
         string avatarUrl,
-        string imageFormat
+        string imageFormat,
+        ILogger? logger = null
     )
     {
         _httpClient = httpClient;
+        _logger = logger ?? NullLogger.Instance;
         _webhookUrl = webhookUrl;
         _username = username;
         _avatarUrl = avatarUrl;
@@ -136,7 +137,9 @@ public class DiscordWebhookNotifier : INotifier
         }
         catch (System.Exception ex)
         {
-            Logger.LogDebug("Failed to send message to Discord: {ex}", ex.Message);
+            _logger.LogDebug(
+                "Failed to send message to Discord: {ex}",
+                ex.Message);
             throw new System.Exception("Failed to send message to Discord", ex);
         }
     }

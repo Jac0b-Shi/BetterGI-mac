@@ -1,5 +1,8 @@
-﻿using BetterGenshinImpact.GameTask.Model.Area.Converter;
+using BetterGenshinImpact.GameTask.Model.Area.Converter;
+using BetterGenshinImpact.Core.Recognition;
+#if BGI_FULL_WINDOWS
 using BetterGenshinImpact.View.Drawable;
+#endif
 using OpenCvSharp;
 using System;
 using System.Drawing;
@@ -11,7 +14,7 @@ namespace BetterGenshinImpact.GameTask.Model.Area;
 /// 游戏捕获区域类
 /// 主要用于转换到遮罩窗口的坐标
 /// </summary>
-public class GameCaptureRegion(Mat mat, int initX, int initY, Region? owner = null, INodeConverter? converter = null, DrawContent? drawContent = null) : ImageRegion(mat, initX, initY, owner, converter, drawContent)
+public class GameCaptureRegion(Mat mat, int initX, int initY, Region? owner = null, INodeConverter? converter = null, IOverlayDrawPlatform? drawContent = null) : ImageRegion(mat, initX, initY, owner, converter, drawContent)
 {
     /// <summary>
     /// 在游戏捕获图像的坐标维度进行转换到遮罩窗口的坐标维度
@@ -23,6 +26,7 @@ public class GameCaptureRegion(Mat mat, int initX, int initY, Region? owner = nu
     /// <param name="pen"></param>
     /// <param name="name"></param>
     /// <returns></returns>
+#if BGI_FULL_WINDOWS
     public RectDrawable ConvertToRectDrawable(int x, int y, int w, int h, Pen? pen = null, string? name = null)
     {
         var scale = TaskContext.Instance().DpiScale;
@@ -56,6 +60,7 @@ public class GameCaptureRegion(Mat mat, int initX, int initY, Region? owner = nu
     // {
     //     VisionContext.Instance().DrawContent.PutRect(name ?? "None", ConvertToRectDrawable(x, y, w, h, pen, name));
     // }
+#endif
 
     /// <summary>
     /// 游戏窗口初始截图大于1080P的统一转换到1080P
@@ -88,24 +93,24 @@ public class GameCaptureRegion(Mat mat, int initX, int initY, Region? owner = nu
     /// </param>
     public static void GameRegionClick(Func<Size, double, (double, double)> posFunc)
     {
-        var captureAreaRect = TaskContext.Instance().SystemInfo.CaptureAreaRect;
-        var assetScale = TaskContext.Instance().SystemInfo.ScaleTo1080PRatio;
+        var captureAreaRect = GameTaskManagerPlatform.Current.SystemInfo.CaptureAreaRect;
+        var assetScale = GameTaskManagerPlatform.Current.SystemInfo.ScaleTo1080PRatio;
         var (cx, cy) = posFunc(new Size(captureAreaRect.Width, captureAreaRect.Height), assetScale);
         DesktopRegion.DesktopRegionClick(captureAreaRect.X + cx, captureAreaRect.Y + cy);
     }
 
     public static void GameRegionMove(Func<Size, double, (double, double)> posFunc)
     {
-        var captureAreaRect = TaskContext.Instance().SystemInfo.CaptureAreaRect;
-        var assetScale = TaskContext.Instance().SystemInfo.ScaleTo1080PRatio;
+        var captureAreaRect = GameTaskManagerPlatform.Current.SystemInfo.CaptureAreaRect;
+        var assetScale = GameTaskManagerPlatform.Current.SystemInfo.ScaleTo1080PRatio;
         var (cx, cy) = posFunc(new Size(captureAreaRect.Width, captureAreaRect.Height), assetScale);
         DesktopRegion.DesktopRegionMove(captureAreaRect.X + cx, captureAreaRect.Y + cy);
     }
 
     public static void GameRegionMoveBy(Func<Size, double, (double, double)> deltaFunc)
     {
-        var captureAreaRect = TaskContext.Instance().SystemInfo.CaptureAreaRect;
-        var assetScale = TaskContext.Instance().SystemInfo.ScaleTo1080PRatio;
+        var captureAreaRect = GameTaskManagerPlatform.Current.SystemInfo.CaptureAreaRect;
+        var assetScale = GameTaskManagerPlatform.Current.SystemInfo.ScaleTo1080PRatio;
         var (dx, dy) = deltaFunc(new Size(captureAreaRect.Width, captureAreaRect.Height), assetScale);
         DesktopRegion.DesktopRegionMoveBy(dx, dy);
     }

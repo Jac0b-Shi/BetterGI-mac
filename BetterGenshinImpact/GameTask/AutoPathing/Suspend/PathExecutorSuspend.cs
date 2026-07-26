@@ -5,7 +5,18 @@ using BetterGenshinImpact.GameTask.AutoPathing.Model;
 namespace BetterGenshinImpact.GameTask.AutoPathing.Suspend;
 
 //暂停逻辑相关实现,这里主要用来记录，用来恢复相应操作
-public class PathExecutorSuspend(PathExecutor pathExecutor) : ISuspendable
+public interface IPathExecutorSuspendContext
+{
+    (int, List<WaypointForTrack>) CurWaypoints { get; }
+
+    (int, WaypointForTrack) CurWaypoint { get; }
+
+    bool GetPositionAndTimeSuspendFlag { get; set; }
+
+    DateTime MoveToStartTime { set; }
+}
+
+public class PathExecutorSuspend(IPathExecutorSuspendContext pathExecutor) : ISuspendable
 {
     private bool _isSuspended;
 
@@ -53,7 +64,7 @@ public class PathExecutorSuspend(PathExecutor pathExecutor) : ISuspendable
     public void Resume()
     {
         //暂定恢复时，重置移动时的时间，防止因暂停而导致超时
-        pathExecutor.moveToStartTime = DateTime.UtcNow;
+        pathExecutor.MoveToStartTime = DateTime.UtcNow;
         _isSuspended = false;
         _resuming = true;
     }

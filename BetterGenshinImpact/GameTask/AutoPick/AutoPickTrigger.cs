@@ -1,13 +1,13 @@
+using BetterGenshinImpact.Core.Abstractions.Recognition;
+using BetterGenshinImpact.Core.Abstractions.Runtime;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.Core.Recognition.OCR;
-using BetterGenshinImpact.Core.Recognition.ONNX.SVTR;
 using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
+using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.Helpers;
-using BetterGenshinImpact.Service;
-using BetterGenshinImpact.View.Windows;
+using BetterGenshinImpact.Platform.Abstractions;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -18,13 +18,12 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
-using BetterGenshinImpact.GameTask.Model.Area;
 
 namespace BetterGenshinImpact.GameTask.AutoPick;
 
 public partial class AutoPickTrigger : ITaskTrigger
 {
-    private readonly ILogger<AutoPickTrigger> _logger = App.GetLogger<AutoPickTrigger>();
+    private readonly ILogger<AutoPickTrigger> _logger;
 
     public string Name => "自动拾取";
     public bool IsEnabled { get; set; }
@@ -52,19 +51,52 @@ public partial class AutoPickTrigger : ITaskTrigger
 
     // 外部配置
     private AutoPickExternalConfig? _externalConfig;
+    private readonly IAutoPickRuntimeState _runtimeState;
+    private readonly IAutoPickConfigProvider _configProvider;
+    private readonly IInputBackend _inputBackend;
+    private readonly ISystemInfo _systemInfo;
+    private readonly IPaddleAutoPickTextRecognizer _paddleRecognizer;
+    private readonly IYapAutoPickTextRecognizer _yapRecognizer;
+    private readonly int _requiredStableInteractionFrames;
 
-    public AutoPickTrigger()
-    {
-    }
+    private int StopCount => _runtimeState.StopCount;
 
-    public AutoPickTrigger(AutoPickExternalConfig? config) : this()
+    /// <summary>
+    /// Master constructor. All injected dependencies are required — no static fallback.
+    /// </summary>
+    public AutoPickTrigger(
+        AutoPickExternalConfig? config,
+        IAutoPickRuntimeState runtimeState,
+        IAutoPickConfigProvider configProvider,
+        IInputBackend inputBackend,
+        ISystemInfo systemInfo,
+        ILogger<AutoPickTrigger> logger,
+        IPaddleAutoPickTextRecognizer paddleRecognizer,
+        IYapAutoPickTextRecognizer yapRecognizer,
+        int requiredStableInteractionFrames = 2)
     {
+        ArgumentNullException.ThrowIfNull(runtimeState);
+        ArgumentNullException.ThrowIfNull(configProvider);
+        ArgumentNullException.ThrowIfNull(inputBackend);
+        ArgumentNullException.ThrowIfNull(systemInfo);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(paddleRecognizer);
+        ArgumentNullException.ThrowIfNull(yapRecognizer);
+        ArgumentOutOfRangeException.ThrowIfLessThan(requiredStableInteractionFrames, 1);
         _externalConfig = config;
+        _runtimeState = runtimeState;
+        _configProvider = configProvider;
+        _inputBackend = inputBackend;
+        _systemInfo = systemInfo;
+        _logger = logger;
+        _paddleRecognizer = paddleRecognizer;
+        _yapRecognizer = yapRecognizer;
+        _requiredStableInteractionFrames = requiredStableInteractionFrames;
     }
 
     public void Init()
     {
-        var config = TaskContext.Instance().Config.AutoPickConfig;
+        var config = _configProvider.AutoPickConfig;
         IsEnabled = config.Enabled;
 
         if (config.BlackListEnabled)
@@ -92,13 +124,12 @@ public partial class AutoPickTrigger : ITaskTrigger
             var json = Global.ReadAllTextIfExist(jsonFilePath);
             if (!string.IsNullOrEmpty(json))
             {
-                return JsonSerializer.Deserialize<HashSet<string>>(json, ConfigService.JsonOptions) ?? [];
+                return JsonSerializer.Deserialize<HashSet<string>>(json) ?? [];
             }
         }
         catch (Exception e)
         {
             _logger.LogError(e, "读取拾取黑/白名单失败");
-            ThemedMessageBox.Error("读取拾取黑/白名单失败，请确认修改后的拾取黑/白名单内容格式是否正确！");
         }
 
         return [];
@@ -118,7 +149,6 @@ public partial class AutoPickTrigger : ITaskTrigger
         catch (Exception e)
         {
             _logger.LogError(e, "读取拾取黑/白名单失败");
-            ThemedMessageBox.Error("读取拾取黑/白名单失败，请确认修改后的拾取黑/白名单内容格式是否正确！");
         }
 
         return [];
@@ -138,7 +168,6 @@ public partial class AutoPickTrigger : ITaskTrigger
         catch (Exception e)
         {
             _logger.LogError(e, "读取拾取黑/白名单失败");
-            ThemedMessageBox.Error("读取拾取黑/白名单失败，请确认修改后的拾取黑/白名单内容格式是否正确！");
         }
 
         return [];
@@ -155,13 +184,18 @@ public partial class AutoPickTrigger : ITaskTrigger
     /// </summary>
     private int _prevClickFrameIndex = -1;
 
+    private Rect _pendingInteractionRect;
+    private int _pendingInteractionFrameCount;
+
+    private const int InteractionPositionTolerance = 12;
+
     //private int _fastModePickCount = 0;
 
     public void OnCapture(CaptureContent content)
     {
-        _autoPickAssets = AutoPickAssets.Get(content.CaptureRectArea, TaskContext.Instance().Config.AutoPickConfig.PickKey);
+        _autoPickAssets = AutoPickAssets.Get(content.CaptureRectArea, _configProvider.AutoPickConfig.PickKey);
         _pickRo = _autoPickAssets.PickRo;
-        while (RunnerContext.Instance.AutoPickTriggerStopCount > 0)
+        while (StopCount > 0)
         {
             Thread.Sleep(1000);
         }
@@ -172,11 +206,13 @@ public partial class AutoPickTrigger : ITaskTrigger
 
         if (foundRectArea.IsEmpty())
         {
+            ResetPendingInteraction();
+
             // 没有识别到F键，先判断是否有滚轮图标信息
             if (HasScrollIcon(content.CaptureRectArea))
             {
                 // 滚轮下
-                Simulation.SendInput.Mouse.VerticalScroll(2);
+                _inputBackend.Scroll(2);
                 Thread.Sleep(50);
             }
 
@@ -188,17 +224,18 @@ public partial class AutoPickTrigger : ITaskTrigger
         if (_externalConfig is { ForceInteraction: true })
         {
             LogPick(content, "直接拾取");
-            Simulation.SendInput.Keyboard.KeyPress(_autoPickAssets.PickVk);
+            _inputBackend.KeyPress(_autoPickAssets.PickVk);
             return;
         }
 
-        var scale = TaskContext.Instance().SystemInfo.AssetScale;
-        var config = TaskContext.Instance().Config.AutoPickConfig;
+        var scale = _systemInfo.AssetScale;
+        var config = _configProvider.AutoPickConfig;
 
         // 存在 L 键位是千星奇遇，无需拾取
         using var lKeyRa = content.CaptureRectArea.Find(RecognitionAssets.Get("AutoPick", "L", content.CaptureRectArea));
         if (lKeyRa.IsExist())
         {
+            ResetPendingInteraction();
             return;
         }
 
@@ -229,17 +266,29 @@ public partial class AutoPickTrigger : ITaskTrigger
             }
         }
 
+        if (isExcludeIcon)
+        {
+            ResetPendingInteraction();
+        }
+
         if (!config.WhiteListEnabled && isExcludeIcon)
         {
             // 默认不拾取且没有白名单直接放弃OCR
             return;
         }
 
+        if (!isExcludeIcon && !HasStableInteractionPrompt(foundRectArea))
+        {
+            return;
+        }
+
         if (!config.WhiteListEnabled && !config.BlackListEnabled && !isExcludeIcon)
         {
             // 没有黑白名单直接拾取
-            Simulation.SendInput.Keyboard.KeyPress(_autoPickAssets.PickVk);
+            _inputBackend.KeyPress(_autoPickAssets.PickVk);
+            ResetPendingInteraction();
             LogPick(content, "黑名单未启用，直接拾取");
+            return;
         }
 
         //if (config.FastModeEnabled && !isExcludeIcon)
@@ -277,43 +326,13 @@ public partial class AutoPickTrigger : ITaskTrigger
         string text;
         if (config.OcrEngine == nameof(PickOcrEngineEnum.Yap))
         {
-            var textMat = new Mat(content.CaptureRectArea.CacheGreyMat, textRect);
-            text = TextInferenceFactory.Pick.Value.Inference(textMat);
+            using var textMat = new Mat(content.CaptureRectArea.CacheGreyMat, textRect);
+            text = _yapRecognizer.Recognize(textMat);
         }
         else
         {
             using var textMat = new Mat(content.CaptureRectArea.SrcMat, textRect);
-            var boundingRect = TextRectExtractor.GetTextBoundingRect(textMat);
-            // var boundingRect = new Rect(); // 不使用自己写的文字区域提取
-            // 如果找到有效区域
-            if (boundingRect.X < 20 && boundingRect.Width > 5 && boundingRect.Height > 5)
-            {
-                // 截取只包含文字的区域
-                using var textOnlyMat = new Mat(textMat, new Rect(0, 0,
-                    boundingRect.Right + 5 < textMat.Width ? boundingRect.Right + 5 : textMat.Width, textMat.Height));
-                text = OcrFactory.Paddle.OcrWithoutDetector(textOnlyMat);
-
-                // if (RuntimeHelper.IsDebug)
-                // {
-                //     // 如果不等于正确文字，则保存图片
-                //     if (text != "烹饪")
-                //     {
-                //         var path = Global.Absolute("log/pick");
-                //         Directory.CreateDirectory(path);
-                //         var str = $"{DateTime.Now:yyyyMMddHHmmssfff}";
-                //         // textMat.SaveImage(Path.Combine(path, $"pick_ocr_ori_{str}.png"));
-                //         // 画上 boundingRect
-                //         Cv2.Rectangle(textMat, boundingRect, new Scalar(0, 0, 255), 1);
-                //         textMat.SaveImage(Path.Combine(path, $"pick_ocr_rect_{str}.png"));
-                //         bin.SaveImage(Path.Combine(path, $"bin_{str}.png"));
-                //     }
-                // }
-            }
-            else
-            {
-                Debug.WriteLine("-- 无法识别到有效文字区域，尝试直接OCR DET");
-                text = OcrFactory.Paddle.Ocr(textMat);
-            }
+            text = _paddleRecognizer.Recognize(textMat);
         }
 
         speedTimer.Record("文字识别");
@@ -336,7 +355,8 @@ public partial class AutoPickTrigger : ITaskTrigger
             if (config.WhiteListEnabled && _whiteList.Contains(text))
             {
                 LogPick(content, text);
-                Simulation.SendInput.Keyboard.KeyPress(_autoPickAssets.PickVk);
+                _inputBackend.KeyPress(_autoPickAssets.PickVk);
+                ResetPendingInteraction();
                 return;
             }
 
@@ -367,10 +387,44 @@ public partial class AutoPickTrigger : ITaskTrigger
             speedTimer.Record("黑名单判断");
 
             LogPick(content, text);
-            Simulation.SendInput.Keyboard.KeyPress(_autoPickAssets.PickVk);
+            _inputBackend.KeyPress(_autoPickAssets.PickVk);
+            ResetPendingInteraction();
         }
 
         speedTimer.DebugPrint();
+    }
+
+    private bool HasStableInteractionPrompt(Region foundRectArea)
+    {
+        if (_requiredStableInteractionFrames <= 1)
+        {
+            return true;
+        }
+
+        var currentRect = new Rect(
+            foundRectArea.X,
+            foundRectArea.Y,
+            foundRectArea.Width,
+            foundRectArea.Height);
+        if (_pendingInteractionFrameCount > 0
+            && Math.Abs(currentRect.X - _pendingInteractionRect.X) <= InteractionPositionTolerance
+            && Math.Abs(currentRect.Y - _pendingInteractionRect.Y) <= InteractionPositionTolerance)
+        {
+            _pendingInteractionFrameCount++;
+        }
+        else
+        {
+            _pendingInteractionFrameCount = 1;
+        }
+
+        _pendingInteractionRect = currentRect;
+        return _pendingInteractionFrameCount >= _requiredStableInteractionFrames;
+    }
+
+    private void ResetPendingInteraction()
+    {
+        _pendingInteractionRect = default;
+        _pendingInteractionFrameCount = 0;
     }
 
     private bool DoNotPick(string text)

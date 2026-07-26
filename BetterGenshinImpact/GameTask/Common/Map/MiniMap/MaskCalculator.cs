@@ -17,6 +17,7 @@ public class MaskCalculator : IDisposable
     private readonly Mat _kernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new Size(5, 5));
     private readonly Mat _outMatF = new Mat(Size, Size, MatType.CV_32FC3);
     private readonly Mat _outMask = new Mat(Size, Size, MatType.CV_8UC1);
+    private readonly Mat _inputBgr = new();
 
     public MaskCalculator()
     {
@@ -52,6 +53,15 @@ public class MaskCalculator : IDisposable
 
     public (Mat, Mat) Process1(Mat bgrMat)
     {
+        if (bgrMat.Channels() == 4)
+        {
+            Cv2.CvtColor(bgrMat, _inputBgr, ColorConversionCodes.BGRA2BGR);
+            bgrMat = _inputBgr;
+        }
+        else if (bgrMat.Channels() != 3)
+        {
+            throw new ArgumentException("Mini-map input must be BGR or BGRA.", nameof(bgrMat));
+        }
         bgrMat = bgrMat[new Rect((bgrMat.Width - Size) / 2, (bgrMat.Width - Size) / 2, Size, Size)];
         bgrMat.ConvertTo(_outMatF, MatType.CV_32FC3);
         CreateIconMask(bgrMat);
@@ -91,7 +101,7 @@ public class MaskCalculator : IDisposable
         CalculateMinDist(temp, minDist);
         using var lut = Mat.FromPixelData(1, 256, MatType.CV_8UC1, minDist);
         Cv2.LUT(_angle, lut, temp);
-        Cv2.Compare(_radius, temp, temp, CmpType.LT);
+        Cv2.Compare(_radius, temp, temp, CmpTypes.LT);
         using var temp1 = new Mat();
         Cv2.InRange(bgrMat, Scalar.All(100), Scalar.All(255), temp1);
         Cv2.BitwiseOr(temp1, temp, _outMask, _outMask);
@@ -103,7 +113,7 @@ public class MaskCalculator : IDisposable
         using var cmin = new Mat();
         using var diff = new Mat();
         MaxMinChannels(bgrMat, cmax, cmin);
-        Cv2.Compare(cmax, cmin, _outMask, CmpType.EQ);
+        Cv2.Compare(cmax, cmin, _outMask, CmpTypes.EQ);
         Cv2.InRange(cmax, new Scalar(50), new Scalar(127), diff);
         Cv2.BitwiseAnd(diff, _outMask, _outMask);
         Cv2.Subtract(cmax, cmin, diff);
@@ -149,5 +159,6 @@ public class MaskCalculator : IDisposable
         _kernel.Dispose();
         _outMatF.Dispose();
         _outMask.Dispose();
+        _inputBgr.Dispose();
     }
 }

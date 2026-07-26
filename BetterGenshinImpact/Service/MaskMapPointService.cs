@@ -47,19 +47,39 @@ public sealed class MaskMapPointService : IMaskMapPointService
     private readonly IHoYoLabMapApiService _hoyolabMapApi;
     private readonly IMihoyoMapApiService _mihoyoMapApi;
     private readonly IKongyingTavernApiService _kongyingTavernApi;
+    private readonly Func<MapMaskConfig> _mapMaskConfigProvider;
+    private readonly Func<string> _mapMatchingMethodProvider;
 
+#if BGI_PLATFORM_MAC
+    public MaskMapPointService(
+        ILogger<MaskMapPointService> logger,
+        IAppCache cache,
+        IHoYoLabMapApiService hoyolabMapApi,
+        IMihoyoMapApiService mihoyoMapApi,
+        IKongyingTavernApiService kongyingTavernApi,
+        Func<MapMaskConfig> mapMaskConfigProvider,
+        Func<string> mapMatchingMethodProvider)
+#else
     public MaskMapPointService(
         ILogger<MaskMapPointService> logger,
         IAppCache cache,
         IHoYoLabMapApiService hoyolabMapApi,
         IMihoyoMapApiService mihoyoMapApi,
         IKongyingTavernApiService kongyingTavernApi)
+#endif
     {
         _logger = logger;
         _cache = cache;
         _hoyolabMapApi = hoyolabMapApi;
         _mihoyoMapApi = mihoyoMapApi;
         _kongyingTavernApi = kongyingTavernApi;
+#if BGI_PLATFORM_MAC
+        _mapMaskConfigProvider = mapMaskConfigProvider;
+        _mapMatchingMethodProvider = mapMatchingMethodProvider;
+#else
+        _mapMaskConfigProvider = () => TaskContext.Instance().Config.MapMaskConfig;
+        _mapMatchingMethodProvider = () => TaskContext.Instance().Config.PathingConditionConfig.MapMatchingMethod;
+#endif
     }
 
     public Task<IReadOnlyList<MaskMapPointLabel>> GetLabelCategoriesAsync(CancellationToken ct = default)
@@ -89,9 +109,9 @@ public sealed class MaskMapPointService : IMaskMapPointService
         };
     }
 
-    private static MapPointApiProvider GetProvider()
+    private MapPointApiProvider GetProvider()
     {
-        return TaskContext.Instance().Config.MapMaskConfig.MapPointApiProvider;
+        return _mapMaskConfigProvider().MapPointApiProvider;
     }
 
     private IMihoyoMapApiService GetMihoyoCompatibleApi()
@@ -208,7 +228,7 @@ public sealed class MaskMapPointService : IMaskMapPointService
             return new MaskMapPointsResult { Labels = labels, Points = Array.Empty<MaskMapPoint>() };
         }
 
-        var map = MapManager.GetMap(MapTypes.Teyvat, TaskContext.Instance().Config.PathingConditionConfig.MapMatchingMethod);
+        var map = MapManager.GetMap(MapTypes.Teyvat, _mapMatchingMethodProvider());
         var points = resp.Data.PointList
             .Where(x => selectedSecondLevelIds.Contains(x.LabelId.ToString(CultureInfo.InvariantCulture)))
             .Select(x =>
@@ -241,7 +261,7 @@ public sealed class MaskMapPointService : IMaskMapPointService
         var provider = GetProvider();
         var providerKey = provider == MapPointApiProvider.HoYoLab ? "hoyolab" : "mihoyo-map";
         var langSegment = provider == MapPointApiProvider.HoYoLab
-            ? $":lang:{HoYoLabMapApiService.NormalizeLanguage(TaskContext.Instance().Config.MapMaskConfig.HoYoLabLanguage)}"
+            ? $":lang:{HoYoLabMapApiService.NormalizeLanguage(_mapMaskConfigProvider().HoYoLabLanguage)}"
             : string.Empty;
         var key = $"{providerKey}:point-list:2:ys_obc{langSegment}:{string.Join(",", labelIds)}";
         var request = new PointListRequest
@@ -473,7 +493,7 @@ public sealed class MaskMapPointService : IMaskMapPointService
         }
 
         var markersByItemId = await GetKongyingMarkersByItemIdCachedAsync(ct);
-        var map = MapManager.GetMap(MapTypes.Teyvat, TaskContext.Instance().Config.PathingConditionConfig.MapMatchingMethod);
+        var map = MapManager.GetMap(MapTypes.Teyvat, _mapMatchingMethodProvider());
 
         var markerById = new Dictionary<long, (MarkerVo Marker, long LabelItemId)>();
         foreach (var selectedItemId in selectedItemIdsInOrder)

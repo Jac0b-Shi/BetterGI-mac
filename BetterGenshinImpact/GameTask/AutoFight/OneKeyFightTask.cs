@@ -2,7 +2,6 @@
 using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
 using BetterGenshinImpact.Model;
-using BetterGenshinImpact.Service;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -37,40 +36,60 @@ public class OneKeyFightTask : Singleton<OneKeyFightTask>
     private readonly HashSet<string> _pressedKeys = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _pressedMouseKeys = new(StringComparer.OrdinalIgnoreCase);
 
+    public void RunHotKey(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        KeyDown();
+        try
+        {
+            cancellationToken.WaitHandle.WaitOne();
+        }
+        finally
+        {
+            KeyUp();
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
     public void KeyDown()
     {
-        if (_isKeyDown || !IsEnabled())
+        var platform = OneKeyFightRuntimePlatform.Current;
+        var settings = platform.Settings;
+        if (_isKeyDown || !IsEnabled(settings))
         {
             return;
         }
 
         _isKeyDown = true;
-        if (_activeMacroPriority != TaskContext.Instance().Config.MacroConfig.CombatMacroPriority ||
-            IsAvatarMacrosEdited())
+        if (_activeMacroPriority != settings.Priority ||
+            IsAvatarMacrosEdited(platform))
         {
-            _activeMacroPriority = TaskContext.Instance().Config.MacroConfig.CombatMacroPriority;
-            _avatarMacros = LoadAvatarMacros();
-            Logger.LogInformation("加载一键宏配置完成");
+            _activeMacroPriority = settings.Priority;
+            _avatarMacros = LoadAvatarMacros(platform);
+            platform.Logger.LogInformation("加载一键宏配置完成");
         }
 
-        if (IsHoldOnMode() || IsHoldFinishMode())
+        if (IsHoldOnMode(settings) || IsHoldFinishMode(settings))
         {
             if (_cts == null || _cts.Token.IsCancellationRequested)
             {
                 _cts = new CancellationTokenSource();
-                _fightTask = FightTask(_cts.Token, IsHoldOnMode());
+                _fightTask = FightTask(
+                    platform,
+                    _cts.Token,
+                    IsHoldOnMode(settings));
                 if (!_fightTask.IsCompleted)
                 {
                     _fightTask.Start();
                 }
             }
         }
-        else if (IsTickMode())
+        else if (IsTickMode(settings))
         {
             if (_cts == null || _cts.Token.IsCancellationRequested)
             {
                 _cts = new CancellationTokenSource();
-                _fightTask = FightTask(_cts.Token, false);
+                _fightTask = FightTask(platform, _cts.Token, false);
                 if (!_fightTask.IsCompleted)
                 {
                     _fightTask.Start();
@@ -86,15 +105,16 @@ public class OneKeyFightTask : Singleton<OneKeyFightTask>
     public void KeyUp()
     {
         _isKeyDown = false;
-        if (!IsEnabled())
+        var settings = OneKeyFightRuntimePlatform.Current.Settings;
+        if (!IsEnabled(settings))
         {
             return;
         }
 
-        if (IsHoldOnMode() || IsHoldFinishMode())
+        if (IsHoldOnMode(settings) || IsHoldFinishMode(settings))
         {
             _cts?.Cancel();
-            if (IsHoldOnMode())
+            if (IsHoldOnMode(settings))
             {
                 // 新一键宏允许指令保持按下状态，松开热键时需要立即释放残留按键。
                 ReleasePressedMacroKeys();
@@ -136,7 +156,10 @@ public class OneKeyFightTask : Singleton<OneKeyFightTask>
     /// <summary>
     /// 循环执行战斗宏
     /// </summary>
-    private Task FightTask(CancellationToken ct, bool releasePressedKeysOnStop)
+    private Task FightTask(
+        IOneKeyFightRuntimePlatform platform,
+        CancellationToken ct,
+        bool releasePressedKeysOnStop)
     {
         var imageRegion = CaptureToRectArea();
         var combatScenes = new CombatScenes().InitializeTeam(imageRegion);
@@ -144,12 +167,13 @@ public class OneKeyFightTask : Singleton<OneKeyFightTask>
         {
             if (_currentCombatScenes == null)
             {
-                Logger.LogError("首次队伍角色识别失败");
+                platform.Logger.LogError("首次队伍角色识别失败");
                 return Task.CompletedTask;
             }
             else
             {
-                Logger.LogWarning("队伍角色识别失败，使用上次识别结果，队伍未切换时无影响");
+                platform.Logger.LogWarning(
+                    "队伍角色识别失败，使用上次识别结果，队伍未切换时无影响");
             }
         }
         else
@@ -162,14 +186,14 @@ public class OneKeyFightTask : Singleton<OneKeyFightTask>
         var avatarName = _currentCombatScenes.CurrentAvatar(true, imageRegion, ct);
         if (avatarName is null)
         {
-            Logger.LogError("无法识别出战角色");
+            platform.Logger.LogError("无法识别出战角色");
             return Task.CompletedTask;
         }
 
         var activeAvatar = _currentCombatScenes.SelectAvatar(avatarName);
         if (activeAvatar is null)
         {
-            Logger.LogError("获取出战角色{Name}失败", avatarName);
+            platform.Logger.LogError("获取出战角色{Name}失败", avatarName);
             return Task.CompletedTask;
         }
         if (releasePressedKeysOnStop)
@@ -185,10 +209,17 @@ public class OneKeyFightTask : Singleton<OneKeyFightTask>
                 return new Task(() =>
                 {
                     var round = 1;
-                    while (!ct.IsCancellationRequested && IsEnabled())
+                    while (!ct.IsCancellationRequested &&
+                           IsEnabled(platform.Settings))
                     {
-                        Logger.LogInformation("→ {Name}执行宏 (第{Round}轮)", activeAvatar.Name, round);
-                        if ((IsHoldOnMode() || IsHoldFinishMode()) && !_isKeyDown)
+                        platform.Logger.LogInformation(
+                            "→ {Name}执行宏 (第{Round}轮)",
+                            activeAvatar.Name,
+                            round);
+                        var settings = platform.Settings;
+                        if ((IsHoldOnMode(settings) ||
+                             IsHoldFinishMode(settings)) &&
+                            !_isKeyDown)
                         {
                             break;
                         }
@@ -206,7 +237,9 @@ public class OneKeyFightTask : Singleton<OneKeyFightTask>
                         round++;
                     }
 
-                    Logger.LogInformation("→ {Name}停止宏", activeAvatar.Name);
+                    platform.Logger.LogInformation(
+                        "→ {Name}停止宏",
+                        activeAvatar.Name);
                 });
             }
 
@@ -216,10 +249,17 @@ public class OneKeyFightTask : Singleton<OneKeyFightTask>
                 try
                 {
                     var round = 1;
-                    while (!ct.IsCancellationRequested && IsEnabled())
+                    while (!ct.IsCancellationRequested &&
+                           IsEnabled(platform.Settings))
                     {
-                        Logger.LogInformation("→ {Name}执行宏 (第{Round}轮)", activeAvatar.Name, round);
-                        if ((IsHoldOnMode() || IsHoldFinishMode()) && !_isKeyDown)
+                        platform.Logger.LogInformation(
+                            "→ {Name}执行宏 (第{Round}轮)",
+                            activeAvatar.Name,
+                            round);
+                        var settings = platform.Settings;
+                        if ((IsHoldOnMode(settings) ||
+                             IsHoldFinishMode(settings)) &&
+                            !_isKeyDown)
                         {
                             break;
                         }
@@ -250,23 +290,34 @@ public class OneKeyFightTask : Singleton<OneKeyFightTask>
                         ReleasePressedMacroKeys(activeAvatar);
                     }
 
-                    Logger.LogInformation("→ {Name}停止宏", activeAvatar.Name);
+                    platform.Logger.LogInformation(
+                        "→ {Name}停止宏",
+                        activeAvatar.Name);
                 }
             });
         }
         else
         {
-            Logger.LogWarning("→ {Name}配置[{Priority}]为空，请先配置一键宏", activeAvatar.Name, _activeMacroPriority);
+            platform.Logger.LogWarning(
+                "→ {Name}配置[{Priority}]为空，请先配置一键宏",
+                activeAvatar.Name,
+                _activeMacroPriority);
             return Task.CompletedTask;
         }
     }
 
-    public Dictionary<string, List<CombatCommand>> LoadAvatarMacros()
+    public Dictionary<string, List<CombatCommand>> LoadAvatarMacros() =>
+        LoadAvatarMacros(OneKeyFightRuntimePlatform.Current);
+
+    private Dictionary<string, List<CombatCommand>> LoadAvatarMacros(
+        IOneKeyFightRuntimePlatform platform)
     {
-        var jsonPath = GetAvatarMacroJsonPath();
+        var jsonPath = platform.EnsureAvatarMacroPath();
         var json = File.ReadAllText(jsonPath);
         _lastUpdateTime = File.GetLastWriteTime(jsonPath);
-        var avatarMacros = JsonSerializer.Deserialize<List<AvatarMacro>>(json, ConfigService.JsonOptions);
+        var avatarMacros = JsonSerializer.Deserialize<List<AvatarMacro>>(
+            json,
+            ConfigJson.Options);
         if (avatarMacros == null)
         {
             return [];
@@ -285,43 +336,44 @@ public class OneKeyFightTask : Singleton<OneKeyFightTask>
         return result;
     }
 
-    public bool IsAvatarMacrosEdited()
+    public bool IsAvatarMacrosEdited() =>
+        IsAvatarMacrosEdited(OneKeyFightRuntimePlatform.Current);
+
+    private bool IsAvatarMacrosEdited(
+        IOneKeyFightRuntimePlatform platform)
     {
         // 通过修改时间判断是否编辑过
-        var jsonPath = GetAvatarMacroJsonPath();
+        var jsonPath = platform.EnsureAvatarMacroPath();
         var lastWriteTime = File.GetLastWriteTime(jsonPath);
         return lastWriteTime > _lastUpdateTime;
     }
     
-    public static string GetAvatarMacroJsonPath()
-    {
-        var path = Global.Absolute("User/avatar_macro.json");
-        if (!File.Exists(path))
-        {
-            File.Copy(Global.Absolute("User/avatar_macro_default.json"), path);
-        }
-        return path;
-    }
+    public static string GetAvatarMacroJsonPath() =>
+        OneKeyFightRuntimePlatform.Current.EnsureAvatarMacroPath();
 
-    public static bool IsEnabled()
-    {
-        return TaskContext.Instance().Config.MacroConfig.CombatMacroEnabled;
-    }
+    public static bool IsEnabled() =>
+        IsEnabled(OneKeyFightRuntimePlatform.Current.Settings);
 
-    public static bool IsHoldOnMode()
-    {
-        return TaskContext.Instance().Config.MacroConfig.CombatMacroHotkeyMode == HoldOnMode;
-    }
+    internal static bool IsEnabled(OneKeyFightSettings settings) =>
+        settings.Enabled;
 
-    public static bool IsHoldFinishMode()
-    {
-        return TaskContext.Instance().Config.MacroConfig.CombatMacroHotkeyMode == HoldFinishMode;
-    }
+    public static bool IsHoldOnMode() =>
+        IsHoldOnMode(OneKeyFightRuntimePlatform.Current.Settings);
 
-    public static bool IsTickMode()
-    {
-        return TaskContext.Instance().Config.MacroConfig.CombatMacroHotkeyMode == TickMode;
-    }
+    internal static bool IsHoldOnMode(OneKeyFightSettings settings) =>
+        settings.HotkeyMode == HoldOnMode;
+
+    public static bool IsHoldFinishMode() =>
+        IsHoldFinishMode(OneKeyFightRuntimePlatform.Current.Settings);
+
+    internal static bool IsHoldFinishMode(OneKeyFightSettings settings) =>
+        settings.HotkeyMode == HoldFinishMode;
+
+    public static bool IsTickMode() =>
+        IsTickMode(OneKeyFightRuntimePlatform.Current.Settings);
+
+    internal static bool IsTickMode(OneKeyFightSettings settings) =>
+        settings.HotkeyMode == TickMode;
 
     /// 新一键宏执行指令时记录按下状态，便于停止时释放未抬起的键。
     private void ExecuteCommand(Avatar avatar, CombatCommand command)

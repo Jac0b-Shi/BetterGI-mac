@@ -12,7 +12,6 @@ using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Helpers;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.Common.Job;
@@ -28,8 +27,8 @@ public class ClaimEncounterPointsRewardsTask
 
     public ClaimEncounterPointsRewardsTask()
     {
-        IStringLocalizer<ClaimEncounterPointsRewardsTask> stringLocalizer = App.GetService<IStringLocalizer<ClaimEncounterPointsRewardsTask>>() ?? throw new NullReferenceException();
-        CultureInfo cultureInfo = new CultureInfo(TaskContext.Instance().Config.OtherConfig.GameCultureInfoName);
+        IStringLocalizer<ClaimEncounterPointsRewardsTask> stringLocalizer = Model.TaskParameterPlatform.Current.GetStringLocalizer<ClaimEncounterPointsRewardsTask>();
+        CultureInfo cultureInfo = new CultureInfo(Model.TaskParameterPlatform.Current.GameCultureInfoName);
         this.commissionsLocalizedString = stringLocalizer.WithCultureGet(cultureInfo, "委托");
     }
 
@@ -52,11 +51,11 @@ public class ClaimEncounterPointsRewardsTask
 
         await Delay(200, ct);
 
-        TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.OpenAdventurerHandbook); // F1 开书
+        AutoSkip.AutoSkipRuntimePlatform.Current.SimulateBackgroundAction(GIActions.OpenAdventurerHandbook); // F1 开书
 
         await Delay(1000, ct);
 
-        var assetScale = TaskContext.Instance().SystemInfo.AssetScale;
+        var assetScale = AutoFight.AutoFightRuntimePlatform.Current.SystemInfo.AssetScale;
 
         var earlyClaim = false; // 无需点击委托直接领取
         // 找委托按钮

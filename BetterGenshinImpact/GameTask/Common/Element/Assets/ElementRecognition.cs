@@ -1,6 +1,6 @@
+using System;
 using System.Collections.Generic;
 using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Model;
 using OpenCvSharp;
@@ -24,15 +24,15 @@ public static class ElementRecognition
         return RecognitionAssets.Get(@"Common\Element", objectName);
     }
 
-    public static RecognitionObject GetChatBackButton()
+    public static RecognitionObject GetChatBackButton(Region region)
     {
-        var systemInfo = TaskContext.Instance().SystemInfo;
-        var assetScale = systemInfo.AssetScale;
+        var assetScale = Math.Min(1d, region.Width / 1920d);
         return new RecognitionObject
         {
             Name = "ChatBackButton",
             RecognitionType = RecognitionTypes.TemplateMatch,
-            TemplateImageMat = GameTaskManager.LoadAssetImage(@"UseRedeemCode", "esc_return_button.png", systemInfo),
+            TemplateImageMat = GameTaskManager.LoadAssetImage(
+                @"UseRedeemCode", "esc_return_button.png", region.Width, region.Height),
             RegionOfInterest = new Rect(0, 0, (int)(220 * assetScale), (int)(160 * assetScale)),
             Threshold = 0.72,
             DrawOnWindow = false

@@ -81,7 +81,7 @@ public partial class MaskWindowConfig : ObservableObject
     ///     1080p下UID遮盖的位置与大小
     /// </summary>
     [NonSerialized]
-    public static readonly Rect UidCoverRightBottomRect = new(1920 - 1685, 1080 - 1053, 178, 22);
+    public static readonly Rect UidCoverRightBottomRect = ScreenshotPrivacy.UidCoverRightBottomRect;
 
     /// <summary>
     ///     准星是否启用

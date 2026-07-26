@@ -4,14 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using BetterGenshinImpact.Core.Config;
-using BetterGenshinImpact.GameTask.AutoPathing.Model;
-using BetterGenshinImpact.GameTask.Common;
-using BetterGenshinImpact.GameTask.LogParse;
-using BetterGenshinImpact.Helpers;
-using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
+using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.GameTask.FarmingPlan;
 
@@ -20,7 +15,7 @@ namespace BetterGenshinImpact.GameTask.FarmingPlan;
 /// </summary>
 public static class FarmingStatsRecorder
 {
-    public static readonly string LogDirectory = Global.Absolute(@"log\FarmingPlan");
+    public static string LogDirectory => FarmingStatsRuntimePlatform.Current.LogDirectory;
     public static bool debugMode = false;
     
     //输出测试用
@@ -28,7 +23,7 @@ public static class FarmingStatsRecorder
     {
         if (debugMode)
         {
-            TaskControl.Logger.LogDebug(msg);
+            FarmingStatsRuntimePlatform.Current.Logger.LogDebug(msg);
         }
     }
 
@@ -41,7 +36,7 @@ public static class FarmingStatsRecorder
         }
 
         var dailyFarmingData = ReadDailyFarmingData();
-        var config = TaskContext.Instance().Config.OtherConfig.FarmingPlanConfig;
+        var config = FarmingStatsRuntimePlatform.Current.Config;
         var mysdCfg = config.MiyousheDataConfig;
         bool mysEnable = mysdCfg.Enabled;
         var cap = dailyFarmingData.getFinalCap();
@@ -65,7 +60,7 @@ public static class FarmingStatsRecorder
             &&DateTime.Now > dailyFarmingData.TravelsDiaryDetailManagerUpdateTime.AddHours(2)
             && DateTime.Now > dailyFarmingData.LastMiyousheUpdateTime.AddMinutes(20))
         {
-            Task.Run(() => TryUpdateTravelsData());
+            _ = Task.Run(TryUpdateTravelsData);
         }
 
         
@@ -139,18 +134,17 @@ public static class FarmingStatsRecorder
             var cap = dailyData.getFinalCap();
             // 保存更新后的数据
             SaveDailyData(dailyData.FilePath, dailyData);
-            TaskControl.Logger.LogInformation(
+            FarmingStatsRuntimePlatform.Current.Logger.LogInformation(
                 $"锄地进度:[小怪:{ft.TotalNormalMobCount}/{cap.DailyMobCap}" +
                 $",精英:{ft.TotalEliteMobCount}/{cap.DailyEliteCap}]"+(dailyData.EnableMiyousheStats()?"(合并米游社数据)":""));
         }
         catch (Exception e)
         {
-            TaskControl.Logger.LogError($"锄地进度记录失败：{e.Message}");
+            FarmingStatsRuntimePlatform.Current.Logger.LogError(e, "锄地进度记录失败");
         }
     }
     
     //生成需要读取的札记月份
-    private static readonly SemaphoreSlim _updateLock = new SemaphoreSlim(1, 1);
     private static bool _isUpdating = false;
     
     public async static Task TryUpdateTravelsData()
@@ -161,51 +155,16 @@ public static class FarmingStatsRecorder
         try
         {
             _isUpdating = true;
-           // await _updateLock.WaitAsync(); // 获取独占锁    
             debugInfo("开始更新米游社札记");
-            string cookie = TaskContext.Instance().Config.OtherConfig.MiyousheConfig.Cookie;
-            DailyFarmingData? dailyFarmingData = null;
-            if (TaskContext.Instance().Config.OtherConfig.FarmingPlanConfig.MiyousheDataConfig.Enabled
-                && cookie != string.Empty)
-            {
-                try
-                {
-                    GameInfo gameInfo = await TravelsDiaryDetailManager.UpdateTravelsDiaryDetailManager(cookie,true);
-                    List<ActionItem> actionItems = TravelsDiaryDetailManager.loadNowDayActionItems(gameInfo);
-                    //当天的数据
-                    MoraStatistics ms = new MoraStatistics();
-                    ms.ActionItems.AddRange(actionItems);
-                    dailyFarmingData = ReadDailyFarmingData();
-                    
-                    if (actionItems.Count > 0)
-                    {
-                        dailyFarmingData.MiyousheTotalEliteMobCount = ms.EliteGameStatistics;
-                        dailyFarmingData.MiyousheTotalNormalMobCount = ms.SmallMonsterStatistics;
-                        dailyFarmingData.TravelsDiaryDetailManagerUpdateTime = DateTime.Parse(actionItems.Last().Time);
-                        debugInfo($"札记当天数据：[精英：{dailyFarmingData.MiyousheTotalEliteMobCount},小怪：{dailyFarmingData.MiyousheTotalNormalMobCount},{dailyFarmingData.TravelsDiaryDetailManagerUpdateTime}]");
-                    }
-                    else
-                    {
-                        TaskControl.Logger.LogError($"米游社旅行札记未有数据！");
-                    }
-                }
-                catch (Exception e)
-                {
-                    TaskControl.Logger.LogError($"米游社数据更新失败，请检查cookie是否过期：{e.Message}");
-                }
-            }
-
-            if (dailyFarmingData == null)
-            {
-                dailyFarmingData = ReadDailyFarmingData();
-            }
-
-            dailyFarmingData.LastMiyousheUpdateTime = DateTime.Now;
-            SaveDailyData(dailyFarmingData.FilePath, dailyFarmingData);
+            await FarmingStatsRuntimePlatform.Current.UpdateMiyousheDataAsync(CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            FarmingStatsRuntimePlatform.Current.Logger.LogError(
+                exception, "米游社数据更新失败，请检查平台能力或cookie是否过期");
         }
         finally
         {
-            //_updateLock.Release();
             _isUpdating = false;
         }
     }
@@ -213,7 +172,7 @@ public static class FarmingStatsRecorder
     public static DailyFarmingData ReadDailyFarmingData()
     {
         // 确定统计日期（以凌晨4点为分界）
-        DateTimeOffset now = ServerTimeHelper.GetServerTimeNow();
+        DateTimeOffset now = FarmingStatsRuntimePlatform.Current.ServerTimeNow;
         DateTimeOffset statsDate = CalculateStatsDate(now);
         string dateString = statsDate.ToString("yyyyMMdd");
 
@@ -285,7 +244,7 @@ public static class FarmingStatsRecorder
     /// <summary>
     /// 保存每日数据
     /// </summary>
-    private static void SaveDailyData(string filePath, DailyFarmingData data)
+    internal static void SaveDailyData(string filePath, DailyFarmingData data)
     {
         string json = JsonConvert.SerializeObject(data, GetJsonSettings());
         File.WriteAllText(filePath, json);

@@ -1,4 +1,3 @@
-using BetterGenshinImpact.Core.Recognition.OpenCv;
 using OpenCvSharp;
 using System;
 using System.Collections.Frozen;
@@ -18,7 +17,12 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
 
         public GridParams(Rect roi1080p, int columns, int s1Round, int roundMilliseconds, int s2Round, double s3Scale)
         {
-            Roi = roi1080p.Multiply(TaskContext.Instance().SystemInfo.AssetScale);
+            var scale = GridScreenRuntimePlatform.Current.AssetScale;
+            Roi = new Rect(
+                (int)Math.Round(roi1080p.X * scale),
+                (int)Math.Round(roi1080p.Y * scale),
+                (int)Math.Round(roi1080p.Width * scale),
+                (int)Math.Round(roi1080p.Height * scale));
             Columns = columns;
             S1Round = s1Round;
             RoundMilliseconds = roundMilliseconds;

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script.Group;
+using BetterGenshinImpact.Core.Script.Dependence;
 using BetterGenshinImpact.Helpers;
 using Newtonsoft.Json;
 
@@ -30,7 +31,8 @@ public class ExecutionRecordStorage
         if (File.Exists(filePath))
         {
             string json = File.ReadAllText(filePath);
-            dailyRecord = JsonConvert.DeserializeObject<DailyExecutionRecord>(json);
+            dailyRecord = JsonConvert.DeserializeObject<DailyExecutionRecord>(json)
+                ?? throw new InvalidDataException($"执行记录无法反序列化：{filePath}");
         }
         else
         {
@@ -107,7 +109,8 @@ public class ExecutionRecordStorage
             if (File.Exists(filePath))
             {
                 string json = File.ReadAllText(filePath);
-                var record = JsonConvert.DeserializeObject<DailyExecutionRecord>(json);
+                var record = JsonConvert.DeserializeObject<DailyExecutionRecord>(json)
+                    ?? throw new InvalidDataException($"执行记录无法反序列化：{filePath}");
                 results.Add(record);
             }
         }
@@ -152,7 +155,7 @@ public class ExecutionRecordStorage
             throw new ArgumentOutOfRangeException(nameof(boundaryHour), "分界时间必须在0-23之间");
 
         DateTimeOffset now = isBoundaryTimeBasedOnServerTime
-            ? ServerTimeHelper.GetServerTimeNow()
+            ? ScriptHostServices.ServerTimeNow
             : DateTimeOffset.Now;
 
         // 计算今天的开始时间（根据分界时间）
@@ -243,7 +246,7 @@ public class ExecutionRecordStorage
                     // 如果记录不在"今天"，则跳过
                     if (!IsTodayByBoundary(config.BoundaryTime,
                             record.ServerStartTime ??
-                            new DateTimeOffset(record.StartTime).ToOffset(ServerTimeHelper.GetServerTimeOffset()),
+                            new DateTimeOffset(record.StartTime).ToOffset(ScriptHostServices.ServerTimeZoneOffset),
                             config.IsBoundaryTimeBasedOnServerTime)) continue;
                 }
 

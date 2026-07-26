@@ -18,20 +18,7 @@ public class ConfigService : IConfigService
     private const string ConfigRelativePath = @"User/config.json";
     private const string BackupFolderName = "backup";
 
-    public static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters =
-        {
-            new OpenCvPointJsonConverter(),
-            new OpenCvRectJsonConverter(),
-        },
-        WriteIndented = true,
-        AllowTrailingCommas = true,
-        ReadCommentHandling = JsonCommentHandling.Skip,
-    };
+    public static readonly JsonSerializerOptions JsonOptions = ConfigJson.Options;
 
     /// <summary>
     /// 写入只有UI线程会调用
@@ -164,51 +151,5 @@ public class ConfigService : IConfigService
         var coreStack = string.IsNullOrWhiteSpace(coreException.StackTrace) ? "无可用堆栈信息" : coreException.StackTrace;
         var message = $"配置文件{operation}失败\n错误：{coreException.Message}\n堆栈：\n{coreStack}";
         _ = ThemedMessageBox.ErrorAsync(message, "配置文件异常");
-    }
-}
-
-public class OpenCvRectJsonConverter : JsonConverter<Rect>
-{
-    public override unsafe Rect Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        RectHelper helper = JsonSerializer.Deserialize<RectHelper>(ref reader, options);
-        return *(Rect*)&helper;
-    }
-
-    public override unsafe void Write(Utf8JsonWriter writer, Rect value, JsonSerializerOptions options)
-    {
-        RectHelper helper = *(RectHelper*)&value;
-        JsonSerializer.Serialize(writer, helper, options);
-    }
-
-    // DO NOT MODIFY: Keep the layout same as OpenCvSharp.Rect
-    private struct RectHelper
-    {
-        public int X { get; set; }
-        public int Y { get; set; }
-        public int Width { get; set; }
-        public int Height { get; set; }
-    }
-}
-
-public class OpenCvPointJsonConverter : JsonConverter<Point>
-{
-    public override unsafe Point Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        PointHelper helper = JsonSerializer.Deserialize<PointHelper>(ref reader, options);
-        return *(Point*)&helper;
-    }
-
-    public override unsafe void Write(Utf8JsonWriter writer, Point value, JsonSerializerOptions options)
-    {
-        PointHelper helper = *(PointHelper*)&value;
-        JsonSerializer.Serialize(writer, helper, options);
-    }
-
-    // DO NOT MODIFY: Keep the layout same as OpenCvSharp.Point
-    private struct PointHelper
-    {
-        public int X { get; set; }
-        public int Y { get; set; }
     }
 }

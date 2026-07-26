@@ -15,11 +15,11 @@ namespace BetterGenshinImpact.Core.Script.Dependence;
 
 public class Http
 {
-    private readonly ILogger<Http> _logger = App.GetLogger<Http>();
+    private readonly ILogger _logger = ScriptHostServices.CreateLogger<Http>();
 
     private void CheckHttpPermission(string url)
     {
-        var currentProject = TaskContext.Instance().CurrentScriptProject;
+        var currentProject = ScriptHostServices.CurrentProject;
         if (!currentProject?.AllowJsHTTP ?? false)
         {
             throw new UnauthorizedAccessException("当前JS脚本不允许使用HTTP请求，请在调度器通用设置中启用“JS HTTP权限”");

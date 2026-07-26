@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "modelRootContract": "The resolver modelRoot is the directory containing Assets/; artifact relativePaths are relative to modelRoot.",
+  "artifacts": [
+    {
+      "id": "YapModelTraining",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/Yap/model_training.onnx",
+      "registryKey": "YapModelTraining",
+      "requiredFor": ["PickTextInference", "AutoPick.Yap"],
+      "sidecars": ["Assets/Model/Yap/index_2_word.json"]
+    },
+    {
+      "id": "PaddleOcrDetV4",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/PaddleOCR/Det/V4/ppocr_det_v4.onnx",
+      "registryKey": "PaddleOcrDetV4",
+      "requiredFor": ["PaddleOCR.Det.V4"],
+      "sidecars": []
+    },
+    {
+      "id": "PaddleOcrDetV5",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/PaddleOCR/Det/V5/ppocr_det_v5.onnx",
+      "registryKey": "PaddleOcrDetV5",
+      "requiredFor": ["PaddleOCR.Det.V5"],
+      "sidecars": []
+    },
+    {
+      "id": "PaddleOcrDetV6",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/PaddleOCR/Det/V6/ppocr_det_v6.onnx",
+      "registryKey": "PaddleOcrDetV6",
+      "requiredFor": ["PaddleOCR.Det.V6"],
+      "sidecars": []
+    },
+    {
+      "id": "PaddleOcrRecV4",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/PaddleOCR/Rec/V4/ppocr_rec_v4.onnx",
+      "registryKey": "PaddleOcrRecV4",
+      "requiredFor": ["PaddleOCR.Rec.V4"],
+      "sidecars": ["Assets/Model/PaddleOCR/Rec/V4/inference.yml"]
+    },
+    {
+      "id": "PaddleOcrRecV4En",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/PaddleOCR/Rec/V4En/ppocr_rec_v4_en.onnx",
+      "registryKey": "PaddleOcrRecV4En",
+      "requiredFor": ["PaddleOCR.Rec.V4En"],
+      "sidecars": ["Assets/Model/PaddleOCR/Rec/V4En/inference.yml"]
+    },
+    {
+      "id": "PaddleOcrRecV5",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/PaddleOCR/Rec/V5/ppocr_rec_v5.onnx",
+      "registryKey": "PaddleOcrRecV5",
+      "requiredFor": ["PaddleOCR.Rec.V5"],
+      "sidecars": ["Assets/Model/PaddleOCR/Rec/V5/inference.yml"]
+    },
+    {
+      "id": "PaddleOcrRecV5Latin",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/PaddleOCR/Rec/V5Latin/ppocr_rec_v5_latin.onnx",
+      "registryKey": "PaddleOcrRecV5Latin",
+      "requiredFor": ["PaddleOCR.Rec.V5Latin"],
+      "sidecars": ["Assets/Model/PaddleOCR/Rec/V5Latin/inference.yml"]
+    },
+    {
+      "id": "PaddleOcrRecV5Eslav",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/PaddleOCR/Rec/V5Eslav/ppocr_rec_v5_eslav.onnx",
+      "registryKey": "PaddleOcrRecV5Eslav",
+      "requiredFor": ["PaddleOCR.Rec.V5Eslav"],
+      "sidecars": ["Assets/Model/PaddleOCR/Rec/V5Eslav/inference.yml"]
+    },
+    {
+      "id": "PaddleOcrRecV5Korean",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/PaddleOCR/Rec/V5Korean/ppocr_rec_v5_korean.onnx",
+      "registryKey": "PaddleOcrRecV5Korean",
+      "requiredFor": ["PaddleOCR.Rec.V5Korean"],
+      "sidecars": ["Assets/Model/PaddleOCR/Rec/V5Korean/inference.yml"]
+    },
+    {
+      "id": "PaddleOcrRecV6",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/PaddleOCR/Rec/V6/ppocr_rec_v6.onnx",
+      "registryKey": "PaddleOcrRecV6",
+      "requiredFor": ["PaddleOCR.Rec.V6"],
+      "sidecars": ["Assets/Model/PaddleOCR/Rec/V6/inference.yml"]
+    },
+    {
+      "id": "BgiAvatarSide",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/Common/avatar_side_classify_sim.onnx",
+      "registryKey": "BgiAvatarSide",
+      "requiredFor": ["AutoFight.TeamRecognition"],
+      "sidecars": []
+    },
+    {
+      "id": "BgiQClassify",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/Common/q_classify_sim.onnx",
+      "registryKey": "BgiQClassify",
+      "requiredFor": ["AutoFight.BurstRecognition"],
+      "sidecars": []
+    },
+    {
+      "id": "BgiTree",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/Domain/bgi_tree.onnx",
+      "registryKey": "BgiTree",
+      "requiredFor": ["AutoDomain.TreeRecognition"],
+      "sidecars": []
+    },
+    {
+      "id": "BgiFish",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/Fish/bgi_fish.onnx",
+      "registryKey": "BgiFish",
+      "requiredFor": ["AutoFishing.FishRecognition"],
+      "sidecars": []
+    },
+    {
+      "id": "GridIcon",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/Item/gridIcon.onnx",
+      "registryKey": "GridIcon",
+      "requiredFor": ["AutoFishing.BaitRecognition", "GridIconsAccuracyTest"],
+      "sidecars": ["Assets/Model/Item/items.csv"]
+    },
+    {
+      "id": "BgiMine",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/Mine/bgi_mine.onnx",
+      "registryKey": "BgiMine",
+      "requiredFor": ["AutoPathing.Mining"],
+      "sidecars": []
+    },
+    {
+      "id": "SileroVad",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/Vad/silero_vad.onnx",
+      "registryKey": "SileroVad",
+      "requiredFor": ["AutoSkip.DialogueVoiceWait"],
+      "sidecars": []
+    },
+    {
+      "id": "BgiWorld",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/World/bgi_world.onnx",
+      "registryKey": "BgiWorld",
+      "requiredFor": ["AutoFight.DropScan"],
+      "sidecars": []
+    }
+  ],
+  "sidecarArtifacts": [
+    {
+      "id": "PaddleOCR.Preheat.Default",
+      "relativePath": "Assets/Model/PaddleOCR/test_pp_ocr.png",
+      "requiredFor": ["PaddleOcrService.Preheat"]
+    },
+    {
+      "id": "PaddleOCR.Preheat.Number",
+      "relativePath": "Assets/Model/PaddleOCR/test_pp_ocr_number.png",
+      "requiredFor": ["PaddleOcrService.Preheat.V4En"]
+    }
+  ]
+}

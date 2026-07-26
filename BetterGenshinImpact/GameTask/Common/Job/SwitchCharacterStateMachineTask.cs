@@ -1,6 +1,7 @@
 using BetterGenshinImpact.Core.BgiVision;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
+using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoFight.Config;
@@ -9,6 +10,7 @@ using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Common.Exceptions;
 using BetterGenshinImpact.GameTask.Common.StateMachine;
 using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.Model.GameUI;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
@@ -62,9 +64,11 @@ public sealed class SwitchCharacterStateMachineTask : StateMachineBase<SwitchCha
     private const string PlayerGirlName = "荧";
     private const string SwordWeaponType = "单手剑";
 
-    private readonly ILogger<SwitchCharacterStateMachineTask> _logger = App.GetLogger<SwitchCharacterStateMachineTask>();
+    private readonly ILogger _logger;
     private readonly ReturnMainUiTask _returnMainUiTask = new();
-    private readonly double _assetScale = TaskContext.Instance().SystemInfo.AssetScale;
+    private readonly double _assetScale;
+    private readonly BgiOnnxFactory _onnxFactory;
+    private readonly IOcrService _ocrService;
 
     private SwitchCharacterState _workflowState;
     private AvatarGridIconRecognizer? _recognizer;
@@ -84,6 +88,19 @@ public sealed class SwitchCharacterStateMachineTask : StateMachineBase<SwitchCha
     /// 状态机日志对象。
     /// </summary>
     protected override ILogger Logger => _logger;
+
+    public SwitchCharacterStateMachineTask(
+        ILogger logger,
+        ISystemInfo systemInfo,
+        BgiOnnxFactory onnxFactory,
+        IOcrService ocrService)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _assetScale = (systemInfo ?? throw new ArgumentNullException(nameof(systemInfo))).AssetScale;
+        _onnxFactory = onnxFactory ?? throw new ArgumentNullException(nameof(onnxFactory));
+        _ocrService = ocrService ?? throw new ArgumentNullException(nameof(ocrService));
+        InitializeStateMachine();
+    }
 
     private sealed record TargetRole(
         int Slot,
@@ -125,7 +142,7 @@ public sealed class SwitchCharacterStateMachineTask : StateMachineBase<SwitchCha
     /// <summary>
     /// 初始化状态机版本的角色切换任务。
     /// </summary>
-    public SwitchCharacterStateMachineTask()
+    private void InitializeStateMachine()
     {
         RegisterStateMethodsByAttribute();
         RegisterStateTransitions(
@@ -214,7 +231,7 @@ public sealed class SwitchCharacterStateMachineTask : StateMachineBase<SwitchCha
         }
 
         ResetWorkflow(roles);
-        using var recognizer = new AvatarGridIconRecognizer();
+        using var recognizer = new AvatarGridIconRecognizer(_onnxFactory);
         _recognizer = recognizer;
 
         try
@@ -621,7 +638,7 @@ public sealed class SwitchCharacterStateMachineTask : StateMachineBase<SwitchCha
         using var binary = new Mat(tagRegion.SrcMat.Size(), MatType.CV_8UC3, Scalar.White);
         binary.SetTo(Scalar.Black, darkMask);
 
-        var result = OcrFactory.Paddle.OcrResult(binary);
+        var result = _ocrService.OcrResult(binary);
         return result.Regions
             .OrderBy(region => region.Rect.Center.Y)
             .ThenBy(region => region.Rect.Center.X)
@@ -686,7 +703,7 @@ public sealed class SwitchCharacterStateMachineTask : StateMachineBase<SwitchCha
     [StateHandler(SwitchCharacterState.MainUi, RetryTimeout = 15000, RetryInterval = 500, TransitionTimeout = 7000)]
     private async Task<StateHandlerResult> HandleMainUi(BvPage page)
     {
-        Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+        TaskControlPlatform.Current.SimulateAction(GIActions.OpenPartySetupScreen, KeyType.KeyPress);
         await Delay(2000, _ct);
         return StateHandlerResult.Success;
     }

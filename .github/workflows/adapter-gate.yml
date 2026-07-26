@@ -1,0 +1,43 @@
+name: Adapter Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - mac-core-extraction
+    paths:
+      - "BetterGenshinImpact.Platform.Abstractions/**"
+      - "BetterGenshinImpact/Core/Runtime/Windows/**"
+      - "Test/BetterGenshinImpact.Core.AdapterBuild/**"
+      - ".github/workflows/adapter-gate.yml"
+  pull_request:
+    paths:
+      - "BetterGenshinImpact.Platform.Abstractions/**"
+      - "BetterGenshinImpact/Core/Runtime/Windows/**"
+      - "Test/BetterGenshinImpact.Core.AdapterBuild/**"
+      - ".github/workflows/adapter-gate.yml"
+
+concurrency:
+  group: adapter-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  adapter-gate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Restore
+        run: >
+          dotnet restore
+          Test/BetterGenshinImpact.Core.AdapterBuild/BetterGenshinImpact.Core.AdapterBuild.csproj
+          -p:Platform=x64
+      - name: Build
+        run: >
+          dotnet build
+          Test/BetterGenshinImpact.Core.AdapterBuild/BetterGenshinImpact.Core.AdapterBuild.csproj
+          -c Release
+          -p:Platform=x64
+          --no-restore

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script.Group;
+using BetterGenshinImpact.Service;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
@@ -13,7 +14,7 @@ namespace BetterGenshinImpact.GameTask.TaskProgress;
 public class TaskProgressManager
 {
     private static readonly string _configDir = Global.Absolute(@"log\task_progress");
-    public static ILogger Logger { get; } = App.GetLogger<TaskProgressManager>();
+    public static ILogger Logger => ScriptServicePlatform.Current.Logger;
     public static void SaveTaskProgress(TaskProgress taskProgress)
     {
         // 如果目录不存在，则创建

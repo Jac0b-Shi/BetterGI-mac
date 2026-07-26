@@ -82,7 +82,7 @@ public class DailyFarmingData
 
     public (double DailyEliteCap, double DailyMobCap) getFinalCap()
     {
-        var config = TaskContext.Instance().Config.OtherConfig.FarmingPlanConfig;
+        var config = FarmingStatsRuntimePlatform.Current.Config;
         var mysdCfg = config.MiyousheDataConfig;
         if (MiyousheTotalEliteMobCount + MiyousheTotalNormalMobCount > 0)
         {
@@ -92,4 +92,3 @@ public class DailyFarmingData
         return (config.DailyEliteCap,config.DailyMobCap);
     }
 }
-

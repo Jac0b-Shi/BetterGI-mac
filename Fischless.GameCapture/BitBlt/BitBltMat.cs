@@ -1,32 +1,28 @@
-﻿using OpenCvSharp;
-using OpenCvSharp.Internal;
+using OpenCvSharp;
 
 namespace Fischless.GameCapture.BitBlt;
 
-public class BitBltMat : Mat
+/// <summary>
+/// Bridges BitBlt-owned pooled memory into OpenCvSharp without depending on
+/// OpenCvSharp's private native-pointer constructor. OpenCvSharp 4.13 made that
+/// pointer immutable, so a Mat cannot safely own the pool-return callback.
+/// Clone before returning and release the borrowed buffer immediately.
+/// </summary>
+public static class BitBltMat
 {
-    private readonly BitBltSession _session;
-    private readonly IntPtr _data;
-
-    private BitBltMat(IntPtr ptr, BitBltSession session, IntPtr data)
-    {
-        if (ptr == IntPtr.Zero)
-            throw new OpenCvSharpException("Native object address is NULL");
-        this.ptr = ptr;
-        _session = session;
-        _data = data;
-    }
-
     public static Mat FromPixelData(BitBltSession session, int rows, int cols, MatType type, IntPtr data, long step = 0)
     {
-        NativeMethods.HandleException(
-            NativeMethods.core_Mat_new8(rows, cols, type, data, new IntPtr(step), out var ptr));
-        return new BitBltMat(ptr, session, data);
-    }
+        if (data == IntPtr.Zero)
+            throw new OpenCvSharpException("Pixel data address is NULL");
 
-    protected override void DisposeUnmanaged()
-    {
-        base.DisposeUnmanaged();
-        _session.ReleaseBuffer(_data);
+        try
+        {
+            using var borrowed = Mat.FromPixelData(rows, cols, type, data, step);
+            return borrowed.Clone();
+        }
+        finally
+        {
+            session.ReleaseBuffer(data);
+        }
     }
 }

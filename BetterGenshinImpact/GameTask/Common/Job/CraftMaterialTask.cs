@@ -1,13 +1,11 @@
 using BetterGenshinImpact.Core.BgiVision;
 using BetterGenshinImpact.Core.Config;
-using BetterGenshinImpact.Core.Simulator;
+using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask.Common.Reward;
 using BetterGenshinImpact.GameTask.GetGridIcons;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Model.GameUI;
 using BetterGenshinImpact.Helpers;
-using BetterGenshinImpact.View.Drawable;
-using Fischless.WindowsInput;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualBasic.FileIO;
 using OpenCvSharp;
@@ -23,66 +21,6 @@ using static BetterGenshinImpact.GameTask.Common.TaskControl;
 namespace BetterGenshinImpact.GameTask.Common.Job;
 
 /// <summary>
-/// 合成指定材料的执行结果。
-/// </summary>
-public class CraftMaterialResult
-{
-    /// <summary>
-    /// 是否成功完成合成。
-    /// </summary>
-    public bool Success { get; set; }
-
-    /// <summary>
-    /// 目标材料名。
-    /// </summary>
-    public string MaterialName { get; set; } = string.Empty;
-
-    /// <summary>
-    /// 目标合成个数。
-    /// </summary>
-    public int TargetQuantity { get; set; }
-
-    /// <summary>
-    /// 实际设置到界面的合成个数。
-    /// </summary>
-    public int ActualQuantity { get; set; }
-
-    /// <summary>
-    /// 本次使用的材料筛选类型。
-    /// </summary>
-    public string MaterialType { get; set; } = string.Empty;
-
-    /// <summary>
-    /// 本次合成产物汇总。
-    /// </summary>
-    public List<RewardItem> Rewards { get; set; } = [];
-
-    /// <summary>
-    /// 创建成功结果。
-    /// </summary>
-    /// <param name="materialName">目标材料名。</param>
-    /// <param name="targetQuantity">目标合成个数。</param>
-    /// <param name="actualQuantity">实际设置个数。</param>
-    /// <param name="materialType">材料筛选类型。</param>
-    /// <param name="rewards">本次合成产物汇总。</param>
-    /// <returns>成功结果。</returns>
-    public static CraftMaterialResult CreateSuccess(string materialName, int targetQuantity, int actualQuantity, string materialType,
-        List<RewardItem> rewards)
-    {
-        return new CraftMaterialResult
-        {
-            Success = true,
-            MaterialName = materialName,
-            TargetQuantity = targetQuantity,
-            ActualQuantity = actualQuantity,
-            MaterialType = materialType,
-            Rewards = rewards
-        };
-    }
-
-}
-
-/// <summary>
 /// 当前合成界面内按材料名自动合成材料。
 /// </summary>
 public class CraftMaterialTask
@@ -91,8 +29,7 @@ public class CraftMaterialTask
     private static readonly Regex FractionRegex = new(@"(\d+)\s*/\s*(\d+)", RegexOptions.Compiled);
     private static readonly Lazy<Dictionary<string, string>> MaterialTypes = new(LoadMaterialTypes);
 
-    private readonly ILogger<CraftMaterialTask> _logger = App.GetLogger<CraftMaterialTask>();
-    private readonly InputSimulator _input = Simulation.SendInput;
+    private readonly ILogger<CraftMaterialTask> _logger = CraftMaterialRuntimePlatform.Current.Logger;
     private readonly string _materialName;
     private readonly int _targetQuantity;
     private readonly string? _materialType;
@@ -327,7 +264,7 @@ public class CraftMaterialTask
         using ItemRecognizer itemRecognizer = new();
         GridScreen gridScreen = new(GridParams.Templates[GridScreenName.Crafting], _logger, _ct);
         gridScreen.OnAfterTurnToNewPage += GridScreen.DrawItemsAfterTurnToNewPage;
-        gridScreen.OnBeforeScroll += () => VisionContext.Instance().DrawContent.ClearAll();
+        gridScreen.OnBeforeScroll += () => OverlayDrawPlatform.Current.ClearAll();
 
         try
         {
@@ -355,7 +292,7 @@ public class CraftMaterialTask
         }
         finally
         {
-            VisionContext.Instance().DrawContent.ClearAll();
+            OverlayDrawPlatform.Current.ClearAll();
         }
 
         return false;
@@ -516,7 +453,7 @@ public class CraftMaterialTask
         var x = sliderStartX + (sliderEndX - sliderStartX) * Math.Clamp(ratio, 0d, 1d);
         GameCaptureRegion.GameRegion1080PPosMove(sliderStartX, sliderY);
         await Delay(80, _ct);
-        _input.Mouse.LeftButtonDown();
+        LeftButtonDown();
         try
         {
             const int steps = 12;
@@ -529,7 +466,7 @@ public class CraftMaterialTask
         }
         finally
         {
-            _input.Mouse.LeftButtonUp();
+            LeftButtonUp();
         }
     }
 
@@ -646,7 +583,7 @@ public class CraftMaterialTask
     /// <returns>当前截图尺寸下的矩形。</returns>
     private static Rect Rect1080(int x, int y, int width, int height)
     {
-        var scale = TaskContext.Instance().SystemInfo.AssetScale;
+        var scale = GridScreenRuntimePlatform.Current.AssetScale;
         return new Rect(
             (int)Math.Round(x * scale),
             (int)Math.Round(y * scale),

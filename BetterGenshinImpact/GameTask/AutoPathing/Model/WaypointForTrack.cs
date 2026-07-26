@@ -3,6 +3,7 @@ using System;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
 using BetterGenshinImpact.GameTask.AutoPathing.Model.Enum;
 using BetterGenshinImpact.GameTask.Common.Map.Maps;
+using BetterGenshinImpact.Service;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing.Model;
 
@@ -24,7 +25,7 @@ public class WaypointForTrack : Waypoint
     public string MapMatchMethod { get; set; }
     
     //异常识别
-    public Misidentification Misidentification { get; set; } = new();
+    public new Misidentification Misidentification { get; set; } = new();
     
     //怪物标签
     public string MonsterTag { get; set; } ="";
@@ -51,7 +52,7 @@ public class WaypointForTrack : Waypoint
         GameY = waypoint.Y;
         MapName = mapName;
         // 坐标系转换
-        mapMatchMethod ??= TaskContext.Instance().Config.PathingConditionConfig.MapMatchingMethod;
+        mapMatchMethod ??= ScriptServicePlatform.Current.MapMatchingMethod;
         MapMatchMethod = mapMatchMethod;
         var MatP = MapManager.GetMap(mapName, MapMatchMethod).ConvertGenshinMapCoordinatesToImageCoordinates(new OpenCvSharp.Point2f((float)waypoint.X, (float)waypoint.Y));
         MatX = MatP.X;

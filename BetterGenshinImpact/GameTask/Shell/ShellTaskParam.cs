@@ -1,11 +1,10 @@
 using BetterGenshinImpact.Core.Config;
-using BetterGenshinImpact.GameTask.Model;
 
 namespace BetterGenshinImpact.GameTask.Shell;
 
-public class ShellTaskParam : BaseTaskParam<ShellTask>
+public class ShellTaskParam
 {
-    private ShellTaskParam(string command, int configTimeoutSeconds, bool configNoWindow, bool configOutput, bool configDisable) : base(null, null)
+    private ShellTaskParam(string command, int configTimeoutSeconds, bool configNoWindow, bool configOutput, bool configDisable)
     {
         Command = command;
         TimeoutSeconds = configTimeoutSeconds;

@@ -1,10 +1,12 @@
-﻿using BetterGenshinImpact.Core.Recognition;
+using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area.Converter;
 using BetterGenshinImpact.Helpers;
+#if BGI_FULL_WINDOWS
 using BetterGenshinImpact.View.Drawable;
+#endif
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using SixLabors.ImageSharp;
@@ -54,7 +56,7 @@ public class ImageRegion : Region
     }
 
     public ImageRegion(Mat mat, int x, int y, Region? owner = null, INodeConverter? converter = null,
-        DrawContent? drawContent = null) : base(x, y, mat.Width, mat.Height, owner, converter, drawContent)
+        IOverlayDrawPlatform? drawContent = null) : base(x, y, mat.Width, mat.Height, owner, converter, drawContent)
     {
         SrcMat = mat;
     }
@@ -204,7 +206,7 @@ public class ImageRegion : Region
                 {
                     if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                     {
-                        drawContent.RemoveRect(ro.Name);
+                        drawContent.RemoveRectangles(ro.Name);
                     }
 
                     failAction?.Invoke();
@@ -243,8 +245,8 @@ public class ImageRegion : Region
                 roi = new Mat(SrcMat, effectiveRegionOfInterest);
             }
 
-            var result = OcrFactory.Paddle.OcrResult(roi);
-            var text = StringUtils.RemoveAllSpace(result.Text);
+            var result = ImageRegionOcrPlatform.Current.OcrResult(roi);
+            var text = NormalizeOcrText(result.Text);
             // 替换可能出错的文本
             foreach (var entry in ro.ReplaceDictionary)
             {
@@ -291,11 +293,13 @@ public class ImageRegion : Region
                 var newRa = Derive(effectiveRegionOfInterest);
                 if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                 {
+#if BGI_FULL_WINDOWS
                     // 画出OCR识别到的区域
                     var drawList = result.Regions.Select(item =>
                         this.ToRectDrawable(item.Rect.BoundingRect() + effectiveRegionOfInterest.Location, ro.Name,
                             ro.DrawOnWindowPen)).ToList();
-                    drawContent.PutOrRemoveRectList(ro.Name, drawList);
+                    VisionContext.Instance().DrawContent.PutOrRemoveRectList(ro.Name, drawList);
+#endif
                 }
 
                 successAction?.Invoke(newRa);
@@ -305,7 +309,7 @@ public class ImageRegion : Region
             {
                 if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                 {
-                    drawContent.RemoveRect(ro.Name);
+                    OverlayDrawPlatform.Current.RemoveRectangles(ro.Name);
                 }
 
                 failAction?.Invoke();
@@ -347,18 +351,20 @@ public class ImageRegion : Region
                 }
             }
 
-            var result = OcrFactory.Paddle.OcrResult(roi);
-            var text = StringUtils.RemoveAllSpace(result.Text);
+            var result = ImageRegionOcrPlatform.Current.OcrResult(roi);
+            var text = NormalizeOcrText(result.Text);
 
             if (!string.IsNullOrEmpty(text))
             {
                 if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                 {
+#if BGI_FULL_WINDOWS
                     // 画出OCR识别到的区域
                     var drawList = result.Regions.Select(item =>
                         this.ToRectDrawable(item.Rect.BoundingRect() + effectiveRegionOfInterest.Location, ro.Name,
                             ro.DrawOnWindowPen)).ToList();
-                    drawContent.PutOrRemoveRectList(ro.Name, drawList);
+                    VisionContext.Instance().DrawContent.PutOrRemoveRectList(ro.Name, drawList);
+#endif
                 }
 
                 if (effectiveRegionOfInterest != default)
@@ -379,7 +385,7 @@ public class ImageRegion : Region
             {
                 if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                 {
-                    drawContent.RemoveRect(ro.Name);
+                    OverlayDrawPlatform.Current.RemoveRectangles(ro.Name);
                 }
 
                 failAction?.Invoke();
@@ -465,8 +471,8 @@ public class ImageRegion : Region
 
                     if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                     {
-                        VisionContext.Instance().DrawContent.PutOrRemoveRectList(ro.Name,
-                            resRaList.Select(ra => ra.SelfToRectDrawable(ro.Name)).ToList());
+                        OverlayDrawPlatform.Current.SetRectangles(
+                            ro.Name, this, resRaList.Select(ra => new Rect(ra.X, ra.Y, ra.Width, ra.Height)).ToList());
                     }
 
                     successAction?.Invoke(resRaList);
@@ -476,7 +482,7 @@ public class ImageRegion : Region
                 {
                     if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                     {
-                        VisionContext.Instance().DrawContent.RemoveRect(ro.Name);
+                        OverlayDrawPlatform.Current.RemoveRectangles(ro.Name);
                     }
 
                     failAction?.Invoke();
@@ -510,7 +516,7 @@ public class ImageRegion : Region
                 roi = new Mat(SrcMat, effectiveRegionOfInterest);
             }
 
-            var result = OcrFactory.Paddle.OcrResult(roi);
+            var result = ImageRegionOcrPlatform.Current.OcrResult(roi);
 
             if (result.Regions.Length > 0)
             {
@@ -529,11 +535,13 @@ public class ImageRegion : Region
                 }).ToList();
                 if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                 {
+#if BGI_FULL_WINDOWS
                     // 画出OCR识别到的区域
                     var drawList = result.Regions.Select(item =>
                         this.ToRectDrawable(item.Rect.BoundingRect() + effectiveRegionOfInterest.Location, ro.Name,
                             ro.DrawOnWindowPen)).ToList();
                     VisionContext.Instance().DrawContent.PutOrRemoveRectList(ro.Name, drawList);
+#endif
                 }
 
                 successAction?.Invoke(resRaList);
@@ -543,7 +551,7 @@ public class ImageRegion : Region
             {
                 if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                 {
-                    VisionContext.Instance().DrawContent.RemoveRect(ro.Name);
+                    OverlayDrawPlatform.Current.RemoveRectangles(ro.Name);
                 }
 
                 failAction?.Invoke();
@@ -561,5 +569,19 @@ public class ImageRegion : Region
         _cacheImage?.Dispose();
         _cacheGreyMat?.Dispose();
         SrcMat.Dispose();
+    }
+
+    private static string NormalizeOcrText(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+#if BGI_PLATFORM_MAC
+        return text
+            .Replace(" ", "")
+            .Replace("\t", "")
+            .Replace("\n", "")
+            .Replace("\r", "");
+#else
+        return StringUtils.RemoveAllSpace(text);
+#endif
     }
 }

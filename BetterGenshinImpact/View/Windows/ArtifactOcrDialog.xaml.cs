@@ -73,7 +73,8 @@ public partial class ArtifactOcrDialog
             this.ModelStructure.Text = artifact.ToStructuredString();
             if (this.javaScript != null)
             {
-                bool isMatch = await AutoArtifactSalvageTask.IsMatchJavaScript(artifact, this.javaScript);
+                bool isMatch = await AutoArtifactSalvageTask.IsMatchJavaScript(
+                    artifact, this.javaScript, App.GetLogger<AutoArtifactSalvageTask>());
                 this.RegexResult.Text = isMatch ? "匹配" : "不匹配";
             }
         }

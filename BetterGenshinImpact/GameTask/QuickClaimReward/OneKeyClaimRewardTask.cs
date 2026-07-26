@@ -1,6 +1,4 @@
 using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.Core.Simulator;
-using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Model;
 using Microsoft.Extensions.Logging;
@@ -9,8 +7,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Vanara.PInvoke;
-using Wpf.Ui.Violeta.Controls;
 
 namespace BetterGenshinImpact.GameTask.QuickClaimReward;
 
@@ -23,13 +19,27 @@ public class OneKeyClaimRewardTask : Singleton<OneKeyClaimRewardTask>
     private const int ScrollChunkSize = 10;
     private const int MaxBlankContinueChecks = 3;
     private const int ScrollRenderDelayMilliseconds = 120;
-    private static readonly ILogger<OneKeyClaimRewardTask> Logger = App.GetLogger<OneKeyClaimRewardTask>();
 
     private readonly object _taskLock = new();
     private CancellationTokenSource? _cts;
     private Task? _claimTask;
     private volatile bool _isKeyDown;
     private DateTime _lastNoRewardLogTime = DateTime.MinValue;
+
+    public void RunHotKey(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        KeyDown();
+        try
+        {
+            cancellationToken.WaitHandle.WaitOne();
+        }
+        finally
+        {
+            KeyUp();
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+    }
 
     public void KeyDown()
     {
@@ -39,42 +49,43 @@ public class OneKeyClaimRewardTask : Singleton<OneKeyClaimRewardTask>
         }
 
         _isKeyDown = true;
-        if (!CanRun())
+        var platform = OneKeyClaimRewardRuntimePlatform.Current;
+        if (!CanRun(platform))
         {
             return;
         }
 
-        if (IsHoldMode())
+        if (IsHoldMode(platform.Settings))
         {
-            StartHoldTask();
+            StartHoldTask(platform);
         }
         else
         {
-            StartClickOnceTask();
+            StartClickOnceTask(platform);
         }
     }
 
     public void KeyUp()
     {
         _isKeyDown = false;
-        if (IsHoldMode())
+        if (IsHoldMode(OneKeyClaimRewardRuntimePlatform.Current.Settings))
         {
             _cts?.Cancel();
         }
     }
 
-    private static bool CanRun()
+    private static bool CanRun(IOneKeyClaimRewardRuntimePlatform platform)
     {
-        if (!TaskContext.Instance().IsInitialized)
+        if (!platform.IsInitialized)
         {
-            Toast.Warning("请先启动");
+            platform.NotifyNotStarted();
             return false;
         }
 
-        return SystemControl.IsGenshinImpactActiveByProcess();
+        return platform.IsGameProcessActive;
     }
 
-    private void StartClickOnceTask()
+    private void StartClickOnceTask(IOneKeyClaimRewardRuntimePlatform platform)
     {
         lock (_taskLock)
         {
@@ -84,12 +95,14 @@ public class OneKeyClaimRewardTask : Singleton<OneKeyClaimRewardTask>
             }
 
             _cts?.Dispose();
-            _cts = new CancellationTokenSource();
-            _claimTask = Task.Run(() => ClaimCurrentPageAsync(_cts.Token));
+            var cancellation = new CancellationTokenSource();
+            _cts = cancellation;
+            _claimTask = Task.Run(
+                () => ClaimCurrentPageAsync(platform, cancellation.Token));
         }
     }
 
-    private void StartHoldTask()
+    private void StartHoldTask(IOneKeyClaimRewardRuntimePlatform platform)
     {
         lock (_taskLock)
         {
@@ -99,139 +112,194 @@ public class OneKeyClaimRewardTask : Singleton<OneKeyClaimRewardTask>
             }
 
             _cts?.Dispose();
-            _cts = new CancellationTokenSource();
-            _claimTask = Task.Run(() => ClaimWhileHoldingAsync(_cts.Token));
+            var cancellation = new CancellationTokenSource();
+            _cts = cancellation;
+            _claimTask = Task.Run(
+                () => ClaimWhileHoldingAsync(platform, cancellation.Token));
         }
     }
 
-    private async Task ClaimCurrentPageAsync(CancellationToken ct)
+    private async Task ClaimCurrentPageAsync(
+        IOneKeyClaimRewardRuntimePlatform platform,
+        CancellationToken cancellationToken)
     {
         try
         {
             var clickCount = 0;
-            while (!ct.IsCancellationRequested && clickCount < MaxClickCountPerRun)
+            while (!cancellationToken.IsCancellationRequested &&
+                   clickCount < MaxClickCountPerRun)
             {
-                if (!await TryClaimOneRewardAsync(ct))
+                if (!await TryClaimOneRewardAsync(platform, cancellationToken))
                 {
                     break;
                 }
 
                 clickCount++;
-                await Delay(180, ct);
+                await Delay(180, cancellationToken);
             }
 
             if (clickCount == 0)
             {
-                Logger.LogInformation("一键领取奖励：未找到领取图标");
+                platform.Logger.LogInformation(
+                    "一键领取奖励：未找到领取图标");
             }
             else
             {
-                Logger.LogInformation("一键领取奖励：本次已点击 {Count} 个领取图标", clickCount);
+                platform.Logger.LogInformation(
+                    "一键领取奖励：本次已点击 {Count} 个领取图标",
+                    clickCount);
             }
 
             if (clickCount >= MaxClickCountPerRun)
             {
-                Logger.LogWarning("一键领取奖励：已达到单次点击上限 {Count}，请检查当前界面是否仍有可领取图标", MaxClickCountPerRun);
+                platform.Logger.LogWarning(
+                    "一键领取奖励：已达到单次点击上限 {Count}，请检查当前界面是否仍有可领取图标",
+                    MaxClickCountPerRun);
             }
         }
         catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
         {
         }
-        catch (Exception e)
+        catch (Exception exception)
         {
-            Logger.LogWarning(e, "一键领取奖励执行异常: {Message}", e.Message);
+            platform.Logger.LogWarning(
+                exception,
+                "一键领取奖励执行异常: {Message}",
+                exception.Message);
         }
     }
 
-    private async Task ClaimWhileHoldingAsync(CancellationToken ct)
+    private async Task ClaimWhileHoldingAsync(
+        IOneKeyClaimRewardRuntimePlatform platform,
+        CancellationToken cancellationToken)
     {
-        Logger.LogInformation("一键领取奖励：开始持续领取");
+        platform.Logger.LogInformation("一键领取奖励：开始持续领取");
         try
         {
-            while (!ct.IsCancellationRequested)
+            while (!cancellationToken.IsCancellationRequested)
             {
-                if (await TryClaimOneRewardAsync(ct))
+                if (await TryClaimOneRewardAsync(platform, cancellationToken))
                 {
-                    await Delay(180, ct);
+                    await Delay(180, cancellationToken);
                     continue;
                 }
 
-                if (CanScrollDown())
+                var settings = platform.Settings;
+                if (CanScrollDown(settings))
                 {
-                    LogNoReward("一键领取奖励：未找到领取图标，滚轮下滑");
-                    ScrollDown(ct);
-                    await Delay(ScrollRenderDelayMilliseconds, ct);
+                    LogNoReward(
+                        platform,
+                        "一键领取奖励：未找到领取图标，滚轮下滑");
+                    ScrollDown(
+                        platform,
+                        settings.ScrollDownAmount,
+                        cancellationToken);
+                    await Delay(
+                        ScrollRenderDelayMilliseconds,
+                        cancellationToken);
                 }
                 else
                 {
-                    LogNoReward("一键领取奖励：未找到领取图标");
-                    await Delay(260, ct);
+                    LogNoReward(platform, "一键领取奖励：未找到领取图标");
+                    await Delay(260, cancellationToken);
                 }
             }
         }
         catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
         {
         }
-        catch (Exception e)
+        catch (Exception exception)
         {
-            Logger.LogWarning(e, "一键领取奖励持续执行异常: {Message}", e.Message);
+            platform.Logger.LogWarning(
+                exception,
+                "一键领取奖励持续执行异常: {Message}",
+                exception.Message);
         }
         finally
         {
-            Logger.LogInformation("一键领取奖励：持续领取已停止");
+            platform.Logger.LogInformation("一键领取奖励：持续领取已停止");
         }
     }
 
-    private async Task<bool> TryClaimOneRewardAsync(CancellationToken ct)
+    private static async Task<bool> TryClaimOneRewardAsync(
+        IOneKeyClaimRewardRuntimePlatform platform,
+        CancellationToken cancellationToken)
     {
-        ct.ThrowIfCancellationRequested();
+        cancellationToken.ThrowIfCancellationRequested();
 
-        using var capture = TaskControl.CaptureToRectArea();
+        using var capture = platform.Capture(cancellationToken);
         var candidate = FindRewardCandidates(capture).FirstOrDefault();
-        if (candidate == null)
+        if (candidate is null)
         {
             return false;
         }
 
-        candidate.Region.Click();
-        Logger.LogInformation("一键领取奖励：点击{IconName}图标", candidate.Name);
-        await PressEscIfBlankContinueShownAsync(ct);
+        platform.Click(candidate.Region, cancellationToken);
+        platform.Logger.LogInformation(
+            "一键领取奖励：点击{IconName}图标",
+            candidate.Name);
+        await PressEscIfBlankContinueShownAsync(
+            platform,
+            cancellationToken);
         return true;
     }
 
-    private static List<RewardCandidate> FindRewardCandidates(ImageRegion capture)
+    private static List<RewardCandidate> FindRewardCandidates(
+        ImageRegion capture)
     {
         var candidates = new List<RewardCandidate>();
 
-        candidates.AddRange(capture.FindMulti(RecognitionAssets.Get("QuickClaimReward", "ClaimText", capture))
-            .Select(region => new RewardCandidate(region, "领取")));
-        candidates.AddRange(capture.FindMulti(RecognitionAssets.Get("QuickClaimReward", "ClaimGift", capture))
-            .Select(region => new RewardCandidate(region, "礼物领取")));
+        candidates.AddRange(
+            capture.FindMulti(
+                    RecognitionAssets.Get(
+                        "QuickClaimReward", "ClaimText", capture))
+                .Select(region => new RewardCandidate(region, "领取")));
+        candidates.AddRange(
+            capture.FindMulti(
+                    RecognitionAssets.Get(
+                        "QuickClaimReward", "ClaimGift", capture))
+                .Select(region => new RewardCandidate(region, "礼物领取")));
 
-        return [.. candidates.OrderBy(candidate => candidate.Region.Top).ThenBy(candidate => candidate.Region.Left)];
+        return
+        [
+            .. candidates
+                .OrderBy(candidate => candidate.Region.Top)
+                .ThenBy(candidate => candidate.Region.Left)
+        ];
     }
 
-    private static async Task PressEscIfBlankContinueShownAsync(CancellationToken ct)
+    private static async Task PressEscIfBlankContinueShownAsync(
+        IOneKeyClaimRewardRuntimePlatform platform,
+        CancellationToken cancellationToken)
     {
-        for (var i = 0; i < MaxBlankContinueChecks; i++)
+        for (var index = 0; index < MaxBlankContinueChecks; index++)
         {
-            await Delay(160, ct);
+            await Delay(160, cancellationToken);
 
-            using var capture = TaskControl.CaptureToRectArea();
-            using var continueTip = capture.Find(RecognitionAssets.Get("QuickClaimReward", "ClickBlankContinue", capture));
+            using var capture = platform.Capture(cancellationToken);
+            using var continueTip = capture.Find(
+                RecognitionAssets.Get(
+                    "QuickClaimReward",
+                    "ClickBlankContinue",
+                    capture));
             if (continueTip.IsEmpty())
             {
                 continue;
             }
 
-            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
-            Logger.LogInformation("一键领取奖励：检测到“点击空白区域继续”，已按 ESC");
-            await Delay(220, ct);
+            platform.PressEscape(cancellationToken);
+            platform.Logger.LogInformation(
+                "一键领取奖励：检测到“点击空白区域继续”，已按 ESC");
+            await Delay(220, cancellationToken);
             return;
         }
     }
 
-    private void LogNoReward(string message)
+    private void LogNoReward(
+        IOneKeyClaimRewardRuntimePlatform platform,
+        string message)
     {
         if ((DateTime.Now - _lastNoRewardLogTime).TotalSeconds < 2)
         {
@@ -239,41 +307,36 @@ public class OneKeyClaimRewardTask : Singleton<OneKeyClaimRewardTask>
         }
 
         _lastNoRewardLogTime = DateTime.Now;
-        Logger.LogInformation(message);
+        platform.Logger.LogInformation("{Message}", message);
     }
 
-    private static bool IsHoldMode()
-    {
-        return TaskContext.Instance().Config.MacroConfig.OneKeyClaimRewardHotkeyMode == HoldMode;
-    }
+    internal static bool IsHoldMode(OneKeyClaimRewardSettings settings) =>
+        settings.HotkeyMode == HoldMode;
 
-    private static bool CanScrollDown()
-    {
-        var config = TaskContext.Instance().Config.MacroConfig;
-        return config.OneKeyClaimRewardHotkeyMode == HoldMode && config.OneKeyClaimRewardScrollDownEnabled;
-    }
+    internal static bool CanScrollDown(OneKeyClaimRewardSettings settings) =>
+        IsHoldMode(settings) && settings.ScrollDownEnabled;
 
-    private static void ScrollDown(CancellationToken ct)
+    internal static void ScrollDown(
+        IOneKeyClaimRewardRuntimePlatform platform,
+        int configuredAmount,
+        CancellationToken cancellationToken)
     {
-        var amount = Math.Max(1, Math.Abs(TaskContext.Instance().Config.MacroConfig.OneKeyClaimRewardScrollDownAmount));
+        var amount = Math.Max(1, Math.Abs(configuredAmount));
         while (amount > 0)
         {
-            ct.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
             var scrollAmount = Math.Min(amount, ScrollChunkSize);
-            Simulation.SendInput.Mouse.VerticalScroll(-scrollAmount);
+            platform.VerticalScroll(-scrollAmount, cancellationToken);
             amount -= scrollAmount;
         }
     }
 
-    private static async Task Delay(int millisecondsDelay, CancellationToken ct)
-    {
-        if (millisecondsDelay <= 0)
-        {
-            return;
-        }
-
-        await Task.Delay(millisecondsDelay, ct);
-    }
+    private static Task Delay(
+        int millisecondsDelay,
+        CancellationToken cancellationToken) =>
+        millisecondsDelay <= 0
+            ? Task.CompletedTask
+            : Task.Delay(millisecondsDelay, cancellationToken);
 
     private sealed record RewardCandidate(Region Region, string Name);
 }

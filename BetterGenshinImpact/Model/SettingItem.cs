@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+#if !BGI_PLATFORM_MAC
 using System.Linq;
 using System.Text.Json;
 using System.Windows;
@@ -7,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using BetterGenshinImpact.View.Controls;
+#endif
 
 namespace BetterGenshinImpact.Model;
 
@@ -23,6 +25,7 @@ public class SettingItem
 
     public object? Default { get; set; }
 
+#if !BGI_PLATFORM_MAC
     public List<UIElement> ToControl(dynamic context)
     {
         var list = new List<UIElement>();
@@ -209,4 +212,5 @@ public class SettingItem
 
         return list;
     }
+#endif
 }

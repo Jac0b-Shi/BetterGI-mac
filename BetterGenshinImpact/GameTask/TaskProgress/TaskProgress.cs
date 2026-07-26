@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using BetterGenshinImpact.Service;
+using BetterGenshinImpact.Core.Config;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BetterGenshinImpact.GameTask.TaskProgress;
@@ -66,6 +67,6 @@ public partial class TaskProgress : ObservableObject
     }
     public string ToJson()
     {
-        return JsonSerializer.Serialize(this, ConfigService.JsonOptions);
+        return JsonSerializer.Serialize(this, ConfigJson.Options);
     }
 }

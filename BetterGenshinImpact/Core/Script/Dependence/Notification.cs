@@ -1,18 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using BetterGenshinImpact.Core.Config;
-using BetterGenshinImpact.GameTask;
-using BetterGenshinImpact.Service.Notification;
-using BetterGenshinImpact.Service.Notification.Model.Enum;
 using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.Core.Script.Dependence;
 
 public class Notification
 {
-  private readonly AllConfig _config = TaskContext.Instance().Config; 
-    private readonly ILogger<Notification> _logger = App.GetLogger<Notification>();
+    private readonly ILogger _logger = ScriptHostServices.CreateLogger<Notification>();
     private readonly TimeSpan _timeWindow = TimeSpan.FromMinutes(1);
     private readonly int _maxNotifications = 5;
     private readonly Queue<DateTime> _callRecords = new();
@@ -26,8 +21,8 @@ public class Notification
     {
         try
         {
-            var currentProject = TaskContext.Instance().CurrentScriptProject;
-            return _config.NotificationConfig.JsNotificationEnabled &&
+            var currentProject = ScriptHostServices.CurrentProject;
+            return ScriptHostServices.JsNotificationEnabled &&
                    (currentProject?.AllowJsNotification ?? true);
         }
         catch
@@ -82,7 +77,7 @@ public class Notification
             _logger.LogWarning("通知内容违规，消息被拦截: " + message);
             return;
         }
-        Notify.Event(NotificationEvent.JsCustom).Send(message);
+        ScriptHostServices.EmitNotification(ScriptNotificationKind.Success, message);
         _logger.LogInformation("通知发送成功：" + message);
     }
 
@@ -108,7 +103,7 @@ public class Notification
             _logger.LogWarning("通知内容违规，消息被拦截: " + message);
             return;
         }
-        Notify.Event(NotificationEvent.JsError).Error(message);
+        ScriptHostServices.EmitNotification(ScriptNotificationKind.Error, message);
         _logger.LogInformation("错误通知发送成功：" + message);
     }
 }

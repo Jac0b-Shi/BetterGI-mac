@@ -13,11 +13,6 @@ namespace BetterGenshinImpact.GameTask.Common.BgiVision;
 public static partial class Bv
 {
     
-    public static Mat ImRead(string fileName, ImreadModes flags = ImreadModes.Color)
-    {
-        return Mat.FromStream(File.OpenRead(fileName), flags);
-    }
-    
     /// <summary>
     /// 等待图像被找到
     /// </summary>

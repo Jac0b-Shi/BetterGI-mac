@@ -1,5 +1,6 @@
 using BetterGenshinImpact.Helpers.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using NCalc;
 using Newtonsoft.Json;
 using OpenCvSharp;
@@ -11,6 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using BetterGenshinImpact.GameTask.Common;
 
 namespace BetterGenshinImpact.Core.Recognition;
 
@@ -27,9 +29,8 @@ public sealed class RecognitionObjectJsonLoadContext
 
 public static class RecognitionObjectJsonLoader
 {
-    private sealed class LoggerTag;
-
-    private static readonly ILogger Logger = App.GetLogger<LoggerTag>();
+    private static ILogger Logger =>
+        TaskControlPlatform.TryGetCurrent()?.Logger ?? NullLogger.Instance;
 
     public static RecognitionObject LoadFromFile(string filePath, string objectName, RecognitionObjectJsonLoadContext context)
     {
@@ -167,11 +168,13 @@ public static class RecognitionObjectJsonLoader
 
             if (!string.IsNullOrWhiteSpace(config.DrawColor) || config.DrawWidth.HasValue)
             {
+#if BGI_FULL_WINDOWS
                 var drawColor = !string.IsNullOrWhiteSpace(config.DrawColor)
                     ? ParseColor(config.DrawColor)
-                    : recognitionObject.DrawOnWindowPen.Color;
-                var drawWidth = config.DrawWidth ?? recognitionObject.DrawOnWindowPen.Width;
+                    : recognitionObject.DrawOnWindowPen?.Color ?? Color.Red;
+                var drawWidth = config.DrawWidth ?? recognitionObject.DrawOnWindowPen?.Width ?? 2;
                 recognitionObject.DrawOnWindowPen = new Pen(drawColor, drawWidth);
+#endif
             }
 
             if (config.MaxMatchCount.HasValue)
@@ -363,7 +366,8 @@ public static class RecognitionObjectJsonLoader
             ncalcExpression.Functions["cutLeftBottom"] = args => _captureRect.CutLeftBottom(ToDouble(args.Evaluate(0)), ToDouble(args.Evaluate(1)));
             ncalcExpression.Functions["cutRightBottom"] = args => _captureRect.CutRightBottom(ToDouble(args.Evaluate(0)), ToDouble(args.Evaluate(1)));
 
-            return ncalcExpression.Evaluate();
+            return ncalcExpression.Evaluate()
+                   ?? throw new InvalidOperationException($"表达式未返回值: {expression}");
         }
 
         private Dictionary<string, object> BuildParameters(string? skipVarName = null)

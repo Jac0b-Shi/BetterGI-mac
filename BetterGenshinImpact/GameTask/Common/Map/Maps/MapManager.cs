@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using BetterGenshinImpact.GameTask.Common.Map.Maps.Base;
+using BetterGenshinImpact.Service;
 
 namespace BetterGenshinImpact.GameTask.Common.Map.Maps;
 
@@ -24,7 +25,7 @@ public static class MapManager
     {
         if (string.IsNullOrEmpty(matchingMethod))
         {
-            matchingMethod = TaskContext.Instance().Config.PathingConditionConfig.MapMatchingMethod;
+            matchingMethod = ScriptServicePlatform.Current.MapMatchingMethod;
         }
         string key = $"{mapType}_{matchingMethod}";
 

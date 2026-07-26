@@ -1,7 +1,6 @@
 ﻿using OpenCvSharp;
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using Point = OpenCvSharp.Point;
 using Size = OpenCvSharp.Size;
@@ -19,17 +18,9 @@ public class TestTrigger : ITaskTrigger
     public int Priority => 9999;
     public bool IsExclusive { get; private set; }
 
-    private readonly Pen _pen = new(Color.Coral, 1);
-
     //private readonly AutoGeniusInvokationAssets _autoGeniusInvokationAssets;
 
     // private readonly YoloV8 _predictor = new(Global.Absolute("Assets\\Model\\Domain\\bgi_tree.onnx"));
-
-    public TestTrigger()
-    {
-        var info = TaskContext.Instance().SystemInfo;
-        //_autoGeniusInvokationAssets = new AutoGeniusInvokationAssets();
-    }
 
     public void Init()
     {

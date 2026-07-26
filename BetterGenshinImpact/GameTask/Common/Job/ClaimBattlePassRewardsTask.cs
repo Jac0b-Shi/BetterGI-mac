@@ -9,11 +9,10 @@ using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Helpers.Extensions;
-using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.Common.Job;
@@ -31,8 +30,8 @@ public class ClaimBattlePassRewardsTask
 
     public ClaimBattlePassRewardsTask()
     {
-        IStringLocalizer<ClaimBattlePassRewardsTask> stringLocalizer = App.GetService<IStringLocalizer<ClaimBattlePassRewardsTask>>() ?? throw new NullReferenceException();
-        CultureInfo cultureInfo = new CultureInfo(TaskContext.Instance().Config.OtherConfig.GameCultureInfoName);
+        var stringLocalizer = TaskParameterPlatform.Current.GetStringLocalizer<ClaimBattlePassRewardsTask>();
+        CultureInfo cultureInfo = new CultureInfo(TaskParameterPlatform.Current.GameCultureInfoName);
         this.claimAllLocalizedStrings = ((string[])["一键", "领取"]).Select(i => stringLocalizer.WithCultureGet(cultureInfo, i)).ToArray();
     }
 
@@ -54,7 +53,7 @@ public class ClaimBattlePassRewardsTask
         await _returnMainUiTask.Start(ct);
 
         await Delay(200, ct);
-        TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.OpenBattlePassScreen); // F4 开纪行
+        TaskControlPlatform.Current.SimulateAction(GIActions.OpenBattlePassScreen, KeyType.KeyPress); // F4 开纪行
 
         // 先领取纪行点数，避免一进入纪行就因可选奖励弹窗阻塞后续流程
         await Delay(1000, ct);
@@ -70,7 +69,7 @@ public class ClaimBattlePassRewardsTask
             using var primogem = ra.Find(ElementRecognition.Get("Primogem", ra));
             if (primogem.IsExist())
             {
-                TaskContext.Instance().PostMessageSimulator.KeyPress(User32.VK.VK_ESCAPE);
+                TaskControlPlatform.Current.PressEscape();
             }
         }
         GameCaptureRegion.GameRegion1080PPosClick(858, 45);
@@ -104,7 +103,7 @@ public class ClaimBattlePassRewardsTask
 
             if (ra2.Find(ElementRecognition.Get("Primogem", ra2)).IsExist())
             {
-                TaskContext.Instance().PostMessageSimulator.KeyPress(User32.VK.VK_ESCAPE);
+                TaskControlPlatform.Current.PressEscape();
             }
 
             return true;

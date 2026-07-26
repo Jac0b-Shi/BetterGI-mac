@@ -6,7 +6,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.Helpers;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Simulator.Extensions;
@@ -48,29 +47,29 @@ public class PickAroundHandler() : IActionHandler
 
     public async Task MoveCircle(double edgeT, int n)
     {
-        Simulation.SendInput.SimulateAction(GIActions.MoveLeft, KeyType.KeyDown);
+        SimulateAction(GIActions.MoveLeft, KeyType.KeyDown);
         await Delay(30, _ct);
         while (n-- > 0)
         {
-            Simulation.SendInput.Mouse.MiddleButtonClick();
+            MiddleButtonClick();
             await Delay((int)Math.Round(edgeT), _ct);
         }
 
-        Simulation.SendInput.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
+        SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
         await Delay(200, _ct);
     }
 
-    public async Task MoveAfterTurn(User32.VK vk, int ms = 0)
+    public async Task MoveAfterTurn(GIActions action, int ms = 0)
     {
-        Simulation.SendInput.Keyboard.KeyPress(vk);
+        SimulateAction(action);
         await Delay(200, _ct);
-        Simulation.SendInput.Mouse.MiddleButtonClick();
+        MiddleButtonClick();
         await Delay(500, _ct);
         if (ms > 0)
         {
-            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+            SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
             await Delay(ms, _ct);
-            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+            SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
             await Delay(200, _ct);
         }
     }
@@ -79,10 +78,10 @@ public class PickAroundHandler() : IActionHandler
     {
         double x = newRadius - oldRadius * Math.Cos(angle);
         double y = oldRadius * Math.Sin(angle);
-        Simulation.SendInput.Mouse.MiddleButtonClick();
+        MiddleButtonClick();
         await Delay(500, _ct);
-        await MoveAfterTurn(GIActions.MoveBackward.ToActionKey().ToVK(), (int)Math.Round(y) + 200);
-        await MoveAfterTurn(GIActions.MoveLeft.ToActionKey().ToVK(), (int)Math.Round(x));
+        await MoveAfterTurn(GIActions.MoveBackward, (int)Math.Round(y) + 200);
+        await MoveAfterTurn(GIActions.MoveLeft, (int)Math.Round(x));
     }
 }
 

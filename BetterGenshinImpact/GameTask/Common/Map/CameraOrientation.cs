@@ -42,6 +42,7 @@ public class CameraOrientation
        return angle;
     }
 
+#if BGI_FULL_WINDOWS
     public static void DrawDirection(ImageRegion region, double angle, string name = "camera", Pen? pen = null)
     {
         // 绘图
@@ -61,4 +62,5 @@ public class CameraOrientation
 
         region.DrawLine(center.X, center.Y, (int)x1, (int)y1, name, pen);
     }
+#endif
 }

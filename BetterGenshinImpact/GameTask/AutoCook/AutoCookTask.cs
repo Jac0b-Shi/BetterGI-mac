@@ -1,5 +1,5 @@
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
+using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
@@ -7,14 +7,15 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.AutoCook;
 
 public class AutoCookTask : ISoloTask
 {
-    private readonly ILogger<AutoCookTask> _logger = App.GetLogger<AutoCookTask>();
+    private readonly AutoCookConfig _config;
+    private readonly double _assetScale;
+    private readonly ILogger<AutoCookTask> _logger;
     private const int UiCheckIntervalMs = 400;
     private const int PeakMinCount = 600; // 最小仙跳墙 700 多
     private const int PeakTolerance = 20;
@@ -25,15 +26,29 @@ public class AutoCookTask : ISoloTask
 
     public string Name => "自动烹饪";
 
+#if !BGI_PLATFORM_MAC
+    public AutoCookTask() : this(
+        TaskContext.Instance().Config.AutoCookConfig,
+        TaskContext.Instance().SystemInfo.AssetScale,
+        App.GetLogger<AutoCookTask>())
+    {
+    }
+#endif
+
+    public AutoCookTask(AutoCookConfig config, double assetScale, ILogger<AutoCookTask> logger)
+    {
+        _config = config ?? throw new ArgumentNullException(nameof(config));
+        _assetScale = assetScale > 0 ? assetScale : throw new ArgumentOutOfRangeException(nameof(assetScale));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
     public async Task Start(CancellationToken ct)
     {
-        var assetScale = TaskContext.Instance().SystemInfo.AssetScale;
-        var autoCookConfig = TaskContext.Instance().Config.AutoCookConfig;
-        var checkIntervalMs = Math.Max(1, autoCookConfig.CheckIntervalMs);
-        var stopTaskWhenRecoverButtonDetected = autoCookConfig.StopTaskWhenRecoverButtonDetected;
-        var peakMinCount = (int)(PeakMinCount * assetScale);
-        var triggerDropCount = (int)(TriggerDropCount * assetScale);
-        var cookColorRect = ScaleRect(CookColorRect1080P, assetScale);
+        var checkIntervalMs = Math.Max(1, _config.CheckIntervalMs);
+        var stopTaskWhenRecoverButtonDetected = _config.StopTaskWhenRecoverButtonDetected;
+        var peakMinCount = (int)(PeakMinCount * _assetScale);
+        var triggerDropCount = (int)(TriggerDropCount * _assetScale);
+        var cookColorRect = ScaleRect(CookColorRect1080P, _assetScale);
         _logger.LogInformation("自动烹饪任务启动");
         var lastUiCheckTime = DateTime.MinValue;
         var inCookUi = false;
@@ -86,7 +101,7 @@ public class AutoCookTask : ISoloTask
                 {
                     if (currentColorCount <= peakColorCount.Value - triggerDropCount)
                     {
-                        Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_SPACE);
+                        TaskControlPlatform.Current.PressKey(0x20);
                         _logger.LogInformation("自动烹饪：{Text}", $"烹饪条像素数量较峰值下降超过{triggerDropCount}，按下空格。峰值:{peakColorCount.Value} 当前:{currentColorCount}");
                         ResetPeakState(ref peakColorCount, ref peakCandidate, ref peakCandidateStableFrames);
                     }

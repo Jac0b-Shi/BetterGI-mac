@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
+using BetterGenshinImpact.GameTask.Common;
 using Microsoft.Extensions.Logging;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
@@ -41,16 +42,16 @@ public class NahidaCollectHandler : IActionHandler
 
         await nahida.WaitSkillCd(ct);
 
-        var dpi = TaskContext.Instance().DpiScale;
+        var dpi = TaskControlPlatform.Current.DpiScale;
 
         int x = (int)(400 * dpi), y = (int)(-30 * dpi);
         int i = 60;
         // 视角拉到最下面
-        Simulation.SendInput.Mouse.MoveMouseBy(0, 10000);
+        MoveMouseBy(0, 10000);
         await Delay(200, ct);
 
         // 按住E技能 无死角扫码
-        Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyDown);
+        SimulateAction(GIActions.ElementalSkill, KeyType.KeyDown);
         try
         {
             await Delay(200, ct);
@@ -58,7 +59,7 @@ public class NahidaCollectHandler : IActionHandler
             // 先地面来一圈
             for (int j = 0; j < 15; j++)
             {
-                Simulation.SendInput.Mouse.MoveMouseBy(x, 500);
+                MoveMouseBy(x, 500);
                 await Delay(30, ct);
             }
 
@@ -71,14 +72,14 @@ public class NahidaCollectHandler : IActionHandler
                     y -= (int)(20 * dpi);
                 }
 
-                Simulation.SendInput.Mouse.MoveMouseBy(x, y);
+                MoveMouseBy(x, y);
                 await Delay(30, ct);
             }
         }
         finally
         {
             // 就算被终止也要让按键弹回
-            Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
+            SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
             // 更新纳西妲CD
             if (!ct.IsCancellationRequested)
             {
@@ -90,7 +91,7 @@ public class NahidaCollectHandler : IActionHandler
 
         await Delay(800, ct);
         // 恢复视角
-        Simulation.SendInput.Mouse.MiddleButtonClick();
+        MiddleButtonClick();
         await Delay(1000, ct);
     }
 }

@@ -1,7 +1,6 @@
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
@@ -12,8 +11,6 @@ using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Model.GameUI;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Helpers.Extensions;
-using BetterGenshinImpact.View.Drawable;
-using Fischless.WindowsInput;
 using Microsoft.ClearScript;
 using Microsoft.ClearScript.V8;
 using Microsoft.Extensions.Localization;
@@ -29,7 +26,6 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.AutoArtifactSalvage;
@@ -40,7 +36,8 @@ namespace BetterGenshinImpact.GameTask.AutoArtifactSalvage;
 public class AutoArtifactSalvageTask : ISoloTask
 {
     private readonly ILogger logger;
-    private readonly InputSimulator input = Simulation.SendInput;
+    private readonly IOcrService ocrService;
+    private readonly double assetScale;
 
     private CancellationToken ct;
 
@@ -66,14 +63,20 @@ public class AutoArtifactSalvageTask : ISoloTask
 
     private readonly FrozenDictionary<ArtifactAffixType, string> artifactAffixStrDic;
 
-    public AutoArtifactSalvageTask(AutoArtifactSalvageTaskParam param, ILogger? logger = null)
+    public AutoArtifactSalvageTask(
+        AutoArtifactSalvageTaskParam param,
+        IOcrService ocrService,
+        double assetScale,
+        ILogger logger)
     {
         this.star = param.Star;
         this.javaScript = param.JavaScript;
         this.artifactSetFilter = param.ArtifactSetFilter;
         this.maxNumToCheck = param.MaxNumToCheck;
         this.recognitionFailurePolicy = param.RecognitionFailurePolicy;
-        this.logger = logger ?? App.GetLogger<AutoArtifactSalvageTask>();
+        this.ocrService = ocrService ?? throw new ArgumentNullException(nameof(ocrService));
+        this.assetScale = assetScale > 0 ? assetScale : throw new ArgumentOutOfRangeException(nameof(assetScale));
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         var stringLocalizer = param.StringLocalizer;
         this.cultureInfo = param.GameCultureInfo;
         quickSelectLocalizedString = stringLocalizer.WithCultureGet(cultureInfo, "快速选择");
@@ -88,7 +91,17 @@ public class AutoArtifactSalvageTask : ISoloTask
         artifactAffixStrDic = ArtifactAffix.DefaultStrDic.Select(kvp => new KeyValuePair<ArtifactAffixType, string>(kvp.Key, stringLocalizer.WithCultureGet(cultureInfo, kvp.Value))).ToFrozenDictionary();
     }
 
-    public static async Task OpenInventory(GridScreenName gridScreenName, InputSimulator input, ILogger logger, CancellationToken ct)
+#if !BGI_PLATFORM_MAC
+    public AutoArtifactSalvageTask(AutoArtifactSalvageTaskParam param, ILogger? logger = null) : this(
+        param,
+        OcrFactory.Paddle,
+        TaskContext.Instance().SystemInfo.AssetScale,
+        logger ?? App.GetLogger<AutoArtifactSalvageTask>())
+    {
+    }
+#endif
+
+    public static async Task OpenInventory(GridScreenName gridScreenName, ILogger logger, CancellationToken ct)
     {
         RecognitionObject? recognitionObjectChecked;
         RecognitionObject? recognitionObjectUnchecked;
@@ -136,7 +149,7 @@ public class AutoArtifactSalvageTask : ISoloTask
         }
 
         // B键打开背包
-        input.SimulateAction(GIActions.OpenInventory);
+        TaskControlPlatform.Current.SimulateAction(GIActions.OpenInventory);
         await Delay(1200, ct);
 
         var openBagSuccess = await NewRetry.WaitForAction(() =>
@@ -171,7 +184,7 @@ public class AutoArtifactSalvageTask : ISoloTask
             if (Bv.IsInMainUi(ra))
             {
                 Debug.WriteLine("背包打开失败,再次尝试打开背包");
-                input.SimulateAction(GIActions.OpenInventory);
+                TaskControlPlatform.Current.SimulateAction(GIActions.OpenInventory);
             }
 
             return false;
@@ -195,7 +208,7 @@ public class AutoArtifactSalvageTask : ISoloTask
             await new ReturnMainUiTask().Start(ct);
         }
 
-        await OpenInventory(GridScreenName.Artifacts, this.input, this.logger, this.ct);
+        await OpenInventory(GridScreenName.Artifacts, this.logger, this.ct);
 
         // 点击分解按钮打开分解界面
         using var ra2 = CaptureToRectArea();
@@ -281,7 +294,7 @@ public class AutoArtifactSalvageTask : ISoloTask
                 await Delay(400, ct);
                 if (javaScript != null)
                 {
-                    input.Mouse.LeftButtonClick();
+                    TaskControlPlatform.Current.LeftButtonClick();
                     await Delay(1000, ct);
                 }
             }
@@ -307,45 +320,41 @@ public class AutoArtifactSalvageTask : ISoloTask
                 ra5.ClickTo(315, 190);
                 await Delay(1000, ct);
                 // 遍历套装Grid勾选套装
-                using InferenceSession session = GridIconsAccuracyTestTask.LoadModel(out Dictionary<string, float[]> prototypes);
+                using InferenceSession session = GridIconClassifier.LoadModel(out Dictionary<string, float[]> prototypes);
                 ArtifactSetFilterScreen gridScreen = new ArtifactSetFilterScreen(new GridParams(new Rect(40, 100, 1300, 852), 2, 3, 40, 40, 0.024), this.logger, this.ct);
                 string drawKey = "ArtifactSetFilter";
-                var drawRectList = new List<RectDrawable>();
-                var drawTextList = new List<TextDrawable>();
-                gridScreen.OnBeforeScroll += () => { VisionContext.Instance().DrawContent.RemoveRect(drawKey); drawRectList.Clear(); drawTextList.Clear(); };
+                var drawLabels = new List<OverlayLabel>();
+                gridScreen.OnBeforeScroll += () =>
+                {
+                    OverlayDrawPlatform.Current.RemoveLabels(drawKey);
+                    drawLabels.Clear();
+                };
                 try
                 {
                     await foreach ((ImageRegion pageRegion, Rect itemRect) in gridScreen)
                     {
                         using ImageRegion itemRegion = pageRegion.DeriveCrop(itemRect);
-                        using Mat img125 = GetGridIconsTask.CropResizeArtifactSetFilterGridIcon(itemRegion);
-                        (string? predName, _) = GridIconsAccuracyTestTask.Infer(img125, session, prototypes);
+                        using Mat img125 = CropResizeArtifactSetFilterGridIcon(itemRegion);
+                        (string? predName, _) = GridIconClassifier.Infer(img125, session, prototypes);
                         if (predName == null)
                         {
-                            var rectDrawable = itemRegion.SelfToRectDrawable(drawKey);
-                            drawRectList.Add(rectDrawable);
-                            VisionContext.Instance().DrawContent.PutOrRemoveRectList(drawKey, drawRectList);
-                            drawTextList.Add(new TextDrawable("识别失败", new System.Windows.Point(rectDrawable.Rect.X + rectDrawable.Rect.Width / 3, rectDrawable.Rect.Y)));
-                            VisionContext.Instance().DrawContent.TextList.GetOrAdd(drawKey, drawTextList);
+                            drawLabels.Add(new OverlayLabel(itemRect, "识别失败", false));
                         }
                         else
                         {
-                            var rectDrawable = itemRegion.SelfToRectDrawable(drawKey, System.Drawing.Pens.Lime);
-                            drawRectList.Add(rectDrawable);
-                            VisionContext.Instance().DrawContent.PutOrRemoveRectList(drawKey, drawRectList);
-                            drawTextList.Add(new TextDrawable(predName, new System.Windows.Point(rectDrawable.Rect.X + rectDrawable.Rect.Width / 3, rectDrawable.Rect.Y)));
-                            VisionContext.Instance().DrawContent.TextList.GetOrAdd(drawKey, drawTextList);
+                            drawLabels.Add(new OverlayLabel(itemRect, predName, true));
                             if (this.artifactSetFilter.Contains(predName))
                             {
                                 itemRegion.Click();
                                 await Delay(100, ct);
                             }
                         }
+                        OverlayDrawPlatform.Current.SetLabels(drawKey, pageRegion, drawLabels);
                     }
                 }
                 finally
                 {
-                    VisionContext.Instance().DrawContent.ClearAll();
+                    OverlayDrawPlatform.Current.ClearAll();
                 }
                 // 点击确认筛选
                 using var confirmFilterBtnRegion = CaptureToRectArea();
@@ -363,13 +372,26 @@ public class AutoArtifactSalvageTask : ISoloTask
         }
         else
         {
-            input.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+            TaskControlPlatform.Current.PressEscape();
 
             if (returnToMainUi)
             {
                 await new ReturnMainUiTask().Start(ct);
             }
         }
+    }
+
+    private Mat CropResizeArtifactSetFilterGridIcon(ImageRegion itemRegion)
+    {
+        const double width = 60;
+        const double height = 60;
+        var iconRect = new Rect(
+            (int)(itemRegion.Width / 2 - 237 * assetScale - width / 2),
+            (int)(itemRegion.Height / 2 - height / 2),
+            (int)width,
+            (int)height).ClampTo(itemRegion.SrcMat);
+        using var crop = itemRegion.SrcMat.SubMat(iconRect);
+        return crop.Resize(new Size(125, 125));
     }
 
     private async Task Salvage5Star()
@@ -381,7 +403,7 @@ public class AutoArtifactSalvageTask : ISoloTask
         GridParams gridParams = GridParams.Templates[GridScreenName.ArtifactSalvage];
         GridScreen gridScreen = new GridScreen(gridParams, this.logger, this.ct); // 圣遗物分解Grid有4行9列
         gridScreen.OnAfterTurnToNewPage += GridScreen.DrawItemsAfterTurnToNewPage;
-        gridScreen.OnBeforeScroll += () => VisionContext.Instance().DrawContent.ClearAll();
+        gridScreen.OnBeforeScroll += () => OverlayDrawPlatform.Current.ClearAll();
         try
         {
             await foreach ((ImageRegion pageRegion, Rect itemRect) in gridScreen)
@@ -402,7 +424,7 @@ public class AutoArtifactSalvageTask : ISoloTask
                         ArtifactStat artifact;
                         try
                         {
-                            artifact = GetArtifactStat(card.SrcMat, OcrFactory.Paddle, out string allText);
+                            artifact = GetArtifactStat(card.SrcMat, ocrService, out string allText);
                         }
                         catch (Exception e)
                         {
@@ -420,7 +442,7 @@ public class AutoArtifactSalvageTask : ISoloTask
                             }
                         }
 
-                        if (await IsMatchJavaScript(artifact, javaScript))
+                        if (await IsMatchJavaScript(artifact, javaScript, logger))
                         {
                             // logger.LogInformation(message: msg);
                         }
@@ -442,7 +464,7 @@ public class AutoArtifactSalvageTask : ISoloTask
         }
         finally
         {
-            VisionContext.Instance().DrawContent.ClearAll();
+            OverlayDrawPlatform.Current.ClearAll();
         }
     }
 
@@ -455,9 +477,9 @@ public class AutoArtifactSalvageTask : ISoloTask
     /// <returns>是否匹配。取JS的“Output”作为出参</returns>
     /// <exception cref="InvalidOperationException"></exception>
     /// <exception cref="Exception"></exception>
-    public async static Task<bool> IsMatchJavaScript(ArtifactStat artifact, string javaScript, ILogger? logger = null, TimeProvider? timeProvider = null)
+    public async static Task<bool> IsMatchJavaScript(ArtifactStat artifact, string javaScript, ILogger logger, TimeProvider? timeProvider = null)
     {
-        logger = logger ?? App.GetLogger<AutoArtifactSalvageTask>();
+        ArgumentNullException.ThrowIfNull(logger);
         using V8ScriptEngine engine = new V8ScriptEngine(V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding | V8ScriptEngineFlags.DisableGlobalMembers);
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3), timeProvider ?? TimeProvider.System);    // 这里只是用JS写一个自定义判断方法，由于每个圣遗物都会执行一次，这个方法不应执行太久
         cts.Token.Register(() =>

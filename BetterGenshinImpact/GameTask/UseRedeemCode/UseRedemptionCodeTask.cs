@@ -3,38 +3,39 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
 using BetterGenshinImpact.Core.BgiVision;
+using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.UseRedeemCode.Model;
-using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Helpers.Extensions;
 using Microsoft.Extensions.Logging;
-using Vanara.PInvoke;
 using Rect = OpenCvSharp.Rect;
 
 namespace BetterGenshinImpact.GameTask.UseRedeemCode;
 
 public class UseRedemptionCodeTask : ISoloTask
 {
-    private static readonly ILogger _logger = App.GetLogger<UseRedemptionCodeTask>();
-
-
     private readonly List<RedeemCode> _list;
+    private readonly IUseRedemptionCodeRuntimePlatform _platform;
+    private ILogger<UseRedemptionCodeTask> Logger => _platform.Logger;
 
-    public UseRedemptionCodeTask(List<RedeemCode> list)
+    public UseRedemptionCodeTask(
+        List<RedeemCode> list, IUseRedemptionCodeRuntimePlatform platform)
     {
-        this._list = list;
+        _list = list;
+        _platform = platform;
     }
     
-    public UseRedemptionCodeTask(List<string> strList)
+    public UseRedemptionCodeTask(
+        List<string> strList, IUseRedemptionCodeRuntimePlatform platform)
     {
         _list = strList
             .Where(code => !string.IsNullOrWhiteSpace(code))
             .Select(code => new RedeemCode(code, null))
             .ToList();
+        _platform = platform;
     }
 
     public string Name => "使用兑换码";
@@ -45,15 +46,15 @@ public class UseRedemptionCodeTask : ISoloTask
 
         try
         {
-            Rect captureRect = TaskContext.Instance().SystemInfo.ScaleMax1080PCaptureRect;
+            Rect captureRect = _platform.SystemInfo.ScaleMax1080PCaptureRect;
 
             await new ReturnMainUiTask().Start(ct);
 
             var page = new BvPage(ct);
 
-            _logger.LogInformation("使用兑换码: {Msg}", "打开设置");
+            Logger.LogInformation("使用兑换码: {Msg}", "打开设置");
             // 按ESC键打开菜单
-            page.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+            TaskControlPlatform.Current.PressEscape();
             // 等待ESC后菜单出现
             await page.Locator(new BvImage("UseRedeemCode:esc_return_button.png")).WaitFor();
             // 点击设置按钮
@@ -61,7 +62,7 @@ public class UseRedemptionCodeTask : ISoloTask
             await page.Wait(1000);
 
             // 点击账户
-            _logger.LogInformation("使用兑换码: {Msg}", "点击账户 —— 前往兑换");
+            Logger.LogInformation("使用兑换码: {Msg}", "点击账户 —— 前往兑换");
             await page.GetByText("账户").WithRoi(captureRect.CutLeft(0.2)).Click();
             await page.Wait(300);
 
@@ -82,28 +83,36 @@ public class UseRedemptionCodeTask : ISoloTask
                 await UseRedeemCode(redeemCode, page);
             }
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            _logger.LogError("使用兑换码时发生错误: {Message}", ex.Message);
-            _logger.LogDebug(ex, "使用兑换码时发生错误");
+            Logger.LogError("使用兑换码时发生错误: {Message}", ex.Message);
+            Logger.LogDebug(ex, "使用兑换码时发生错误");
+            if (_platform.PropagateTaskExceptions) throw;
         }
         finally
         {
-            // 清空剪贴板
-            UIDispatcherHelper.Invoke(Clipboard.Clear);
-            // 返回主界面
-            await new ReturnMainUiTask().Start(ct);
-            
+            try
+            {
+                _platform.ClearClipboard();
+            }
+            finally
+            {
+                await new ReturnMainUiTask().Start(ct);
+            }
         }
     }
 
     private async Task UseRedeemCode(RedeemCode redeemCode, BvPage page)
     {
-        Rect captureRect = TaskContext.Instance().SystemInfo.ScaleMax1080PCaptureRect;
+        Rect captureRect = _platform.SystemInfo.ScaleMax1080PCaptureRect;
         
-        _logger.LogInformation("输入兑换码: {Code}", redeemCode.Code);
+        Logger.LogInformation("输入兑换码: {Code}", redeemCode.Code);
         // 将要输入的文本复制到剪贴板
-        UIDispatcherHelper.Invoke(() => Clipboard.SetDataObject(redeemCode.Code!));
+        _platform.SetClipboardText(redeemCode.Code!);
         // 粘贴兑换码
         await page.GetByText("粘贴").WithRoi(captureRect.CutRight(0.5)).Click();
         // 点击兑换
@@ -113,32 +122,32 @@ public class UseRedemptionCodeTask : ISoloTask
         var list = await page.GetByText("兑换成功").TryWaitFor(1000);
         if (list.Count > 0)
         {
-            _logger.LogInformation("兑换码 {Code} 兑换成功", redeemCode.Code);
+            Logger.LogInformation("兑换码 {Code} 兑换成功", redeemCode.Code);
             // 点击确认
             await page.Locator(ElementRecognition.Get("BtnBlackConfirm")).Click();
             await page.Wait(5100);
         }
         else
         {
-            _logger.LogWarning("兑换码 {Code} 兑换失败，可能是过期、错误或已被使用", redeemCode.Code);
+            Logger.LogWarning("兑换码 {Code} 兑换失败，可能是过期、错误或已被使用", redeemCode.Code);
             // 点击清除
             await page.GetByText("清除").WithRoi(captureRect.CutRight(0.5)).Click();
         }
     }
 
 
-    private static void InitLog(List<RedeemCode> list)
+    private void InitLog(List<RedeemCode> list)
     {
-        _logger.LogInformation("开始使用兑换码:");
+        Logger.LogInformation("开始使用兑换码:");
         foreach (var redeemCode in list)
         {
             if (string.IsNullOrEmpty(redeemCode.Items))
             {
-                _logger.LogInformation("{Code}", redeemCode.Code);
+                Logger.LogInformation("{Code}", redeemCode.Code);
             }
             else
             {
-                _logger.LogInformation("{Code} - {Msg}", redeemCode.Code, redeemCode.Items);
+                Logger.LogInformation("{Code} - {Msg}", redeemCode.Code, redeemCode.Items);
             }
         }
     }

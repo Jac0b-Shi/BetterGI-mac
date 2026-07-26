@@ -1,6 +1,6 @@
 using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.Model.Area;
-using OpenCvSharp;
+using BetterGenshinImpact.Platform.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -17,7 +17,7 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests
         {
             DesktopRectArea = new(gameScreenSize.Width, gameScreenSize.Height);
 
-            GameScreenSize = gameScreenSize;
+            GameScreenSize = new BgiRect(gameScreenSize.X, gameScreenSize.Y, gameScreenSize.Width, gameScreenSize.Height);
             // 0.28 改动，素材缩放比例不可以超过 1，也就是图像识别时分辨率大于 1920x1080 的情况下直接进行缩放
             if (GameScreenSize.Width < 1920)
             {
@@ -29,7 +29,7 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests
 
         public System.Drawing.Size DisplaySize => throw new NotImplementedException();
 
-        public RECT GameScreenSize { get; }
+        public BgiRect GameScreenSize { get; }
 
         public double AssetScale { get; } = 1;
 
@@ -37,8 +37,8 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests
 
         public double ScaleTo1080PRatio { get; }
 
-        public RECT CaptureAreaRect { get ; set ; }
-        public Rect ScaleMax1080PCaptureRect { get; set; } = new Rect(0, 0, 1920, 1080);
+        public BgiRect CaptureAreaRect { get ; set ; }
+        public BgiRect ScaleMax1080PCaptureRect { get; set; } = new BgiRect(0, 0, 1920, 1080);
 
         public Process GameProcess => throw new NotImplementedException();
 

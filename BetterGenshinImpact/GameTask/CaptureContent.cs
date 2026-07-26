@@ -1,4 +1,4 @@
-﻿using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.GameTask.Model.Area;
 using System;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using OpenCvSharp;
@@ -21,15 +21,16 @@ public class CaptureContent : IDisposable
     
     public GameUiCategory CurrentGameUiCategory;
 
+#if BGI_FULL_WINDOWS
     public CaptureContent(Mat image, int frameIndex, double interval)
     {
         FrameIndex = frameIndex;
         TimerInterval = interval;
         var systemInfo = TaskContext.Instance().SystemInfo;
-
         var gameCaptureRegion = systemInfo.DesktopRectArea.Derive(image, systemInfo.CaptureAreaRect.X, systemInfo.CaptureAreaRect.Y);
         CaptureRectArea = gameCaptureRegion.DeriveTo1080P();
     }
+#endif
 
     /// <summary>
     /// 用于兼容新的 ImageRegion
@@ -38,6 +39,13 @@ public class CaptureContent : IDisposable
     public CaptureContent(ImageRegion ra)
     {
         CaptureRectArea = ra;
+    }
+
+    public CaptureContent(ImageRegion ra, int frameIndex, double interval)
+    {
+        CaptureRectArea = ra ?? throw new ArgumentNullException(nameof(ra));
+        FrameIndex = frameIndex;
+        TimerInterval = interval;
     }
 
     public void Dispose()

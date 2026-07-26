@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Only the adapter-essential compile units — NOT the full WPF app -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\BetterGenshinImpact.Platform.Abstractions\BetterGenshinImpact.Platform.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Fischless.WindowsInput\Fischless.WindowsInput.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\BetterGenshinImpact\Core\Runtime\Windows\Win32InputHelpers.cs" Link="Win32InputHelpers.cs" />
+    <Compile Include="..\..\BetterGenshinImpact\Core\Runtime\Windows\Win32InputBackend.cs" Link="Win32InputBackend.cs" />
+  </ItemGroup>
+
+</Project>

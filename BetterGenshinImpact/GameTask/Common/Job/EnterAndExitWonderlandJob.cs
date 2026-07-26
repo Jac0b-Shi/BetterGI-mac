@@ -1,11 +1,9 @@
 using System.Threading;
 using System.Threading.Tasks;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Model.Area;
 using Microsoft.Extensions.Logging;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.Common.Job;
@@ -15,12 +13,12 @@ public class EnterAndExitWonderlandJob
     public async Task Start(CancellationToken ct)
     {
         Logger.LogInformation("进入千星奇域");
-        SystemControl.FocusWindow(TaskContext.Instance().GameHandle);
+        TaskControlPlatform.Current.EnsureGameActive();
 
         // 等待千星奇域界面出现
         await NewRetry.WaitForElementAppear(
             ElementRecognition.Get("WonderlandClose"),
-            () => Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_F6),
+            () => TaskControlPlatform.Current.PressKey(0x75),
             ct,
             10,
             1000
@@ -102,7 +100,7 @@ public class EnterAndExitWonderlandJob
         // 等待菜单界面出现
         await NewRetry.WaitForElementAppear(
             ElementRecognition.Get("BtnBackTeyvat"),
-            () => Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE),
+            () => TaskControlPlatform.Current.PressEscape(),
             ct,
             20,
             800

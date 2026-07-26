@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.Model;
 
@@ -28,15 +29,25 @@ public class AutoStygianOnslaughtParam:BaseTaskParam<AutoStygianOnslaughtTask>
     // 使用脆弱树脂刷取副本次数
     public int FragileResinUseCount { get; set; }
     // 指定战斗队伍
-    public string FightTeamName { get; set; }
+    public string FightTeamName { get; set; } = string.Empty;
     // 战斗脚本包路径
-    public string CombatScriptBagPath { get; set; }
+    public string CombatScriptBagPath { get; set; } = string.Empty;
+    public int ArtifactSalvageStar { get; set; } = 4;
     public void SetDefault()
     {
+#if BGI_PLATFORM_MAC
+        throw new InvalidOperationException(
+            "AutoStygianOnslaughtParam defaults must be supplied by the Core composition on macOS.");
+#else
         var config = TaskContext.Instance().Config.AutoStygianOnslaughtConfig;
-        SetAutoStygianOnslaughtConfig(config);
+        SetAutoStygianOnslaughtConfig(
+            config, TaskContext.Instance().Config.AutoFightConfig.StrategyName);
+        ArtifactSalvageStar = ParseArtifactStar(
+            TaskContext.Instance().Config.AutoArtifactSalvageConfig.MaxArtifactStar);
+#endif
     }
-    public void SetAutoStygianOnslaughtConfig(AutoStygianOnslaughtConfig config)
+    public void SetAutoStygianOnslaughtConfig(
+        AutoStygianOnslaughtConfig config, string? defaultStrategyName = null)
     {
         BossNum = config.BossNum;
         AutoArtifactSalvage = config.AutoArtifactSalvage;
@@ -47,7 +58,7 @@ public class AutoStygianOnslaughtParam:BaseTaskParam<AutoStygianOnslaughtTask>
         TransientResinUseCount = config.TransientResinUseCount;
         FragileResinUseCount = config.FragileResinUseCount;
         FightTeamName = config.FightTeamName;
-        SetCombatStrategyPath(config.StrategyName);
+        SetCombatStrategyPath(config.StrategyName, defaultStrategyName);
     }
     public AutoStygianOnslaughtParam() : base(null, null)
     {
@@ -57,6 +68,16 @@ public class AutoStygianOnslaughtParam:BaseTaskParam<AutoStygianOnslaughtTask>
     {
         SetDefault();
         CombatScriptBagPath=combatScriptBagPath;
+    }
+    public AutoStygianOnslaughtParam(
+        AutoStygianOnslaughtConfig config, string? defaultStrategyName,
+        int artifactSalvageStar) : base(null, null)
+    {
+        SetAutoStygianOnslaughtConfig(
+            config ?? throw new ArgumentNullException(nameof(config)), defaultStrategyName);
+        ArtifactSalvageStar = artifactSalvageStar is >= 1 and <= 4
+            ? artifactSalvageStar
+            : 4;
     }
     public void SetResinPriorityList(params string[] priorities)
     {
@@ -69,11 +90,15 @@ public class AutoStygianOnslaughtParam:BaseTaskParam<AutoStygianOnslaughtTask>
     /// 设置战斗策略路径
     /// </summary>  
     /// <param name="strategyName">策略名称</param>  
-    public void SetCombatStrategyPath(string? strategyName = null)
+    public void SetCombatStrategyPath(
+        string? strategyName = null, string? defaultStrategyName = null)
     {
         if (string.IsNullOrEmpty(strategyName))
         {
-            strategyName = TaskContext.Instance().Config.AutoFightConfig.StrategyName;
+            strategyName = defaultStrategyName;
+#if !BGI_PLATFORM_MAC
+            strategyName ??= TaskContext.Instance().Config.AutoFightConfig.StrategyName;
+#endif
         }
 
         if (string.IsNullOrWhiteSpace(strategyName) ||"根据队伍自动选择".Equals(strategyName))
@@ -84,4 +109,7 @@ public class AutoStygianOnslaughtParam:BaseTaskParam<AutoStygianOnslaughtTask>
 
         CombatScriptBagPath= Global.Absolute(@"User\AutoFight\" + strategyName + ".txt");
     }
+
+    private static int ParseArtifactStar(string? value) =>
+        int.TryParse(value, out var star) && star is >= 1 and <= 4 ? star : 4;
 }

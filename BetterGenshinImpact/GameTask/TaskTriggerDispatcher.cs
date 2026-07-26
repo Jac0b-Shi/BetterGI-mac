@@ -1,8 +1,18 @@
+using BetterGenshinImpact.Core.Abstractions.Recognition;
+using BetterGenshinImpact.Core.Abstractions.Runtime;
 using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Runtime.Windows;
 using BetterGenshinImpact.GameTask.Common;
+using BetterGenshinImpact.GameTask.Common.BgiVision;
+using BetterGenshinImpact.GameTask.GameLoading;
+using BetterGenshinImpact.GameTask.Screenshot;
+using BetterGenshinImpact.GameTask.AutoPick.Assets;
+using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.Helpers;
+using BetterGenshinImpact.Platform.Abstractions;
 using BetterGenshinImpact.View;
 using Fischless.GameCapture;
+using Fischless.GameCapture.Graphics;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -12,9 +22,6 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows;
-using BetterGenshinImpact.GameTask.Common.BgiVision;
-using BetterGenshinImpact.GameTask.GameLoading;
-using Fischless.GameCapture.Graphics;
 using BetterGenshinImpact.Service;
 using BetterGenshinImpact.Service.Model;
 using BetterGenshinImpact.Service.Model.OverlayMetric;
@@ -62,12 +69,36 @@ namespace BetterGenshinImpact.GameTask
         private DateTime PrevGameUiChangeTime = DateTime.Now; // 上一次UI变化时间
         
 
-        public TaskTriggerDispatcher()
+        private readonly IAutoPickConfigProvider _autoPickConfigProvider;
+        private readonly IAutoPickRuntimeState _runtimeState;
+        private readonly IInputBackend _inputBackend;
+        private readonly IPaddleAutoPickTextRecognizer _paddleRecognizer;
+        private readonly IYapAutoPickTextRecognizer _yapRecognizer;
+        private ISystemInfo? _systemInfo;
+        private bool _started;
+        private bool _starting;
+        private bool _startFailed;
+
+        public TaskTriggerDispatcher(IAutoPickConfigProvider autoPickConfigProvider, IAutoPickRuntimeState runtimeState, IInputBackend inputBackend,
+            IPaddleAutoPickTextRecognizer paddleRecognizer, IYapAutoPickTextRecognizer yapRecognizer)
         {
+            ArgumentNullException.ThrowIfNull(autoPickConfigProvider);
+            ArgumentNullException.ThrowIfNull(runtimeState);
+            ArgumentNullException.ThrowIfNull(inputBackend);
+            ArgumentNullException.ThrowIfNull(paddleRecognizer);
+            ArgumentNullException.ThrowIfNull(yapRecognizer);
+            _autoPickConfigProvider = autoPickConfigProvider;
+            _runtimeState = runtimeState;
+            _inputBackend = inputBackend;
+            _paddleRecognizer = paddleRecognizer;
+            _yapRecognizer = yapRecognizer;
             _instance = this;
             _timer.Elapsed += Tick;
-            //_timer.Tick += Tick;
         }
+
+        private ISystemInfo RequireSystemInfo() =>
+            _systemInfo ?? throw new InvalidOperationException(
+                "TaskTriggerDispatcher.Start() must be called first.");
 
         public static TaskTriggerDispatcher Instance()
         {
@@ -115,7 +146,7 @@ namespace BetterGenshinImpact.GameTask
         {
             lock (_triggerListLocker)
             {
-                if (GameTaskManager.AddTrigger(name, externalConfig))
+                if (GameTaskManager.AddTrigger(name, externalConfig, _runtimeState, _inputBackend, RequireSystemInfo(), _autoPickConfigProvider, _paddleRecognizer, _yapRecognizer))
                 {
                     SetTriggers(GameTaskManager.ConvertToTriggerList(true));
                     return true;
@@ -125,20 +156,45 @@ namespace BetterGenshinImpact.GameTask
             }
         }
 
+        /// <summary>
+        /// Reload initial triggers via GameTaskManager, forwarding stored SystemInfo and config provider.
+        /// Throws if Start() has not been called.
+        /// </summary>
+        public void ReloadInitialTriggers()
+        {
+            var si = RequireSystemInfo();
+            SetTriggers(GameTaskManager.LoadInitialTriggers(_inputBackend, si, _runtimeState, _autoPickConfigProvider, _paddleRecognizer, _yapRecognizer));
+        }
+
         public void Start(IntPtr hWnd, CaptureModes mode, int interval = 50)
         {
-            // 初始化截图器
-            ChatUiHotkeyGuard.Reset();
-            GameCapture = GameCaptureFactory.Create(mode);
-            // 激活窗口 保证后面能够正常获取窗口信息
-            SystemControl.ActivateWindow(hWnd);
+            if (_started)
+                throw new InvalidOperationException("TaskTriggerDispatcher has already been started.");
+            if (_startFailed)
+                throw new InvalidOperationException(
+                    "TaskTriggerDispatcher startup previously failed and may be partially initialized. " +
+                    "Restart the application before trying again.");
+            if (_starting)
+                throw new InvalidOperationException("TaskTriggerDispatcher is already in the process of starting.");
+            _starting = true;
 
-            // 初始化任务上下文(一定要在初始化触发器前完成)
-            TaskContext.Instance().Init(hWnd);
+            try
+            {
+                ChatUiHotkeyGuard.Reset();
+                GameCapture = GameCaptureFactory.Create(mode);
+                // 激活窗口 保证后面能够正常获取窗口信息
+                SystemControl.ActivateWindow(hWnd);
 
-            // 初始化触发器(一定要在任务上下文初始化完毕后使用)
-            _triggers = GameTaskManager.LoadInitialTriggers();
-            GameLoadingTrigger.GlobalEnabled = TaskContext.Instance().Config.GenshinStartConfig.AutoEnterGameEnabled;
+                // 初始化任务上下文(一定要在初始化触发器前完成)
+                TaskContext.Instance().Init(hWnd);
+
+                // 获取有效的 SystemInfo
+                _systemInfo = TaskContext.Instance().SystemInfo;
+
+                // 初始化触发器(一定要在任务上下文初始化完毕后使用)
+                // LoadInitialTriggers 内部会清理 RecognitionAssets 并按当前捕获尺寸延迟加载。
+                _triggers = GameTaskManager.LoadInitialTriggers(_inputBackend, _systemInfo, _runtimeState, _autoPickConfigProvider, _paddleRecognizer, _yapRecognizer);
+                GameLoadingTrigger.GlobalEnabled = TaskContext.Instance().Config.GenshinStartConfig.AutoEnterGameEnabled;
 
             // if (GraphicsCapture.IsHdrEnabled(hWnd))
             // {
@@ -166,7 +222,20 @@ namespace BetterGenshinImpact.GameTask
             {
                 _timer.Start();
             }
+
+            _started = true;
         }
+        catch
+        {
+            _startFailed = true;
+            CleanupFailedStart();
+            throw;
+        }
+        finally
+        {
+            _starting = false;
+        }
+    }
 
         public void Stop()
         {
@@ -187,6 +256,54 @@ namespace BetterGenshinImpact.GameTask
             {
                 User32.UnhookWinEvent(_winEventHookLocation);
                 _winEventHookLocation = default;
+            }
+        }
+
+        /// <summary>
+        /// Best-effort cleanup of partial startup state.
+        /// Does NOT reset _startFailed — the dispatcher remains dead.
+        /// Every step is individually protected so no cleanup exception can mask the original startup exception.
+        /// Mirrors the safe subset of <see cref="Stop"/> cleanup.
+        /// </summary>
+        private void CleanupFailedStart()
+        {
+            TryCleanup("timer stop", () => _timer.Stop());
+
+            var capture = GameCapture;
+            GameCapture = null;
+            TryCleanup("game capture stop", () => capture?.Stop());
+            TryCleanup("game capture dispose", () => capture?.Dispose());
+
+            var moveSizeHook = _winEventHookMoveSize;
+            _winEventHookMoveSize = default;
+            TryCleanup("unhook move/size event", () =>
+            {
+                if (moveSizeHook != default && !User32.UnhookWinEvent(moveSizeHook))
+                    _logger.LogWarning("Cleanup: UnhookWinEvent (move/size) returned false");
+            });
+            var locationHook = _winEventHookLocation;
+            _winEventHookLocation = default;
+            TryCleanup("unhook location change event", () =>
+            {
+                if (locationHook != default && !User32.UnhookWinEvent(locationHook))
+                    _logger.LogWarning("Cleanup: UnhookWinEvent (location) returned false");
+            });
+
+            TryCleanup("clear task manager triggers", GameTaskManager.ClearTriggers);
+            TryCleanup("clear local triggers", () => _triggers?.Clear());
+            _triggers = null;
+
+        }
+
+        private void TryCleanup(string operation, Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed startup cleanup step: {Operation}", operation);
             }
         }
 
@@ -421,7 +538,7 @@ namespace BetterGenshinImpact.GameTask
                         foreach (var trigger in needRunTriggers)
                         {
                             if ((PrevGameUiCategory != content.CurrentGameUiCategory || (DateTime.Now - PrevGameUiChangeTime).TotalSeconds <= 30) // UI变化了后的30s内则所有触发器执行一遍
-                                || trigger.SupportedGameUiCategory == content.CurrentGameUiCategory)
+                                || trigger.SupportsGameUiCategory(content.CurrentGameUiCategory))
                             {
                                 // 触发器耗时只累计触发器执行本体，便于和截图耗时、总处理耗时拆开观察。
                                 var triggerStart = Stopwatch.GetTimestamp();
@@ -490,7 +607,7 @@ namespace BetterGenshinImpact.GameTask
                 }
 
                 _gameRect = new RECT(currentRect);
-                TaskContext.Instance().SystemInfo.CaptureAreaRect = currentRect;
+                TaskContext.Instance().SystemInfo.CaptureAreaRect = new BgiRect(currentRect.X, currentRect.Y, currentRect.Width, currentRect.Height);
                 MaskWindow.Instance().RefreshPosition();
                 HtmlMaskWindow.UpdateAllPositions();
                 return true;
@@ -528,43 +645,12 @@ namespace BetterGenshinImpact.GameTask
         {
             try
             {
-                var path = Global.Absolute($@"log\screenshot\");
-                if (!Directory.Exists(path))
-                {
-                    Directory.CreateDirectory(path);
-                }
-
-                Mat mat;
-                try
-                {
-                    mat = TaskControl.CaptureGameImage(GameCapture);
-                }
-                catch (Exception)
-                {
-                    _logger.LogInformation("截图失败，未获取到图像");
-                    return;
-                }
-
-                var name = $@"{DateTime.Now:yyyyMMddHHmmssffff}.png";
-                var savePath = Global.Absolute($@"log\screenshot\{name}");
-                if (TaskContext.Instance().Config.CommonConfig.ScreenshotUidCoverEnabled)
-                {
-                    var assetScale = TaskContext.Instance().SystemInfo.ScaleTo1080PRatio;
-                    var rect = new Rect((int)(mat.Width - MaskWindowConfig.UidCoverRightBottomRect.X * assetScale),
-                        (int)(mat.Height - MaskWindowConfig.UidCoverRightBottomRect.Y * assetScale),
-                        (int)(MaskWindowConfig.UidCoverRightBottomRect.Width * assetScale),
-                        (int)(MaskWindowConfig.UidCoverRightBottomRect.Height * assetScale));
-                    mat.Rectangle(rect, Scalar.White, -1);
-                    Cv2.ImWrite(savePath, mat);
-                }
-                else
-                {
-                    Cv2.ImWrite(savePath, mat);
-                }
-
-                mat.Dispose();
-
-                _logger.LogInformation("截图已保存: {Name}", name);
+                var gameCapture = GameCapture
+                    ?? throw new InvalidOperationException("截图器未初始化!");
+                new GameScreenshotTask(
+                        new WindowsGameScreenshotRuntimePlatform(gameCapture),
+                        _logger)
+                    .TakeScreenshot();
             }
             catch (Exception e)
             {

@@ -4,17 +4,44 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using BetterGenshinImpact.GameTask.AutoFishing;
 using Vanara.PInvoke;
 
 namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoFishingTests
 {
-    internal class FakeInputSimulator : IInputSimulator
+    internal class FakeInputSimulator : IInputSimulator, IAutoFishingInput
     {
         public IKeyboardSimulator Keyboard => new FakeKeyboardSimulator();
 
         public IMouseSimulator Mouse => new FakeMouseSimulator();
 
         public IInputDeviceStateAdaptor InputDeviceState => throw new NotImplementedException();
+
+        public void MoveMouseBy(int x, int y) => Mouse.MoveMouseBy(x, y);
+
+        public void LeftButtonDown() => Mouse.LeftButtonDown();
+
+        public void LeftButtonUp() => Mouse.LeftButtonUp();
+
+        public void LeftButtonClick() => Mouse.LeftButtonClick();
+
+        public void RightButtonClick() => Mouse.RightButtonClick();
+
+        public bool IsLeftButtonDown() => false;
+
+        public void PressEscape() => Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+
+        public void PressInteraction() => Keyboard.KeyPress(User32.VK.VK_F);
+
+        public void SetMoveForward(bool isDown)
+        {
+            if (isDown) Keyboard.KeyDown(User32.VK.VK_W); else Keyboard.KeyUp(User32.VK.VK_W);
+        }
+
+        public void SetMoveBackward(bool isDown)
+        {
+            if (isDown) Keyboard.KeyDown(User32.VK.VK_S); else Keyboard.KeyUp(User32.VK.VK_S);
+        }
     }
 
     internal class FakeKeyboardSimulator : IKeyboardSimulator

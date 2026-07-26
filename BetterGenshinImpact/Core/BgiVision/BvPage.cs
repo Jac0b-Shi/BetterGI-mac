@@ -2,23 +2,29 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Recognition;
+#if !BGI_PLATFORM_MAC
 using BetterGenshinImpact.Core.Simulator;
+using Fischless.WindowsInput;
+#endif
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
-using Fischless.WindowsInput;
-using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 
 namespace BetterGenshinImpact.Core.BgiVision;
 
 public class BvPage
 {
-    private static readonly ILogger Logger = App.GetLogger<BvPage>();
     private readonly CancellationToken _cancellationToken;
 
+#if BGI_PLATFORM_MAC
+    public BvKeyboard Keyboard { get; } = new();
+
+    public BvMouse Mouse { get; } = new();
+#else
     public IKeyboardSimulator Keyboard => Simulation.SendInput.Keyboard;
 
     public IMouseSimulator Mouse => Simulation.SendInput.Mouse;
+#endif
 
     /// <summary>
     /// Default timeout for operations in milliseconds
@@ -119,3 +125,57 @@ public class BvPage
         GameCaptureRegion.GameRegion1080PPosClick(x, y);
     }
 }
+
+#if BGI_PLATFORM_MAC
+public sealed class BvKeyboard
+{
+    public BvKeyboard KeyDown(int windowsVirtualKey)
+    {
+        TaskControlPlatform.Current.KeyDown(windowsVirtualKey);
+        return this;
+    }
+
+    public BvKeyboard KeyUp(int windowsVirtualKey)
+    {
+        TaskControlPlatform.Current.KeyUp(windowsVirtualKey);
+        return this;
+    }
+
+    public BvKeyboard KeyPress(int windowsVirtualKey)
+    {
+        TaskControlPlatform.Current.PressKey(windowsVirtualKey);
+        return this;
+    }
+
+    public BvKeyboard TextEntry(string text)
+    {
+        TaskControlPlatform.Current.InputText(text);
+        return this;
+    }
+}
+
+public sealed class BvMouse
+{
+    public BvMouse MoveMouseBy(int x, int y)
+    {
+        TaskControlPlatform.Current.MoveMouseBy(x, y);
+        return this;
+    }
+
+    public BvMouse LeftButtonDown() { TaskControlPlatform.Current.LeftButtonDown(); return this; }
+    public BvMouse LeftButtonUp() { TaskControlPlatform.Current.LeftButtonUp(); return this; }
+    public BvMouse LeftButtonClick() { TaskControlPlatform.Current.LeftButtonClick(); return this; }
+    public BvMouse RightButtonDown() { TaskControlPlatform.Current.RightButtonDown(); return this; }
+    public BvMouse RightButtonUp() { TaskControlPlatform.Current.RightButtonUp(); return this; }
+    public BvMouse RightButtonClick() { TaskControlPlatform.Current.RightButtonClick(); return this; }
+    public BvMouse MiddleButtonDown() { TaskControlPlatform.Current.MiddleButtonDown(); return this; }
+    public BvMouse MiddleButtonUp() { TaskControlPlatform.Current.MiddleButtonUp(); return this; }
+    public BvMouse MiddleButtonClick() { TaskControlPlatform.Current.MiddleButtonClick(); return this; }
+
+    public BvMouse VerticalScroll(int scrollAmountInClicks)
+    {
+        TaskControlPlatform.Current.VerticalScroll(scrollAmountInClicks);
+        return this;
+    }
+}
+#endif

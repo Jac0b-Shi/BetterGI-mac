@@ -5,7 +5,6 @@ using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Common.Exceptions;
 using BetterGenshinImpact.GameTask.Model.Area;
-using BetterGenshinImpact.View.Drawable;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -13,14 +12,13 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.Common.Job;
 
 public class SwitchPartyTask
 {
-    private readonly double _assetScale = TaskContext.Instance().SystemInfo.AssetScale;
+    private readonly double _assetScale = BetterGenshinImpact.GameTask.AutoFight.AutoFightRuntimePlatform.Current.SystemInfo.AssetScale;
 
     public string Name => "切换队伍";
 
@@ -53,7 +51,7 @@ public class SwitchPartyTask
             bool isOpened = false;
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                SimulateAction(GIActions.OpenPartySetupScreen);
 
                 // 考虑加载时间 2s，共检查 4.2s，如果失败则抛出异常
 
@@ -114,7 +112,7 @@ public class SwitchPartyTask
             Logger.LogInformation("当前队伍[{Name}]即为目标队伍，无需切换", currTeamName);
             if (isInPartyViewUi)
             {
-                Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                PressEscape();
                 await Delay(500, ct);
                 await _returnMainUiTask.Start(ct);
             }
@@ -155,9 +153,9 @@ public class SwitchPartyTask
         await Task.Delay(50, ct);
         GameCaptureRegion.GameRegion1080PPosClick(700, 125);
         await Task.Delay(50, ct);
-        Simulation.SendInput.Mouse.LeftButtonDown();
+        LeftButtonDown();
         await Task.Delay(450, ct);
-        Simulation.SendInput.Mouse.LeftButtonUp();
+        LeftButtonUp();
         await Task.Delay(100, ct);
 
         Rect regionOfInterest = new Rect(0, (int)(80 * _assetScale), partyDeleteBtn.Right, partyDeleteBtn.Top - (int)(80 * _assetScale));
@@ -166,8 +164,7 @@ public class SwitchPartyTask
             RecognitionType = RecognitionTypes.Ocr,
             RegionOfInterest = regionOfInterest,
             DrawOnWindow = true,
-            Name = "队伍名称",
-            DrawOnWindowPen= System.Drawing.Pens.White
+            Name = "队伍名称"
         };
         // 逐页查找
         try
@@ -222,7 +219,7 @@ public class SwitchPartyTask
         }
         finally
         {
-            VisionContext.Instance().DrawContent.ClearAll();
+            Core.Recognition.OverlayDrawPlatform.Current.ClearAll();
         }
 
         // 未找到

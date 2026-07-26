@@ -6,6 +6,7 @@ using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.AutoFight.Assets;
 using BetterGenshinImpact.GameTask.AutoFight.Config;
+using BetterGenshinImpact.GameTask.AutoFight.Script;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Model;
@@ -24,14 +25,12 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using BetterGenshinImpact.Core.Recognition;
-
 namespace BetterGenshinImpact.GameTask.AutoFight.Model;
 
 /// <summary>
 /// 战斗场景
 /// </summary>
-public class CombatScenes : IDisposable
+public class CombatScenes : IDisposable, ICombatScriptScene
 {
     /// <summary>
     /// 当前配队
@@ -60,7 +59,7 @@ public class CombatScenes : IDisposable
     {
         if (predictor == null)
         {
-            _predictor = App.ServiceProvider.GetRequiredService<BgiOnnxFactory>().CreateYoloPredictor(BgiOnnxModel.BgiAvatarSide);
+            _predictor = AutoFightRuntimePlatform.Current.CreateYoloPredictor(BgiOnnxModel.BgiAvatarSide);
             _ownsPredictor = true;
         }
         else
@@ -68,7 +67,7 @@ public class CombatScenes : IDisposable
             _predictor = predictor;
             _ownsPredictor = false;
         }
-        _systemInfo = systemInfo ?? TaskContext.Instance().SystemInfo;
+        _systemInfo = systemInfo ?? AutoFightRuntimePlatform.Current.SystemInfo;
         var captureRect = _systemInfo.ScaleMax1080PCaptureRect;
         _autoFightAssets = autoFightAssets ?? AutoFightAssets.Get(captureRect.Width, captureRect.Height);    // todo BaseAssets重构后直接由systemInfo构建，省去传入？
         if (logger == null)
@@ -92,6 +91,12 @@ public class CombatScenes : IDisposable
         return Avatars.AsReadOnly();
     }
 
+    ICombatCommandAvatar? ICombatCommandScene.SelectAvatar(string name) => SelectAvatar(name);
+
+    ICombatCommandAvatar ICombatCommandScene.SelectAvatar(int avatarIndex) => SelectAvatar(avatarIndex);
+
+    IReadOnlyCollection<ICombatCommandAvatar> ICombatScriptScene.GetAvatars() => GetAvatars();
+
 
     /// <summary>
     /// 通过YOLO分类器识别队伍内角色
@@ -101,7 +106,7 @@ public class CombatScenes : IDisposable
     {
         if (autoFightConfig == null)
         {
-            autoFightConfig = TaskContext.Instance().Config.AutoFightConfig;
+            autoFightConfig = AutoFightRuntimePlatform.Current.AutoFightConfig;
         }
 
         AssertUtils.CheckGameResolution();
@@ -190,7 +195,7 @@ public class CombatScenes : IDisposable
         {
             if (autoFightConfig == null)
             {
-                autoFightConfig = TaskContext.Instance().Config.AutoFightConfig;
+                autoFightConfig = AutoFightRuntimePlatform.Current.AutoFightConfig;
             }
 
             // 优先取配置
@@ -271,7 +276,7 @@ public class CombatScenes : IDisposable
     // }
 
 
-    public (string, string) ClassifyAvatarCnName(Image<Rgb24> img, int index)
+    public virtual (string, string) ClassifyAvatarCnName(Image<Rgb24> img, int index)
     {
         var className = ClassifyAvatarName(img, index);
 
@@ -354,7 +359,7 @@ public class CombatScenes : IDisposable
     {
         if (autoFightConfig == null)
         {
-            autoFightConfig = TaskContext.Instance().Config.AutoFightConfig;
+            autoFightConfig = AutoFightRuntimePlatform.Current.AutoFightConfig;
         }
         var cdConfig = autoFightConfig.ActionSchedulerByCd;
         if (avatarIndexRectList == null && ExpectedTeamAvatarNum == 4)
@@ -419,7 +424,7 @@ public class CombatScenes : IDisposable
     public void AfterTask()
     {
         // 释放所有按键
-        Simulation.ReleaseAllKey();
+        TaskControlPlatform.Current.ReleasePressedInputs();
 
         var mwk = SelectAvatar("玛薇卡");
         if (mwk != null)
@@ -538,9 +543,10 @@ public class CombatScenes : IDisposable
     public CombatScenes InitializeTeamOldOcr(CaptureContent content)
     {
         // 优先取配置
-        if (!string.IsNullOrEmpty(TaskContext.Instance().Config.AutoFightConfig.TeamNames))
+        if (!string.IsNullOrEmpty(AutoFightRuntimePlatform.Current.AutoFightConfig.TeamNames))
         {
-            InitializeTeamFromConfig(TaskContext.Instance().Config.AutoFightConfig.TeamNames, TaskContext.Instance().Config.AutoFightConfig);
+            InitializeTeamFromConfig(AutoFightRuntimePlatform.Current.AutoFightConfig.TeamNames,
+                AutoFightRuntimePlatform.Current.AutoFightConfig);
             return this;
         }
 
@@ -551,7 +557,7 @@ public class CombatScenes : IDisposable
             OpenCvCommonHelper.InRangeHsv(teamRa.SrcMat, new Scalar(0, 0, 210), new Scalar(255, 30, 255));
 
         // 识别队伍内角色
-        var result = OcrFactory.Paddle.OcrResult(hsvFilterMat);
+        var result = AutoFightRuntimePlatform.Current.OcrService.OcrResult(hsvFilterMat);
         ParseTeamOcrResult(result, teamRa);
         return this;
     }

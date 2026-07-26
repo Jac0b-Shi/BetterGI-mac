@@ -19,7 +19,7 @@ public class NormalAttackHandler : IActionHandler
     public async Task RunAsync(CancellationToken ct, WaypointForTrack? waypointForTrack = null, object? config = null)
     {
         Logger.LogInformation("执行 {Text}", "普通攻击");
-        Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+        SimulateAction(GIActions.NormalAttack);
         await Delay(1000, ct);
     }
 }

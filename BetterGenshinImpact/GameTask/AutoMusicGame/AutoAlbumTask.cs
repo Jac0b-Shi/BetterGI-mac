@@ -7,8 +7,6 @@ using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Model.Area;
-using BetterGenshinImpact.Service.Notification;
-using BetterGenshinImpact.Service.Notification.Model.Enum;
 using Microsoft.Extensions.Logging;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
@@ -17,31 +15,41 @@ namespace BetterGenshinImpact.GameTask.AutoMusicGame;
 /// <summary>
 /// 自动音乐专辑
 /// </summary>
-public class AutoAlbumTask(AutoMusicGameParam taskParam) : ISoloTask
+public class AutoAlbumTask(
+    AutoMusicGameParam taskParam,
+    IAutoMusicGameRuntimePlatform runtimePlatform,
+    AutoMusicGameConfig config,
+    IAutoAlbumRuntimePlatform albumRuntimePlatform) : ISoloTask
 {
     public string Name => "自动音游专辑";
 
-    private AutoMusicGameTask _autoMusicGameTask = new AutoMusicGameTask(taskParam);
+    private readonly AutoMusicGameTask _autoMusicGameTask = new(taskParam, runtimePlatform);
 
     public async Task Start(CancellationToken ct)
     {
         try
         {
-            AutoMusicGameTask.Init();
-            Notify.Event(NotificationEvent.AlbumStart).Success("自动音游专辑启动");
-            Logger.LogInformation("开始自动演奏整个专辑未完成的音乐");
+            AutoMusicGameTask.Init(runtimePlatform);
+            albumRuntimePlatform.Notify(AutoAlbumNotification.Start, "自动音游专辑启动");
+            albumRuntimePlatform.Logger.LogInformation("开始自动演奏整个专辑未完成的音乐");
             await StartOneAlbum(ct);
-            Notify.Event(NotificationEvent.AlbumEnd).Success("自动音游专辑结束");
+            albumRuntimePlatform.Notify(AutoAlbumNotification.End, "自动音游专辑结束");
         }
         catch (NormalEndException e)
         {
-            Logger.LogError("手动取消任务 - {Msg}", e.Message);
+            albumRuntimePlatform.Logger.LogError("手动取消任务 - {Msg}", e.Message);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception e)
         {
-            Logger.LogError("自动音乐专辑任务异常:{Msg}", e.Message);
-            Logger.LogDebug(e, "自动音乐专辑任务异常详情");
-            Notify.Event(NotificationEvent.AlbumError).Error("自动音游专辑异常", e);
+            albumRuntimePlatform.Logger.LogError("自动音乐专辑任务异常:{Msg}", e.Message);
+            albumRuntimePlatform.Logger.LogDebug(e, "自动音乐专辑任务异常详情");
+            albumRuntimePlatform.Notify(
+                AutoAlbumNotification.Error, "自动音游专辑异常", e);
+            if (albumRuntimePlatform.PropagateTaskExceptions) throw;
         }
     }
 
@@ -64,13 +72,13 @@ public class AutoAlbumTask(AutoMusicGameParam taskParam) : ISoloTask
             }
         }
 
-        var musicLevel = TaskContext.Instance().Config.AutoMusicGameConfig.MusicLevel;
+        var musicLevel = config.MusicLevel;
         if (string.IsNullOrEmpty(musicLevel))
         {
             musicLevel = "传说";
         }
 
-        Logger.LogInformation("自动音游乐曲难度等级：{Text}", musicLevel);
+        albumRuntimePlatform.Logger.LogInformation("自动音游乐曲难度等级：{Text}", musicLevel);
 
         // 遍历4个难度等级
         var defaultDifficultyLevels = new[]
@@ -89,24 +97,24 @@ public class AutoAlbumTask(AutoMusicGameParam taskParam) : ISoloTask
 
         foreach (var (difficultyName, xPos, yPos, canorusAsset) in difficultyLevels)
         {
-            Logger.LogInformation("开始演奏{Difficulty}难度的乐曲", difficultyName);
+            albumRuntimePlatform.Logger.LogInformation("开始演奏{Difficulty}难度的乐曲", difficultyName);
 
             // 每个难度12首曲子
             for (int i = 0; i < 13; i++)
             {
-                if (TaskContext.Instance().Config.AutoMusicGameConfig.MustCanorusLevel)
+                if (config.MustCanorusLevel)
                 {
                     using var canoraArea = CaptureToRectArea();
                     using var canoraRa = canoraArea.Find(canorusAsset);
                     if (canoraRa.IsExist())
                     {
-                        Logger.LogInformation("乐曲{Num} - {Difficulty}级别：已完成【大音天籁】，切换下一首", i + 1, difficultyName);
+                        albumRuntimePlatform.Logger.LogInformation("乐曲{Num} - {Difficulty}级别：已完成【大音天籁】，切换下一首", i + 1, difficultyName);
                         GameCaptureRegion.GameRegion1080PPosClick(310, 220);
                         await Delay(800, ct);
                         continue;
                     }
 
-                    Logger.LogInformation("第{Num}首{Difficulty}难度的乐曲：{Message}", i + 1, difficultyName, "没有完成【大音天籁】");
+                    albumRuntimePlatform.Logger.LogInformation("第{Num}首{Difficulty}难度的乐曲：{Message}", i + 1, difficultyName, "没有完成【大音天籁】");
                 }
                 else
                 {
@@ -114,13 +122,13 @@ public class AutoAlbumTask(AutoMusicGameParam taskParam) : ISoloTask
                     using var doneRa = doneArea.Find(RecognitionAssets.Get("AutoMusicGame", "AlbumMusicComplate", doneArea));
                     if (doneRa.IsExist())
                     {
-                        Logger.LogInformation("当前乐曲{Num}所有奖励已领取，切换下一首", i + 1);
+                        albumRuntimePlatform.Logger.LogInformation("当前乐曲{Num}所有奖励已领取，切换下一首", i + 1);
                         GameCaptureRegion.GameRegion1080PPosClick(310, 220);
                         await Delay(800, ct);
                         continue;
                     }
 
-                    Logger.LogInformation("当前乐曲{Num}存在未领取奖励，前往演奏", i + 1);
+                    albumRuntimePlatform.Logger.LogInformation("当前乐曲{Num}存在未领取奖励，前往演奏", i + 1);
                 }
 
 
@@ -154,7 +162,7 @@ public class AutoAlbumTask(AutoMusicGameParam taskParam) : ISoloTask
                         using var listRa = listArea.Find(RecognitionAssets.Get("AutoMusicGame", "BtnList", listArea));
                         if (listRa.IsExist())
                         {
-                            Logger.LogDebug("检测到返回列表按钮，演奏结束");
+                            albumRuntimePlatform.Logger.LogDebug("检测到返回列表按钮，演奏结束");
                             listRa.Click();
                             return;
                         }
@@ -182,18 +190,21 @@ public class AutoAlbumTask(AutoMusicGameParam taskParam) : ISoloTask
                     // 忽略主动停止另一侧任务时产生的取消或正常结束异常
                 }
 
-                Logger.LogInformation("第{Num}首{Difficulty}难度乐曲演奏完成", i + 1, difficultyName);
+                albumRuntimePlatform.Logger.LogInformation("第{Num}首{Difficulty}难度乐曲演奏完成", i + 1, difficultyName);
                 await Delay(2000, ct);
 
-                await Bv.WaitUntilFound(RecognitionAssets.Get("AutoMusicGame", "UiLeftTopAlbumIcon", TaskContext.Instance().SystemInfo.ScaleMax1080PCaptureRect.Width, TaskContext.Instance().SystemInfo.ScaleMax1080PCaptureRect.Height), ct);
-                Logger.LogDebug("切换到下一首乐曲");
+                var captureRect = albumRuntimePlatform.SystemInfo.ScaleMax1080PCaptureRect;
+                await Bv.WaitUntilFound(RecognitionAssets.Get(
+                    "AutoMusicGame", "UiLeftTopAlbumIcon",
+                    captureRect.Width, captureRect.Height), ct);
+                albumRuntimePlatform.Logger.LogDebug("切换到下一首乐曲");
                 GameCaptureRegion.GameRegion1080PPosClick(310, 220);
                 await Delay(800, ct);
             }
 
-            Logger.LogInformation("完成{Difficulty}难度所有乐曲的演奏", difficultyName);
+            albumRuntimePlatform.Logger.LogInformation("完成{Difficulty}难度所有乐曲的演奏", difficultyName);
         }
 
-        Logger.LogInformation("当前专辑所有乐曲演奏结束");
+        albumRuntimePlatform.Logger.LogInformation("当前专辑所有乐曲演奏结束");
     }
 }

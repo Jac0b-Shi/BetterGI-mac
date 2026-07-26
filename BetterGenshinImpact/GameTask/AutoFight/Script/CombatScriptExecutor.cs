@@ -25,21 +25,21 @@ public static class CombatScriptExecutor
         CombatScript combatScript,
         CancellationToken ct,
         ILogger logger,
-        CombatScenes? combatScenes = null)
+        ICombatScriptScene? combatScenes = null)
     {
-        var ownsScenes = false;
+        CombatScenes? ownedScenes = null;
         if (combatScenes == null)
         {
             using var capture = CaptureToRectArea();
-            combatScenes = new CombatScenes();
-            combatScenes.InitializeTeam(capture);
-            if (!combatScenes.CheckTeamInitialized())
+            ownedScenes = new CombatScenes();
+            ownedScenes.InitializeTeam(capture);
+            if (!ownedScenes.CheckTeamInitialized())
             {
                 logger.LogError("队伍识别未初始化成功！");
-                combatScenes.Dispose();
+                ownedScenes.Dispose();
                 return;
             }
-            ownsScenes = true;
+            combatScenes = ownedScenes;
         }
 
         try
@@ -80,10 +80,9 @@ public static class CombatScriptExecutor
         }
         finally
         {
-            if (ownsScenes)
-            {
-                combatScenes.Dispose();
-            }
+            ownedScenes?.Dispose();
         }
+
+        await Task.CompletedTask;
     }
 }

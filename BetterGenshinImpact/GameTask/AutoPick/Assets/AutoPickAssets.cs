@@ -1,11 +1,10 @@
-using System;
 using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.GameTask.Model.Assets;
 using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.GameTask.Model.Assets;
 using BetterGenshinImpact.Helpers;
+using BetterGenshinImpact.Platform.Abstractions;
 using OpenCvSharp;
-using Vanara.PInvoke;
-using Microsoft.Extensions.Logging;
+using System;
 
 namespace BetterGenshinImpact.GameTask.AutoPick.Assets;
 
@@ -13,9 +12,8 @@ public sealed class AutoPickAssets
 {
     private static readonly AssetsCache<CacheKey, AutoPickAssets> Cache = new(
         static key => new AutoPickAssets(key.CaptureSize, key.PickKey));
-    private readonly ILogger<AutoPickAssets> _logger = App.GetLogger<AutoPickAssets>();
 
-    public User32.VK PickVk { get; private set; } = User32.VK.VK_F;
+    public BgiKey PickVk { get; private set; } = BgiKey.F;
     public RecognitionObject PickRo { get; private set; }
     public RecognitionObject ChatPickRo { get; private set; }
 
@@ -28,34 +26,29 @@ public sealed class AutoPickAssets
         AssetScale = captureSize.AssetScale;
         PickRo = RecognitionAssets.Get("AutoPick", "F", captureSize.Width, captureSize.Height);
         ChatPickRo = LoadCustomChatPickKey("F", captureSize);
-        if (pickKey != "F")
+        if (pickKey == "F")
         {
-            try
-            {
-                PickRo = LoadCustomPickKey(pickKey, captureSize);
-                PickVk = User32Helper.ToVk(pickKey);
-                ChatPickRo = LoadCustomChatPickKey(pickKey, captureSize);
-            }
-            catch (Exception e)
-            {
-                _logger.LogDebug(e, "加载自定义拾取按键时发生异常");
-                _logger.LogError("加载自定义拾取按键失败，继续使用默认的F键");
-                return;
-            }
+            return;
+        }
 
-            _logger.LogInformation("自定义拾取按键：{Key}", pickKey);
+        try
+        {
+            PickRo = LoadCustomPickKey(pickKey, captureSize);
+            PickVk = BgiKeyMapper.ToKey(pickKey);
+            ChatPickRo = LoadCustomChatPickKey(pickKey, captureSize);
+        }
+        catch
+        {
+            PickRo = RecognitionAssets.Get("AutoPick", "F", captureSize.Width, captureSize.Height);
+            PickVk = BgiKey.F;
+            ChatPickRo = LoadCustomChatPickKey("F", captureSize);
         }
     }
 
-    public static AutoPickAssets Get(Region region, string pickKey)
-    {
-        return Get(CaptureSize.From(region), pickKey);
-    }
+    public static AutoPickAssets Get(Region region, string pickKey) => Get(CaptureSize.From(region), pickKey);
 
-    public static AutoPickAssets Get(int captureWidth, int captureHeight, string pickKey)
-    {
-        return Get(new CaptureSize(captureWidth, captureHeight), pickKey);
-    }
+    public static AutoPickAssets Get(int captureWidth, int captureHeight, string pickKey) =>
+        Get(new CaptureSize(captureWidth, captureHeight), pickKey);
 
     private static AutoPickAssets Get(CaptureSize captureSize, string pickKey)
     {
@@ -94,5 +87,4 @@ public sealed class AutoPickAssets
     }
 
     private readonly record struct CacheKey(CaptureSize CaptureSize, string PickKey);
-
 }

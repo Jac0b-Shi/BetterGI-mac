@@ -1,137 +1,192 @@
 using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
-using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
-using BetterGenshinImpact.GameTask.Model.Area;
-using BetterGenshinImpact.View.Drawable;
-using Microsoft.Extensions.Logging;
 using System;
-using Wpf.Ui.Violeta.Controls;
-using static Vanara.PInvoke.User32;
+using System.Threading;
 
 namespace BetterGenshinImpact.GameTask.QuickSereniteaPot;
 
 public class QuickSereniteaPotTask
 {
-    private static void WaitForBagToOpen()
+    public static void Done(CancellationToken cancellationToken = default)
     {
-        NewRetry.Do(() =>
+        cancellationToken.ThrowIfCancellationRequested();
+        var platform = QuickSereniteaPotRuntimePlatform.Current;
+        if (!platform.IsInitialized)
         {
-            TaskControl.Sleep(1);
-            using var ra1 = TaskControl.CaptureToRectArea(forceNew: true);
-            using var ra2 = ra1.Find(RecognitionAssets.Get("QuickSereniteaPot", "BagCloseButton", ra1));
-            if (ra2.IsEmpty())
-            {
-                throw new RetryException("背包未打开");
-            }
-        }, TimeSpan.FromMilliseconds(500), 5);
-    }
-
-    private static void FindPotIcon()
-    {
-        NewRetry.Do(() =>
-        {
-            TaskControl.Sleep(1);
-            using var ra1 = TaskControl.CaptureToRectArea(forceNew: true);
-            using var ra2 = ra1.Find(RecognitionAssets.Get("QuickSereniteaPot", "SereniteaPotIcon", ra1));
-            if (ra2.IsEmpty())
-            {
-                throw new RetryException("未检测到壶");
-            }
-            else
-            {
-                ra2.Click();
-            }
-        }, TimeSpan.FromMilliseconds(200), 3);
-    }
-
-    public static void Done()
-    {
-        if (!TaskContext.Instance().IsInitialized)
-        {
-            Toast.Warning("请先启动");
+            platform.NotifyNotStarted();
             return;
         }
-
-        if (!SystemControl.IsGenshinImpactActiveByProcess())
-        {
+        if (!platform.IsGameProcessActive)
             return;
-        }
 
         try
         {
-            // 打开背包
-            Simulation.SendInput.SimulateAction(GIActions.OpenInventory);
-            TaskControl.CheckAndSleep(500);
-            WaitForBagToOpen();
+            platform.SimulateAction(
+                GIActions.OpenInventory,
+                cancellationToken);
+            platform.Wait(500, cancellationToken);
+            WaitForBagToOpen(platform, cancellationToken);
 
-            // 点击道具页
-            GameCaptureRegion.GameRegion1080PPosClick(1050, 50);
-            TaskControl.CheckAndSleep(200);
+            platform.ClickGame1080P(1050, 50, cancellationToken);
+            platform.Wait(200, cancellationToken);
 
-            // 尝试放置壶
-            FindPotIcon();
-            TaskControl.CheckAndSleep(200);
+            FindPotIcon(platform, cancellationToken);
+            platform.Wait(200, cancellationToken);
 
-            // 点击放置 右下225,60
-            // GameCaptureRegion.GameRegionClick((size, assetScale) => (size.Width - 225 * assetScale, size.Height - 60 * assetScale));
-            // 也可以使用下面的方法点击放置按钮
-            Bv.ClickWhiteConfirmButton(TaskControl.CaptureToRectArea());
-            TaskControl.CheckAndSleep(800);
-            // 校验是否部署成功
-            var seccess = false;
-            for (int i = 0; i < 5; i++)
+            using (var capture = platform.Capture(
+                       forceNew: false,
+                       cancellationToken))
             {
-                if (Bv.IsInMainUi(TaskControl.CaptureToRectArea()))
-                {
-                    seccess = true;
-                    break;
-                }
+                Bv.ClickWhiteConfirmButton(capture);
             }
-            if (!seccess) {
-                for (int i = 0; i < 5; ++i)
+            platform.Wait(800, cancellationToken);
+
+            var success = false;
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                using var capture = platform.Capture(
+                    forceNew: false,
+                    cancellationToken);
+                if (!Bv.IsInMainUi(capture))
+                    continue;
+                success = true;
+                break;
+            }
+
+            if (!success)
+            {
+                for (var attempt = 0; attempt < 5; attempt++)
                 {
-                    if (!Bv.IsInBigMapUi(TaskControl.CaptureToRectArea()))
-                    {
-                        Simulation.SendInput.SimulateAction(GIActions.OpenInventory);
-                    }
-                    else
-                    {
+                    using var capture = platform.Capture(
+                        forceNew: false,
+                        cancellationToken);
+                    if (Bv.IsInBigMapUi(capture))
                         return;
-                    }
+                    platform.SimulateAction(
+                        GIActions.OpenInventory,
+                        cancellationToken);
                 }
             }
-            // 校验F交互是否是 进入/离开[尘歌壶] 
-            var capture = TaskControl.CaptureToRectArea();
-            bool isEnter = Bv.FindF(capture, "进入", "尘歌壶");
-            bool isLeave = Bv.FindF(capture, "离开", "尘歌壶");
 
-            if (isEnter || isLeave) {
-                string action = isEnter ? "进入" : "离开";
-                TaskControl.Logger.LogInformation($"快速进出尘歌壶:识别到 {action}尘歌壶");
-                
-                // 按F触发交互
-                Simulation.SendInput.SimulateAction(GIActions.PickUpOrInteract);
-                TaskControl.Logger.LogInformation($"快速进出尘歌壶:F{action}尘歌壶");
-                TaskControl.CheckAndSleep(200);
-                // 点击进入/离开尘歌壶
-                // 如果不是联机状态，此时玩家应已进入传送界面，本次点击不会影响实际功能
-                GameCaptureRegion.GameRegion1080PPosClick(1010, 760);
-            }
-            else
-            {
-                TaskControl.Logger.LogInformation("快速进出尘歌壶:未识别到 进入或离开尘歌壶");
-            }
+            using var interactionCapture = platform.Capture(
+                forceNew: false,
+                cancellationToken);
+            CompleteInteraction(
+                platform,
+                Bv.FindF(interactionCapture, "进入", "尘歌壶"),
+                Bv.FindF(interactionCapture, "离开", "尘歌壶"),
+                cancellationToken);
         }
-        catch (Exception e)
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
         {
-            TaskControl.Logger.LogWarning(e.Message);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            platform.LogWarning(exception);
         }
         finally
         {
-            VisionContext.Instance().DrawContent.ClearAll();
+            platform.ClearOverlay();
         }
+    }
+
+    internal static void CompleteInteraction(
+        IQuickSereniteaPotRuntimePlatform platform,
+        bool isEnter,
+        bool isLeave,
+        CancellationToken cancellationToken)
+    {
+        if (!isEnter && !isLeave)
+        {
+            platform.LogInformation(
+                "快速进出尘歌壶:未识别到 进入或离开尘歌壶");
+            return;
+        }
+
+        var action = isEnter ? "进入" : "离开";
+        platform.LogInformation(
+            $"快速进出尘歌壶:识别到 {action}尘歌壶");
+        platform.SimulateAction(
+            GIActions.PickUpOrInteract,
+            cancellationToken);
+        platform.LogInformation(
+            $"快速进出尘歌壶:F{action}尘歌壶");
+        platform.Wait(200, cancellationToken);
+        platform.ClickGame1080P(1010, 760, cancellationToken);
+    }
+
+    private static void WaitForBagToOpen(
+        IQuickSereniteaPotRuntimePlatform platform,
+        CancellationToken cancellationToken)
+    {
+        Retry(() =>
+        {
+            platform.Wait(1, cancellationToken);
+            using var capture = platform.Capture(
+                forceNew: true,
+                cancellationToken);
+            using var result = capture.Find(RecognitionAssets.Get(
+                "QuickSereniteaPot",
+                "BagCloseButton",
+                capture));
+            if (result.IsEmpty())
+                throw new RetryException("背包未打开");
+        }, platform, retryIntervalMilliseconds: 500, maxAttemptCount: 5,
+            cancellationToken);
+    }
+
+    private static void FindPotIcon(
+        IQuickSereniteaPotRuntimePlatform platform,
+        CancellationToken cancellationToken)
+    {
+        Retry(() =>
+        {
+            platform.Wait(1, cancellationToken);
+            using var capture = platform.Capture(
+                forceNew: true,
+                cancellationToken);
+            using var result = capture.Find(RecognitionAssets.Get(
+                "QuickSereniteaPot",
+                "SereniteaPotIcon",
+                capture));
+            if (result.IsEmpty())
+                throw new RetryException("未检测到壶");
+            result.Click();
+        }, platform, retryIntervalMilliseconds: 200, maxAttemptCount: 3,
+            cancellationToken);
+    }
+
+    private static void Retry(
+        Action action,
+        IQuickSereniteaPotRuntimePlatform platform,
+        int retryIntervalMilliseconds,
+        int maxAttemptCount,
+        CancellationToken cancellationToken)
+    {
+        RetryException? lastException = null;
+        for (var attempt = 0; attempt < maxAttemptCount; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (attempt > 0)
+                platform.Wait(retryIntervalMilliseconds, cancellationToken);
+            try
+            {
+                action();
+                return;
+            }
+            catch (RetryException exception)
+            {
+                lastException = exception;
+            }
+        }
+
+        if (lastException is not null)
+            throw lastException;
+        throw new InvalidOperationException(
+            "Retry ended without an attempt.");
     }
 }

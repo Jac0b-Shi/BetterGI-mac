@@ -3,11 +3,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
+using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using Microsoft.Extensions.Logging;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.Common.Job;
@@ -38,7 +37,7 @@ public class ClaimMailRewardsTask
 
         await Delay(200, ct);
 
-        TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.OpenPaimonMenu); // ESC 
+        TaskControlPlatform.Current.SimulateAction(GIActions.OpenPaimonMenu);
 
         await Delay(1300, ct);
 
@@ -59,7 +58,7 @@ public class ClaimMailRewardsTask
                     await Delay(200, ct);
                     // TODO 截图
 
-                    TaskContext.Instance().PostMessageSimulator.KeyPress(User32.VK.VK_ESCAPE); // ESC 
+                    TaskControlPlatform.Current.PressEscape();
                 }
             }
             else

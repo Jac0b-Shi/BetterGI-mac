@@ -29,7 +29,9 @@ public class MapEditorWebBridge
         await new TaskRunner().RunThreadAsync(async () =>
         {
             var task = PathingTask.BuildFromJson(json);
-            var pathExecutor = new PathExecutor(CancellationContext.Instance.Cts.Token);
+            var pathExecutor = new PathExecutor(
+                CancellationContext.Instance.Cts.Token, PathExecutorPlatform.Current,
+                PathExecutorAutoSkipPlatform.Current, ScriptGroupExecutionServices.Current);
             pathExecutor.PartyConfig = new PathingPartyConfig { AutoFightEnabled = false };
             await pathExecutor.Pathing(task);
         });

@@ -1,4 +1,6 @@
-﻿using System;
+﻿#nullable disable
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,7 +10,6 @@ using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.Helpers;
 using Microsoft.Extensions.Logging;
-using Wpf.Ui.Violeta.Controls;
 
 namespace BetterGenshinImpact.GameTask.LogParse;
 
@@ -173,7 +174,8 @@ public class TravelsDiaryDetailManager
                     writeFile(tddfile, _temp2);
                     if (!skipToast)
                     {
-                        Toast.Information($"{month.year}_{month.month}数据获取成功！");
+                        LogParse.NotifyHtmlGenerationStatus(
+                            $"{month.year}_{month.month}数据获取成功！");
                     }
                     else
                     {
@@ -189,11 +191,12 @@ public class TravelsDiaryDetailManager
                 }*/
             }
         }
-        catch (NoLoginException e)
+        catch (NoLoginException)
         {
             if (!skipToast)
             {
-                Toast.Warning("token未登录，请重新登录获取，此次将不新最新数据！");
+                LogParse.NotifyHtmlGenerationStatus(
+                    "token未登录，请重新登录获取，此次将不更新最新数据！");
             }
             else
             {

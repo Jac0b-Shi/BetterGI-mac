@@ -3,8 +3,6 @@ using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Common.Map.Maps;
 using BetterGenshinImpact.GameTask.Common.Map.Maps.Base;
 using BetterGenshinImpact.GameTask.Model.Area;
-using CommunityToolkit.Mvvm.Messaging;
-using CommunityToolkit.Mvvm.Messaging.Messages;
 using OpenCvSharp;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing;
@@ -34,8 +32,7 @@ public class NavigationInstance
             (_prevX, _prevY) = (p.X, p.Y);
             _captureTime = captureTime;
         }
-        WeakReferenceMessenger.Default.Send(new PropertyChangedMessage<object>(typeof(Navigation),
-            "SendCurrentPosition", new object(), p));
+        NavigationPlatform.Current.PublishCurrentPosition(p);
         return p;
     }
 
@@ -69,8 +66,7 @@ public class NavigationInstance
             _captureTime = captureTime;
         }
 
-        WeakReferenceMessenger.Default.Send(new PropertyChangedMessage<object>(typeof(Navigation),
-            "SendCurrentPosition", new object(), p));
+        NavigationPlatform.Current.PublishCurrentPosition(p);
         return p;
     }
 

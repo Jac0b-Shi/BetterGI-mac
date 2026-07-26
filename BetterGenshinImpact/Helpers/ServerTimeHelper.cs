@@ -1,5 +1,4 @@
 ﻿using System;
-using BetterGenshinImpact.GameTask;
 
 namespace BetterGenshinImpact.Helpers;
 
@@ -29,14 +28,16 @@ public interface IServerTimeProvider
 public class ServerTimeProvider : IServerTimeProvider
 {
     private readonly TimeProvider _timeProvider;
+    private readonly Func<TimeSpan> _serverTimeZoneOffset;
 
     /// <summary>
     /// 初始化 <see cref="ServerTimeProvider"/> 类的新实例
     /// </summary>
     /// <param name="timeProvider">用于获取基准UTC时间的 <see cref="TimeProvider"/></param>
-    public ServerTimeProvider(TimeProvider timeProvider)
+    public ServerTimeProvider(TimeProvider timeProvider, Func<TimeSpan> serverTimeZoneOffset)
     {
         _timeProvider = timeProvider;
+        _serverTimeZoneOffset = serverTimeZoneOffset ?? throw new ArgumentNullException(nameof(serverTimeZoneOffset));
     }
 
     /// <inheritdoc/>
@@ -48,16 +49,7 @@ public class ServerTimeProvider : IServerTimeProvider
 
     public TimeSpan GetServerTimeOffset()
     {
-        try
-        {
-            return TaskContext.Instance().Config.OtherConfig.ServerTimeZoneOffset;
-        }
-        // throw new Exception("Config未初始化"); in TaskContext.cs
-        catch (Exception)
-        {
-            // 如果配置未加载，假定为北京时间用于核心开发者测试
-            return TimeSpan.FromHours(8);
-        }
+        return _serverTimeZoneOffset();
     }
 }
 

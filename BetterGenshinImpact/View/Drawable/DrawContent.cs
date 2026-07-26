@@ -1,9 +1,10 @@
 ﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace BetterGenshinImpact.View.Drawable;
 
-public class DrawContent
+public class DrawContent : BetterGenshinImpact.Core.Recognition.IOverlayDrawPlatform
 {
     /// <summary>
     /// 在遮罩窗口上绘制的矩形
@@ -153,4 +154,10 @@ public class DrawContent
         LineList.Clear();
         MaskWindow.Instance().Refresh();
     }
+
+    public void SetRectangles(string name, BetterGenshinImpact.GameTask.Model.Area.Region source,
+        IReadOnlyList<OpenCvSharp.Rect> rectangles) => PutOrRemoveRectList(
+        name, rectangles.Select(rect => source.ToRectDrawable(rect, name)).ToList());
+
+    public void RemoveRectangles(string name) => RemoveRect(name);
 }

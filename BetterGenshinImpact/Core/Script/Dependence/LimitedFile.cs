@@ -6,13 +6,13 @@ using System.IO;
 using System.Threading.Tasks;
 using OpenCvSharp;
 using System.Linq;
-using BetterGenshinImpact.GameTask.Common;
 using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.Core.Script.Dependence;
 
 public class LimitedFile(string rootPath)
 {
+    private readonly ILogger _logger = ScriptHostServices.CreateLogger<LimitedFile>();
     /// <summary>
     /// 读取指定文件夹内所有文件和文件夹的路径（非递归方式）。
     /// 目录不存在时返回空数组
@@ -28,7 +28,7 @@ public class LimitedFile(string rootPath)
 
             if (!Directory.Exists(fullPath))
             {
-                TaskControl.Logger.LogError("ReadPathSync 目录不存在: {Path}", fullPath);
+                _logger.LogError("ReadPathSync 目录不存在: {Path}", fullPath);
                 return Array.Empty<string>();
             }
 
@@ -42,11 +42,12 @@ public class LimitedFile(string rootPath)
             string[] combined = files.Concat(directories).ToArray();
 
             // 将绝对路径转换为相对于 rootPath 的相对路径
-            return combined.Select(path => Path.GetRelativePath(rootPath, path)).ToArray();
+            return combined.Select(path =>
+                ScriptUtils.GetScriptRelativePath(rootPath, path)).ToArray();
         }
         catch (Exception ex)
         {
-            TaskControl.Logger.LogError("ReadPathSync 异常: {Message}", ex.Message);
+            _logger.LogError("ReadPathSync 异常: {Message}", ex.Message);
             return Array.Empty<string>();
         }
     }
@@ -68,7 +69,7 @@ public class LimitedFile(string rootPath)
         }
         catch (Exception ex)
         {
-            TaskControl.Logger.LogError("CreateDir 异常: {Message}", ex.Message);
+            _logger.LogError("CreateDir 异常: {Message}", ex.Message);
             return false;
         }
     }
@@ -91,7 +92,7 @@ public class LimitedFile(string rootPath)
         catch (Exception ex)
         {
             // 记录异常并返回 false
-            TaskControl.Logger.LogError("IsFolder 异常: {Message}", ex.Message);
+            _logger.LogError("IsFolder 异常: {Message}", ex.Message);
             return false;
         }
     }
@@ -110,7 +111,7 @@ public class LimitedFile(string rootPath)
         }
         catch (Exception ex)
         {
-            TaskControl.Logger.LogError("IsFile 异常: {Message}", ex.Message);
+            _logger.LogError("IsFile 异常: {Message}", ex.Message);
             return false;
         }
     }
@@ -129,7 +130,7 @@ public class LimitedFile(string rootPath)
         }
         catch (Exception ex)
         {
-            TaskControl.Logger.LogError("IsExists 异常: {Message}", ex.Message);
+            _logger.LogError("IsExists 异常: {Message}", ex.Message);
             return false;
         }
     }
@@ -157,7 +158,7 @@ public class LimitedFile(string rootPath)
         catch (Exception ex)
         {
             // 记录异常并返回空字符串
-            TaskControl.Logger.LogError("ReadTextSync 异常: {Message}", ex.Message);
+            _logger.LogError("ReadTextSync 异常: {Message}", ex.Message);
             return string.Empty;
         }
     }
@@ -178,7 +179,7 @@ public class LimitedFile(string rootPath)
         catch (Exception ex)
         {
             // 记录异常并返回空字符串
-            TaskControl.Logger.LogError("ReadText 异常: {Message}", ex.Message);
+            _logger.LogError("ReadText 异常: {Message}", ex.Message);
             return string.Empty;
         }
     }
@@ -222,7 +223,7 @@ public class LimitedFile(string rootPath)
         catch (Exception ex)
         {
             // 记录异常并返回空的Mat
-            TaskControl.Logger.LogError("ReadImageMatSync 异常: {Message}", ex.Message);
+            _logger.LogError("ReadImageMatSync 异常: {Message}", ex.Message);
             return new Mat();
         }
     }
@@ -270,7 +271,7 @@ public class LimitedFile(string rootPath)
         catch (Exception ex)
         {
             // 记录异常并返回空的Mat
-            TaskControl.Logger.LogError("ReadImageMatWithResizeSync 异常: {Message}", ex.Message);
+            _logger.LogError("ReadImageMatWithResizeSync 异常: {Message}", ex.Message);
             return new Mat();
         }
     }
@@ -326,7 +327,7 @@ public class LimitedFile(string rootPath)
         catch (Exception ex)
         {
             // 记录异常并返回 false
-            TaskControl.Logger.LogError("IsValid 异常: {Message}", ex.Message);
+            _logger.LogError("IsValid 异常: {Message}", ex.Message);
             return false;
         }
     }
@@ -342,11 +343,11 @@ public class LimitedFile(string rootPath)
     {
         try
         {
-            path = NormalizePath(path);
             if (!IsValid(path, content))
             {
                 return false;
             }
+            path = NormalizePath(path);
 
             if (append && File.Exists(path))
             {
@@ -375,11 +376,11 @@ public class LimitedFile(string rootPath)
     {
         try
         {
-            path = NormalizePath(path);
             if (!IsValid(path, content))
             {
                 return false;
             }
+            path = NormalizePath(path);
             
             if (append && File.Exists(path))
             {
@@ -409,12 +410,12 @@ public class LimitedFile(string rootPath)
     {
         try
         {
-            path = NormalizePath(path);
             if (!IsValid(path, content))
             {
                 callbackFunc("路径不合法或文件内容不合法", null);
                 return false;
             }
+            path = NormalizePath(path);
             
             if (append && File.Exists(path))
             {
@@ -466,7 +467,7 @@ public class LimitedFile(string rootPath)
         catch (Exception ex)
         {
             // 记录异常并返回 false
-            TaskControl.Logger.LogError("WriteImageSync 异常: {Message}", ex.Message);
+            _logger.LogError("WriteImageSync 异常: {Message}", ex.Message);
             return false;
         }
     }
@@ -520,6 +521,12 @@ public class LimitedFile(string rootPath)
     {
         try
         {
+            if (!IsValid(newPath))
+            {
+                _logger.LogError("RenamePathSync 异常: 新文件路径不合法 {Path}", newPath);
+                return false;
+            }
+
             // 标准化路径
             oldPath = NormalizePath(oldPath);
             newPath = NormalizePath(newPath);
@@ -527,14 +534,7 @@ public class LimitedFile(string rootPath)
             // 检查原路径是否存在
             if (!File.Exists(oldPath) && !Directory.Exists(oldPath))
             {
-                TaskControl.Logger.LogError("RenamePathSync 异常: 原路径不存在 {Path}", oldPath);
-                return false;
-            }
-
-            //验证扩展名合法性
-            if (File.Exists(oldPath) && !IsValid(newPath))
-            {
-                TaskControl.Logger.LogError("RenamePathSync 异常: 新文件路径不合法 {Path}", newPath);
+                _logger.LogError("RenamePathSync 异常: 原路径不存在 {Path}", oldPath);
                 return false;
             }
 
@@ -552,7 +552,7 @@ public class LimitedFile(string rootPath)
         }
         catch (Exception ex)
         {
-            TaskControl.Logger.LogError("RenamePathSync 异常: {Message}", ex.Message);
+            _logger.LogError("RenamePathSync 异常: {Message}", ex.Message);
             return false;
         }
     }

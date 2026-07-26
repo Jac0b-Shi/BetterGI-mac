@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoFight.Config;
 using Microsoft.Extensions.Logging;
+using BetterGenshinImpact.GameTask.Common;
 
 namespace BetterGenshinImpact.GameTask.AutoFight.Script;
 
@@ -46,7 +47,7 @@ public static class ESkillCdTracker
     private static CancellationTokenSource? _debounceCts;
     private static readonly object _debounceLock = new();
 
-    private static readonly ILogger Logger = App.GetLogger<ConditionEvaluator>(); // ESkillCdTracker 是静态类，不能用作泛型参数
+    private static ILogger Logger => TaskControlPlatform.Current.Logger;
 
     /// <summary>
     /// 防抖触发 E 技能 CD 检测。

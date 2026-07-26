@@ -1,5 +1,5 @@
-using BetterGenshinImpact.GameTask.Model.Assets;
 using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.GameTask.Model.Assets;
 using OpenCvSharp;
 using System;
 
@@ -10,9 +10,8 @@ public sealed class MapAssets
     private static readonly CaptureAssetsCache<MapAssets> Cache = new(static size => new MapAssets(size));
 
     public Rect MimiMapRect { get; }
-    
-    public static Rect MimiMapRect1080P =  new Rect(62, 19,212,212);
 
+    public static Rect MimiMapRect1080P = new(62, 19, 212, 212);
 
     private MapAssets(CaptureSize captureSize)
     {
@@ -23,13 +22,7 @@ public sealed class MapAssets
             (int)Math.Round(212 * captureSize.AssetScale));
     }
 
-    public static MapAssets Get(Region region)
-    {
-        return Cache.Get(region);
-    }
+    public static MapAssets Get(Region region) => Cache.Get(region);
 
-    public static MapAssets Get(int captureWidth, int captureHeight)
-    {
-        return Cache.Get(captureWidth, captureHeight);
-    }
+    public static MapAssets Get(int captureWidth, int captureHeight) => Cache.Get(captureWidth, captureHeight);
 }

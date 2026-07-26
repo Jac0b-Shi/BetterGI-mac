@@ -1,14 +1,12 @@
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Assets;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Model;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Helpers;
-using BetterGenshinImpact.Helpers.Extensions;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -27,62 +25,37 @@ namespace BetterGenshinImpact.GameTask.AutoGeniusInvokation;
 /// </summary>
 public class GeniusInvokationControl
 {
-    private readonly ILogger<GeniusInvokationControl> _logger = App.GetLogger<GeniusInvokationControl>();
+    private readonly IAutoGeniusInvokationRuntimePlatform _platform;
+    private readonly ILogger<GeniusInvokationControl> _logger;
+    private readonly AutoGeniusInvokationConfig _config;
+    private readonly CancellationToken _ct;
 
-    // 定义一个静态变量来保存类的实例
-    private static GeniusInvokationControl? _uniqueInstance;
-
-    // 定义一个标识确保线程同步
-    private static readonly object _locker = new();
-
-    private AutoGeniusInvokationConfig _config;
-
-    // 定义私有构造函数，使外界不能创建该类实例
-    private GeniusInvokationControl()
+    public GeniusInvokationControl(
+        IAutoGeniusInvokationRuntimePlatform platform,
+        AutoGeniusInvokationConfig config,
+        CancellationToken cancellationToken)
     {
-        var captureRect = TaskContext.Instance().SystemInfo.ScaleMax1080PCaptureRect;
+        _platform = platform;
+        _logger = platform.GetLogger<GeniusInvokationControl>();
+        _config = config;
+        _ct = cancellationToken;
+        var captureRect = platform.SystemInfo.ScaleMax1080PCaptureRect;
         _assets = AutoGeniusInvokationAssets.Get(captureRect.Width, captureRect.Height);
         _actionPhaseDiceMats = _assets.ActionPhaseDiceMats;
-        _config = TaskContext.Instance().Config.AutoGeniusInvokationConfig;
     }
 
-    /// <summary>
-    /// 定义公有方法提供一个全局访问点,同时你也可以定义公有属性来提供全局访问点
-    /// </summary>
-    /// <returns></returns>
-    public static GeniusInvokationControl GetInstance()
-    {
-        if (_uniqueInstance == null)
-        {
-            lock (_locker)
-            {
-                _uniqueInstance ??= new GeniusInvokationControl();
-            }
-        }
-
-        return _uniqueInstance;
-    }
-
-    public static bool OutputImageWhenError = true;
-
-    private CancellationToken _ct;
+    public bool OutputImageWhenError { get; set; } = true;
 
     private readonly AutoGeniusInvokationAssets _assets;
     private IReadOnlyDictionary<string, Mat> _actionPhaseDiceMats;
 
     // private IGameCapture? _gameCapture;
 
-    public void Init(CancellationToken ct)
-    {
-        _ct = ct;
-        // _gameCapture = taskParam.Dispatcher.GameCapture;
-    }
-
     public void Sleep(int millisecondsTimeout)
     {
         CheckTask();
         Thread.Sleep(millisecondsTimeout);
-        var sleepDelay = TaskContext.Instance().Config.AutoGeniusInvokationConfig.SleepDelay;
+        var sleepDelay = _config.SleepDelay;
         if (sleepDelay > 0)
         {
             Thread.Sleep(sleepDelay);
@@ -91,17 +64,17 @@ public class GeniusInvokationControl
 
     public Mat CaptureGameMat()
     {
-        return CaptureToRectArea().SrcMat;
+        return _platform.Capture().SrcMat;
     }
 
     public Mat CaptureGameGreyMat()
     {
-        return CaptureToRectArea().CacheGreyMat;
+        return _platform.Capture().CacheGreyMat;
     }
 
     public ImageRegion CaptureGameRectArea()
     {
-        return CaptureToRectArea();
+        return _platform.Capture();
     }
 
     private static RecognitionObject GetRecognitionObject(string objectName)
@@ -116,26 +89,11 @@ public class GeniusInvokationControl
 
     public void CheckTask()
     {
-        NewRetry.Do(() =>
-        {
-            if (_ct is { IsCancellationRequested: true })
-            {
-                return;
-            }
-
-            TaskControl.TrySuspend();
-            if (!SystemControl.IsGenshinImpactActiveByProcess())
-            {
-                var name = SystemControl.GetActiveByProcess();
-                _logger.LogWarning($"当前获取焦点的窗口为: {name}，不是原神，暂停");
-                throw new RetryException("当前获取焦点的窗口不是原神");
-            }
-        }, TimeSpan.FromSeconds(1), 100);
-
-        if (_ct is { IsCancellationRequested: true })
+        if (_ct.IsCancellationRequested)
         {
             throw new TaskCanceledException("任务取消");
         }
+        _platform.EnsureGameActive(_ct);
     }
 
     public void CommonDuelPrepare()
@@ -252,7 +210,7 @@ public class GeniusInvokationControl
             _logger.LogWarning("未识别到角色卡牌区域（Y轴）");
             if (OutputImageWhenError)
             {
-                Cv2.ImWrite("log\\character_card_error.jpg", bottomMat);
+                _platform.WriteDiagnosticImage("character_card_error.jpg", bottomMat);
             }
 
             throw new RetryException("未获取到角色区域");
@@ -310,7 +268,7 @@ public class GeniusInvokationControl
             _logger.LogWarning("未识别到角色卡牌区域（X轴识别点{Count}个）", colLines.Count);
             if (OutputImageWhenError)
             {
-                Cv2.ImWrite("log\\character_card_error.jpg", bottomMat);
+                _platform.WriteDiagnosticImage("character_card_error.jpg", bottomMat);
             }
 
             throw new RetryException("未获取到角色区域");
@@ -344,19 +302,21 @@ public class GeniusInvokationControl
     /// <param name="x"></param>
     /// <param name="y"></param>
     /// <returns></returns>
-    public void ClickCaptureArea(int x, int y)
+    public void ClickCaptureArea(double x, double y)
     {
-        var rect = TaskContext.Instance().SystemInfo.CaptureAreaRect;
-        ClickExtension.Click(rect.X + x, rect.Y + y);
+        _platform.ClickCapturePoint(x, y);
     }
+
+    public void MoveCaptureArea(double x, double y) =>
+        _platform.MoveCapturePoint(x, y);
 
     /// <summary>
     ///  点击游戏屏幕中心点
     /// </summary>
     public void ClickGameWindowCenter()
     {
-        var p = TaskContext.Instance().SystemInfo.CaptureAreaRect.GetCenterPoint();
-        p.Click();
+        var rect = _platform.SystemInfo.CaptureAreaRect;
+        _platform.ClickCapturePoint(rect.Width / 2d, rect.Height / 2d);
     }
 
     /*public static Dictionary<string, List<Point>> FindMultiPicFromOneImage(Mat srcMat, Dictionary<string, Mat> imgSubDictionary, double threshold = 0.8)
@@ -528,12 +488,6 @@ public class GeniusInvokationControl
         Sleep(5000);
     }
 
-    public Point MakeOffset(Point p)
-    {
-        var rect = TaskContext.Instance().SystemInfo.CaptureAreaRect;
-        return new Point(rect.X + p.X, rect.Y + p.Y);
-    }
-
     /// <summary>
     /// 计算当前有哪些骰子
     /// </summary>
@@ -563,21 +517,20 @@ public class GeniusInvokationControl
     /// </summary>
     public void ActionPhaseElementalTuning(int currentCardCount)
     {
-        var rect = TaskContext.Instance().SystemInfo.CaptureAreaRect;
-        var m = Simulation.SendInput.Mouse;
-        ClickExtension.Click(rect.X + rect.Width / 2d, rect.Y + rect.Height - 50);
+        var rect = _platform.SystemInfo.CaptureAreaRect;
+        _platform.ClickCapturePoint(rect.Width / 2d, rect.Height - 50);
         Sleep(1500);
         if (currentCardCount == 1)
         {
             // 最后一张牌在右侧，而不是中间
-            ClickExtension.Move(rect.X + rect.Width / 2d + 120, rect.Y + rect.Height - 50);
+            _platform.MoveCapturePoint(rect.Width / 2d + 120, rect.Height - 50);
         }
 
-        m.LeftButtonDown();
+        _platform.LeftButtonDown();
         Sleep(100);
-        m = ClickExtension.Move(rect.X + rect.Width - 50, rect.Y + rect.Height / 2d);
+        _platform.MoveCapturePoint(rect.Width - 50, rect.Height / 2d);
         Sleep(100);
-        m.LeftButtonUp();
+        _platform.LeftButtonUp();
     }
 
     /// <summary>
@@ -585,13 +538,12 @@ public class GeniusInvokationControl
     /// </summary>
     private bool ActionPhaseElementalTuningAlternatives(int currentCardCount)
     {
-        var rect = TaskContext.Instance().SystemInfo.CaptureAreaRect;
-        var info = TaskContext.Instance().SystemInfo;
-        var m = Simulation.SendInput.Mouse;
+        var rect = _platform.SystemInfo.CaptureAreaRect;
+        var info = _platform.SystemInfo;
 
-        var startY = rect.Y + rect.Height - 50;
-        var endX = rect.X + rect.Width - 50;
-        var endY = rect.Y + rect.Height / 2d;
+        var startY = rect.Height - 50;
+        var endX = rect.Width - 50;
+        var endY = rect.Height / 2d;
 
         // 手牌数量对应的起点（中心）和间距
         var table = new Dictionary<int, (double startX, double spacing)>
@@ -617,22 +569,22 @@ public class GeniusInvokationControl
         var (startX, spacing) = table[currentCardCount];
 
         // 先点中间位置，确保牌是展开状态
-        ClickExtension.Click(rect.X + rect.Width / 2d, rect.Y + rect.Height - 50);
+        _platform.ClickCapturePoint(rect.Width / 2d, rect.Height - 50);
         Sleep(1500);
 
         // 从左往右尝试
         for (int idx = 0; idx < currentCardCount; idx++)
         {
-            var x = rect.X + startX * info.AssetScale + idx * spacing * info.AssetScale;
+            var x = startX * info.AssetScale + idx * spacing * info.AssetScale;
 
-            ClickExtension.Click(x, startY);
+            _platform.ClickCapturePoint(x, startY);
             Sleep(500);
 
-            m.LeftButtonDown();
+            _platform.LeftButtonDown();
             Sleep(100);
-            m = ClickExtension.Move(endX, endY);
+            _platform.MoveCapturePoint(endX, endY);
             Sleep(100);
-            m.LeftButtonUp();
+            _platform.LeftButtonUp();
 
             // 等待动画并确认
             Sleep(1200);
@@ -672,14 +624,14 @@ public class GeniusInvokationControl
     /// <returns></returns>
     public void ActionPhasePressSwitchButton()
     {
-        var info = TaskContext.Instance().SystemInfo;
-        var x = info.CaptureAreaRect.X + info.CaptureAreaRect.Width - 100 * info.AssetScale;
-        var y = info.CaptureAreaRect.Y + info.CaptureAreaRect.Height - 120 * info.AssetScale;
+        var info = _platform.SystemInfo;
+        var x = info.CaptureAreaRect.Width - 100 * info.AssetScale;
+        var y = info.CaptureAreaRect.Height - 120 * info.AssetScale;
 
-        ClickExtension.Move(x, y).LeftButtonClick();
+        _platform.ClickCapturePoint(x, y);
         Sleep(800); // 等待动画彻底弹出
 
-        ClickExtension.Move(x, y).LeftButtonClick();
+        _platform.ClickCapturePoint(x, y);
     }
 
     /// <summary>
@@ -692,10 +644,10 @@ public class GeniusInvokationControl
         ClickGameWindowCenter(); // 复位
         Sleep(500);
         // 技能坐标写死 (w - 100 * n, h - 120)
-        var info = TaskContext.Instance().SystemInfo;
-        var x = info.CaptureAreaRect.X + info.CaptureAreaRect.Width - 100 * info.AssetScale * skillIndex;
-        var y = info.CaptureAreaRect.Y + info.CaptureAreaRect.Height - 120 * info.AssetScale;
-        ClickExtension.Click(x, y);
+        var info = _platform.SystemInfo;
+        var x = info.CaptureAreaRect.Width - 100 * info.AssetScale * skillIndex;
+        var y = info.CaptureAreaRect.Height - 120 * info.AssetScale;
+        _platform.ClickCapturePoint(x, y);
         Sleep(1200); // 等待动画彻底弹出
 
         using var ra = CaptureGameRectArea();
@@ -704,7 +656,7 @@ public class GeniusInvokationControl
         {
             // 多点几次保证点击到
             _logger.LogInformation("使用技能{SkillIndex}", skillIndex);
-            ClickExtension.Click(x, y);
+            _platform.ClickCapturePoint(x, y);
             Sleep(500);
             ClickGameWindowCenter(); // 复位
             return true;
@@ -893,7 +845,10 @@ public class GeniusInvokationControl
             throw new System.Exception("未能获取到我方角色卡位置");
         }
 
-        var pList = MatchTemplateHelper.MatchTemplateMulti(CaptureGameGreyMat(), _assets.CharacterDefeatedMat, 0.8);
+#pragma warning disable CS0612
+        var pList = MatchTemplateHelper.MatchTemplateMulti(
+            CaptureGameGreyMat(), _assets.CharacterDefeatedMat, 0.8);
+#pragma warning restore CS0612
 
         var res = new bool[3];
         foreach (var p in pList)
@@ -1108,8 +1063,10 @@ public class GeniusInvokationControl
         }
 
         // 识别角色能量
-        var energyPointList =
-            MatchTemplateHelper.MatchTemplateMulti(characterMat.Clone(), _assets.CharacterEnergyOnMat, 0.8);
+#pragma warning disable CS0612
+        var energyPointList = MatchTemplateHelper.MatchTemplateMulti(
+            characterMat.Clone(), _assets.CharacterEnergyOnMat, 0.8);
+#pragma warning restore CS0612
         character.EnergyByRecognition = energyPointList.Count;
 
         character.Hp = hp;
@@ -1180,19 +1137,19 @@ public class GeniusInvokationControl
 
                         Cv2.Rectangle(srcMat, rect1, Scalar.Yellow);
                         Cv2.Rectangle(srcMat, duel.CharacterCardRects[i], Scalar.Blue, 2);
-                        OutputImage(duel, rects, bottomMat, halfHeight, "log\\active_character2_success.jpg");
+                        OutputImage(duel, rects, bottomMat, halfHeight, "active_character2_success.jpg");
                         return duel.CurrentCharacter;
                     }
                 }
             }
 
-            OutputImage(duel, rects, bottomMat, halfHeight, "log\\active_character2_no_overlap_error.jpg");
+            OutputImage(duel, rects, bottomMat, halfHeight, "active_character2_no_overlap_error.jpg");
         }
         else
         {
             if (OutputImageWhenError)
             {
-                Cv2.ImWrite("log\\active_character2_no_rects_error.jpg", gray);
+                _platform.WriteDiagnosticImage("active_character2_no_rects_error.jpg", gray);
             }
         }
 
@@ -1206,7 +1163,7 @@ public class GeniusInvokationControl
             throw new System.Exception("未能获取到我方角色卡位置");
         }
 
-        var imageRegion = CaptureToRectArea();
+        var imageRegion = _platform.Capture();
 
         var hpArray = new int[3]; // 1 代表未出战 2 代表出战
         for (var i = 0; i < duel.CharacterCardRects.Count; i++)
@@ -1223,7 +1180,7 @@ public class GeniusInvokationControl
             var hpMat = new Mat(imageRegion.SrcMat, new Rect(cardRect.X + _config.CharacterCardExtendHpRect.X,
                 cardRect.Y + _config.CharacterCardExtendHpRect.Y,
                 _config.CharacterCardExtendHpRect.Width, _config.CharacterCardExtendHpRect.Height));
-            var text = OcrFactory.Paddle.Ocr(hpMat);
+            var text = _platform.OcrService.Ocr(hpMat);
             //Cv2.ImWrite($"log\\hp_n_{i}.jpg", hpMat);
             Debug.WriteLine($"角色{i}未出战HP位置识别结果{text}");
             if (!string.IsNullOrWhiteSpace(text))
@@ -1240,7 +1197,7 @@ public class GeniusInvokationControl
                     _config.CharacterCardExtendHpRect.Width,
                     _config.CharacterCardExtendHpRect.Height).ClampTo(imageRegion.SrcMat);
                 hpMat = new Mat(imageRegion.SrcMat, activeHpRect);
-                text = OcrFactory.Paddle.Ocr(hpMat);
+                text = _platform.OcrService.Ocr(hpMat);
                 //Cv2.ImWrite($"log\\hp_active_{i}.jpg", hpMat);
                 Debug.WriteLine($"角色{i}出战HP位置识别结果{text}");
                 if (!string.IsNullOrWhiteSpace(text))
@@ -1274,7 +1231,7 @@ public class GeniusInvokationControl
         return NewRetry.Do(() => WhichCharacterActiveByHpWord(duel), TimeSpan.FromSeconds(0.3), 2);
     }
 
-    private static void OutputImage(Duel duel, List<Rect> rects, Mat bottomMat, int halfHeight, string fileName)
+    private void OutputImage(Duel duel, List<Rect> rects, Mat bottomMat, int halfHeight, string fileName)
     {
         if (OutputImageWhenError)
         {
@@ -1290,7 +1247,7 @@ public class GeniusInvokationControl
                     new Rect(rc.X, rc.Y - halfHeight, rc.Width, rc.Height), Scalar.Green, 1);
             }
 
-            Cv2.ImWrite(fileName, bottomMat);
+            _platform.WriteDiagnosticImage(fileName, bottomMat);
         }
     }
 
@@ -1302,7 +1259,7 @@ public class GeniusInvokationControl
     {
         var srcMat = CaptureGameGreyMat();
         var diceCountMap = new Mat(srcMat, _config.MyDiceCountRect);
-        var text = OcrFactory.Paddle.OcrWithoutDetector(diceCountMap);
+        var text = _platform.OcrService.OcrWithoutDetector(diceCountMap);
         text = text.Replace(" ", "")
             .Replace("①", "1")
             .Replace("②", "2")
@@ -1323,7 +1280,7 @@ public class GeniusInvokationControl
         {
             _logger.LogWarning("通过OCR识别当前骰子数量结果为空,无影响");
 #if DEBUG
-            Cv2.ImWrite($"log\\dice_count_empty{DateTime.Now:yyyy-MM-dd HH：mm：ss：ffff}.jpg", diceCountMap);
+            _platform.WriteDiagnosticImage($"dice_count_empty{DateTime.Now:yyyy-MM-dd HH-mm-ss-ffff}.jpg", diceCountMap);
 #endif
             return -10;
         }
@@ -1336,7 +1293,7 @@ public class GeniusInvokationControl
         {
             _logger.LogWarning("通过OCR识别当前骰子结果: {Text}", text);
 #if DEBUG
-            Cv2.ImWrite($"log\\dice_count_error_{DateTime.Now:yyyy-MM-dd HH：mm：ss：ffff}.jpg", diceCountMap);
+            _platform.WriteDiagnosticImage($"dice_count_error_{DateTime.Now:yyyy-MM-dd HH-mm-ss-ffff}.jpg", diceCountMap);
 #endif
             return -10;
         }

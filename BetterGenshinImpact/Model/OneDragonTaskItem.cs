@@ -189,7 +189,8 @@ public partial class OneDragonTaskItem : ObservableObject
             case "领取尘歌壶奖励":
                 Action = async () =>
                 {
-                    await new GoToSereniteaPotTask().Start(CancellationContext.Instance.Cts.Token);
+                    await new GoToSereniteaPotTask(config)
+                        .Start(CancellationContext.Instance.Cts.Token);
                 };
                 break;
             case "自动地脉花":

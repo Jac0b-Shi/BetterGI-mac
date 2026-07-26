@@ -43,8 +43,8 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
         OnlyPickEliteDropsMode = autoFightConfig.OnlyPickEliteDropsMode;
         BattleThresholdForLoot = autoFightConfig.BattleThresholdForLoot ?? BattleThresholdForLoot;
         //下面参数固定，只取自动战斗里面的
-        FinishDetectConfig.BattleEndProgressBarColor = TaskContext.Instance().Config.AutoFightConfig.FinishDetectConfig.BattleEndProgressBarColor;
-        FinishDetectConfig.BattleEndProgressBarColorTolerance = TaskContext.Instance().Config.AutoFightConfig.FinishDetectConfig.BattleEndProgressBarColorTolerance;
+        FinishDetectConfig.BattleEndProgressBarColor = AutoFightRuntimePlatform.Current.AutoFightConfig.FinishDetectConfig.BattleEndProgressBarColor;
+        FinishDetectConfig.BattleEndProgressBarColorTolerance = AutoFightRuntimePlatform.Current.AutoFightConfig.FinishDetectConfig.BattleEndProgressBarColorTolerance;
 
         GuardianAvatar = autoFightConfig.GuardianAvatar;
         GuardianCombatSkip = autoFightConfig.GuardianCombatSkip;
@@ -61,7 +61,7 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
 
     public FightFinishDetectConfig FinishDetectConfig { get; set; } = new();
 
-    public string CombatStrategyPath { get; set; }
+    public string CombatStrategyPath { get; set; } = string.Empty;
 
     public bool FightFinishDetectEnabled { get; set; } = false;
     public bool PickDropsAfterFightEnabled { get; set; } = false;
@@ -71,7 +71,7 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
 
     public bool KazuhaPickupEnabled = true;
     public string ActionSchedulerByCd = "";
-    public string KazuhaPartyName;
+    public string KazuhaPartyName = string.Empty;
     public string OnlyPickEliteDropsMode = "";
     public string GuardianAvatar { get; set; } = string.Empty;
     public bool GuardianCombatSkip { get; set; } = false;
@@ -104,7 +104,7 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
     {
         if (string.IsNullOrEmpty(strategyName))
         {
-            strategyName = TaskContext.Instance().Config.AutoFightConfig.StrategyName;
+            strategyName = AutoFightRuntimePlatform.Current.AutoFightConfig.StrategyName;
         }
 
         if ("根据队伍自动选择".Equals(strategyName))
@@ -147,7 +147,7 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
 
     public void SetDefault()
     {
-        var autoFightConfig = TaskContext.Instance().Config.AutoFightConfig;
+        var autoFightConfig = AutoFightRuntimePlatform.Current.AutoFightConfig;
         Timeout = autoFightConfig.Timeout;
         FightFinishDetectEnabled = autoFightConfig.FightFinishDetectEnabled;
         PickDropsAfterFightEnabled = autoFightConfig.PickDropsAfterFightEnabled;

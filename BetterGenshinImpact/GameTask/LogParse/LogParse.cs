@@ -1,4 +1,6 @@
-﻿using System;
+﻿#nullable enable
+
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -9,7 +11,6 @@ using System.Text.RegularExpressions;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.FarmingPlan;
 using Newtonsoft.Json;
-using Wpf.Ui.Violeta.Controls;
 using static BetterGenshinImpact.GameTask.LogParse.LogParse.ConfigGroupEntity;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -21,7 +22,7 @@ namespace BetterGenshinImpact.GameTask.LogParse
         private static readonly string _assets_dir = Global.Absolute($@"GameTask\LogParse\Assets");
         // 添加一个静态事件用于通知日志的生成状态
         public static event Action<string> HtmlGenerationStatusChanged = delegate { };
-        private static void NotifyHtmlGenerationStatus(string status)
+        internal static void NotifyHtmlGenerationStatus(string status)
         {
             HtmlGenerationStatusChanged.Invoke(status);
         }
@@ -70,20 +71,22 @@ namespace BetterGenshinImpact.GameTask.LogParse
             ConfigTask? configTask = null;
             for (int i = 0; i < logLines.Count; i++)
             {
-                var logstr = logLines[i].Item1;
+                var logstr = NormalizeLogMessage(logLines[i].Item1);
                 var logrq = logLines[i].Item2;
                 //if("配置组 \"${}\" 加载完成，共25个脚本，开始执行")
 
 
                 // 定义正则表达式
 
-                var result = ParseBgiLine(@"配置组 ""(.+?)"" 加载完成，共(\d+)个脚本", logstr);
+                var result = ParseBgiLine(
+                    @"配置组\s+""?(.+?)""?\s+加载完成，共(\d+)个脚本",
+                    logstr);
                 if (result.Item1)
                 {
                     configGroupEntity = new()
                     {
                         Name = result.Item2[1],
-                        StartDate = ParsePreDataTime(logLines, i - 1, logrq)
+                        StartDate = ParseDataTime(logLines, i, logrq)
                     };
                     configGroupEntities.Add(configGroupEntity);
                 }
@@ -91,10 +94,12 @@ namespace BetterGenshinImpact.GameTask.LogParse
                 if (configGroupEntity != null)
                 {
                     //配置组 "战斗" 执行结束
-                    result = ParseBgiLine($"配置组 \"{configGroupEntity.Name}\" 执行结束", logstr);
+                    result = ParseBgiLine(
+                        $@"配置组\s+""?{Regex.Escape(configGroupEntity.Name)}""?\s+执行结束",
+                        logstr);
                     if (result.Item1)
                     {
-                        configGroupEntity.EndDate = ParsePreDataTime(logLines, i - 1, logrq);
+                        configGroupEntity.EndDate = ParseDataTime(logLines, i, logrq);
                         configGroupEntity = null;
                     }
                 }
@@ -102,12 +107,14 @@ namespace BetterGenshinImpact.GameTask.LogParse
 
                 if (configGroupEntity != null)
                 {
-                    result = ParseBgiLine(@"→ 开始执行(?:地图追踪任务|JS脚本): ""(.+?)""", logstr);
+                    result = ParseBgiLine(
+                        @"→ 开始执行(?:地图追踪任务|JS脚本):\s*""?(.+?)""?$",
+                        logstr);
                     if (result.Item1)
                     {
                         configTask = new();
                         configTask.Name = result.Item2[1];
-                        configTask.StartDate = ParsePreDataTime(logLines, i - 1, logrq);
+                        configTask.StartDate = ParseDataTime(logLines, i, logrq);
                         configGroupEntity.ConfigTaskList.Add(configTask);
                     }
 
@@ -158,16 +165,19 @@ namespace BetterGenshinImpact.GameTask.LogParse
                             configTask.Fault.ErrCount++;
                         }
 
-                        if (logstr.StartsWith("→ 脚本执行结束: \"" + configTask.Name + "\""))
+                        result = ParseBgiLine(
+                            $@"→ 脚本执行结束:\s*""?{Regex.Escape(configTask.Name)}""?(?:,|$)",
+                            logstr);
+                        if (result.Item1)
                         {
-                            configTask.EndDate = ParsePreDataTime(logLines, i - 1, logrq);
+                            configTask.EndDate = ParseDataTime(logLines, i, logrq);
                             configTask = null;
                         }
 
                         result = ParseBgiLine(@"交互或拾取：""(.+?)""", logstr);
                         if (result.Item1)
                         {
-                            configTask.AddPick(result.Item2[1]);
+                            configTask?.AddPick(result.Item2[1]);
                         }
                         
                     }
@@ -207,18 +217,53 @@ namespace BetterGenshinImpact.GameTask.LogParse
             return (false, []);
         }
 
-        private static DateTime? ParsePreDataTime(List<(string, string)> list, int index, string logrq)
+        private static string NormalizeLogMessage(string line)
+        {
+            if (!line.Contains(" Core: ", StringComparison.Ordinal))
+                return line;
+
+            var corePrefix = line.IndexOf(" Core: ", StringComparison.Ordinal);
+            var categoryStart = line.IndexOf('[', corePrefix + 7);
+            var categoryEnd = categoryStart >= 0
+                ? line.IndexOf("] ", categoryStart, StringComparison.Ordinal)
+                : -1;
+            return categoryEnd >= 0 ? line[(categoryEnd + 2)..] : line;
+        }
+
+        private static DateTime? ParseDataTime(
+            List<(string, string)> list,
+            int index,
+            string logrq)
         {
             if (index < 0)
             {
                 return null;
             }
 
-            (bool, List<string>) result = ParseBgiLine(@"\[(\d{2}:\d{2}:\d{2})\.\d+\]", list[index].Item1);
-            if (result.Item1)
+            for (var current = index; current >= Math.Max(0, index - 1); current--)
             {
-                DateTime dateTime = DateTime.ParseExact(logrq + " " + result.Item2[1], "yyyy-MM-dd HH:mm:ss", null);
-                return dateTime;
+                var line = list[current].Item1;
+                var time = ParseBgiLine(
+                    @"(?:^|\s)(?:Core:\s*)?(\d{2}:\d{2}:\d{2})\.\d+(?:\s|$)",
+                    line);
+                if (time.Item1)
+                {
+                    return DateTime.ParseExact(
+                        $"{logrq} {time.Item2[1]}",
+                        "yyyy-MM-dd HH:mm:ss",
+                        CultureInfo.InvariantCulture);
+                }
+
+                var iso = ParseBgiLine(
+                    @"^\[(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})\.\d+(?:Z|[+-]\d{2}:\d{2})\]",
+                    line);
+                if (iso.Item1)
+                {
+                    return DateTime.ParseExact(
+                        $"{iso.Item2[1]} {iso.Item2[2]}",
+                        "yyyy-MM-dd HH:mm:ss",
+                        CultureInfo.InvariantCulture);
+                }
             }
 
             return null;
@@ -227,7 +272,7 @@ namespace BetterGenshinImpact.GameTask.LogParse
         public class ConfigGroupEntity
         {
             //配置组名字
-            public string Name { get; set; }
+            public string Name { get; set; } = string.Empty;
 
             //开始日期
             public DateTime? StartDate { get; set; }
@@ -241,7 +286,7 @@ namespace BetterGenshinImpact.GameTask.LogParse
             public class ConfigTask
             {
                 public bool IsMerger { get; set; } = false;
-                public string Name { get; set; }
+                public string Name { get; set; } = string.Empty;
 
                 //开始日期
                 public DateTime? StartDate { get; set; }
@@ -304,7 +349,8 @@ namespace BetterGenshinImpact.GameTask.LogParse
             }
 
             // 定义文件名匹配的正则表达式
-            string pattern = @"^better-genshin-impact(\d{8})(_\d{3})*\.log$";
+            string pattern =
+                @"^better-genshin-impact-?(\d{8})(?:[_-]\d{1,3})*\.log$";
             Regex regex = new Regex(pattern);
 
             // 遍历文件夹中的所有文件
@@ -323,7 +369,9 @@ namespace BetterGenshinImpact.GameTask.LogParse
                     if (DateTime.TryParseExact(dateString, "yyyyMMdd", null, DateTimeStyles.None,
                             out DateTime parsedDate))
                     {
-                        result.Add((folderPath + "\\" + fileName, parsedDate.ToString("yyyy-MM-dd")));
+                        result.Add((
+                            Path.Combine(folderPath, fileName),
+                            parsedDate.ToString("yyyy-MM-dd")));
                     }
                 }
             }
@@ -895,9 +943,8 @@ namespace BetterGenshinImpact.GameTask.LogParse
                 WriteIndented = true // 启用格式化（缩进）
             };
             var content = JsonSerializer.Serialize(config, options);
-            string directoryPath = Path.GetDirectoryName(_configPath);
-
-            if (!Directory.Exists(directoryPath))
+            var directoryPath = Path.GetDirectoryName(_configPath);
+            if (!string.IsNullOrEmpty(directoryPath) && !Directory.Exists(directoryPath))
             {
                 // 如果文件夹不存在，创建文件夹
                 Directory.CreateDirectory(directoryPath);
@@ -918,7 +965,7 @@ namespace BetterGenshinImpact.GameTask.LogParse
                 }
                 catch (NullReferenceException)
                 {
-                    Toast.Warning("读取日志分析配置文件失败！");
+                    NotifyHtmlGenerationStatus("读取日志分析配置文件失败！");
                     config = new LogParseConfig();
                 }
             }

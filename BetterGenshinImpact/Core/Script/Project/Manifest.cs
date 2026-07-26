@@ -1,4 +1,3 @@
-using BetterGenshinImpact.Service;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -59,7 +58,13 @@ public class Manifest
         // 比较版本号大小 BgiVersion
         if (!string.IsNullOrWhiteSpace(BgiVersion) && Global.IsNewVersion(BgiVersion))
         {
+#if BGI_PLATFORM_MAC
+            System.Diagnostics.Trace.TraceError(
+                "脚本 {0} 版本号要求 {1} 大于当前 BetterGI 版本号 {2}，脚本可能无法正常工作，请更新 BetterGI 版本！",
+                Name, BgiVersion, Global.Version);
+#else
             TaskControl.Logger.LogError("脚本 {Name} 版本号要求 {BgiVersion} 大于当前 BetterGI 版本号 {CurrentVersion} ， 脚本可能无法正常工作，请更新 BetterGI 版本！", Name, BgiVersion, Global.Version);
+#endif
         }
     }
 
@@ -75,7 +80,7 @@ public class Manifest
         if (File.Exists(settingFile))
         {
             var json = File.ReadAllText(settingFile);
-            settingItems = JsonSerializer.Deserialize<List<SettingItem>>(json, ConfigService.JsonOptions) ?? [];
+            settingItems = JsonSerializer.Deserialize<List<SettingItem>>(json, ConfigJson.Options) ?? [];
         }
 
         return settingItems;

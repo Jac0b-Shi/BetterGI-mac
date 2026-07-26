@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using BetterGenshinImpact.GameTask.Common.Map.Maps.Base;
+using BetterGenshinImpact.Service;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing.Model;
 
@@ -56,7 +57,7 @@ public class PathingTaskInfo
     /// SIFT 老的匹配方式
     /// TemplateMatch 支持分层地图
     /// </summary>
-    public string MapMatchMethod { get; set; } = TaskContext.Instance().Config.PathingConditionConfig.MapMatchingMethod;
+    public string MapMatchMethod { get; set; } = ScriptServicePlatform.Current.MapMatchingMethod;
     
     
     public List<MaterialInfo> Items { get; set; } = [];

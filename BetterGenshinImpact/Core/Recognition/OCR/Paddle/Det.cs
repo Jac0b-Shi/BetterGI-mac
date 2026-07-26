@@ -5,6 +5,7 @@ using BetterGenshinImpact.Core.Recognition.ONNX;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using OpenCvSharp;
+using System.Threading;
 
 namespace BetterGenshinImpact.Core.Recognition.OCR.Paddle;
 
@@ -12,6 +13,7 @@ public class Det(BgiOnnxModel model, OcrVersionConfig config, BgiOnnxFactory bgi
     : IDisposable
 {
     private readonly InferenceSession _session = bgiOnnxFactory.CreateInferenceSession(model, true);
+    private int _disposed;
 
     /// <summary>Gets or sets the detection side length limit used by the Python det preprocess.</summary>
     public int LimitSideLen { get; set; } = 960;
@@ -40,21 +42,16 @@ public class Det(BgiOnnxModel model, OcrVersionConfig config, BgiOnnxFactory bgi
     /// <summary>Gets or sets the ratio for enlarging text boxes during post-processing.</summary>
     public float UnclipRatio { get; set; } = 2.0f;
 
-    ~Det()
-    {
-        lock (_session)
-        {
-            _session.Dispose();
-        }
-    }
-
     public void Dispose()
     {
-        lock (_session)
-        {
-            _session.Dispose();
-        }
+        DisposeSession();
         GC.SuppressFinalize(this);
+    }
+
+    private void DisposeSession()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            _session.Dispose();
     }
 
     public RotatedRect[] Run(Mat src)

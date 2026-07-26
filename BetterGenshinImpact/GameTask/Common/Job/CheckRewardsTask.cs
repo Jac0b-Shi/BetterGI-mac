@@ -5,8 +5,9 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
+using BetterGenshinImpact.GameTask.Common;
+using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Service.Notification;
 using BetterGenshinImpact.Service.Notification.Model.Enum;
@@ -22,14 +23,14 @@ namespace BetterGenshinImpact.GameTask.Common.Job;
 /// </summary>
 public class CheckRewardsTask
 {
-    private readonly ILogger<CheckRewardsTask> _logger = App.GetLogger<CheckRewardsTask>();
-
     private readonly string _dailyRewardsClaimedLocalizedString;
 
     public CheckRewardsTask()
     {
-        IStringLocalizer<CheckRewardsTask> stringLocalizer = App.GetService<IStringLocalizer<CheckRewardsTask>>() ?? throw new NullReferenceException();
-        CultureInfo cultureInfo = new CultureInfo(TaskContext.Instance().Config.OtherConfig.GameCultureInfoName);
+        IStringLocalizer<CheckRewardsTask> stringLocalizer =
+            TaskParameterPlatform.Current.GetStringLocalizer<CheckRewardsTask>();
+        CultureInfo cultureInfo = new CultureInfo(
+            TaskParameterPlatform.Current.GameCultureInfoName);
         this._dailyRewardsClaimedLocalizedString = stringLocalizer.WithCultureGet(cultureInfo, "今日奖励已领取");
     }
 
@@ -57,7 +58,8 @@ public class CheckRewardsTask
                 GetConfirmRa(true,"每日委托奖励"),
                 ()=>
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.OpenAdventurerHandbook); 
+                    TaskControlPlatform.Current.SimulateAction(
+                        GIActions.OpenAdventurerHandbook);
                     var screen = CaptureToRectArea();
                     var ra = screen.FindMulti(GetConfirmRa())
                         .FirstOrDefault(btn => btn.Text == "委托");

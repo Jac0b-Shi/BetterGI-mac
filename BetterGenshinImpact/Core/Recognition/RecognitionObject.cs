@@ -1,4 +1,4 @@
-﻿using BetterGenshinImpact.Core.Recognition.OpenCv;
+using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Helpers.Extensions;
 using OpenCvSharp;
 using System;
@@ -96,8 +96,13 @@ public class RecognitionObject
 
     /// <summary>
     ///     DrawOnWindow 为 true 时，绘制的矩形框的颜色。可选，默认红色。
+    ///     WPF overlay only — no-op stub on non-Windows.
     /// </summary>
+#if BGI_FULL_WINDOWS
     public Pen DrawOnWindowPen = new(Color.Red, 2);
+#else
+    public Pen? DrawOnWindowPen = null;
+#endif
 
     /// <summary>
     ///    一个模板匹配多个结果的时候最大匹配数量。可选，默认 -1，即不限制。
@@ -113,7 +118,7 @@ public class RecognitionObject
     /// 二值化阈值，默认 128
     /// </summary>
     public int BinaryThreshold { get; set; } = 128;
-    
+
     public RecognitionObject InitTemplate()
     {
         if (TemplateImageMat != null && TemplateImageGreyMat == null)
@@ -126,16 +131,16 @@ public class RecognitionObject
         return this;
     }
 
-    
+
     public static RecognitionObject TemplateMatch(Mat mat)
     {
         var ro = new RecognitionObject
         {
             RecognitionType = RecognitionTypes.TemplateMatch,
             TemplateImageMat = mat,
-            UseMask = false, 
+            UseMask = false,
         };
-        
+
         return ro.InitTemplate();
     }
 
@@ -148,10 +153,10 @@ public class RecognitionObject
             UseMask = useMask,
             MaskColor = maskColor == default? Color.FromArgb(0, 255, 0) : maskColor
         };
-        
+
         return ro.InitTemplate();
     }
-    
+
     public static RecognitionObject TemplateMatch(Mat mat, double x, double y, double w, double h)
     {
         var ro = new RecognitionObject
@@ -160,7 +165,7 @@ public class RecognitionObject
             TemplateImageMat = mat,
             RegionOfInterest = new Rect((int)Math.Round(x), (int)Math.Round(y), (int)Math.Round(w), (int)Math.Round(h))
         };
-        
+
         return ro.InitTemplate();
     }
 
@@ -215,12 +220,12 @@ public class RecognitionObject
     ///     多个值全匹配的情况下才算成功
     /// </summary>
     public List<string> RegexMatchText { get; set; } = [];
-    
+
     /// <summary>
     /// 用于多个OCR结果的匹配
     /// </summary>
     public string Text { get; set; } = string.Empty;
-    
+
     public static RecognitionObject Ocr(double x, double y, double w, double h)
     {
         return new RecognitionObject
@@ -229,7 +234,7 @@ public class RecognitionObject
             RegionOfInterest = new Rect((int)Math.Round(x), (int)Math.Round(y), (int)Math.Round(w), (int)Math.Round(h))
         };
     }
-    
+
     public static RecognitionObject OcrMatch(double x, double y, double w, double h, params string[] matchTexts)
     {
         return new RecognitionObject
@@ -255,9 +260,9 @@ public class RecognitionObject
     };
 
     #endregion OCR文字识别
-    
-    
-    
+
+
+
     /// <summary>
     /// 克隆当前 RecognitionObject 实例
     /// </summary>
@@ -278,7 +283,7 @@ public class RecognitionObject
                     AnchorMode = this.SearchOptions.AnchorMode,
                     ExpandSize = this.SearchOptions.ExpandSize
                 },
-            
+
             // 模板匹配相关属性
             TemplateImageMat = this.TemplateImageMat, // 注意：Mat 是引用类型，克隆后仍然指向同一内存
             TemplateImageGreyMat = this.TemplateImageGreyMat, // 注意：Mat 是引用类型，克隆后仍然指向同一内存
@@ -289,15 +294,20 @@ public class RecognitionObject
             MaskColor = this.MaskColor,
             MaskMat = this.MaskMat, // 注意：Mat 是引用类型，克隆后仍然指向同一内存
             DrawOnWindow = this.DrawOnWindow,
-            DrawOnWindowPen = new Pen(this.DrawOnWindowPen.Color, this.DrawOnWindowPen.Width),
+#if BGI_FULL_WINDOWS
+            DrawOnWindowPen = this.DrawOnWindowPen != null
+                ? new Pen(this.DrawOnWindowPen.Color, this.DrawOnWindowPen.Width) : null,
+#else
+            DrawOnWindowPen = null,
+#endif
             MaxMatchCount = this.MaxMatchCount,
-            
+
             // 颜色匹配相关属性
             ColorConversionCode = this.ColorConversionCode,
             LowerColor = this.LowerColor,
             UpperColor = this.UpperColor,
             MatchCount = this.MatchCount,
-            
+
             // OCR相关属性
             OcrEngine = this.OcrEngine,
             ReplaceDictionary = this.ReplaceDictionary,  // 不克隆字典，因为字典通常是不可变的
@@ -306,7 +316,7 @@ public class RecognitionObject
             RegexMatchText = this.RegexMatchText, // 不克隆
             Text = this.Text
         };
-        
+
         return cloned;
     }
 }

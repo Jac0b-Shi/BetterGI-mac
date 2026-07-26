@@ -1,138 +1,156 @@
 <div align="center">
-  <h1 align="center">
-    <a href="https://www.bettergi.com/"><img src="https://img.alicdn.com/imgextra/i4/2042484851/O1CN016PuRSW1lhoOl4tcHS_!!2042484851.png" width="190"></a>
-    <br/>
-    <a href="https://www.bettergi.com/">BetterGI</a>
-  </h1>
-  <a href="https://trendshift.io/repositories/5269" target="_blank"><img src="https://trendshift.io/api/badge/repositories/5269" alt="babalae%2Fbetter-genshin-impact | Trendshift" style="width: 200px; height: 46px;" width="250" height="46"/></a>
+  <h1>BetterGI macOS</h1>
+  <p>BetterGI 的非官方 macOS 移植</p>
+  <p>
+    <a href="https://github.com/Jac0b-Shi/BetterGI-mac/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Jac0b-Shi/BetterGI-mac?style=flat-square&logo=github"></a>
+    <img alt="平台" src="https://img.shields.io/badge/platform-macOS%2014%2B-black?style=flat-square&logo=apple">
+    <img alt="架构" src="https://img.shields.io/badge/architecture-Apple%20Silicon-black?style=flat-square&logo=apple">
+    <a href="https://github.com/Jac0b-Shi/BetterGI-mac/actions/workflows/mac-core.yml"><img alt="macOS Core Extraction" src="https://github.com/Jac0b-Shi/BetterGI-mac/actions/workflows/mac-core.yml/badge.svg"></a>
+  </p>
 </div>
 
-<br/>
+BetterGI macOS 将 [BetterGI](https://github.com/babalae/better-genshin-impact) 的
+C# Core、识别资源、任务、脚本与调度能力接入 SwiftUI/AppKit 前端，并使用
+ScreenCaptureKit、Core Graphics 和 macOS 原生窗口系统完成截图、输入与 HUD。
 
-<div align="center">
-  <a href="https://dotnet.microsoft.com/zh-cn/download/dotnet/latest/runtime"><img alt="Windows" src="https://img.shields.io/badge/platform-Windows-blue?logo=windowsxp&style=flat-square&color=1E9BFA" /></a>
-  <a href="https://github.com/babalae/better-genshin-impact/releases"><img alt="下载数" src="https://img.shields.io/github/downloads/babalae/better-genshin-impact/total?logo=github&style=flat-square&color=1E9BFA"></a>
-  <a href="https://github.com/babalae/better-genshin-impact/releases"><img alt="Release" src="https://img.shields.io/github/v/release/babalae/better-genshin-impact?logo=visualstudio&style=flat-square&color=1E9BFA"></a>
-</div>
-
-<br/>
-
-
-<div align="center">
-🌟 点一下右上角的 Star，Github 主页就能收到软件更新通知了哦~
-</div>
-
-<div align="center">
-    <img src="https://img.alicdn.com/imgextra/i1/2042484851/O1CN01OL1E1v1lhoM7Wdmup_!!2042484851.gif" alt="Star" width="186" height="60">
-  </a>
-</div>
-
-<br/>
-
-[English](./Docs/readme_en.md) | [中文](./README.md) | [繁體中文](./Docs/readme_tcn.md) | [日本語](./Docs/readme_ja.md)  
-BetterGI · 更好的原神， 一个基于计算机视觉技术，意图让原神变的更好的项目。
-
-## 功能
-* 实时任务
-  * [自动拾取](https://www.bettergi.com/feats/timer/pick.html)：遇到可交互/拾取内容时自动按 <kbd>F</kbd>，支持黑白名单配置
-  * [自动剧情](https://www.bettergi.com/feats/timer/skip.html)：快速点击过剧情、自动选择选项、自动提交物品、关闭弹出书页等
-    * 与凯瑟琳对话时有橙色选项会 [自动领取「每日委托」奖励](https://www.bettergi.com/feats/timer/skip.html#%E8%87%AA%E5%8A%A8%E9%A2%86%E5%8F%96%E3%80%8E%E6%AF%8F%E6%97%A5%E5%A7%94%E6%89%98%E3%80%8F%E5%A5%96%E5%8A%B1)、[自动重新派遣](https://www.bettergi.com/feats/timer/skip.html#%E8%87%AA%E5%8A%A8%E9%87%8D%E6%96%B0%E6%B4%BE%E9%81%A3)
-  * [自动邀约](https://www.bettergi.com/feats/timer/skip.html#%E8%87%AA%E5%8A%A8%E9%82%80%E7%BA%A6)：自动剧情开启的情况下此功能才会生效，自动选择邀约选项
-  * [快速传送](https://www.bettergi.com/feats/timer/tp.html)：在地图上点击传送点，或者点击后出现的列表中存在传送点，会自动点击传送点并传送
-  * [半自动钓鱼](https://www.bettergi.com/feats/timer/fish.html)：AI 识别自动抛竿，鱼上钩时自动收杆，并自动完成钓鱼进度
-* 独立任务
-  * [全自动七圣召唤](https://www.bettergi.com/feats/task/tcg.html)：帮助你轻松完成七圣召唤角色邀请、每周来客挑战等 PVE 内容
-  * [自动伐木](https://www.bettergi.com/feats/task/felling.html)：自动 <kbd>Z</kbd> 键使用「王树瑞佑」，利用上下线可以刷新木材的原理，挂机刷满一背包的木材
-  * [自动秘境](https://www.bettergi.com/feats/task/domain.html)：全自动秘境挂机刷体力，自动循环进入秘境开启钥匙、战斗、走到古树并领取奖励
-  * [自动幽境危战](https://www.bettergi.com/feats/task/stygian.html)：自动传送并前往幽境危战，主要用于难度三刷圣遗物
-  * [全自动钓鱼](https://www.bettergi.com/feats/task/fish.html)：在出现钓鱼 <kbd>F</kbd> 按钮的位置面向鱼塘，然后启动全自动钓鱼，启动后程序会自动完成钓鱼，并切换白天和晚上
-  * [自动地脉花](https://www.bettergi.com/feats/task/leyline.html)：自动连续刷地脉花，支持绝大部分地脉花位置。
-  * [自动音游](https://www.bettergi.com/feats/task/music.html)：一键自动完成千音雅集的专辑，快速获取成就
-  * [自动烹饪](https://www.bettergi.com/feats/task/cook.html)：自动在完美区域完成食物烹饪
-  * [自动分解圣遗物](https://www.bettergi.com/feats/task/artifactSalvage.html)：支持 **快速分解** 和 **按匹配规则的圣遗物分解**
-* 全自动
-  * [一条龙](https://github.com/babalae/better-genshin-impact/issues/846)：一键完成日常（使用历练点），并领取奖励
-  * [自动采集/挖矿/锄地](https://www.bettergi.com/feats/autos/pathing.html)：通过左上角小地图的识别，完成自动采集、挖矿、锄地等功能
-  * [键鼠录制](https://www.bettergi.com/feats/autos/kmscript.html)：可以录制回放当前的键鼠操作，建议配合调度器使用
-* 操控辅助
-  * [那维莱特转圈](https://www.bettergi.com/feats/macro/other.html#%E9%82%A3%E7%BB%B4%E8%8E%B1%E7%89%B9-%E8%BD%AC%E5%9C%88%E5%9C%88)：设置快捷键后，长按可以不断水平旋转视角（当然你也可以用来转草神）
-  * [快速圣遗物强化](https://www.bettergi.com/feats/macro/other.html#%E5%9C%A3%E9%81%97%E7%89%A9%E4%B8%80%E9%94%AE%E5%BC%BA%E5%8C%96)：通过快速切换“详情”、“强化”页跳过圣遗物强化结果展示，快速+20
-  * [商店一键购买](https://www.bettergi.com/feats/macro/other.html#%E4%B8%80%E9%94%AE%E8%B4%AD%E4%B9%B0)：可以快速以满数量购买商店中的物品，适合快速清空活动兑换，尘歌壶商店兑换等
-* [**……**](https://www.bettergi.com/doc.html)
-
-<div align="center">
-  <img src="https://github.com/babalae/better-genshin-impact/assets/15783049/57ab7c3c-709a-4cf3-8f64-1c78764c364c"/>
-  <p>自带一个遮罩窗口覆盖在游戏界面上，用于显示日志和图像识别结果</p>
-</div>
-
-## 截图
-
-![0 59 1](https://github.com/user-attachments/assets/a65aafe9-d8d7-4ffb-8cdc-9939c2fb3bdf)
-
+本仓库不是 BetterGI 官方发布，也不由 BetterGI 上游维护者提供支持。Windows
+版本请前往[上游项目](https://github.com/babalae/better-genshin-impact)。
 
 ## 下载
 
-> [!NOTE]
-> 下载地址：[⚡Github 下载](https://github.com/babalae/better-genshin-impact/releases)
-> 
-> 不知道下载哪个？第一次使用？请看：[快速上手](https://www.bettergi.com/quickstart.html) ， 遇到问题请先看：[常见问题](https://www.bettergi.com/faq.html)
+从本仓库的 [GitHub Releases](https://github.com/Jac0b-Shi/BetterGI-mac/releases)
+下载最新的 Apple Silicon 安装文件：
 
-最新测试版本可以从自动构建中获取： [![](https://github.com/babalae/better-genshin-impact/actions/workflows/publish.yml/badge.svg)](https://github.com/babalae/better-genshin-impact/actions/workflows/publish.yml)
-或者从CNB上直接下载（速度快）：[CNB Releases](https://cnb.cool/bettergi/better-genshin-impact/-/releases)
+- `BetterGI-mac-v<版本>-arm64.dmg`：推荐的安装镜像。
+- `BetterGI-mac-v<版本>-arm64.zip`：应用压缩包。
+- 文件名包含 `-unsigned`：ad-hoc 签名、未经 Apple 公证的临时发布。
+- `SHA256SUMS.txt`：安装文件校验值。
+
+拥有 Developer ID 后，正式 Release 会使用 Developer ID 签名并经过 Apple 公证。
+在此之前，本仓库会明确发布文件名带 `-unsigned` 的 ad-hoc 构建。请勿从第三方
+来源下载。ad-hoc 构建始终标记为 GitHub Prerelease，不作为正式 Latest 发布。
+
+## 系统要求
+
+- Apple Silicon Mac。
+- macOS 14 或更高版本。
+- 能够正常运行原神的 macOS/Wine 环境；当前主要适配和验证
+  [YAAgl OS](https://github.com/yaagl/yet-another-anime-game-launcher)。
+- 推荐使用 `16:9` 游戏分辨率，并保持游戏亮度为默认值。
+- 不建议启用 HDR、画面滤镜或会改变截图颜色的后处理。
+
+Release 已内置自包含的 BetterGI Core，普通用户无需另外安装 .NET。
+
+## 安装
+
+1. 下载并打开 DMG。
+2. 将 `BetterGI.app` 拖入 `Applications`。
+3. 从“应用程序”目录启动 BetterGI。
+4. 首次运行时按“启动”页面提示授予“屏幕录制”和“辅助功能（无障碍）”权限。
+5. 完成屏幕录制授权后，完全退出 BetterGI，再从“应用程序”目录重新打开。
+
+如果下载文件名包含 `-unsigned`，首次打开时 macOS 会提示无法验证开发者。请在
+“系统设置 → 隐私与安全性”中确认该应用来自本仓库 Release 后选择“仍要打开”。
+ad-hoc 版本升级后可能需要重新授予屏幕录制和辅助功能权限。
+
+请始终运行已安装到“应用程序”目录的版本，不要直接运行 SwiftPM `.build` 目录
+中的可执行文件。
 
 ## 使用方法
-由于图像识别比较吃性能，低配置电脑可能无法正常使用部分功能。
 
-推荐的电脑配置至少能够中画质60帧流畅游玩原神，否则部分功能的使用体验会较差。
+1. 通过 YAAgl OS 启动原神，进入游戏并保持游戏窗口可见。
+2. 打开 BetterGI，在“启动”页面确认两项 macOS 权限均显示“已授权”。
+3. 点击“启动”开启 BetterGI Core 和 ScreenCaptureKit 截图器。
+4. 如果自动识别不到游戏，展开“手动选择窗口”，选择真实、可见的原神窗口。
+5. 截图器进入运行状态后，再按需启用实时任务、独立任务、调度器、脚本或 HUD。
+6. 退出游戏后，BetterGI 会自动停止截图器。
 
-你的系统需要满足以下条件：
-  * Windows 10 或更高版本的64位系统
-  * [.NET 8 运行时](https://dotnet.microsoft.com/zh-cn/download/dotnet/latest/runtime) （没有的话，启动程序，系统会提示下载安装）
+当前默认输入后端要求原神是 macOS 前台应用。切换到其他应用时，依赖键鼠输入的
+任务会暂停或拒绝发送输入，不会把操作投递给当前前台应用。后台 Wine 输入仍属于
+后续实验能力。
 
-**⚠️注意：**
-1. 窗口大小变化、切换游戏分辨率、切换显示器的时候请重启本软件。
-2. 不支持任何画面滤镜（HDR、N卡滤镜等）。游戏亮度请保持默认。
-3. 当前只支持 `16:9` 的分辨率，推荐在 `1920x1080` 窗口化游戏下使用。
-4. **模拟操作部分可能被部分安全软件拦截，请加入白名单。已知360或者自定义规则WD会拦截部分类型的模拟点击**
+各功能的任务语义和脚本格式以
+[BetterGI 文档](https://www.bettergi.com/doc.html)及上游实现为准，但页面位置、
+快捷键和部分平台能力可能与 Windows 版不同。
 
-**打开软件以后，在“启动”页选择好截图方式，点击启动按钮就可以享受 BetterGI 带来的便利了！**
+## macOS 权限
 
-详细使用指南请看：[快速上手](https://www.bettergi.com/quickstart.html)
+| 权限 | 用途 |
+| --- | --- |
+| 屏幕录制 | 通过 ScreenCaptureKit 读取原神窗口画面，用于识别、定位和任务执行 |
+| 辅助功能（无障碍） | 通过 Core Graphics 发送经安全门校验的键盘和鼠标输入 |
 
-具体功能效果与使用方式见：[文档](https://www.bettergi.com/doc.html)
+BetterGI 不会在启动截图器时反复请求权限。若本次启动已经发出屏幕录制请求，请在
+系统设置中完成授权，然后退出并重新打开应用。
+
+## 已知限制
+
+- 小地图标点继承上游 BetterGI 的定位数据与算法覆盖范围，部分较新的地图区域可能
+  不显示标点；大地图标点不受此限制。
+- 当前稳定输入后端不支持在原神失去 macOS 前台焦点后继续操控游戏。
+- Wine、YAAgl、游戏版本和 macOS 更新都可能影响截图、窗口识别或模拟输入行为。
+- macOS 移植持续跟进上游，但新功能可能不会与 Windows 版同时可用。
 
 ## FAQ
-* 为什么需要管理员权限？
-  * 因为游戏是以管理员权限启动的，软件不以管理员权限启动的话没有权限模拟鼠标点击。
-* 会不会封号？
-  * 理论上不会被封。 **BetterGI 不会做出任何修改游戏文件、读写游戏内存等任何危害游戏本体的行为，单纯依靠视觉算法和模拟操作实现。** 但是mhy是自由的，用户条款上明确说明第三方软件/模拟操作是封号理由之一。当前方案还是存在被检测的可能。只能说请低调使用，请不要跳脸官方。
-* [更多常见问题...](https://www.bettergi.com/faq.html)
 
-## 致谢
+### 为什么需要“屏幕录制”和“辅助功能（无障碍）”权限？
 
-本项目的完成离不开以下项目：
-* [Yap](https://github.com/Alex-Beng/Yap)
-* [genshin-woodmen](https://github.com/genshin-matrix/genshin-woodmen)
-* [Fischless](https://github.com/genshin-matrix/Fischless)
-* [MicaSetup](https://github.com/lemutec/MicaSetup)
-* [cvAutoTrack](https://github.com/GengGode/cvAutoTrack)
-* [genshin_impact_assistant](https://github.com/infstellar/genshin_impact_assistant)
-* [HutaoFisher](https://github.com/myHuTao-qwq/HutaoFisher)
-* [minimap](https://github.com/tignioj/minimap)
-* [kachina-installer](https://github.com/YuehaiTeam/kachina-installer)
+macOS 将窗口画面读取和模拟键鼠输入分别置于两个隐私权限下。屏幕录制权限用于
+图像识别，辅助功能权限用于实际操作游戏；缺少任意一项时运行时都不会启动。
 
-另外特别感谢 [@Lightczx](https://github.com/Lightczx) 和 [@emako](https://github.com/emako) 对本项目的指导与贡献
+### 已经授权，为什么仍显示未授权？
 
-## 开发者
+屏幕录制权限变更后通常需要重新启动应用。请完全退出 BetterGI，并确认重新打开的
+是 `/Applications/BetterGI.app`。开发构建、不同签名或不同 Bundle ID 会被 macOS
+视为另一个应用。ad-hoc 版本升级后也可能需要重新授权。
 
-格式化：[CodeMaid.config](CodeMaid.config)、[Settings.XamlStyler](Settings.XamlStyler)；<br>
+### 为什么找不到原神窗口？
 
-[如何编译项目？](BetterGenshinImpact/README.md)
+确认游戏窗口真实可见且未退出，然后在“启动”页面使用“手动选择窗口”。登录界面、
+启动器窗口或不可见的合成窗口不能作为运行时目标。
 
-## 许可证
+### 为什么切到其他应用后任务不再输入？
 
-![GPL-v3](https://www.gnu.org/graphics/gplv3-127x51.png)
+这是当前前台输入安全策略。它用于防止 BetterGI 将按键或点击发送到浏览器、终端等
+其他前台应用，不是任务卡死。
+
+### 会不会封号？
+
+任何第三方自动化工具都存在违反游戏用户协议或被检测的风险。本项目不承诺账号
+安全，也无法代表游戏运营方给出保证。请自行评估并承担使用风险。
+
+### 在部分地区看不到小地图标点怎么办？
+
+这是上游 Windows 实现同样存在的地图定位覆盖限制，不是 macOS HUD 单独出现的
+渲染故障。可改用大地图确认标点，或等待上游补充对应区域支持。
+
+## 免责声明
+
+本项目是社区维护的非官方 BetterGI macOS 移植，与 BetterGI 上游维护者、
+米哈游/HoYoverse、YAAgl 及其维护者不存在隶属、授权、背书或合作关系。
+
+本软件按现状提供，不附带任何明示或暗示保证。使用者应自行确认当地法律、游戏用户
+协议和账号风险，并对安装、运行、自动化操作以及由此产生的账号、数据或设备损失
+承担全部责任。请不要向 BetterGI 上游或游戏官方提交本移植版本特有的问题。
+
+“原神”、相关图像及商标归其各自权利人所有。
 
 ## 问题反馈
 
-提 [Issue](https://github.com/babalae/better-genshin-impact/issues) 或 QQ群[1045965909](https://qm.qq.com/q/v5yJPb63Ze)
+macOS 移植问题请提交到本仓库
+[Issues](https://github.com/Jac0b-Shi/BetterGI-mac/issues)，不要提交到 BetterGI
+上游。反馈时请附上 macOS 版本、Mac 型号、YAAgl/Wine 版本、游戏分辨率、
+BetterGI Release 版本和相关日志。
+
+## 开发
+
+源码构建、验证和发布说明见
+[BetterGenshinImpact/README.md](BetterGenshinImpact/README.md)。
+
+## 致谢
+
+- [BetterGI](https://github.com/babalae/better-genshin-impact)：本项目所移植并持续同步的上游原项目。
+
+## 许可证
+
+本项目沿用上游 BetterGI 的 GPL-3.0 许可证。详见 [LICENSE](LICENSE)。

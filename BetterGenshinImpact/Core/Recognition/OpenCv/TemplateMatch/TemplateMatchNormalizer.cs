@@ -125,20 +125,20 @@ public class TemplateMatchNormalizer
         using var inverted = new Mat();
         Cv2.Subtract(255, template, inverted);
         Cv2.Max(template, inverted, inverted);
-        var worstVal = Cv2.Norm(inverted, NormTypes.L2SQR, mask);
+        var worstVal = Cv2.Norm(inverted, NormTypes.L2SQR, mask!);
         return (0, worstVal);
     }
 
     public static (double, double) CCorrMatchValue(Mat template, Mat? mask = null)
     {
-        var bestVal = Cv2.Norm(template, NormTypes.L2SQR, mask);
+        var bestVal = Cv2.Norm(template, NormTypes.L2SQR, mask!);
         return (bestVal, 0);
     }
 
     public static (double, double) CCoeffMatchValue(Mat template, Mat? mask = null)
     {
         using var result = new Mat();
-        Cv2.MatchTemplate(template, template, result, TemplateMatchModes.CCoeff, mask);
+        Cv2.MatchTemplate(template, template, result, TemplateMatchModes.CCoeff, mask!);
         var bestVal = result.At<double>(0, 0);
         return (bestVal, -bestVal);
     }

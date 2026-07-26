@@ -1,7 +1,5 @@
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
-using Fischless.WindowsInput;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -21,19 +19,17 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
         private readonly Rect roi;
         private readonly CancellationToken ct;
         private readonly ILogger logger;
-        private readonly InputSimulator input = Simulation.SendInput;
         private readonly int columns;
         private readonly int s1Round;
         private readonly int roundMilliseconds;
         private readonly int s2Round;
         private readonly double s3Scale;
 
-        internal GridScroller(GridParams @params, ILogger logger, InputSimulator input, CancellationToken ct)
+        internal GridScroller(GridParams @params, ILogger logger, CancellationToken ct)
         {
             this.roi = @params.Roi;
             this.ct = ct;
             this.logger = logger;
-            this.input = input;
             this.columns = @params.Columns;
             this.s1Round = @params.S1Round;
             this.roundMilliseconds = @params.RoundMilliseconds;
@@ -48,7 +44,7 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
 
             for (int i = 0; i < this.s1Round; i++)
             {
-                this.input.Mouse.VerticalScroll(-2);
+                TaskControlPlatform.Current.VerticalScroll(-2);
                 await TaskControl.Delay(this.roundMilliseconds, this.ct);
             }
             await TaskControl.Delay(300, this.ct);
@@ -61,7 +57,7 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
             {
                 for (int i = 0; i < this.s2Round; i++)    // 再滚动差不多（最多行数-1）行
                 {
-                    input.Mouse.VerticalScroll(-2);
+                    TaskControlPlatform.Current.VerticalScroll(-2);
                     await TaskControl.Delay(this.roundMilliseconds, ct);
                 }
 
@@ -74,7 +70,7 @@ namespace BetterGenshinImpact.GameTask.Model.GameUI
                     IEnumerable<Rect> gridItems2 = GetGridItems(grid2.SrcMat, this.columns);
                     if (gridItems2.Min(i => i.Y) > (ra4.Width * this.s3Scale))  // 最后精细滚动，保证完整地显示最多行
                     {
-                        input.Mouse.VerticalScroll(-1);
+                        TaskControlPlatform.Current.VerticalScroll(-1);
                     }
                     else
                     {

@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RuntimeIdentifier>osx-arm64</RuntimeIdentifier>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS9057</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" ExcludeAssets="analyzers" />
+    <PackageReference Include="OpenCvSharp4.runtime.osx.arm64" Version="4.13.0.20260627" />
+    <PackageReference Include="Microsoft.ClearScript.V8.Native.osx-arm64" Version="7.4.5" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\BetterGenshinImpact.Core\BetterGenshinImpact.Core.csproj" />
+    <ProjectReference Include="..\..\BetterGenshinImpact.Platform.Abstractions\BetterGenshinImpact.Platform.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Link WPF-owned Win32InputHelpers for pure-function testing (no Win32 runtime needed) -->
+    <Compile Include="..\..\BetterGenshinImpact\Core\Runtime\Windows\Win32InputHelpers.cs" Link="Runtime\Windows\Win32InputHelpers.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\BetterGenshinImpact\GameTask\AutoBoss\Assets\Pathing\雷音权现前往.json"
+          Link="Fixtures\雷音权现前往.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\BetterGenshinImpact.UnitTest\Assets\AutoFight\联机满编\*.png"
+          Link="Fixtures\AutoFight\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\BetterGenshinImpact.UnitTest\Assets\AutoArtifactSalvage\ArtifactGrid.png"
+          Link="Fixtures\AutoArtifactSalvage\ArtifactGrid.png"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\BetterGenshinImpact.UnitTest\Assets\AutoArtifactSalvage\ArtifactAffixes.png"
+          Link="Fixtures\AutoArtifactSalvage\ArtifactAffixes.png"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

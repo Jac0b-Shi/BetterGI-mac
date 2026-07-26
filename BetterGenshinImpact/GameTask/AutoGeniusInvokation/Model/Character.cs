@@ -1,6 +1,4 @@
-﻿using BetterGenshinImpact.Core.Recognition.OpenCv;
-using BetterGenshinImpact.Helpers.Extensions;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System.Collections.Generic;
 using System.Text;
@@ -9,7 +7,14 @@ namespace BetterGenshinImpact.GameTask.AutoGeniusInvokation.Model
 {
     public class Character
     {
-        private readonly ILogger _logger = App.GetLogger<Character>();
+        private readonly GeniusInvokationControl _control;
+        private readonly ILogger _logger;
+
+        public Character(GeniusInvokationControl control, ILogger<Character> logger)
+        {
+            _control = control;
+            _logger = logger;
+        }
 
         /// <summary>
         /// 1-3 所在数组下标一致
@@ -77,22 +82,22 @@ namespace BetterGenshinImpact.GameTask.AutoGeniusInvokation.Model
 
         public void ChooseFirst()
         {
-            ClickExtension.Move(GeniusInvokationControl.GetInstance().MakeOffset(Area.GetCenterPoint()))
-                .LeftButtonClick()
-                .Sleep(200)
-                .LeftButtonClick();
+            var point = new Point(Area.X + Area.Width / 2, Area.Y + Area.Height / 2);
+            _control.ClickCaptureArea(point.X, point.Y);
+            _control.Sleep(200);
+            _control.ClickCaptureArea(point.X, point.Y);
         }
 
         public bool SwitchLater()
         {
-            GeniusInvokationControl.GetInstance().ClickGameWindowCenter();
-            GeniusInvokationControl.GetInstance().Sleep(800);
-            var p = GeniusInvokationControl.GetInstance().MakeOffset(Area.GetCenterPoint());
+            _control.ClickGameWindowCenter();
+            _control.Sleep(800);
+            var p = new Point(Area.X + Area.Width / 2, Area.Y + Area.Height / 2);
             // 选择角色
-            p.Click();
+            _control.ClickCaptureArea(p.X, p.Y);
 
             // 点击切人按钮
-            GeniusInvokationControl.GetInstance().ActionPhasePressSwitchButton();
+            _control.ActionPhasePressSwitchButton();
             return true;
         }
 
@@ -103,18 +108,18 @@ namespace BetterGenshinImpact.GameTask.AutoGeniusInvokation.Model
         public void SwitchWhenTakenOut()
         {
             _logger.LogInformation("有角色被打败,当前选择{Name}出战", Name);
-            var p = GeniusInvokationControl.GetInstance().MakeOffset(Area.GetCenterPoint());
+            var p = new Point(Area.X + Area.Width / 2, Area.Y + Area.Height / 2);
             // 选择角色
-            p.Click();
+            _control.ClickCaptureArea(p.X, p.Y);
             // 双击切人
-            GeniusInvokationControl.GetInstance().Sleep(500);
-            p.Click();
-            GeniusInvokationControl.GetInstance().Sleep(300);
+            _control.Sleep(500);
+            _control.ClickCaptureArea(p.X, p.Y);
+            _control.Sleep(300);
         }
 
         public bool UseSkill(int skillIndex, Duel duel)
         {
-            var res = GeniusInvokationControl.GetInstance().ActionPhaseAutoUseSkill(skillIndex, Skills[skillIndex].SpecificElementCost, Skills[skillIndex].Type, duel);
+            var res = _control.ActionPhaseAutoUseSkill(skillIndex, Skills[skillIndex].SpecificElementCost, Skills[skillIndex].Type, duel);
             if (res)
             {
                 return true;

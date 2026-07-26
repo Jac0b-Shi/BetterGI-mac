@@ -50,6 +50,8 @@ public partial class TaskSettingsPageViewModel : ViewModel
 
     private readonly INavigationService _navigationService;
     private readonly TaskTriggerDispatcher _taskDispatcher;
+    private readonly IAutoWoodRuntimePlatform _autoWoodRuntimePlatform;
+    private readonly IAutoMusicGameRuntimePlatform _autoMusicGameRuntimePlatform;
 
     private CancellationTokenSource? _cts;
     private static readonly object _locker = new();
@@ -224,11 +226,18 @@ public partial class TaskSettingsPageViewModel : ViewModel
     [ObservableProperty]
     private string _switchAutoRedeemCodeButtonText = "启动";
 
-    public TaskSettingsPageViewModel(IConfigService configService, INavigationService navigationService, TaskTriggerDispatcher taskTriggerDispatcher)
+    public TaskSettingsPageViewModel(
+        IConfigService configService,
+        INavigationService navigationService,
+        TaskTriggerDispatcher taskTriggerDispatcher,
+        IAutoWoodRuntimePlatform autoWoodRuntimePlatform,
+        IAutoMusicGameRuntimePlatform autoMusicGameRuntimePlatform)
     {
         Config = configService.Get();
         _navigationService = navigationService;
         _taskDispatcher = taskTriggerDispatcher;
+        _autoWoodRuntimePlatform = autoWoodRuntimePlatform;
+        _autoMusicGameRuntimePlatform = autoMusicGameRuntimePlatform;
         NormalizeLeyLineOutcropType();
         _scanDropsAfterRewardEnabledUi = Config.AutoLeyLineOutcropConfig.ScanDropsAfterRewardEnabled;
 
@@ -371,7 +380,10 @@ public partial class TaskSettingsPageViewModel : ViewModel
 
         SwitchAutoGeniusInvokationEnabled = true;
         await new TaskRunner()
-            .RunSoloTaskAsync(new AutoGeniusInvokationTask(new GeniusInvokationTaskParam(content)));
+            .RunSoloTaskAsync(new AutoGeniusInvokationTask(
+                new GeniusInvokationTaskParam(content),
+                Config.AutoGeniusInvokationConfig,
+                new Core.Runtime.Windows.WindowsAutoGeniusInvokationRuntimePlatform()));
         SwitchAutoGeniusInvokationEnabled = false;
     }
 
@@ -407,7 +419,10 @@ public partial class TaskSettingsPageViewModel : ViewModel
     {
         SwitchAutoWoodEnabled = true;
         await new TaskRunner()
-            .RunSoloTaskAsync(new AutoWoodTask(new WoodTaskParam(AutoWoodRoundNum, AutoWoodDailyMaxCount)));
+            .RunSoloTaskAsync(new AutoWoodTask(
+                new WoodTaskParam(AutoWoodRoundNum, AutoWoodDailyMaxCount),
+                TaskContext.Instance().Config.AutoWoodConfig,
+                _autoWoodRuntimePlatform));
         SwitchAutoWoodEnabled = false;
     }
 
@@ -624,7 +639,8 @@ public partial class TaskSettingsPageViewModel : ViewModel
     {
         SwitchAutoMusicGameEnabled = true;
         await new TaskRunner()
-            .RunSoloTaskAsync(new AutoMusicGameTask(new AutoMusicGameParam()));
+            .RunSoloTaskAsync(new AutoMusicGameTask(
+                new AutoMusicGameParam(), _autoMusicGameRuntimePlatform));
         SwitchAutoMusicGameEnabled = false;
     }
 
@@ -639,7 +655,10 @@ public partial class TaskSettingsPageViewModel : ViewModel
     {
         SwitchAutoAlbumEnabled = true;
         await new TaskRunner()
-            .RunSoloTaskAsync(new AutoAlbumTask(new AutoMusicGameParam()));
+            .RunSoloTaskAsync(new AutoAlbumTask(
+                new AutoMusicGameParam(), _autoMusicGameRuntimePlatform,
+                Config.AutoMusicGameConfig,
+                new Core.Runtime.Windows.WindowsAutoAlbumRuntimePlatform()));
         SwitchAutoAlbumEnabled = false;
     }
 
@@ -846,7 +865,8 @@ public partial class TaskSettingsPageViewModel : ViewModel
 
             SwitchAutoRedeemCodeEnabled = true;
             await new TaskRunner()
-                .RunSoloTaskAsync(new UseRedemptionCodeTask(codes));
+                .RunSoloTaskAsync(new UseRedemptionCodeTask(
+                    codes, new Core.Runtime.Windows.WindowsUseRedemptionCodeRuntimePlatform()));
             SwitchAutoRedeemCodeEnabled = false;
         }
     }

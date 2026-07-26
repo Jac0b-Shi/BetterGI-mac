@@ -7,14 +7,11 @@ using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Model;
 using BetterGenshinImpact.GameTask.AutoPathing.Handler;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.AutoPathing.Model.Enum;
-using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.AutoTrackPath;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.Common.Map;
 using BetterGenshinImpact.GameTask.Model.Area;
-using CommunityToolkit.Mvvm.Messaging;
-using CommunityToolkit.Mvvm.Messaging.Messages;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -27,9 +24,7 @@ using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.GameTask.AutoPathing.Suspend;
 using BetterGenshinImpact.GameTask.Common;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
-using static BetterGenshinImpact.GameTask.SystemControl;
 using ActionEnum = BetterGenshinImpact.GameTask.AutoPathing.Model.Enum.ActionEnum;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask;
@@ -41,21 +36,42 @@ using BetterGenshinImpact.GameTask.AutoFight;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing;
 
-public partial class PathExecutor
+public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
 {
+    public static bool SupportsAction(string? action)
+    {
+        return string.IsNullOrEmpty(action)
+               || action == ActionEnum.ForceTp.Code
+               || action == ActionEnum.LogOutput.Code
+               || ActionFactory.CanHandleBefore(action)
+               || ActionFactory.CanExecuteAfterWaypoint(action);
+    }
+
     private readonly CameraRotateTask _rotateTask;
     private readonly TrapEscaper _trapEscaper;
     private readonly BlessingOfTheWelkinMoonTask _blessingOfTheWelkinMoonTask = new();
-    private AutoSkipTrigger? _autoSkipTrigger;
+    private readonly IPathExecutorPlatform _platform;
+    private readonly IPathExecutorAutoSkipPlatform _autoSkipFactory;
+    private readonly IScriptGroupExecutionServices _executionServices;
+    private IPathExecutorAutoSkipSession? _autoSkipSession;
     public int SuccessFight = 0;
     //路径追踪完全走完所有路径结束的标识
     public bool SuccessEnd = false;
+    int IPathExecutor.SuccessFight => SuccessFight;
+    bool IPathExecutor.SuccessEnd => SuccessEnd;
     private PathingPartyConfig? _partyConfig;
     private CancellationToken ct;
     private PathExecutorSuspend pathExecutorSuspend;
 
-    public PathExecutor(CancellationToken ct)
+    public PathExecutor(
+        CancellationToken ct,
+        IPathExecutorPlatform platform,
+        IPathExecutorAutoSkipPlatform autoSkipFactory,
+        IScriptGroupExecutionServices executionServices)
     {
+        _platform = platform ?? throw new ArgumentNullException(nameof(platform));
+        _autoSkipFactory = autoSkipFactory ?? throw new ArgumentNullException(nameof(autoSkipFactory));
+        _executionServices = executionServices ?? throw new ArgumentNullException(nameof(executionServices));
         _trapEscaper = new(ct);
         _rotateTask = new(ct);
         this.ct = ct;
@@ -64,7 +80,7 @@ public partial class PathExecutor
 
     public PathingPartyConfig PartyConfig
     {
-        get => _partyConfig ?? PathingPartyConfig.BuildDefault();
+        get => _partyConfig ?? _executionServices.DefaultPartyConfig;
         set => _partyConfig = value;
     }
 
@@ -88,6 +104,17 @@ public partial class PathExecutor
 
     //记录当前点位
     public (int, WaypointForTrack) CurWaypoint { get; set; }
+
+    DateTime IPathExecutorSuspendContext.MoveToStartTime
+    {
+        set => moveToStartTime = value;
+    }
+
+    bool IPathExecutorSuspendContext.GetPositionAndTimeSuspendFlag
+    {
+        get => GetPositionAndTimeSuspendFlag;
+        set => GetPositionAndTimeSuspendFlag = value;
+    }
 
     //记录恢复点位数组
     private (int, List<WaypointForTrack>) RecordWaypoints { get; set; }
@@ -250,7 +277,7 @@ public partial class PathExecutor
                     }
                     break;
                 }
-                catch (HandledException handledException)
+                catch (HandledException)
                 {
                     SuccessEnd = true;
                     break;
@@ -297,8 +324,8 @@ public partial class PathExecutor
                 finally
                 {
                     // 不管咋样，松开所有按键
-                    Simulation.SendInput.Keyboard.KeyUp(User32.VK.VK_W);
-                    Simulation.SendInput.Mouse.RightButtonUp();
+                    SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                    RightButtonUp();
                 }
             }
 
@@ -378,13 +405,12 @@ public partial class PathExecutor
     {
         LogScreenResolution();
         InitHurryOnConfig();
-        WeakReferenceMessenger.Default.Send(new PropertyChangedMessage<object>(this,
-            "UpdateCurrentPathing", new object(), task));
+        _platform.PublishCurrentPathing(task);
     }
 
     private void LogScreenResolution()
     {
-        var gameScreenSize = SystemControl.GetGameScreenRect(TaskContext.Instance().GameHandle);
+        var gameScreenSize = _platform.GetGameScreenSize();
         if (gameScreenSize.Width * 9 != gameScreenSize.Height * 16)
         {
             Logger.LogError("游戏窗口分辨率不是 16:9 ！当前分辨率为 {Width}x{Height} , 非 16:9 分辨率的游戏无法正常使用地图追踪功能！",
@@ -446,9 +472,9 @@ public partial class PathExecutor
     }
 
 
-    private static string? FilterPartyNameByConditionConfig(PathingTask task)
+    private string? FilterPartyNameByConditionConfig(PathingTask task)
     {
-        var pathingConditionConfig = TaskContext.Instance().Config.PathingConditionConfig;
+        var pathingConditionConfig = _platform.PathingConditionConfig;
         var materialName = task.GetMaterialName();
         var specialActions = task.Positions
             .Select(p => p.Action)
@@ -474,7 +500,7 @@ public partial class PathExecutor
 
         // 没有强制配置的情况下，使用地图追踪内的条件配置
         // 必须放在这里，因为要通过队伍识别来得到最终结果
-        var pathingConditionConfig = TaskContext.Instance().Config.PathingConditionConfig;
+        var pathingConditionConfig = _platform.PathingConditionConfig;
         var skipPartySwitch = PartyConfig.SkipPartySwitch;
         if (PartyConfig is { Enabled: false })
         {
@@ -584,9 +610,9 @@ public partial class PathExecutor
                 if (avatar.TrySwitch())
                 {
                     //1命白术能两次
-                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                    SimulateAction(GIActions.ElementalSkill);
                     await Delay(800, ct);
-                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                    SimulateAction(GIActions.ElementalSkill);
                     await Delay(800, ct);
                     await SwitchAvatar(PartyConfig.MainAvatarIndex);
                     await Delay(4000, ct);
@@ -599,7 +625,7 @@ public partial class PathExecutor
             {
                 if (avatar.TrySwitch())
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                    SimulateAction(GIActions.ElementalSkill);
                     await Delay(11000, ct);
                     await SwitchAvatar(PartyConfig.MainAvatarIndex);
                     return true;
@@ -611,10 +637,10 @@ public partial class PathExecutor
             {
                 if (avatar.TrySwitch())
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                    SimulateAction(GIActions.ElementalSkill);
                     await Delay(500, ct);
                     //尝试Q全队回血
-                    Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);
+                    SimulateAction(GIActions.ElementalBurst);
                     //单人血只给行走位加血
                     await SwitchAvatar(PartyConfig.MainAvatarIndex);
                     await Delay(5000, ct);
@@ -687,13 +713,13 @@ public partial class PathExecutor
         await tpTask.OpenBigMapUi();
         bool changeBigMap = false;
         string adventurersGuildCountry =
-            TaskContext.Instance().Config.OtherConfig.AutoFetchDispatchAdventurersGuildCountry;
+            _platform.AutoFetchDispatchAdventurersGuildCountry;
         if (!RunnerContext.Instance.isAutoFetchDispatch && adventurersGuildCountry != "无" && !string.IsNullOrEmpty(adventurersGuildCountry))
         {
             var ra1 = CaptureToRectArea();
             var textRect = new Rect(60, 20, 160, 260);
             var textMat = new Mat(ra1.SrcMat, textRect);
-            string text = OcrFactory.Paddle.Ocr(textMat);
+            string text = _platform.OcrService.Ocr(textMat);
             if (text.Contains("探索派遣奖励"))
             {
                 changeBigMap = true;
@@ -706,7 +732,7 @@ public partial class PathExecutor
                         5);
                     Logger.LogInformation("自动领取派遣结束，回归原任务！");
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     Logger.LogInformation("未知原因，发生异常，尝试继续执行任务！");
                 }
@@ -765,12 +791,12 @@ public partial class PathExecutor
         var hurryOnState = new HurryOnState();
 
         // 按下w，一直走
-        Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+        SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
         while (!ct.IsCancellationRequested)
         {
-            if (!Simulation.IsKeyDown(GIActions.MoveForward.ToActionKey().ToVK()))
+            if (!IsActionKeyDown(GIActions.MoveForward))
             {
-                Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+                SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
             }
 
             num++;
@@ -788,9 +814,9 @@ public partial class PathExecutor
              (position, additionalTimeInMs) = await GetPositionAndTime(screen, waypoint);
              if (additionalTimeInMs>0)
              {
-                 if (!Simulation.IsKeyDown(GIActions.MoveForward.ToActionKey().ToVK()))
+                 if (!IsActionKeyDown(GIActions.MoveForward))
                  {
-                     Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+                     SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
                  }
 
                  additionalTimeInMs = additionalTimeInMs + 1000;//当做起步补偿
@@ -872,7 +898,7 @@ public partial class PathExecutor
                             //调用脱困代码，由TrapEscaper接管移动
                             await _trapEscaper.RotateAndMove();
                             await _trapEscaper.MoveTo(waypoint);
-                            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+                            SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
                             Logger.LogInformation("卡死脱离结束");
                             continue;
                         }
@@ -898,9 +924,9 @@ public partial class PathExecutor
                 if (consecutiveRotationCountBeyondAngle > 10)
                 {
                     // 松W键，站定好转向，转完重新按下W继续走
-                    Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                    TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                     await WaitUntilRotatedTo(targetOrientation, 2);
-                    Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+                    TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
                 }
             }
 
@@ -922,7 +948,7 @@ public partial class PathExecutor
                 if (!isFlying)
                 {
                     Debug.WriteLine("未进入飞行状态，按下空格");
-                    Simulation.SendInput.SimulateAction(GIActions.Jump);
+                    SimulateAction(GIActions.Jump);
                     await Delay(200, ct);
                 }
 
@@ -932,7 +958,7 @@ public partial class PathExecutor
 
             if (waypoint.MoveMode == MoveModeEnum.Jump.Code)
             {
-                Simulation.SendInput.SimulateAction(GIActions.Jump);
+                SimulateAction(GIActions.Jump);
                 await Delay(200, ct);
                 continue;
             }
@@ -944,11 +970,11 @@ public partial class PathExecutor
                 {
                     if (fastMode)
                     {
-                        Simulation.SendInput.SimulateAction(GIActions.SprintMouse, KeyType.KeyUp);
+                        SimulateAction(GIActions.SprintMouse, KeyType.KeyUp);
                     }
                     else
                     {
-                        Simulation.SendInput.SimulateAction(GIActions.SprintMouse, KeyType.KeyDown);
+                        SimulateAction(GIActions.SprintMouse, KeyType.KeyDown);
                     }
 
                     fastMode = !fastMode;
@@ -961,7 +987,7 @@ public partial class PathExecutor
                     if (Math.Abs((fastModeColdTime - DateTime.UtcNow).TotalMilliseconds) > 1000) //冷却一会
                     {
                         fastModeColdTime = DateTime.UtcNow;
-                        Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                        SimulateAction(GIActions.SprintMouse);
                     }
                 }
             }
@@ -998,7 +1024,7 @@ public partial class PathExecutor
                     if (Math.Abs((fastModeColdTime - DateTime.UtcNow).TotalMilliseconds) > 2500) //冷却时间2.5s，回复体力用
                     {
                         fastModeColdTime = DateTime.UtcNow;
-                        Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                        SimulateAction(GIActions.SprintMouse);
                     }
                 }
             }
@@ -1008,7 +1034,7 @@ public partial class PathExecutor
             {
                 if ((DateTime.UtcNow - _useGadgetLastUseTime).TotalMilliseconds > PartyConfig.UseGadgetIntervalMs)
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget);
+                    SimulateAction(GIActions.QuickUseGadget);
                     _useGadgetLastUseTime = DateTime.UtcNow;
                 }
             }
@@ -1017,7 +1043,7 @@ public partial class PathExecutor
         }
 
         // 抬起w键
-        Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+        SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
     }
 
     private async Task UseElementalSkill()
@@ -1040,9 +1066,9 @@ public partial class PathExecutor
         // 钟离往身后放柱子
         if (avatar.Name == "钟离")
         {
-            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+            SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
             await Delay(50, ct);
-            Simulation.SendInput.SimulateAction(GIActions.MoveBackward);
+            SimulateAction(GIActions.MoveBackward);
             await Delay(200, ct);
         }
 
@@ -1051,7 +1077,7 @@ public partial class PathExecutor
         // 钟离往身后放柱子 后继续走路
         if (avatar.Name == "钟离")
         {
-            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+            SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
         }
     }
 
@@ -1086,14 +1112,14 @@ public partial class PathExecutor
             targetOrientation = Navigation.GetTargetOrientation(waypoint, position);
             await WaitUntilRotatedTo(targetOrientation, 2);
             // 小碎步接近
-            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+            SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
             Thread.Sleep(60);
-            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+            SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
             // Simulation.SendInput.Keyboard.KeyDown(User32.VK.VK_W).Sleep(60).KeyUp(User32.VK.VK_W);
             await Delay(20, ct);
         }
 
-        Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+        SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
 
         // 到达目的地后停顿一秒
         await Delay(1000, ct);
@@ -1111,7 +1137,7 @@ public partial class PathExecutor
     {
         if (waypoint.Action == ActionEnum.UpDownGrabLeaf.Code)
         {
-            Simulation.SendInput.Mouse.MiddleButtonClick();
+            MiddleButtonClick();
             await Delay(300, ct);
             var screen = CaptureToRectArea();
             var position = await GetPosition(screen, waypoint);
@@ -1128,22 +1154,7 @@ public partial class PathExecutor
 
     private async Task AfterMoveToTarget(WaypointForTrack waypoint)
     {
-        if (waypoint.Action == ActionEnum.NahidaCollect.Code
-            || waypoint.Action == ActionEnum.PickAround.Code
-            || waypoint.Action == ActionEnum.Fight.Code
-            || waypoint.Action == ActionEnum.HydroCollect.Code
-            || waypoint.Action == ActionEnum.ElectroCollect.Code
-            || waypoint.Action == ActionEnum.AnemoCollect.Code
-            || waypoint.Action == ActionEnum.PyroCollect.Code
-            || waypoint.Action == ActionEnum.CombatScript.Code
-            || waypoint.Action == ActionEnum.Mining.Code
-            || waypoint.Action == ActionEnum.LinneaMining.Code
-            || waypoint.Action == ActionEnum.Fishing.Code
-            || waypoint.Action == ActionEnum.ExitAndRelogin.Code
-            || waypoint.Action == ActionEnum.EnterAndExitWonderland.Code
-            || waypoint.Action == ActionEnum.SetTime.Code
-            || waypoint.Action == ActionEnum.UseGadget.Code
-            || waypoint.Action == ActionEnum.PickUpCollect.Code)
+        if (ActionFactory.CanExecuteAfterWaypoint(waypoint.Action))
         {
             var handler = ActionFactory.GetAfterHandler(waypoint.Action);
             //,PartyConfig
@@ -1222,8 +1233,6 @@ public partial class PathExecutor
     
     private  Point2f prePosition;
     private  DateTime preTime;
-    //自动构造点位的最大时间
-    private int maxAutoPositionTime=10000; 
     private async Task WaitForCloseMap(int maxAttempts, int delayMs)
     {
         await Delay(delayMs, ct);
@@ -1286,12 +1295,12 @@ public partial class PathExecutor
                 {
                     position =MapManager.GetMap(waypoint.MapName, waypoint.MapMatchMethod).ConvertGenshinMapCoordinatesToImageCoordinates(tpTask.GetPositionFromBigMap(waypoint.MapName));
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     Logger.LogInformation(@$"地图中心点识别失败！");
                 }
                
-                Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                PressEscape();
                 //Bv.IsInMainUi(imageRegion);
                 await WaitForCloseMap(10,200);
                 DateTime end = DateTime.Now;
@@ -1355,10 +1364,9 @@ public partial class PathExecutor
             }
 
             Logger.LogInformation("检测到其他界面，使用ESC关闭界面");
-            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+            PressEscape();
             await Delay(1000, ct); // 等待界面关闭
         }
-
 
         // 处理月卡
         await _blessingOfTheWelkinMoonTask.Start(ct);
@@ -1376,19 +1384,12 @@ public partial class PathExecutor
         var disabledUiButtonRa = ra.Find(GetAutoSkipRecognitionObject("DisabledUiButton", ra));
         if (disabledUiButtonRa.IsExist())
         {
-            Logger.LogWarning("进入剧情，自动点击剧情直到结束");
-
-            if (_autoSkipTrigger == null)
+            if (_autoSkipSession == null)
             {
-                _autoSkipTrigger = new AutoSkipTrigger(new AutoSkipConfig
-                {
-                    Enabled = true,
-                    QuicklySkipConversationsEnabled = true, // 快速点击过剧情
-                    ClosePopupPagedEnabled = true,
-                    ClickChatOption = "优先选择最后一个选项",
-                });
-                _autoSkipTrigger.Init();
+                _autoSkipSession = _autoSkipFactory.CreateSession();
             }
+
+            Logger.LogWarning("进入剧情，自动点击剧情直到结束");
 
             int noDisabledUiButtonTimes = 0;
 
@@ -1398,7 +1399,7 @@ public partial class PathExecutor
                 disabledUiButtonRa = ra.Find(GetAutoSkipRecognitionObject("DisabledUiButton", ra));
                 if (disabledUiButtonRa.IsExist())
                 {
-                    _autoSkipTrigger.OnCapture(new CaptureContent(ra));
+                    _autoSkipSession.OnCapture(new CaptureContent(ra));
                     noDisabledUiButtonTimes = 0;
                 }
                 else

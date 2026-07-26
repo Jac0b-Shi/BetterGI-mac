@@ -2,9 +2,7 @@
 using BetterGenshinImpact.GameTask.AutoTrackPath;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.Common.Job;
-using Vanara.PInvoke;
 using BetterGenshinImpact.GameTask.AutoFishing;
-using BetterGenshinImpact.ViewModel.Pages;
 using System;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
@@ -22,28 +20,36 @@ namespace BetterGenshinImpact.Core.Script.Dependence;
 
 public class Genshin
 {
-    private RECT captureAreaRect = TaskContext.Instance().SystemInfo.CaptureAreaRect;
-    private readonly ILogger<Genshin> _logger = App.GetLogger<Genshin>();
+    private IGenshinRuntimePlatform Platform => GenshinRuntimePlatform.Current;
+    public Genshin()
+    {
+        LazyNavigationInstance = new Lazy<NavigationInstance>(() =>
+        {
+            var matchingMethod = Platform.MapMatchingMethod;
+            Navigation.WarmUp(matchingMethod);
+            return new NavigationInstance();
+        });
+    }
 
     /// <summary>
     /// 游戏宽度
     /// </summary>
-    public int Width => captureAreaRect.Width;
+    public int Width => Platform.SystemInfo.CaptureAreaRect.Width;
 
     /// <summary>
     /// 游戏高度
     /// </summary>
-    public int Height => captureAreaRect.Height;
+    public int Height => Platform.SystemInfo.CaptureAreaRect.Height;
 
     /// <summary>
     /// 游戏窗口大小相比1080P的缩放比例
     /// </summary>
-    public double ScaleTo1080PRatio { get; } = TaskContext.Instance().SystemInfo.ScaleTo1080PRatio;
+    public double ScaleTo1080PRatio => Platform.SystemInfo.ScaleTo1080PRatio;
 
     /// <summary>
     /// 系统屏幕的DPI缩放比例
     /// </summary>
-    public double ScreenDpiScale => TaskContext.Instance().DpiScale;
+    public double ScreenDpiScale => Platform.DpiScale;
     
     /// <summary>
     /// 通过 OCR 识别当前角色的 UID
@@ -54,12 +60,7 @@ public class Genshin
         return Task.FromResult(Bv.Uid());
     }
     
-    public Lazy<NavigationInstance> LazyNavigationInstance { get; } = new(() =>
-    {
-        var matchingMethod = TaskContext.Instance().Config.PathingConditionConfig.MapMatchingMethod;
-        Navigation.WarmUp(matchingMethod);
-        return new NavigationInstance();
-    });
+    public Lazy<NavigationInstance> LazyNavigationInstance { get; }
 
     /// <summary>
     /// 传送到指定位置
@@ -254,7 +255,7 @@ public class Genshin
     /// <returns>包含X和Y坐标的Point2f结构体</returns>
     public Point2f? GetPositionFromMap(string mapName, int cacheTimeMs = 900)
     {
-        var matchingMethod = TaskContext.Instance().Config.PathingConditionConfig.MapMatchingMethod;
+        var matchingMethod = Platform.MapMatchingMethod;
         return GetPositionFromMapWithMatchingMethod(mapName,matchingMethod, cacheTimeMs);
     }
     
@@ -284,7 +285,7 @@ public class Genshin
         {
             throw new InvalidOperationException("不在主界面，无法识别小地图坐标");
         }
-        var matchingMethod = TaskContext.Instance().Config.PathingConditionConfig.MapMatchingMethod;
+        var matchingMethod = Platform.MapMatchingMethod;
         var sceneMap = MapManager.GetMap(mapName, matchingMethod);
         var navigationInstance = LazyNavigationInstance.Value;
         var pos = sceneMap.ConvertGenshinMapCoordinatesToImageCoordinates(new Point2f(x, y));
@@ -328,7 +329,8 @@ public class Genshin
     {
         try
         {
-            return await new SwitchCharacterStateMachineTask().Start(slot1, slot2, slot3, slot4, CancellationContext.Instance.Cts.Token);
+            return await GenshinRuntimePlatform.Current.SwitchCharacter(
+                slot1, slot2, slot3, slot4, CancellationContext.Instance.Cts.Token);
         }
         catch (PartySetupFailedException)
         {
@@ -363,7 +365,8 @@ public class Genshin
     /// <returns></returns>
     public async Task ChooseTalkOption(string option, int skipTimes = 10, bool isOrange = false)
     {
-        await new ChooseTalkOptionTask().SingleSelectText(option, CancellationContext.Instance.Cts.Token, skipTimes, isOrange);
+        await Platform.ChooseTalkOption(
+            option, skipTimes, isOrange, CancellationContext.Instance.Cts.Token);
     }
 
     /// <summary>
@@ -372,7 +375,7 @@ public class Genshin
     /// <returns></returns>
     public async Task ClaimBattlePassRewards()
     {
-        await new ClaimBattlePassRewardsTask().Start(CancellationContext.Instance.Cts.Token);
+        await Platform.ClaimBattlePassRewards(CancellationContext.Instance.Cts.Token);
     }
 
     /// <summary>
@@ -401,7 +404,7 @@ public class Genshin
     /// <returns></returns>
     public async Task GoToCraftingBench(string country)
     {
-        await new GoToCraftingBenchTask().Start(country, CancellationContext.Instance.Cts.Token);
+        await Platform.GoToCraftingBench(country, CancellationContext.Instance.Cts.Token);
     }
 
     /// <summary>
@@ -413,7 +416,8 @@ public class Genshin
     /// <returns>合成执行结果。</returns>
     public async Task<CraftMaterialResult> CraftMaterial(string materialName, int quantity, string? materialType = null)
     {
-        return await new CraftMaterialTask(materialName, quantity, materialType).Start(CancellationContext.Instance.Cts.Token);
+        return await Platform.CraftMaterial(
+            materialName, quantity, materialType, CancellationContext.Instance.Cts.Token);
     }
 
     /// <summary>
@@ -431,13 +435,7 @@ public class Genshin
     /// <returns></returns>
     public async Task AutoFishing(int fishingTimePolicy = 0)
     {
-        var taskSettingsPageViewModel = App.GetService<TaskSettingsPageViewModel>();
-        if (taskSettingsPageViewModel == null)
-        {
-            throw new ArgumentNullException(nameof(taskSettingsPageViewModel), "内部视图模型对象为空");
-        }
-
-        var param = AutoFishingTaskParam.BuildFromConfig(TaskContext.Instance().Config.AutoFishingConfig, taskSettingsPageViewModel.SaveScreenshotOnKeyTick);
+        var param = Platform.BuildAutoFishingTaskParam();
         param.FishingTimePolicy = (FishingTimePolicy)fishingTimePolicy;
         await new AutoFishingTask(param).Start(CancellationContext.Instance.Cts.Token);
     }
@@ -473,7 +471,7 @@ public class Genshin
             throw new ArgumentException($"无效的小时值: {hour}，必须是 0-24 之间的整数字符", nameof(hour));
         if (minute < 0 || minute > 59)
             throw new ArgumentException($"无效的分钟值: {minute}，必须是 0-59 之间的整数字符", nameof(minute));
-        await new SetTimeTask().Start(hour, minute, CancellationContext.Instance.Cts.Token, skip);
+        await Platform.SetTime(hour, minute, skip, CancellationContext.Instance.Cts.Token);
     }
     
     /// <summary>
@@ -489,7 +487,7 @@ public class Genshin
             throw new ArgumentException($"无效的小时值: {hour}，必须是 0-24 之间的整数字符", nameof(hour));
         if (!int.TryParse(minute, out var m) || m < 0 || m > 59)
             throw new ArgumentException($"无效的分钟值: {minute}，必须是 0-59 之间的整数字符", nameof(minute));
-        await new SetTimeTask().Start(h, m, CancellationContext.Instance.Cts.Token, skip);
+        await Platform.SetTime(h, m, skip, CancellationContext.Instance.Cts.Token);
     }
 
     // /// <summary>

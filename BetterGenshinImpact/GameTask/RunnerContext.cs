@@ -2,19 +2,16 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoPathing.Suspend;
-using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.Model;
 using Microsoft.Extensions.Logging;
-using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask;
 
 /// <summary>
 /// 使用 TaskRunner 运行任务时的上下文
 /// </summary>
-public class RunnerContext : Singleton<RunnerContext>
+public partial class RunnerContext : Singleton<RunnerContext>
 {
     /// <summary>
     /// 是否是连续执行配置组的场景
@@ -59,54 +56,11 @@ public class RunnerContext : Singleton<RunnerContext>
     /// <summary>
     /// 当前队伍角色信息
     /// </summary>
-    private CombatScenes? _combatScenes;
-
-    public async Task<CombatScenes?> GetCombatScenes(CancellationToken ct)
-    {
-        if (_combatScenes == null)
-        {
-            // 返回主界面再识别
-            var returnMainUiTask = new ReturnMainUiTask();
-            await returnMainUiTask.Start(ct);
-
-            await Delay(200, ct);
-
-            _combatScenes = new CombatScenes().InitializeTeam(CaptureToRectArea());
-            if (!_combatScenes.CheckTeamInitialized())
-            {
-                Logger.LogError("队伍角色识别失败");
-                _combatScenes = null;
-            }
-        }
-
-        return _combatScenes;
-    }
-
-    /// <summary>
-    /// 尝试静默识别当前队伍信息（无副作用，不出错）
-    /// </summary>
-    public CombatScenes? TrySyncCombatScenesSilent()
-    {
-        try
-        {
-            using var region = CaptureToRectArea();
-            var scenes = new CombatScenes(logger: Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance).InitializeTeamSilent(region);
-            if (scenes.CheckTeamInitialized())
-            {
-                return scenes;
-            }
-            scenes.Dispose();
-        }
-        catch
-        {
-            // 静默模式忽略一切异常
-        }
-        return null;
-    }
+    private object? CombatScenesState { get; set; }
 
     public void ClearCombatScenes()
     {
-        _combatScenes = null;
+        CombatScenesState = null;
     }
 
     /// <summary>
@@ -120,7 +74,7 @@ public class RunnerContext : Singleton<RunnerContext>
             PartyName = null;
         }
 
-        _combatScenes = null;
+        CombatScenesState = null;
         IsSuspend = false;
         isAutoFetchDispatch = false;
         SuspendableDictionary.Clear();
@@ -133,7 +87,7 @@ public class RunnerContext : Singleton<RunnerContext>
     {
         IsContinuousRunGroup = false;
         PartyName = null;
-        _combatScenes = null;
+        CombatScenesState = null;
         IsSuspend = false;
         isAutoFetchDispatch = false;
         SuspendableDictionary.Clear();
@@ -148,7 +102,7 @@ public class RunnerContext : Singleton<RunnerContext>
     public void StopAutoPick(int time = -1)
     {
         AutoPickTriggerStopCount++;
-        Logger.LogInformation("暂停自动拾取拾取:"+AutoPickTriggerStopCount);
+        TaskRunnerPlatform.Current.RunnerLogger.LogInformation("暂停自动拾取拾取:"+AutoPickTriggerStopCount);
         ResumeAutoPick(time);
     }
     /// <summary>
@@ -163,7 +117,7 @@ public class RunnerContext : Singleton<RunnerContext>
 
         if (time>0)
         {
-            Logger.LogInformation(time+"秒后恢复自动拾取:"+AutoPickTriggerStopCount);
+            TaskRunnerPlatform.Current.RunnerLogger.LogInformation(time+"秒后恢复自动拾取:"+AutoPickTriggerStopCount);
         }
        
         if (time <= 0)
@@ -171,7 +125,7 @@ public class RunnerContext : Singleton<RunnerContext>
             if (AutoPickTriggerStopCount>0)
             {
                 AutoPickTriggerStopCount--;
-                Logger.LogInformation("恢复自动拾取:"+AutoPickTriggerStopCount);
+                TaskRunnerPlatform.Current.RunnerLogger.LogInformation("恢复自动拾取:"+AutoPickTriggerStopCount);
             }
         }
         else
@@ -212,6 +166,6 @@ public class RunnerContext : Singleton<RunnerContext>
     }
     public void stop()
     {
-        _combatScenes = null;
+        CombatScenesState = null;
     }
 }

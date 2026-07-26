@@ -1,5 +1,5 @@
 ﻿using BetterGenshinImpact.Core.Config;
-using BetterGenshinImpact.Core.Simulator;
+using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
@@ -9,39 +9,31 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Simulator.Extensions;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
-using Microsoft.Extensions.Localization;
 using System.Globalization;
+using System.Linq;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Core.Recognition.OCR;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.IO;
-using Newtonsoft.Json;
 
 
 namespace BetterGenshinImpact.GameTask.Common.Job;
 
 public class GoToCraftingBenchTask
 {
-    private static readonly string OneDragonFlowConfigFolder = Global.Absolute(@"User\OneDragon");
-    
     public string Name => "前往合成台";
 
     private readonly int _retryTimes = 2;
 
     private readonly ChooseTalkOptionTask _chooseTalkOptionTask = new();
     
-    private  OneDragonFlowConfig? SelectedConfig;
-    private ObservableCollection<OneDragonFlowConfig> ConfigList = [];
-    
+    private int _minResinToKeep;
+
     private readonly string craftLocalizedString;
 
     public GoToCraftingBenchTask()
     {
-        IStringLocalizer<GoToCraftingBenchTask> stringLocalizer = App.GetService<IStringLocalizer<GoToCraftingBenchTask>>() ?? throw new NullReferenceException();
-        CultureInfo cultureInfo = new CultureInfo(TaskContext.Instance().Config.OtherConfig.GameCultureInfoName);
+        var stringLocalizer = TaskParameterPlatform.Current.GetStringLocalizer<GoToCraftingBenchTask>();
+        CultureInfo cultureInfo = new CultureInfo(TaskParameterPlatform.Current.GameCultureInfoName);
         this.craftLocalizedString = stringLocalizer.WithCultureGet(cultureInfo, "合成");
     }
     
@@ -94,7 +86,7 @@ public class GoToCraftingBenchTask
         {
             InitConfigList();
             // 3. 点击合成树脂
-            if (SelectedConfig?.MinResinToKeep > 0){//开关判断，填写的数量大于0时启用 SelectedConfig.MinResinToKeep
+            if (_minResinToKeep > 0){//开关判断，填写的数量大于0时启用 SelectedConfig.MinResinToKeep
                 var fragileResinCount = 0;
                 var condensedResinCount = 0;
                 var fragileResinCountRa = ra.Find(ElementRecognition.Get("fragileResinCount", ra));
@@ -103,7 +95,8 @@ public class GoToCraftingBenchTask
                     // 图像下方就是脆弱树脂数量
                     var countArea = ra.DeriveCrop(fragileResinCountRa.X, fragileResinCountRa.Y + fragileResinCountRa.Height,
                         fragileResinCountRa.Width, fragileResinCountRa.Height);
-                    var count = OcrFactory.Paddle.OcrWithoutDetector(countArea.SrcMat);
+                    var count = GoToCraftingBenchRuntimePlatform.Current.OcrService
+                        .OcrWithoutDetector(countArea.SrcMat);
                     // Logger.LogInformation("识别原粹树脂数量：{Count}", count);
                     var match = System.Text.RegularExpressions.Regex.Match(count, @"(\d+)\s*[/17]\s*(6|60)");
                     if (match.Success)
@@ -123,14 +116,15 @@ public class GoToCraftingBenchTask
                         // 图像右侧就是浓缩树脂数量
                         var countArea = ra.DeriveCrop(condensedResinCountRa.X + condensedResinCountRa.Width,
                             condensedResinCountRa.Y, condensedResinCountRa.Width*5/3, condensedResinCountRa.Height);
-                        var count = OcrFactory.Paddle.OcrWithoutDetector(countArea.CacheGreyMat);
+                        var count = GoToCraftingBenchRuntimePlatform.Current.OcrService
+                            .OcrWithoutDetector(countArea.CacheGreyMat);
                         condensedResinCount = StringUtils.TryParseInt(count);
                     }
                     return condensedResinCount >= 0 && condensedResinCount <=5;
                 },ct,3,200); 
                 if (!condensed)
                 {
-                    Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                    TaskControlPlatform.Current.PressEscape();
                     await new ReturnMainUiTask().Start(ct);
                     throw new Exception($"识别浓缩树脂数量失败: {condensedResinCount}");
                 }
@@ -138,7 +132,7 @@ public class GoToCraftingBenchTask
                 // 每次合成消耗的数量
                 const int resinConsumedPerCraft = 60;
                 // 需要保留的最小数量
-                 int minResinToKeep = SelectedConfig.MinResinToKeep;
+                 int minResinToKeep = _minResinToKeep;
                 // 可以用来合成的树脂数量
                 int resinAvailableForCrafting = fragileResinCount - minResinToKeep;
                 // 最大可合成次数
@@ -189,7 +183,7 @@ public class GoToCraftingBenchTask
             }
             await Delay(1300, ct);
             // 直接ESC退出即可
-            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+            TaskControlPlatform.Current.PressEscape();
         }
         else
         {
@@ -213,7 +207,9 @@ public class GoToCraftingBenchTask
             throw new Exception("地图追踪文件加载失败");
         }
 
-        var pathingTask = new PathExecutor(ct)
+        var pathingTask = new PathExecutor(
+            ct, PathExecutorPlatform.Current, PathExecutorAutoSkipPlatform.Current,
+            ScriptGroupExecutionServices.Current)
         {
             PartyConfig = new PathingPartyConfig
             {
@@ -236,9 +232,9 @@ public class GoToCraftingBenchTask
             if (!IsInCraftingTalkUi())
             {
                 // 往回走一步重试
-                Simulation.SendInput.SimulateAction(GIActions.MoveBackward, KeyType.KeyDown);
+                TaskControlPlatform.Current.SimulateAction(GIActions.MoveBackward, KeyType.KeyDown);
                 await Delay(200, ct);
-                Simulation.SendInput.SimulateAction(GIActions.MoveBackward, KeyType.KeyUp);
+                TaskControlPlatform.Current.SimulateAction(GIActions.MoveBackward, KeyType.KeyUp);
                 
                 await TryPressCrafting(ct);
             
@@ -272,48 +268,11 @@ public class GoToCraftingBenchTask
     
     private void InitConfigList()
     {
-        Directory.CreateDirectory(OneDragonFlowConfigFolder);
-        // 读取文件夹内所有json配置，按创建时间正序
-        var configFiles = Directory.GetFiles(OneDragonFlowConfigFolder, "*.json");
-        var configs = new List<OneDragonFlowConfig>();
-
-        OneDragonFlowConfig? selected = null;
-        foreach (var configFile in configFiles)
-        {
-            var json = File.ReadAllText(configFile);
-            var config = JsonConvert.DeserializeObject<OneDragonFlowConfig>(json);
-            if (config != null)
-            {
-                configs.Add(config);
-                if (config.Name == TaskContext.Instance().Config.SelectedOneDragonFlowConfigName)
-                {
-                    selected = config;
-                }
-            }
-        }
-
-        if (selected == null)
-        {
-            if (configs.Count > 0)
-            {
-                selected = configs[0];
-            }
-            else
-            {
-                selected = new OneDragonFlowConfig
-                {
-                    Name = "默认配置"
-                };
-                configs.Add(selected);
-            }
-        }
-
-        ConfigList.Clear();
-        foreach (var config in configs)
-        {
-            ConfigList.Add(config);
-        }
-
-        SelectedConfig = selected;
+        var platform = GoToCraftingBenchRuntimePlatform.Current;
+        var configs = platform.LoadConfigs();
+        var selected = configs.FirstOrDefault(config => config.Name == platform.SelectedConfigName)
+                       ?? configs.FirstOrDefault()
+                       ?? new CraftingBenchConfig("默认配置", 0);
+        _minResinToKeep = selected.MinResinToKeep;
     }
 }

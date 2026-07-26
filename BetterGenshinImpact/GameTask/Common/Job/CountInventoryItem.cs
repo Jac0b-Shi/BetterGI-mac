@@ -1,11 +1,9 @@
 using BetterGenshinImpact.Core.Recognition.OCR;
-using BetterGenshinImpact.Core.Simulator;
+using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Model.GameUI;
-using BetterGenshinImpact.View.Drawable;
 using BetterGenshinImpact.Helpers;
-using Fischless.WindowsInput;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -17,19 +15,29 @@ using BetterGenshinImpact.Core.Script.Dependence;
 
 namespace BetterGenshinImpact.GameTask.Common.Job
 {
-    internal class CountInventoryItem : ISoloTask<object>
+    public class CountInventoryItem : ISoloTask<object>
     {
         public string Name => "背包数物品";
 
-        private readonly ILogger logger = App.GetLogger<CountInventoryItem>();
-        private readonly InputSimulator input = Simulation.SendInput;
+        private readonly ILogger<CountInventoryItem> logger;
+        private readonly IOcrService ocrService;
         private CancellationToken ct;
         private readonly GridScreenName gridScreenName;
         private readonly string? itemName;
         private readonly IReadOnlyCollection<string>? itemNames;
         private readonly ItemIconRecognitionMode iconRecognitionMode;
 
+#if !BGI_PLATFORM_MAC
         public CountInventoryItem(CountInventoryItemParam param)
+            : this(param, OcrFactory.Paddle, App.GetLogger<CountInventoryItem>())
+        {
+        }
+#endif
+
+        public CountInventoryItem(
+            CountInventoryItemParam param,
+            IOcrService ocrService,
+            ILogger<CountInventoryItem> logger)
         {
             if (param == null)
             {
@@ -37,6 +45,9 @@ namespace BetterGenshinImpact.GameTask.Common.Job
             }
 
             param.Validate();
+
+            this.ocrService = ocrService ?? throw new ArgumentNullException(nameof(ocrService));
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
             this.gridScreenName = param.GridScreenName;
             this.itemName = param.ItemName;
@@ -57,7 +68,7 @@ namespace BetterGenshinImpact.GameTask.Common.Job
                 logger.LogInformation("打开背包并在{grid}寻找{first}等{count}类物品……", this.gridScreenName, this.itemNames!.First(), this.itemNames!.Count());
             }
             await new ReturnMainUiTask().Start(ct);
-            await AutoArtifactSalvageTask.OpenInventory(this.gridScreenName, input, logger, this.ct);
+            await AutoArtifactSalvageTask.OpenInventory(this.gridScreenName, logger, this.ct);
 
             using IItemIconRecognizer iconRecognizer = ItemIconRecognizerFactory.Create(this.iconRecognitionMode);
 
@@ -94,7 +105,7 @@ namespace BetterGenshinImpact.GameTask.Common.Job
             {
                 GlobalMethod.LeftButtonUp();
             }
-            var gridScroller = new GridScroller(CreateGridParams(), logger, input, ct);
+            var gridScroller = new GridScroller(CreateGridParams(), logger, ct);
             while (await gridScroller.TryVerticalScollDown((src, columns) => GridScreen.GridEnumerator.GetGridItems(src, columns)))
             {
                 await TaskControl.Delay(300, ct);
@@ -105,7 +116,7 @@ namespace BetterGenshinImpact.GameTask.Common.Job
         {
             GridScreen gridScreen = new GridScreen(CreateGridParams(), logger, ct);
             gridScreen.OnAfterTurnToNewPage += GridScreen.DrawItemsAfterTurnToNewPage;
-            gridScreen.OnBeforeScroll += () => VisionContext.Instance().DrawContent.ClearAll();
+            gridScreen.OnBeforeScroll += () => OverlayDrawPlatform.Current.ClearAll();
             int? count = null;
             try
             {
@@ -134,7 +145,7 @@ namespace BetterGenshinImpact.GameTask.Common.Job
             }
             finally
             {
-                VisionContext.Instance().DrawContent.ClearAll();
+                OverlayDrawPlatform.Current.ClearAll();
             }
             if (count == null)
             {
@@ -151,7 +162,7 @@ namespace BetterGenshinImpact.GameTask.Common.Job
 
             GridScreen gridScreen = new GridScreen(CreateGridParams(), logger, ct);
             gridScreen.OnAfterTurnToNewPage += GridScreen.DrawItemsAfterTurnToNewPage;
-            gridScreen.OnBeforeScroll += () => VisionContext.Instance().DrawContent.ClearAll();
+            gridScreen.OnBeforeScroll += () => OverlayDrawPlatform.Current.ClearAll();
             try
             {
                 //如果包含武器页的武器经验道具，直接翻页到最底部
@@ -189,7 +200,7 @@ namespace BetterGenshinImpact.GameTask.Common.Job
             }
             finally
             {
-                VisionContext.Instance().DrawContent.ClearAll();
+                OverlayDrawPlatform.Current.ClearAll();
             }
 
             if (notFoundItemNames.Count > 0)
@@ -207,7 +218,7 @@ namespace BetterGenshinImpact.GameTask.Common.Job
 
         private int ReadItemCount(ImageRegion itemRegion)
         {
-            string ocrText = itemRegion.SrcMat.GetGridItemIconText(OcrFactory.Paddle);
+            string ocrText = itemRegion.SrcMat.GetGridItemIconText(ocrService);
             string numStr = StringUtils.ConvertFullWidthNumToHalfWidth(ocrText);
             if (int.TryParse(numStr, out int num))
             {

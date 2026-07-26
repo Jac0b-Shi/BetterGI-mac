@@ -24,8 +24,8 @@ public class HangoutOption : IDisposable
         // 选项文字所在区域初始化
         // 选项图标往上下区域扩展 2/3
         Rect r = default;
-        var captureArea = TaskContext.Instance().SystemInfo.ScaleMax1080PCaptureRect;
-        var assetScale = TaskContext.Instance().SystemInfo.AssetScale;
+        var captureArea = AutoFight.AutoFightRuntimePlatform.Current.SystemInfo.ScaleMax1080PCaptureRect;
+        var assetScale = AutoFight.AutoFightRuntimePlatform.Current.SystemInfo.AssetScale;
         if (IconRect.Left > captureArea.Width / 2)
         {
             // 右边的选项
@@ -72,7 +72,8 @@ public class HangoutOption : IDisposable
 
     public void BackgroundClick()
     {
-        IconRect.BackgroundClick();
+        IconRect.Move();
+        AutoSkipRuntimePlatform.Current.BackgroundLeftButtonClick();
     }
 
     public void Dispose()

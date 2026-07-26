@@ -1,0 +1,81 @@
+name: macOS Core Extraction
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - mac-core-extraction
+  pull_request:
+    paths:
+      - "BetterGenshinImpact.Core/**"
+      - "BetterGenshinImpact.Core.Host/**"
+      - "BetterGenshinImpact.Platform.Abstractions/**"
+      - "BetterGenshinImpact/Core/**"
+      - "BetterGenshinImpact/GameTask/**"
+      - "Test/BetterGenshinImpact.Core.Verification/**"
+      - "Test/BetterGenshinImpact.Core.Host.Verification/**"
+      - "Test/BetterGenshinImpact.Core.Host.Fast.Verification/**"
+      - "Test/BetterGenshinImpact.Pathing.Verification/**"
+      - "Test/BetterGenshinImpact.Verification.Framework/**"
+      - "Test/BetterGenshinImpact.RealUser.Verification/**"
+      - "MacGI/**"
+      - "scripts/verify-core-extraction.sh"
+      - "scripts/verify-core-development.sh"
+      - "scripts/verify-core-fast.sh"
+      - "scripts/verify-core-full.sh"
+      - "scripts/verify-core-static.sh"
+      - "scripts/verify-pathing-library.sh"
+      - ".github/workflows/mac-core.yml"
+
+concurrency:
+  group: mac-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Require Apple Silicon
+        run: test "$(uname -m)" = arm64
+      - name: Install static gate tools
+        run: brew install ripgrep
+      - name: Static anti-fake gate
+        run: scripts/verify-core-extraction.sh
+      - name: Restore Core
+        run: dotnet restore BetterGenshinImpact.Core.sln
+      - name: Build Core
+        run: dotnet build BetterGenshinImpact.Core.sln -c Debug --no-restore
+      - name: Verify locked models and real OCR
+        run: >
+          dotnet run
+          --project Test/BetterGenshinImpact.Core.Verification/BetterGenshinImpact.Core.Verification.csproj
+          -c Debug --no-build -- --suite all
+      - name: Verify Core Host RPC and ClearScript
+        run: >
+          dotnet run
+          --project Test/BetterGenshinImpact.Core.Host.Verification/BetterGenshinImpact.Core.Host.Verification.csproj
+          -c Debug --no-build
+      - name: Verify fast Core Host contracts
+        run: >
+          dotnet run
+          --project Test/BetterGenshinImpact.Core.Host.Fast.Verification/BetterGenshinImpact.Core.Host.Fast.Verification.csproj
+          -c Debug --no-build -- --suite all
+      - name: Package and sign macOS App
+        env:
+          MACGI_APP_OUTPUT_ROOT: ${{ runner.temp }}/bettergi-app
+          MACGI_APP_NAME: MacGI.app
+          MACGI_ALLOW_ADHOC_SIGNING: "1"
+        run: MacGI/scripts/package-macgi-app.sh
+      - name: Verify bundled Core Helper
+        run: >
+          "${{ runner.temp }}/bettergi-app/MacGI.app/Contents/Resources/BetterGICore/BetterGenshinImpact.Core.Host"
+          --dependency-smoke
+      - name: Test Swift UI and platform adapters
+        working-directory: MacGI
+        run: swift test

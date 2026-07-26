@@ -27,12 +27,26 @@ public class Global
 
     public static string Absolute(string relativePath)
     {
-        return Path.Combine(StartUpPath, relativePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
+        var normalized = relativePath
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
+        if (Path.IsPathFullyQualified(normalized))
+            return Path.GetFullPath(normalized);
+
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(StartUpPath));
+        var resolved = Path.GetFullPath(Path.Combine(root, normalized));
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        if (resolved != root && !resolved.StartsWith(root + Path.DirectorySeparatorChar, comparison))
+            throw new UnauthorizedAccessException($"Relative path escapes the BetterGI runtime root: {relativePath}");
+        return resolved;
     }
 
     public static string ScriptPath()
     {
-        return Absolute("User\\JsScript");
+        return Absolute(Path.Combine("User", "JsScript"));
     }
 
     public static string? ReadAllTextIfExist(string relativePath)

@@ -1,26 +1,10 @@
 ﻿using BetterGenshinImpact.Core.Config;
-using BetterGenshinImpact.Core.Recorder;
 using BetterGenshinImpact.Core.Script.Project;
-using BetterGenshinImpact.GameTask;
-using BetterGenshinImpact.GameTask.AutoPathing;
-using BetterGenshinImpact.GameTask.AutoPathing.Model;
-using BetterGenshinImpact.GameTask.Shell;
-using BetterGenshinImpact.ViewModel.Pages;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Dynamic;
-using System.IO;
-using System.Linq;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
-using BetterGenshinImpact.GameTask.AutoPathing.Model.Enum;
-using BetterGenshinImpact.GameTask.Common;
-using BetterGenshinImpact.GameTask.FarmingPlan;
-using BetterGenshinImpact.GameTask.LogParse;
-using BetterGenshinImpact.Helpers;
-using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.Core.Script.Group;
 
@@ -192,139 +176,6 @@ public partial class ScriptGroupProject : ObservableObject
         return string.Join("|", Project.Manifest.HttpAllowedUrls);
     }
 
-    public async Task Run()
-    {
-        //执行记录
-        ExecutionRecord executionRecord = new ExecutionRecord()
-        {
-            ServerStartTime =
-                GroupInfo?.Config.PathingConfig.TaskCompletionSkipRuleConfig.IsBoundaryTimeBasedOnServerTime ?? false
-                    ? ServerTimeHelper.GetServerTimeNow()
-                    : DateTimeOffset.Now,
-            StartTime = DateTime.Now,
-            GroupName = GroupInfo?.Name ?? "",
-            FolderName = FolderName,
-            ProjectName = Name,
-            Type = Type
-        };
-        ExecutionRecordStorage.SaveExecutionRecord(executionRecord);
-        if (Type == "Javascript")
-        {
-            if (Project == null)
-            {
-                throw new Exception("JS脚本未初始化");
-            }
-            JsScriptSettingsObject ??= new ExpandoObject();
-
-            // 清理配置中的无效值
-            CleanInvalidSettingsValues();
-
-            var pathingPartyConfig = GroupInfo?.Config.PathingConfig;
-            await Project.ExecuteAsync(JsScriptSettingsObject, pathingPartyConfig);
-        }
-        else if (Type == "KeyMouse")
-        {
-            // 加载并执行
-            var json = await File.ReadAllTextAsync(Global.Absolute(@$"User\KeyMouseScript\{Name}"));
-            await KeyMouseMacroPlayer.PlayMacro(json, CancellationContext.Instance.Cts.Token, false);
-        }
-        else if (Type == "Pathing")
-        {
-            // 加载并执行
-            var task = PathingTask.BuildFromFilePath(Path.Combine(MapPathingViewModel.PathJsonPath, FolderName, Name));
-            if (task == null)
-            {
-                return;
-            }
-            var pathingTask = new PathExecutor(CancellationContext.Instance.Cts.Token);
-            pathingTask.PartyConfig = GroupInfo?.Config.PathingConfig;
-            if (pathingTask.PartyConfig is null || pathingTask.PartyConfig.AutoPickEnabled)
-            {
-                TaskTriggerDispatcher.Instance().AddTrigger("AutoPick", null);
-            }
-            await pathingTask.Pathing(task);
-
-            
-            executionRecord.IsSuccessful = pathingTask.SuccessEnd;
-            OtherConfig.AutoRestart autoRestart = TaskContext.Instance().Config.OtherConfig.AutoRestartConfig;
-            if (!pathingTask.SuccessEnd)
-            {
-                TaskControl.Logger.LogWarning($"此追踪脚本未正常走完！");
-                if (autoRestart.Enabled && autoRestart.IsPathingFailureExceptional && !pathingTask.SuccessEnd)
-                {
-                    throw new Exception($"路径追踪任务未完全走完，判定失败，触发异常！");
-                }
-            }
-
-            if (task.FarmingInfo.AllowFarmingCount)
-            {
-                var successFight = pathingTask.SuccessEnd;
-                var fightCount = 0;
-               
-                //未走完完整路径下，才校验打架次数
-                if (!successFight)
-                {
-                    fightCount = task.Positions.Count(pos => pos.Action == ActionEnum.Fight.Code);
-                    successFight = pathingTask.SuccessFight >= fightCount;
-                    //判断为锄地脚本
-                    if (task.FarmingInfo.PrimaryTarget!="disable")
-                    {
-
-                        if (autoRestart.Enabled
-                            &&autoRestart.IsFightFailureExceptional
-                            &&!successFight)
-                        {
-                            throw new Exception($"实际战斗次数({pathingTask.SuccessFight})<预期战斗次数（{fightCount}），判定失败，触发异常！");
-                        }
-                    }
-                }
-
-                if (successFight)
-                {
-                    //每日锄地记录
-                    FarmingStatsRecorder.RecordFarmingSession(task.FarmingInfo, new FarmingRouteInfo
-                    {
-                        GroupName = GroupInfo?.Name ?? "",
-                        FolderName = FolderName,
-                        ProjectName = Name
-                    });
-                }
-                else
-                {
-                    TaskControl.Logger.LogWarning($"实际战斗次数({pathingTask.SuccessFight})<预期战斗次数（{fightCount}），判定失败，此次不纳入成功锄地规划的统计上限！");
-                }
-
-            }
-            
-
-            
-
-        }
-        else if (Type == "Shell")
-        {
-            ShellConfig? shellConfig = null;
-            if (GroupInfo?.Config.EnableShellConfig ?? false)
-            {
-                shellConfig = GroupInfo?.Config.ShellConfig;
-            }
-
-            var task = new ShellTask(ShellTaskParam.BuildFromConfig(Name, shellConfig ?? new ShellConfig()));
-            await task.Start(CancellationContext.Instance.Cts.Token);
-        }
-
-        if (Type != "Pathing")
-        {
-            executionRecord.IsSuccessful = true;
-        }
-
-        executionRecord.ServerEndTime =
-            GroupInfo?.Config.PathingConfig.TaskCompletionSkipRuleConfig.IsBoundaryTimeBasedOnServerTime ?? false
-                ? ServerTimeHelper.GetServerTimeNow()
-                : DateTimeOffset.Now;
-        executionRecord.EndTime = DateTime.Now;
-        ExecutionRecordStorage.SaveExecutionRecord(executionRecord);
-    }
-
     partial void OnTypeChanged(string value)
     {
         OnPropertyChanged(nameof(TypeDesc));
@@ -340,66 +191,6 @@ public partial class ScriptGroupProject : ObservableObject
         OnPropertyChanged(nameof(ScheduleDesc));
     }
 
-    /// <summary>
-    /// 清理 JsScriptSettingsObject 中不在 settings.json 定义的 Options 列表中的无效值
-    /// </summary>
-    private void CleanInvalidSettingsValues()
-    {
-        if (Project == null || JsScriptSettingsObject == null)
-        {
-            return;
-        }
-
-        try
-        {
-            // 加载 settings.json 中定义的配置项
-            var settingItems = Project.Manifest.LoadSettingItems(Project.ProjectPath);
-            if (settingItems.Count == 0)
-            {
-                return;
-            }
-
-            var settingsDict = JsScriptSettingsObject as IDictionary<string, object?>;
-            if (settingsDict == null)
-            {
-                return;
-            }
-
-            // 遍历所有 multi-checkbox 类型的配置项
-            foreach (var item in settingItems.Where(i => i.Type == "multi-checkbox"))
-            {
-                if (!settingsDict.ContainsKey(item.Name))
-                {
-                    continue;
-                }
-
-                // 获取当前保存的值
-                var savedValue = settingsDict[item.Name];
-                List<string>? checkedValues = null;
-
-                if (savedValue is List<string> stringList)
-                {
-                    checkedValues = stringList;
-                }
-                else if (savedValue is List<object> objectList)
-                {
-                    checkedValues = objectList.Select(i => (string)i).ToList();
-                    settingsDict[item.Name] = checkedValues;
-                }
-
-                // 清理不在 Options 列表中的无效值
-                if (checkedValues != null && item.Options != null)
-                {
-                    checkedValues.RemoveAll(value => !item.Options.Contains(value));
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            // 清理失败不影响脚本执行，只记录日志
-            TaskControl.Logger.LogDebug(ex, "清理JS脚本配置中的无效值时发生异常");
-        }
-    }
 }
 
 public class ScriptGroupProjectExtensions

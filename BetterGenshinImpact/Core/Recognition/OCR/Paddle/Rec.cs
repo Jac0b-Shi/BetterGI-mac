@@ -9,6 +9,7 @@ using BetterGenshinImpact.Core.Recognition.ONNX;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using OpenCvSharp;
+using System.Threading;
 
 namespace BetterGenshinImpact.Core.Recognition.OCR.Paddle;
 
@@ -20,25 +21,21 @@ public class Rec(
     : IDisposable
 {
     private readonly InferenceSession _session = bgiOnnxFactory.CreateInferenceSession(model, true);
+    private int _disposed;
 
     // _labels = File.ReadAllLines(labelFilePath);
 
     public void Dispose()
     {
-        lock (_session)
-        {
-            _session.Dispose();
-        }
+        DisposeSession();
         GC.SuppressFinalize(this);
     }
 
 
-    ~Rec()
+    private void DisposeSession()
     {
-        lock (_session)
-        {
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
             _session.Dispose();
-        }
     }
 
     /// <summary>

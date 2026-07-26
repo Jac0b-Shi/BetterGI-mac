@@ -1,19 +1,22 @@
-﻿using BetterGenshinImpact.Core.Simulator;
-using System.Threading;
+﻿using System.Threading;
 
 namespace BetterGenshinImpact.GameTask.Macro
 {
     public class TurnAroundMacro
     {
-        public static void Done()
+        public static void Done(CancellationToken cancellationToken = default)
         {
-            if (TaskContext.Instance().Config.MacroConfig.RunaroundMouseXInterval == 0)
+            var platform = TurnAroundRuntimePlatform.Current;
+            if (platform.RunaroundMouseXInterval == 0)
             {
-                TaskContext.Instance().Config.MacroConfig.RunaroundMouseXInterval = 1;
+                platform.RunaroundMouseXInterval = 1;
             }
 
-            Simulation.SendInput.Mouse.MoveMouseBy(TaskContext.Instance().Config.MacroConfig.RunaroundMouseXInterval, 0);
-            Thread.Sleep(TaskContext.Instance().Config.MacroConfig.RunaroundInterval);
+            platform.MoveMouseBy(
+                platform.RunaroundMouseXInterval,
+                0,
+                cancellationToken);
+            platform.Wait(platform.RunaroundInterval, cancellationToken);
         }
     }
 }

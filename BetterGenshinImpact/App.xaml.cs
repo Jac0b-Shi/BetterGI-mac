@@ -5,9 +5,10 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
+using BetterGenshinImpact.Core.Monitor;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.ONNX;
-using BetterGenshinImpact.Core.Monitor;
+using BetterGenshinImpact.Core.Runtime.Windows;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Helpers.Extensions;
@@ -172,6 +173,19 @@ public partial class App : Application
                 services.AddSingleton<IScriptService, ScriptService>();
                 services.AddSingleton<BgiOnnxFactory>();
                 services.AddSingleton<OcrFactory>();
+                // Runtime abstractions (Windows providers — dynamic delegation)
+                services.AddSingleton<Core.Abstractions.Runtime.IAutoPickConfigProvider, Core.Runtime.Windows.WindowsAutoPickConfigProvider>();
+                services.AddSingleton<Core.Abstractions.Runtime.IOcrRuntimeConfigProvider, Core.Runtime.Windows.WindowsOcrRuntimeConfigProvider>();
+                services.AddSingleton<Core.Abstractions.Runtime.IAutoPickRuntimeState, Core.Runtime.Windows.WindowsAutoPickRuntimeState>();
+                services.AddSingleton<GameTask.AutoWood.IAutoWoodRuntimePlatform,
+                    Core.Runtime.Windows.WindowsAutoWoodRuntimePlatform>();
+                services.AddSingleton<GameTask.AutoMusicGame.IAutoMusicGameRuntimePlatform,
+                    Core.Runtime.Windows.WindowsAutoMusicGameRuntimePlatform>();
+                // Platform abstractions (Windows backend)
+                services.AddSingleton<Platform.Abstractions.IInputBackend, Core.Runtime.Windows.Win32InputBackend>();
+                // B9 Text recognition adapters
+                services.AddSingleton<Core.Abstractions.Recognition.IPaddleAutoPickTextRecognizer, Core.Runtime.Windows.WindowsPaddleAutoPickTextRecognizer>();
+                services.AddSingleton<Core.Abstractions.Recognition.IYapAutoPickTextRecognizer, Core.Runtime.Windows.WindowsYapAutoPickTextRecognizer>();
                 services.AddMemoryCache();
                 services.AddSingleton<IAppCache, CachingService>();
                 services.AddSingleton<MemoryFileCache>();
@@ -181,7 +195,10 @@ public partial class App : Application
                 services.AddSingleton<IMaskMapPointService, MaskMapPointService>();
 
                 services.AddSingleton(TimeProvider.System);
-                services.AddSingleton<IServerTimeProvider, ServerTimeProvider>();
+                services.AddSingleton<IServerTimeProvider>(provider =>
+                    new ServerTimeProvider(
+                        provider.GetRequiredService<TimeProvider>(),
+                        () => TaskContext.Instance().Config.OtherConfig.ServerTimeZoneOffset));
 
                 // Configuration
                 //services.Configure<AppConfig>(context.Configuration.GetSection(nameof(AppConfig)));
@@ -223,6 +240,79 @@ public partial class App : Application
     /// </summary>
     protected override async void OnStartup(StartupEventArgs e)
     {
+        Service.ScriptServicePlatform.Configure(new Service.WindowsScriptServicePlatform());
+        GameTask.FarmingPlan.FarmingStatsRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsFarmingStatsRuntimePlatform());
+        GameTask.TaskRunnerPlatform.Configure(new GameTask.WindowsTaskRunnerPlatform());
+        GameTask.GameTaskManagerPlatform.Configure(new GameTask.WindowsGameTaskManagerPlatform());
+        Core.Recognition.OverlayDrawPlatform.Configure(new Core.Runtime.Windows.WindowsOverlayDrawPlatform());
+        Core.Recognition.OCR.ImageRegionOcrPlatform.Configure(
+            _host.Services.GetRequiredService<Core.Recognition.OCR.OcrFactory>().Service);
+        GameTask.Common.TaskControlPlatform.Configure(new Core.Runtime.Windows.WindowsTaskControlPlatform());
+        Core.BgiVision.BvRuntimePlatform.Configure(new Core.Runtime.Windows.WindowsBvRuntimePlatform());
+        GameTask.AutoPathing.PathExecutorPlatform.Configure(new Core.Runtime.Windows.WindowsPathExecutorPlatform());
+        GameTask.AutoPathing.PathExecutorAutoSkipPlatform.Configure(new GameTask.AutoPathing.PathExecutorAutoSkipSessionFactory());
+        GameTask.AutoPathing.NavigationPlatform.Configure(new Core.Runtime.Windows.WindowsNavigationPlatform());
+        GameTask.QuickTeleport.QuickTeleportRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsQuickTeleportRuntimePlatform());
+        GameTask.Macro.TurnAroundRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsTurnAroundRuntimePlatform());
+        GameTask.Macro.QuickEnhanceArtifactRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsQuickEnhanceArtifactRuntimePlatform());
+        GameTask.QuickBuy.QuickBuyRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsQuickBuyRuntimePlatform());
+        GameTask.QuickSereniteaPot.QuickSereniteaPotRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsQuickSereniteaPotRuntimePlatform());
+        GameTask.QuickClaimReward.OneKeyClaimRewardRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsOneKeyClaimRewardRuntimePlatform());
+        GameTask.AutoFight.OneKeyFightRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsOneKeyFightRuntimePlatform());
+        GameTask.AutoEat.AutoEatRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsAutoEatRuntimePlatform());
+        GameTask.GameLoading.GameLoadingRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsGameLoadingRuntimePlatform());
+        GameTask.MapMask.MapMaskRuntimePlatform.Configure(
+            new GameTask.MapMask.WindowsMapMaskRuntimePlatform());
+        GameTask.SkillCd.SkillCdRuntimePlatform.Configure(
+            new GameTask.SkillCd.WindowsSkillCdRuntimePlatform());
+        Core.Script.Dependence.GenshinRuntimePlatform.Configure(
+            new Core.Script.Dependence.WindowsGenshinRuntimePlatform());
+        Core.Script.Dependence.DispatcherRuntimePlatform.Configure(
+            new Core.Script.Dependence.WindowsDispatcherRuntimePlatform(
+                GetService<GameTask.AutoWood.IAutoWoodRuntimePlatform>()!,
+                GetService<GameTask.AutoMusicGame.IAutoMusicGameRuntimePlatform>()!));
+        GameTask.AutoFight.Script.CombatCommandPlatform.Configure(
+            new Core.Runtime.Windows.WindowsCombatCommandPlatform());
+        GameTask.AutoFight.Script.CombatSceneProvider.Configure(
+            new Core.Runtime.Windows.WindowsCombatSceneProvider());
+        GameTask.AutoFight.AutoFightRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsAutoFightRuntimePlatform());
+        GameTask.AutoFishing.AutoFishingRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsAutoFishingRuntimePlatform());
+        GameTask.Model.TaskParameterPlatform.Configure(
+            new Core.Runtime.Windows.WindowsTaskParameterPlatform());
+        GameTask.Common.Job.GoToCraftingBenchRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsGoToCraftingBenchRuntimePlatform());
+        GameTask.Common.Job.CraftMaterialRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsCraftMaterialRuntimePlatform());
+        GameTask.Model.GameUI.GridScreenRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsGridScreenRuntimePlatform());
+        GameTask.Common.Reward.RewardResultRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsRewardResultRuntimePlatform());
+        GameTask.Common.BgiVision.BvSimpleOperationPlatform.Configure(
+            new Core.Runtime.Windows.WindowsBvSimpleOperationPlatform());
+        GameTask.AutoTrackPath.TpTaskRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsTpTaskRuntimePlatform());
+        GameTask.AutoSkip.AutoSkipRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsAutoSkipRuntimePlatform());
+        GameTask.Common.Job.ExitAndReloginPlatform.Configure(
+            new Core.Runtime.Windows.WindowsExitAndReloginPlatform());
+        GameTask.Shell.ShellTaskPlatform.Configure(new GameTask.WindowsShellTaskPlatform());
+        Core.Recorder.KeyMouseMacroPlatform.Configure(new GameTask.WindowsKeyMouseMacroPlatform());
+        GameTask.AutoPathing.ScriptGroupExecutionServices.Configure(
+            new GameTask.WindowsScriptGroupExecutionServices());
+        Core.Script.Dependence.ScriptHostServices.Configure(
+            new WindowsScriptHostServices(_host.Services.GetRequiredService<ILoggerFactory>()));
         Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.Normal;
         // Wine 平台适配
         WinePlatformAddon.ApplyApplicationConfig();

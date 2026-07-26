@@ -98,7 +98,7 @@ public partial class PathingPartyConfig : ObservableObject
             if (_recoverTiming is null)
             {
                 // 首次读取时从旧字段自动迁移
-                _recoverTiming = RecoverTimingMigration.Migrate(_onlyInTeleportRecover);
+                _recoverTiming = RecoverTimingMigration.Migrate(OnlyInTeleportRecover);
             }
             return _recoverTiming.Value;
         }
@@ -183,7 +183,7 @@ public partial class PathingPartyConfig : ObservableObject
     {
         if (value > Distance)
         {
-            _approachStopDistance = Distance;
+            ApproachStopDistance = Distance;
         }
     }
 
@@ -220,6 +220,7 @@ public partial class PathingPartyConfig : ObservableObject
     [ObservableProperty]
     private double _mwkJumpFlyIntervalSeconds = 1;
 
+#if BGI_FULL_WINDOWS
     public static PathingPartyConfig BuildDefault()
     {
         // 即便是不启用的情况下也设置默认值，减少后续使用的判断
@@ -232,4 +233,5 @@ public partial class PathingPartyConfig : ObservableObject
             AutoEatEnabled = pathingConditionConfig.AutoEatEnabled
         };
     }
+#endif
 }

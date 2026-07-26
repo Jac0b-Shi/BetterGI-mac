@@ -63,9 +63,5 @@ namespace BetterGenshinImpact.Helpers.Extensions
             return image;
         }
 
-        public static Scalar ToScalar(this Color color)
-        {
-            return new Scalar(color.R, color.G, color.B);
-        }
     }
 }
