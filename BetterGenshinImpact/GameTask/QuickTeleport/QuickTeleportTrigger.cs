@@ -146,6 +146,7 @@ public class QuickTeleportTrigger : ITaskTrigger
                 using var ra = content.CaptureRectArea.DeriveCrop(assets.MapChooseIconRoi.X + iconRect.X + iconRect.Width, assets.MapChooseIconRoi.Y + iconRect.Y - 8, 200, iconRect.Height + 16);
                 using var textRegion = ra.Find(new RecognitionObject
                 {
+                    // RecognitionType = RecognitionTypes.Ocr,
                     RecognitionType = RecognitionTypes.ColorRangeAndOcr,
                     ColorConversionCode = ColorConversionCodes.BGR2HLS,
                     LowerColor = new Scalar(0, 245, 0),

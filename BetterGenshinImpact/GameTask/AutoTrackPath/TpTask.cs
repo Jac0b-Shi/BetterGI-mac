@@ -3143,6 +3143,7 @@ public class TpTask
                 using var textRa = imageRegion.DeriveCrop(textRect);
                 using var textRegion = textRa.Find(new RecognitionObject
                 {
+                    // RecognitionType = RecognitionTypes.Ocr,
                     RecognitionType = RecognitionTypes.ColorRangeAndOcr,
                     ColorConversionCode = ColorConversionCodes.BGR2HLS,
                     LowerColor = new Scalar(0, 245, 0),
