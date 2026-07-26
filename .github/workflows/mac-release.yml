@@ -66,7 +66,7 @@ jobs:
         run: test "$(uname -m)" = arm64
 
       - name: Install static gate tools
-        run: brew install ripgrep
+        run: brew install ripgrep mingw-w64
 
       - name: Select release signing mode
         id: release_mode

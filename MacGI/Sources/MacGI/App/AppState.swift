@@ -351,11 +351,13 @@ final class AppState: ObservableObject {
     let safetyGate: InputSafetyGate
 
     private let frameProvider = ScreenCaptureKitFrameProvider()
-    private let inputDispatcher: any InputDispatching
+    private var inputDispatcher: any InputDispatching
+    private let inputDispatcherWasInjected: Bool
     private let isTargetWindowFrontmost: (WindowInfo) -> Bool
     private let runtimeResourceStore: BGIRuntimeResourceStore
     private let runtimeLogWriter: RuntimeLogFileWriter
     private let userDefaults: UserDefaults
+    private let launchArguments: [String]
     let latestFrameStore = LatestFrameStore()
     private var runtimeFrameIndex: UInt64 = 0
     private var schedulerExecutionTask: Task<Void, Never>?
@@ -404,6 +406,7 @@ final class AppState: ObservableObject {
     private var confirmedMapMaskSelectedLabelIDs: Set<String> = []
     private var captureTimestamps: [Date] = []
     @Published private(set) var measuredCaptureFPS = 0
+    @Published private(set) var inputBackendSelection: InputBackendSelection
 
     // MARK: Derived capture metrics (from lastCapturedFrame)
 
@@ -502,6 +505,7 @@ final class AppState: ObservableObject {
         self.screenCapturePermissionCoordinator =
             screenCapturePermissionCoordinator ?? ScreenCapturePermissionCoordinator()
         self.userDefaults = userDefaults
+        self.launchArguments = launchArguments
         dryRunLaunchEnabled = launchArguments.contains("--dry-run")
         safetyGate = InputSafetyGate(
             dryRun: dryRunLaunchEnabled,
@@ -509,8 +513,17 @@ final class AppState: ObservableObject {
         allowRuntimeRealInput = !dryRunLaunchEnabled
         runtimeResourceStore = resourceStore
         runtimeLogWriter = RuntimeLogFileWriter(directory: resourceStore.logURL)
-        self.inputDispatcher =
-            inputDispatcher ?? InputDispatcherFactory.make(launchArguments: launchArguments)
+        inputDispatcherWasInjected = inputDispatcher != nil
+        let storedInputBackend = userDefaults.string(forKey: Self.inputBackendSelectionKey)
+        let selectedInputBackend = InputDispatcherFactory.selection(
+            launchArguments: launchArguments,
+            storedValue: storedInputBackend)
+        inputBackendSelection = inputDispatcher.map {
+            $0.deliveryMode == .wineBridge ? .wineBridge : .foregroundCGEvent
+        } ?? selectedInputBackend
+        self.inputDispatcher = inputDispatcher ?? InputDispatcherFactory.make(
+            launchArguments: launchArguments,
+            fallbackSelection: selectedInputBackend)
         self.isTargetWindowFrontmost = isTargetWindowFrontmost
         let storedFocusHiding = userDefaults.object(forKey: Self.hideHUDWhenGameUnfocusedKey)
             as? Bool ?? true
@@ -2027,6 +2040,28 @@ final class AppState: ObservableObject {
     }
 
     private static let hideHUDWhenGameUnfocusedKey = "hud.hideWhenGameUnfocused"
+    private static let inputBackendSelectionKey = "input.backend"
+
+    var canChangeInputBackend: Bool {
+        !inputDispatcherWasInjected
+            && (runtimeLifecycle == .stopped || runtimeLifecycle == .failed)
+    }
+
+    func setInputBackendSelection(_ selection: InputBackendSelection) {
+        guard canChangeInputBackend else {
+            addLog(.warn, "Stop the BetterGI runtime before changing the input backend.")
+            return
+        }
+        guard selection != inputBackendSelection else { return }
+
+        inputDispatcher.shutdown()
+        inputDispatcher = InputDispatcherFactory.make(
+            selection: selection,
+            launchArguments: launchArguments)
+        inputBackendSelection = selection
+        userDefaults.set(selection.rawValue, forKey: Self.inputBackendSelectionKey)
+        addLog(.info, "Input backend changed to \(selection.deliveryMode.rawValue)")
+    }
 
     func requestScreenCapturePermission() {
         let state = screenCapturePermissionCoordinator.requestOnce(
