@@ -288,6 +288,7 @@ public partial class AutoPickTrigger : ITaskTrigger
             _inputBackend.KeyPress(_autoPickAssets.PickVk);
             ResetPendingInteraction();
             LogPick(content, "黑名单未启用，直接拾取");
+            return;
         }
 
         //if (config.FastModeEnabled && !isExcludeIcon)
