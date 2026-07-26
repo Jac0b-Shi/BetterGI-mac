@@ -3,9 +3,16 @@ import ApplicationServices
 import CoreGraphics
 import SwiftUI
 
+@MainActor
 final class MacGIApplicationDelegate: NSObject, NSApplicationDelegate {
+    var terminationHandler: (() -> Void)?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        terminationHandler?()
     }
 }
 
@@ -44,6 +51,9 @@ struct MacGIApp: App {
                 .environmentObject(coordinator)
                 .frame(minWidth: 1080, minHeight: 720)
                 .onAppear {
+                    applicationDelegate.terminationHandler = {
+                        appState.shutdownInputBackend()
+                    }
                     coordinator.configure(appState: appState)
                     appState.beginCoreStartup()
                 }

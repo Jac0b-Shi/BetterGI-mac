@@ -12,6 +12,11 @@ enum InputDeliveryMode: String, Equatable, Sendable {
     case wineBridge
 }
 
+enum InputQuery: Equatable, Sendable {
+    case key(KeyCode)
+    case mouseButton(InputMouseButton)
+}
+
 // MARK: - InputMouseButton
 
 enum InputMouseButton: Equatable, Sendable {
@@ -70,6 +75,9 @@ enum InputAction: Equatable, Sendable {
     /// Vertical scroll wheel clicks. Positive values scroll up, negative down.
     case verticalScroll(clicks: Int)
 
+    /// Text input whose delivery is owned by the selected platform backend.
+    case inputText(String)
+
     /// Left click at absolute screen coordinates.
     case leftClick(at: CGPoint? = nil)
 
@@ -102,6 +110,8 @@ enum InputAction: Equatable, Sendable {
             return "\(base) Hold \(dur)ms"
         case let .verticalScroll(clicks):
             return "Scroll \(clicks)"
+        case let .inputText(text):
+            return "Text (\(text.count) characters)"
         case let .leftClick(at):
             if let pt = at { return "Click (\(Int(pt.x)), \(Int(pt.y)))" }
             return "Click Center"

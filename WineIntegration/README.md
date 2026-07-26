@@ -53,3 +53,27 @@ audit for the evidence and the resulting macdrv patch boundary.
 
 Complete Wine sources and locally extracted release assets must remain outside
 this repository.
+
+## Development Launch
+
+Build the helper with `scripts/verify-wine-bridge.sh`, package betterGI-mac
+through the normal signed app workflow, then launch the app bundle with:
+
+```bash
+open MacGI/.build/App/betterGI-mac.app --args \
+  --input-backend wine-bridge \
+  --wine-bridge-executable "$PWD/WineIntegration/bridge/build/BetterGIWineInputBridge.exe"
+```
+
+The current YAAgl OS Wine executable and prefix are detected from the standard
+per-user data directory. Development overrides are available when needed:
+
+```text
+--wine-executable <path>
+--wine-prefix <path>
+--wine-target-executable <exe-name>
+```
+
+The bridge is not bundled into release artifacts during this experimental
+stage. The game must remain the macOS foreground application; this branch does
+not yet patch Wine virtual foreground behavior.

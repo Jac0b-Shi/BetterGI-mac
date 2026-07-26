@@ -493,7 +493,7 @@ final class AppState: ObservableObject {
 
     init(
         resourceStore: BGIRuntimeResourceStore = .defaultStore(),
-        inputDispatcher: any InputDispatching = CGEventInputDispatcher(),
+        inputDispatcher: (any InputDispatching)? = nil,
         isTargetWindowFrontmost: @escaping (WindowInfo) -> Bool = ForegroundWindowGuard.isTargetFrontmost,
         launchArguments: [String] = ProcessInfo.processInfo.arguments,
         userDefaults: UserDefaults = .standard,
@@ -509,7 +509,8 @@ final class AppState: ObservableObject {
         allowRuntimeRealInput = !dryRunLaunchEnabled
         runtimeResourceStore = resourceStore
         runtimeLogWriter = RuntimeLogFileWriter(directory: resourceStore.logURL)
-        self.inputDispatcher = inputDispatcher
+        self.inputDispatcher =
+            inputDispatcher ?? InputDispatcherFactory.make(launchArguments: launchArguments)
         self.isTargetWindowFrontmost = isTargetWindowFrontmost
         let storedFocusHiding = userDefaults.object(forKey: Self.hideHUDWhenGameUnfocusedKey)
             as? Bool ?? true
@@ -526,6 +527,7 @@ final class AppState: ObservableObject {
             || autoContinueSchedulerProgressName != nil
             || relativeMouseDiagnosticPending
         addLog(.info, "betterGI-mac Swift UI initialized")
+        addLog(.info, "Input backend: \(self.inputDispatcher.deliveryMode.rawValue)")
         if dryRunLaunchEnabled {
             addLog(.info, "Dry-Run enabled by --dry-run; real input is disabled")
         }
@@ -4946,6 +4948,23 @@ final class AppState: ObservableObject {
             addLog(.warn, "Input blocked: \(result.reason)")
         }
         return result
+    }
+
+    func queryInput(_ query: InputQuery) throws -> Bool {
+        do {
+            return try inputDispatcher.query(query, targetWindow: selectedWindow)
+        } catch {
+            let reason =
+                "Input query failed: backend=\(inputDispatcher.deliveryMode.rawValue), "
+                + "targetPID=\(selectedWindow.ownerPID), "
+                + error.localizedDescription
+            addLog(.error, reason)
+            throw BetterGICorePlatformAdapterError.inputRejected(reason)
+        }
+    }
+
+    func shutdownInputBackend() {
+        inputDispatcher.shutdown()
     }
 
     @discardableResult

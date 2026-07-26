@@ -354,19 +354,11 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                 }
                 if let windowsVirtualKey = parameters["windowsVirtualKey"] as? Int,
                    let keyCode = BetterGICoreInputKeyMapper.keyCode(
-                    fromWindowsVirtualKey: windowsVirtualKey),
-                   let virtualKey = keyCode.cgKeyCode {
-                    return ["isDown": CGEventSource.keyState(.combinedSessionState, key: virtualKey)]
+                    fromWindowsVirtualKey: windowsVirtualKey) {
+                    return ["isDown": try appState.queryInput(.key(keyCode))]
                 }
                 if let mouseButton = mouseButton(parameters["mouseButton"] as? String) {
-                    let button: CGMouseButton = switch mouseButton {
-                    case .left: .left
-                    case .right: .right
-                    case .middle: .center
-                    case .side1: CGMouseButton(rawValue: 3)!
-                    case .side2: CGMouseButton(rawValue: 4)!
-                    }
-                    return ["isDown": CGEventSource.buttonState(.combinedSessionState, button: button)]
+                    return ["isDown": try appState.queryInput(.mouseButton(mouseButton))]
                 }
             case "isKeyDown":
                 guard let rawKey = parameters["key"] as? String else {
@@ -374,12 +366,11 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                         "isKeyDown requires a key."
                     )
                 }
-                if let key = BetterGICoreInputKeyMapper.keyCode(from: rawKey),
-                   let virtualKey = key.cgKeyCode {
-                    return ["isDown": CGEventSource.keyState(.combinedSessionState, key: virtualKey)]
+                if let key = BetterGICoreInputKeyMapper.keyCode(from: rawKey) {
+                    return ["isDown": try appState.queryInput(.key(key))]
                 }
-                if let button = BetterGICoreInputKeyMapper.mouseButton(from: rawKey) {
-                    return ["isDown": CGEventSource.buttonState(.combinedSessionState, button: button)]
+                if let button = mouseButton(rawKey) {
+                    return ["isDown": try appState.queryInput(.mouseButton(button))]
                 }
             default:
                 break
@@ -616,11 +607,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             guard let text = parameters["text"] as? String, !text.isEmpty else {
                 throw BetterGICorePlatformAdapterError.invalidParameters("inputText requires non-empty text.")
             }
-            NSPasteboard.general.clearContents()
-            guard NSPasteboard.general.setString(text, forType: .string) else {
-                throw BetterGICorePlatformAdapterError.invalidParameters("Failed to write text to the pasteboard.")
-            }
-            return .keyPress(key: .v, modifiers: .command)
+            return .inputText(text)
         case "releaseAll":
             return .releaseAll
         default:

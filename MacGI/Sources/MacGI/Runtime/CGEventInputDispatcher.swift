@@ -1,3 +1,4 @@
+import AppKit
 import ApplicationServices
 import CoreGraphics
 import Darwin
@@ -37,10 +38,31 @@ struct CGEventDispatchReport: Equatable {
 protocol InputDispatching {
     var deliveryMode: InputDeliveryMode { get }
     func perform(_ action: InputAction, targetWindow: WindowInfo) throws -> CGEventDispatchReport
+    func query(_ query: InputQuery, targetWindow: WindowInfo) throws -> Bool
+    func shutdown()
 }
 
 extension InputDispatching {
     var deliveryMode: InputDeliveryMode { .foregroundCGEvent }
+
+    func query(_ query: InputQuery, targetWindow: WindowInfo) throws -> Bool {
+        guard !targetWindow.isSynthetic else {
+            throw CGEventInputDispatchError.syntheticWindow
+        }
+        switch query {
+        case let .key(key):
+            guard let virtualKey = key.cgKeyCode else {
+                throw CGEventInputDispatchError.unsupportedKey(key)
+            }
+            return CGEventSource.keyState(.combinedSessionState, key: virtualKey)
+        case let .mouseButton(button):
+            return CGEventSource.buttonState(
+                .combinedSessionState,
+                button: button.cgMouseButton)
+        }
+    }
+
+    func shutdown() {}
 }
 
 /// macOS counterpart to BetterGI's `InputSimulator` + `WindowsInputMessageDispatcher`.
@@ -161,6 +183,18 @@ final class CGEventInputDispatcher: InputDispatching {
             Self.mark(event)
             event.post(tap: tap)
             return CGEventDispatchReport(eventCount: 1, detail: "verticalScroll \(clicks)")
+
+        case let .inputText(text):
+            NSPasteboard.general.clearContents()
+            guard NSPasteboard.general.setString(text, forType: .string) else {
+                throw CGEventInputDispatchError.eventCreationFailed("inputText pasteboard")
+            }
+            let events = [
+                try makeKeyboardEvent(key: .v, keyDown: true, modifiers: .command),
+                try makeKeyboardEvent(key: .v, keyDown: false, modifiers: .command)
+            ]
+            events.forEach { $0.post(tap: tap) }
+            return CGEventDispatchReport(eventCount: events.count, detail: "inputText")
 
         case let .leftClick(point):
             let destination = try clickPoint(point, targetWindow: targetWindow)
