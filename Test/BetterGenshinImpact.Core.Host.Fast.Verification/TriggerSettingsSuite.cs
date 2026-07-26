@@ -4,11 +4,15 @@ using BetterGenshinImpact.Core.Abstractions.Runtime;
 using BetterGenshinImpact.Core.Adapters;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Host.Runtime;
+using BetterGenshinImpact.Core.Infrastructure;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.AutoPick;
 using BetterGenshinImpact.GameTask.AutoSkip;
+using BetterGenshinImpact.GameTask.AutoTrackPath;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
+using BetterGenshinImpact.GameTask.Common.Job;
+using BetterGenshinImpact.GameTask.MapMask;
 using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.SkillCd;
 using BetterGenshinImpact.Platform.Abstractions;
@@ -40,6 +44,41 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
                 mapMaskCategoryTrigger, GameUiCategory.Talk, GameUiCategory.Talk,
                 stableCategorySince, now),
             "MapMask did not preserve its upstream main-UI behavior while adding stable big-map updates.");
+
+        var previousMapMaskPlatform = MapMaskRuntimePlatform.Current;
+        var recordingMapMaskPlatform = new RecordingMapMaskPlatform();
+        MapMaskRuntimePlatform.Configure(recordingMapMaskPlatform);
+        try
+        {
+            new MapMaskTrigger().Invalidate();
+            var clearCommand = recordingMapMaskPlatform.LastCommand;
+            context.Require(
+                clearCommand?.IsInBigMapUi == false &&
+                clearCommand?.BigMapViewport?.Width == 0 &&
+                clearCommand?.MiniMapViewport?.Width == 0,
+                "MapMask invalidation did not clear stale map viewports.");
+        }
+        finally
+        {
+            MapMaskRuntimePlatform.Current = previousMapMaskPlatform;
+        }
+
+        var previousUiCulture = System.Globalization.CultureInfo.CurrentUICulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentUICulture =
+                System.Globalization.CultureInfo.GetCultureInfo("zh-Hans");
+            context.Require(
+                new EmbeddedResourceStringLocalizer<TpTask>()["枫丹"].Value == "枫丹",
+                "TpTask localization resources were not embedded in the macOS Core.");
+            context.Require(
+                new EmbeddedResourceStringLocalizer<GoToSereniteaPotTask>()["尘歌壶"].Value == "尘歌壶",
+                "Missing optional task resources did not fall back to source text.");
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentUICulture = previousUiCulture;
+        }
 
         var root = Path.Combine(Path.GetTempPath(), $"bettergi-fast-{Guid.NewGuid():N}");
         try
@@ -236,6 +275,16 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
             category is GameUiCategory.Unknown or GameUiCategory.BigMap;
         public void Init() { }
         public void OnCapture(CaptureContent content) { }
+    }
+
+    private sealed class RecordingMapMaskPlatform : IMapMaskRuntimePlatform
+    {
+        public MapMaskConfig Config { get; } = new() { Enabled = true };
+        public string MapMatchingMethod => "FeatureMatcher";
+        public Microsoft.Extensions.Logging.ILogger<MapMaskTrigger> Logger =>
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MapMaskTrigger>.Instance;
+        public MapMaskDrawCommand? LastCommand { get; private set; }
+        public void Publish(MapMaskDrawCommand command) => LastCommand = command;
     }
 
     private sealed class RecordingGameTaskManagerPlatform : IGameTaskManagerPlatform

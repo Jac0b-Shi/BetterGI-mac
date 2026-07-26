@@ -1,6 +1,7 @@
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
+using BetterGenshinImpact.GameTask.MapMask;
 using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
@@ -25,6 +26,7 @@ public sealed class MacTriggerDispatcher(
     private int _frameIndex;
     private GameUiCategory _previousCategory = GameUiCategory.Unknown;
     private DateTime _categoryChangedAt = DateTime.MinValue;
+    private bool _mapMaskSuppressed;
 
     internal bool IsRunning
     {
@@ -60,6 +62,7 @@ public sealed class MacTriggerDispatcher(
 
         if (loop is not null)
             await loop;
+        InvalidateMapMask();
         if (stopCleanup is not null)
             await stopCleanup(cancellationToken);
     }
@@ -97,7 +100,18 @@ public sealed class MacTriggerDispatcher(
 
             var exclusive = triggers.FirstOrDefault(trigger => trigger.IsExclusive);
             if (exclusive is not null)
+            {
+                if (!_mapMaskSuppressed && exclusive is not MapMaskTrigger)
+                {
+                    InvalidateMapMask();
+                    _mapMaskSuppressed = true;
+                }
                 triggers = [exclusive];
+            }
+            else
+            {
+                _mapMaskSuppressed = false;
+            }
 
             try
             {
@@ -169,4 +183,13 @@ public sealed class MacTriggerDispatcher(
         previousCategory != currentCategory ||
         (now - categoryChangedAt).TotalSeconds <= 30 ||
         trigger.SupportsGameUiCategory(currentCategory);
+
+    private static void InvalidateMapMask()
+    {
+        if (GameTaskManager.TriggerDictionary?.GetValueOrDefault("MapMask")
+            is MapMaskTrigger mapMask)
+        {
+            mapMask.Invalidate();
+        }
+    }
 }
