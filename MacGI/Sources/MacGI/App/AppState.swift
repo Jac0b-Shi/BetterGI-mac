@@ -366,6 +366,7 @@ final class AppState: ObservableObject {
     private var autoStartRuntimePending: Bool
     private var autoStartSchedulerGroupNames: [String]
     private var autoContinueSchedulerProgressName: String?
+    private var relativeMouseDiagnosticPending: Bool
     private var scriptRepositoryAutoUpdateTask: Task<Void, Never>?
     private var waitForScriptRepositoryAutoUpdate = false
     private var runtimeLaunchReady = false
@@ -524,15 +525,23 @@ final class AppState: ObservableObject {
         autoStartSchedulerGroupNames = Self.startGroupNames(from: launchArguments)
         autoContinueSchedulerProgressName =
             Self.taskProgressName(from: launchArguments)
+        relativeMouseDiagnosticPending =
+            launchArguments.contains("--diagnose-relative-mouse")
         autoStartRuntimePending = launchArguments.contains("--start-runtime")
             || !autoStartSchedulerGroupNames.isEmpty
             || autoContinueSchedulerProgressName != nil
+            || relativeMouseDiagnosticPending
         addLog(.info, "betterGI-mac Swift UI initialized")
         if dryRunLaunchEnabled {
             addLog(.info, "Dry-Run enabled by --dry-run; real input is disabled")
         }
         if !hideHUDWhenGameUnfocused {
             addLog(.info, "HUD focus hiding is disabled for this launch")
+        }
+        if relativeMouseDiagnosticPending {
+            addLog(
+                .info,
+                "Relative mouse diagnostic requested; runtime will start automatically.")
         }
         addLog(.info, "Waiting for BetterGI C# Core Host")
         refreshPermissionStatus()
@@ -1971,6 +1980,7 @@ final class AppState: ObservableObject {
                 self.refreshAuxiliaryControlMonitor()
                 self.addLog(.info, "BetterGI runtime started with a verified ScreenCaptureKit frame.")
                 await self.waitForCommandLineScriptRepositoryUpdateIfNeeded()
+                self.attemptRelativeMouseDiagnostic()
                 self.attemptAutoContinueSchedulerProgress()
                 self.attemptAutoStartSchedulerGroups()
             } catch {
@@ -2170,6 +2180,70 @@ final class AppState: ObservableObject {
         }
         selectedSchedulerGroupName = available[0]
         startSchedulerGroups(names: available, continuous: true, loop: false)
+    }
+
+    private func attemptRelativeMouseDiagnostic() {
+        guard relativeMouseDiagnosticPending else { return }
+        relativeMouseDiagnosticPending = false
+        Task { [weak self] in
+            guard let self else { return }
+            self.addLog(
+                .info,
+                "Relative mouse diagnostic is waiting for the selected game window "
+                    + "to become frontmost.")
+            var foregroundReady = false
+            for _ in 0..<120 {
+                guard !Task.isCancelled else { return }
+                if self.isTargetWindowFrontmost(self.selectedWindow) {
+                    foregroundReady = true
+                    break
+                }
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+            guard foregroundReady else {
+                self.addLog(
+                    .error,
+                    "Relative mouse diagnostic timed out waiting for game focus.")
+                return
+            }
+            let steps: [(String, InputAction)] = [
+                ("left", .mouseMoveRelative(deltaX: -160, deltaY: 0)),
+                ("right", .mouseMoveRelative(deltaX: 160, deltaY: 0)),
+                ("up", .mouseMoveRelative(deltaX: 0, deltaY: -120)),
+                ("down", .mouseMoveRelative(deltaX: 0, deltaY: 120)),
+            ]
+            self.addLog(
+                .info,
+                "Relative mouse diagnostic started: backend="
+                    + "\(self.inputDispatcher.deliveryMode.rawValue), "
+                    + "targetPID=\(self.selectedWindow.ownerPID).")
+            for (name, action) in steps {
+                let result = self.dispatchInput(action, source: .runtimeTrigger)
+                guard result.allowed else {
+                    self.addLog(
+                        .error,
+                        "Relative mouse diagnostic \(name) rejected: \(result.reason)")
+                    _ = self.dispatchInput(.releaseAll, source: .runtimeTrigger)
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+            for _ in 0..<12 {
+                let result = self.dispatchInput(
+                    .mouseMoveRelative(deltaX: 24, deltaY: 0),
+                    source: .runtimeTrigger)
+                guard result.allowed else {
+                    self.addLog(
+                        .error,
+                        "Relative mouse diagnostic continuous move rejected: \(result.reason)")
+                    _ = self.dispatchInput(.releaseAll, source: .runtimeTrigger)
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+            _ = self.dispatchInput(.releaseAll, source: .runtimeTrigger)
+            self.addLog(.info, "Relative mouse diagnostic completed.")
+        }
     }
 
     func stopRuntime() {
@@ -4850,11 +4924,18 @@ final class AppState: ObservableObject {
                 let report = try inputDispatcher.perform(action, targetWindow: selectedWindow)
                 inputStatus = .ok
                 recordInputAction(action.displayName, prefix: "→")
-                addLog(.debug, "CGEvent dispatched: \(report.detail), events=\(report.eventCount)")
+                addLog(
+                    .debug,
+                    "Input dispatched: backend=\(inputDispatcher.deliveryMode.rawValue), "
+                        + "targetPID=\(selectedWindow.ownerPID), gate=passed, "
+                        + "\(report.detail), events=\(report.eventCount)")
             } catch {
                 inputStatus = .error
                 recordInputAction(action.displayName, prefix: "✕")
-                let reason = "CGEvent dispatch failed: \(error.localizedDescription)"
+                let reason =
+                    "Input dispatch failed: backend=\(inputDispatcher.deliveryMode.rawValue), "
+                    + "targetPID=\(selectedWindow.ownerPID), "
+                    + error.localizedDescription
                 addLog(.error, reason)
                 return .blocked(reason: reason)
             }

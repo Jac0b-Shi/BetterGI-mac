@@ -35,7 +35,12 @@ struct CGEventDispatchReport: Equatable {
 }
 
 protocol InputDispatching {
+    var deliveryMode: InputDeliveryMode { get }
     func perform(_ action: InputAction, targetWindow: WindowInfo) throws -> CGEventDispatchReport
+}
+
+extension InputDispatching {
+    var deliveryMode: InputDeliveryMode { .foregroundCGEvent }
 }
 
 /// macOS counterpart to BetterGI's `InputSimulator` + `WindowsInputMessageDispatcher`.
@@ -46,6 +51,7 @@ protocol InputDispatching {
 final class CGEventInputDispatcher: InputDispatching {
     private let tap: CGEventTapLocation = .cghidEventTap
     private let clickDelayUsec: useconds_t = 50_000
+    let deliveryMode = InputDeliveryMode.foregroundCGEvent
 
     func perform(_ action: InputAction, targetWindow: WindowInfo) throws -> CGEventDispatchReport {
         guard !targetWindow.isSynthetic else {
@@ -89,6 +95,20 @@ final class CGEventInputDispatcher: InputDispatching {
             let event = try makeMouseEvent(type: .mouseMoved, at: point, button: .left)
             event.post(tap: tap)
             return CGEventDispatchReport(eventCount: 1, detail: "mouseMove")
+
+        case let .mouseMoveRelative(deltaX, deltaY):
+            guard let cursorPoint = CGEvent(source: nil)?.location else {
+                throw CGEventInputDispatchError.eventCreationFailed(
+                    "mouseMoveRelative cursor location")
+            }
+            let event = try Self.makeRelativeMouseEvent(
+                deltaX: deltaX,
+                deltaY: deltaY,
+                cursorPoint: cursorPoint)
+            event.post(tap: tap)
+            return CGEventDispatchReport(
+                eventCount: 1,
+                detail: "mouseMoveRelative dx=\(Int(deltaX)) dy=\(Int(deltaY))")
 
         case let .mouseButtonDown(button, point):
             let destination = try clickPoint(point, targetWindow: targetWindow)
@@ -138,7 +158,7 @@ final class CGEventInputDispatcher: InputDispatching {
             ) else {
                 throw CGEventInputDispatchError.eventCreationFailed("verticalScroll \(clicks)")
             }
-            mark(event)
+            Self.mark(event)
             event.post(tap: tap)
             return CGEventDispatchReport(eventCount: 1, detail: "verticalScroll \(clicks)")
 
@@ -172,7 +192,7 @@ final class CGEventInputDispatcher: InputDispatching {
             throw CGEventInputDispatchError.eventCreationFailed("\(key.displayName) \(keyDown ? "down" : "up")")
         }
         event.flags = modifiers.cgEventFlags
-        mark(event)
+        Self.mark(event)
         return event
     }
 
@@ -185,6 +205,29 @@ final class CGEventInputDispatcher: InputDispatching {
         ) else {
             throw CGEventInputDispatchError.eventCreationFailed("\(type.rawValue)")
         }
+        Self.mark(event)
+        return event
+    }
+
+    static func makeRelativeMouseEvent(
+        deltaX: CGFloat,
+        deltaY: CGFloat,
+        cursorPoint: CGPoint
+    ) throws -> CGEvent {
+        guard let event = CGEvent(
+            mouseEventSource: nil,
+            mouseType: .mouseMoved,
+            mouseCursorPosition: cursorPoint,
+            mouseButton: .left
+        ) else {
+            throw CGEventInputDispatchError.eventCreationFailed("mouseMoveRelative")
+        }
+        event.setIntegerValueField(
+            .mouseEventDeltaX,
+            value: Int64(deltaX.rounded()))
+        event.setIntegerValueField(
+            .mouseEventDeltaY,
+            value: Int64(deltaY.rounded()))
         mark(event)
         return event
     }
@@ -228,7 +271,7 @@ final class CGEventInputDispatcher: InputDispatching {
             else {
                 continue
             }
-            mark(event)
+            Self.mark(event)
             event.post(tap: tap)
             count += 1
         }
@@ -249,7 +292,7 @@ final class CGEventInputDispatcher: InputDispatching {
         return CGEventDispatchReport(eventCount: count, detail: "releaseAll")
     }
 
-    private func mark(_ event: CGEvent) {
+    private static func mark(_ event: CGEvent) {
         event.setIntegerValueField(
             .eventSourceUserData,
             value: BetterGIInputEventMarker.value)

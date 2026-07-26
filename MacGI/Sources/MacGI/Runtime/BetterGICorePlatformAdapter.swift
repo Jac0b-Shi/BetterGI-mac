@@ -545,11 +545,11 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             if action == "keyUp" { return .keyUp(key: key) }
             return .keyPress(key: key)
         case "moveMouseBy":
-            guard let x = number(parameters["x"]), let y = number(parameters["y"]),
-                  let current = CGEvent(source: nil)?.location
-            else { throw BetterGICorePlatformAdapterError.invalidParameters("moveMouseBy requires x/y and a current cursor position.") }
-            let scale = coreInputScale(appState)
-            return .mouseMove(to: CGPoint(x: current.x + x / scale, y: current.y + y / scale))
+            guard let x = number(parameters["x"]), let y = number(parameters["y"]) else {
+                throw BetterGICorePlatformAdapterError.invalidParameters(
+                    "moveMouseBy requires x/y.")
+            }
+            return .mouseMoveRelative(deltaX: x, deltaY: y)
         case "moveMouseToScreen":
             guard let x = number(parameters["x"]), let y = number(parameters["y"]) else {
                 throw BetterGICorePlatformAdapterError.invalidParameters("moveMouseToScreen requires x/y.")

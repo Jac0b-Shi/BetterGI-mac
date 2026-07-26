@@ -7,6 +7,11 @@ enum BetterGIInputEventMarker {
 
 // Platform input DTOs used by the Core input.dispatch callback.
 
+enum InputDeliveryMode: String, Equatable, Sendable {
+    case foregroundCGEvent
+    case wineBridge
+}
+
 // MARK: - InputMouseButton
 
 enum InputMouseButton: Equatable, Sendable {
@@ -47,6 +52,9 @@ enum InputAction: Equatable, Sendable {
     /// Mouse move to absolute screen coordinates.
     case mouseMove(to: CGPoint)
 
+    /// Mouse movement relative to the current game input position.
+    case mouseMoveRelative(deltaX: CGFloat, deltaY: CGFloat)
+
     /// Mouse button down.
     case mouseButtonDown(button: InputMouseButton, at: CGPoint? = nil)
 
@@ -81,6 +89,8 @@ enum InputAction: Equatable, Sendable {
             return "\(mods.displayPrefix)\(key.displayName) Hold \(dur)ms"
         case let .mouseMove(to):
             return "Mouse → (\(Int(to.x)), \(Int(to.y)))"
+        case let .mouseMoveRelative(deltaX, deltaY):
+            return "Mouse Δ (\(Int(deltaX)), \(Int(deltaY)))"
         case let .mouseButtonDown(btn, at):
             return at.map { "\(btn.displayName)↓ (\(Int($0.x)),\(Int($0.y)))" } ?? "\(btn.displayName)↓"
         case let .mouseButtonUp(btn, at):

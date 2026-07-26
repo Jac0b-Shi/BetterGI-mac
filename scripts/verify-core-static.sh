@@ -15,3 +15,11 @@ rg -q '"overlay\.metrics\.toggle"' \
   BetterGenshinImpact.Core.Host/Runtime/HotKeySettingsCatalog.cs
 rg -q 'case "overlay\.metrics\.toggle":' \
   MacGI/Sources/MacGI/App/AppState.swift
+rg -q 'case mouseMoveRelative\(deltaX: CGFloat, deltaY: CGFloat\)' \
+  MacGI/Sources/MacGI/Model/PlatformInputModels.swift
+rg -q 'return \.mouseMoveRelative\(deltaX: x, deltaY: y\)' \
+  MacGI/Sources/MacGI/Runtime/BetterGICorePlatformAdapter.swift
+rg -q '\.mouseEventDeltaX' \
+  MacGI/Sources/MacGI/Runtime/CGEventInputDispatcher.swift
+rg -q '\.mouseEventDeltaY' \
+  MacGI/Sources/MacGI/Runtime/CGEventInputDispatcher.swift

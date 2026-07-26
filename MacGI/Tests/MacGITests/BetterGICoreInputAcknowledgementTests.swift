@@ -65,7 +65,7 @@ struct BetterGICoreInputAcknowledgementTests {
             Issue.record("Core input callback returned the wrong error: \(adapterError)")
             return
         }
-        #expect(reason.contains("CGEvent dispatch failed"))
+        #expect(reason.contains("Input dispatch failed"))
         #expect(appState.inputStatus == .error)
     }
 
@@ -180,6 +180,87 @@ struct BetterGICoreInputAcknowledgementTests {
         #expect(dispatcher.actions == [
             .mouseClick(button: .left, at: CGPoint(x: 61.5, y: 228))
         ])
+    }
+
+    @MainActor
+    @Test("Core relative mouse movement preserves signed deltas")
+    func coreRelativeMouseMovementPreservesDeltas() async {
+        let dispatcher = RecordingInputDispatcher()
+        let appState = runningAppState(
+            name: "runtime-relative-mouse",
+            dispatcher: dispatcher,
+            scaleFactor: 2
+        )
+        let adapter = BetterGICorePlatformAdapter(appState: appState)
+
+        let error = await Task.detached {
+            do {
+                _ = try adapter.handle(
+                    method: "input.dispatch",
+                    parameters: [
+                        "action": "moveMouseBy",
+                        "x": -37,
+                        "y": 19,
+                    ]
+                )
+                return nil as Error?
+            } catch {
+                return error
+            }
+        }.value
+
+        #expect(error == nil)
+        #expect(dispatcher.actions == [
+            .mouseMoveRelative(deltaX: -37, deltaY: 19)
+        ])
+    }
+
+    @MainActor
+    @Test("Core absolute mouse movement remains absolute")
+    func coreAbsoluteMouseMovementRemainsAbsolute() async {
+        let dispatcher = RecordingInputDispatcher()
+        let appState = runningAppState(
+            name: "runtime-absolute-mouse",
+            dispatcher: dispatcher,
+            scaleFactor: 2
+        )
+        let adapter = BetterGICorePlatformAdapter(appState: appState)
+
+        let error = await Task.detached {
+            do {
+                _ = try adapter.handle(
+                    method: "input.dispatch",
+                    parameters: [
+                        "action": "moveMouseToScreen",
+                        "x": 200,
+                        "y": 400,
+                    ]
+                )
+                return nil as Error?
+            } catch {
+                return error
+            }
+        }.value
+
+        #expect(error == nil)
+        #expect(dispatcher.actions == [
+            .mouseMove(to: CGPoint(x: 100, y: 200))
+        ])
+    }
+
+    @Test("Relative CGEvent preserves delta and injection marker")
+    func relativeCGEventPreservesDeltaAndMarker() throws {
+        let event = try CGEventInputDispatcher.makeRelativeMouseEvent(
+            deltaX: -42,
+            deltaY: 17,
+            cursorPoint: CGPoint(x: 640, y: 360))
+
+        #expect(event.location == CGPoint(x: 640, y: 360))
+        #expect(event.getIntegerValueField(.mouseEventDeltaX) == -42)
+        #expect(event.getIntegerValueField(.mouseEventDeltaY) == 17)
+        #expect(
+            event.getIntegerValueField(.eventSourceUserData)
+                == BetterGIInputEventMarker.value)
     }
 
     @MainActor
