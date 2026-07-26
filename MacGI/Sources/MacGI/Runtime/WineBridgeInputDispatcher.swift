@@ -234,16 +234,16 @@ enum InputBackendSelection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .foregroundCGEvent: "macOS CGEvent"
-        case .wineBridge: "Wine Bridge（实验）"
+        case .wineBridge: "Wine Bridge"
         }
     }
 
     var subtitle: String {
         switch self {
         case .foregroundCGEvent:
-            "兼容模式，通过 macOS 事件发送输入，要求原神保持前台。"
+            "兼容云游戏、远程客户端等非 Wine 场景；通过 macOS 事件发送输入。"
         case .wineBridge:
-            "通过原神所在 Wine prefix 内的 SendInput helper 发送输入。"
+            "推荐，通过原神所在 Wine prefix 内的 SendInput helper 发送输入。"
         }
     }
 
@@ -266,12 +266,12 @@ enum InputDispatcherFactory {
             return selection
         }
         return storedValue.flatMap(InputBackendSelection.init(rawValue:))
-            ?? .foregroundCGEvent
+            ?? .wineBridge
     }
 
     static func make(
         launchArguments: [String],
-        fallbackSelection: InputBackendSelection = .foregroundCGEvent
+        fallbackSelection: InputBackendSelection = .wineBridge
     ) -> any InputDispatching {
         let selection = CommandLineOptions(launchArguments)
             .value(after: "--input-backend")

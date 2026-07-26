@@ -63,7 +63,7 @@ The normal app packaging workflow builds the helper and includes it at:
 Contents/Resources/WineIntegration/BetterGIWineInputBridge.exe
 ```
 
-Select `Wine Bridge（实验）` on the launch page while the runtime is stopped, or
+Select `Wine Bridge` on the launch page while the runtime is stopped, or
 launch the app bundle with an explicit command-line override:
 
 ```bash
@@ -83,6 +83,10 @@ per-user data directory. Development overrides are available when needed:
 
 Without an override, target discovery checks both `YuanShen.exe` (CN) and
 `GenshinImpact.exe` (global).
+
+Wine Bridge is the default input backend. CGEvent remains available as the
+compatibility backend for cloud gaming, remote clients and other non-Wine
+targets. Existing explicit user selections remain persisted.
 
 Normal Wine Bridge use still requires the game to be the macOS foreground
 application. Background delivery is enabled only by the validated combination:

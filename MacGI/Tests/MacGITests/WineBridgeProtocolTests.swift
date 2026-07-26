@@ -212,7 +212,7 @@ struct WineBridgeProtocolTests {
         #expect(try reader.readUInt16() == 150)
     }
 
-    @Test("Backend selection is explicit and invalid overrides never fall back")
+    @Test("Wine Bridge is the default and invalid overrides never fall back")
     func backendSelection() {
         let normal = InputDispatcherFactory.make(launchArguments: ["betterGI-mac"])
         let wine = InputDispatcherFactory.make(launchArguments: [
@@ -222,7 +222,7 @@ struct WineBridgeProtocolTests {
             "betterGI-mac", "--input-backend", "unknown"
         ])
 
-        #expect(normal.deliveryMode == .foregroundCGEvent)
+        #expect(normal.deliveryMode == .wineBridge)
         #expect(wine.deliveryMode == .wineBridge)
         #expect(invalid.deliveryMode == .wineBridge)
         #expect(!(invalid is CGEventInputDispatcher))

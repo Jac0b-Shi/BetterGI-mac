@@ -1,8 +1,8 @@
 # BetterGI Win32 Input Bridge
 
 This helper runs in the same Wine prefix as the game and sends input through
-Win32 `SendInput`. It is bundled with betterGI-mac as an experimental input
-backend.
+Win32 `SendInput`. It is bundled with betterGI-mac as the default input backend.
+CGEvent remains available for non-Wine clients.
 
 ## Build
 
