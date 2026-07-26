@@ -35,6 +35,7 @@ short_version=${MACGI_SHORT_VERSION:-0.1.0}
 bundle_version=${MACGI_BUNDLE_VERSION:-1}
 signing_identity=${MACGI_SIGNING_IDENTITY:-${EXPANDED_CODE_SIGN_IDENTITY:-}}
 allow_adhoc_signing=${MACGI_ALLOW_ADHOC_SIGNING:-0}
+codesign_timestamp=${MACGI_CODESIGN_TIMESTAMP:-0}
 if [[ ${allow_adhoc_signing} == 1 ]]; then
   signing_identity=-
 else
@@ -97,7 +98,12 @@ WRAPPER_NAME=${app_name} \
 EXPANDED_CODE_SIGN_IDENTITY=${signing_identity} \
 ${script_dir}/package-bettergi-core.sh
 
-sign_options=(--force --timestamp=none --sign ${signing_identity})
+sign_options=(--force --sign ${signing_identity})
+if [[ ${codesign_timestamp} == 1 ]]; then
+  sign_options+=(--timestamp)
+else
+  sign_options+=(--timestamp=none)
+fi
 if [[ ${signing_identity} != "-" ]]; then
   sign_options+=(--options runtime)
 fi

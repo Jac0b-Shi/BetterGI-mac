@@ -1,0 +1,241 @@
+name: macOS Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mac-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    env:
+      DIST_DIR: ${{ github.workspace }}/dist/mac
+      MACGI_BUNDLE_IDENTIFIER: cn.jac0bshi.bettergi.mac
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          semver_pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?(\+([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?$'
+          if [[ ! "$version" =~ $semver_pattern ]]; then
+            echo "Tag must use semantic versioning, for example v0.1.0 or v0.1.0-beta.1." >&2
+            exit 1
+          fi
+          bundle_short_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+          prerelease="${BASH_REMATCH[5]}"
+          if [[ -n "$prerelease" ]]; then
+            IFS='.' read -r -a prerelease_identifiers <<< "$prerelease"
+            for identifier in "${prerelease_identifiers[@]}"; do
+              if [[ "$identifier" =~ ^[0-9]+$ && ${#identifier} -gt 1 && "$identifier" == 0* ]]; then
+                echo "Numeric prerelease identifiers must not contain leading zeroes." >&2
+                exit 1
+              fi
+            done
+          fi
+          git fetch origin main --no-tags
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Release tags must point to a commit contained in origin/main." >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "bundle_short_version=$bundle_short_version" >> "$GITHUB_OUTPUT"
+          if [[ -n "$prerelease" ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Require Apple Silicon
+        run: test "$(uname -m)" = arm64
+
+      - name: Validate release credentials
+        env:
+          MACGI_CERTIFICATE_P12: ${{ secrets.MACGI_CERTIFICATE_P12 }}
+          MACGI_CERTIFICATE_PASSWORD: ${{ secrets.MACGI_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.MACGI_NOTARY_APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.MACGI_NOTARY_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.MACGI_NOTARY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for variable in \
+            MACGI_CERTIFICATE_P12 \
+            MACGI_CERTIFICATE_PASSWORD \
+            APPLE_ID \
+            APPLE_TEAM_ID \
+            APPLE_APP_SPECIFIC_PASSWORD
+          do
+            if [[ -z "${!variable}" ]]; then
+              echo "Required release secret is missing: $variable" >&2
+              exit 1
+            fi
+          done
+
+      - name: Import Developer ID certificate
+        id: signing
+        env:
+          MACGI_CERTIFICATE_P12: ${{ secrets.MACGI_CERTIFICATE_P12 }}
+          MACGI_CERTIFICATE_PASSWORD: ${{ secrets.MACGI_CERTIFICATE_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          certificate_path="$RUNNER_TEMP/developer-id.p12"
+          keychain_path="$RUNNER_TEMP/bettergi-release.keychain-db"
+          keychain_password="$(openssl rand -hex 24)"
+          printf '%s' "$MACGI_CERTIFICATE_P12" | base64 -D > "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+            -P "$MACGI_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$keychain_path"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain_path"
+          security default-keychain -d user -s "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+          identity="$(
+            security find-identity -v -p codesigning "$keychain_path" \
+              | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' \
+              | head -n 1
+          )"
+          if [[ -z "$identity" ]]; then
+            echo "The imported PKCS#12 does not contain a Developer ID Application identity." >&2
+            exit 1
+          fi
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+          echo "keychain=$keychain_path" >> "$GITHUB_OUTPUT"
+
+      - name: Static production gate
+        run: scripts/verify-core-static.sh
+
+      - name: Test Swift platform layer
+        run: swift test --package-path MacGI
+
+      - name: Package signed application
+        env:
+          CONFIGURATION: Release
+          MACGI_APP_OUTPUT_ROOT: ${{ runner.temp }}/bettergi-release
+          MACGI_APP_NAME: BetterGI.app
+          MACGI_SHORT_VERSION: ${{ steps.version.outputs.bundle_short_version }}
+          MACGI_BUNDLE_VERSION: ${{ github.run_number }}
+          MACGI_SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
+          MACGI_CODESIGN_TIMESTAMP: "1"
+        run: MacGI/scripts/package-macgi-app.sh
+
+      - name: Notarize application
+        env:
+          APPLE_ID: ${{ secrets.MACGI_NOTARY_APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.MACGI_NOTARY_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.MACGI_NOTARY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/bettergi-release/BetterGI.app"
+          submission="$RUNNER_TEMP/BetterGI-notarization.zip"
+          ditto -c -k --keepParent "$app" "$submission"
+          xcrun notarytool submit "$submission" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --wait
+          xcrun stapler staple "$app"
+          xcrun stapler validate "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl --assess --type execute --verbose=4 "$app"
+
+      - name: Build and notarize release artifacts
+        env:
+          APPLE_ID: ${{ secrets.MACGI_NOTARY_APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.MACGI_NOTARY_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.MACGI_NOTARY_PASSWORD }}
+          SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$DIST_DIR"
+          app="$RUNNER_TEMP/bettergi-release/BetterGI.app"
+          zip="$DIST_DIR/BetterGI-mac-v${VERSION}-arm64.zip"
+          dmg="$DIST_DIR/BetterGI-mac-v${VERSION}-arm64.dmg"
+          ditto -c -k --keepParent "$app" "$zip"
+          MacGI/scripts/create-macgi-dmg.sh "$app" "$dmg" "BetterGI ${VERSION}"
+          codesign \
+            --force \
+            --timestamp \
+            --sign "$SIGNING_IDENTITY" \
+            "$dmg"
+          xcrun notarytool submit "$dmg" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --wait
+          xcrun stapler staple "$dmg"
+          xcrun stapler validate "$dmg"
+          (
+            cd "$DIST_DIR"
+            shasum -a 256 "${zip##*/}" "${dmg##*/}" > SHA256SUMS.txt
+          )
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BetterGI-mac-${{ steps.version.outputs.version }}-arm64
+          path: dist/mac/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/mac/* --clobber
+          else
+            args=(
+              "$GITHUB_REF_NAME"
+              dist/mac/*
+              --title "BetterGI macOS ${VERSION}"
+              --generate-notes
+            )
+            if [[ "$PRERELEASE" == "true" ]]; then
+              args+=(--prerelease)
+            fi
+            gh release create "${args[@]}"
+          fi
+
+      - name: Remove temporary signing keychain
+        if: always()
+        shell: bash
+        run: |
+          keychain="${{ steps.signing.outputs.keychain }}"
+          if [[ -n "$keychain" && -f "$keychain" ]]; then
+            security delete-keychain "$keychain"
+          fi
+          rm -f "$RUNNER_TEMP/developer-id.p12"
