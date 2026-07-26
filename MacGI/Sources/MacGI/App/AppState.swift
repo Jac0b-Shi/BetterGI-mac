@@ -1985,6 +1985,7 @@ final class AppState: ObservableObject {
                 self.attemptAutoStartSchedulerGroups()
             } catch {
                 try? await supervisor.stopRuntime()
+                await self.frameProvider.stopCapture()
                 self.captureStatus = .error
                 self.runtimeLifecycle = .failed
                 self.runtimeLifecycleMessage = "无法启动：\(error.localizedDescription)"
@@ -2279,6 +2280,7 @@ final class AppState: ObservableObject {
                 self.addLog(.debug, "Requesting BetterGI Core runtime stop.")
                 try await supervisor.stopRuntime()
                 self.addLog(.debug, "BetterGI Core runtime stop acknowledged.")
+                await self.frameProvider.stopCapture()
                 self.cancelRuntimeGeometryRefresh()
                 self.captureTimestamps = []
                 self.measuredCaptureFPS = 0
@@ -4883,6 +4885,9 @@ final class AppState: ObservableObject {
                 captureStatus = .error
                 addLog(.error, "ScreenCaptureKit capture failed: \(error.localizedDescription)")
             }
+            if runtimeLifecycle != .running {
+                await frameProvider.stopCapture()
+            }
         }
     }
 
@@ -4996,6 +5001,7 @@ final class AppState: ObservableObject {
     }
 
     func resetUIState() {
+        Task { await frameProvider.stopCapture() }
         schedulerExecutionTask?.cancel()
         schedulerExecutionTask = nil
         cancelRuntimeGeometryRefresh()
