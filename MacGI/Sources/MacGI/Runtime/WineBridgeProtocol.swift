@@ -6,6 +6,8 @@ enum WineBridgeCommand: UInt16 {
     case discoverTarget = 3
     case registerTarget = 4
     case ping = 5
+    case queryForeground = 6
+    case setForeground = 7
     case keyDown = 10
     case keyUp = 11
     case keyPress = 12
@@ -129,6 +131,90 @@ struct WineBridgeTarget: Equatable {
             processID: processID,
             windowHandle: windowHandle,
             executableName: name)
+    }
+}
+
+struct WineBridgeForegroundDiagnostic: Equatable {
+    static let encodedSize = 148
+
+    let targetProcessID: UInt32
+    let foregroundProcessID: UInt32
+    let targetThreadID: UInt32
+    let foregroundThreadID: UInt32
+    let targetWindow: UInt64
+    let foregroundWindow: UInt64
+    let activeWindow: UInt64
+    let focusWindow: UInt64
+    let captureWindow: UInt64
+    let menuOwnerWindow: UInt64
+    let moveSizeWindow: UInt64
+    let setForegroundResult: Int32
+    let flags: UInt32
+    let testVirtualKey: UInt16
+    let asyncKeyState: UInt16
+    let foregroundExecutableName: String
+
+    var targetIsWindow: Bool { flags & 1 != 0 }
+    var targetIsVisible: Bool { flags & 2 != 0 }
+
+    static func decode(_ data: Data) throws -> WineBridgeForegroundDiagnostic {
+        guard data.count == encodedSize else {
+            throw WineBridgeError.invalidResponse(
+                "foreground diagnostic length \(data.count)")
+        }
+        var reader = WineBridgeDataReader(data)
+        let targetProcessID = try reader.readUInt32()
+        let foregroundProcessID = try reader.readUInt32()
+        let targetThreadID = try reader.readUInt32()
+        let foregroundThreadID = try reader.readUInt32()
+        let targetWindow = try reader.readUInt64()
+        let foregroundWindow = try reader.readUInt64()
+        let activeWindow = try reader.readUInt64()
+        let focusWindow = try reader.readUInt64()
+        let captureWindow = try reader.readUInt64()
+        let menuOwnerWindow = try reader.readUInt64()
+        let moveSizeWindow = try reader.readUInt64()
+        let setForegroundResult = Int32(bitPattern: try reader.readUInt32())
+        let flags = try reader.readUInt32()
+        let testVirtualKey = try reader.readUInt16()
+        let asyncKeyState = try reader.readUInt16()
+        let executableData = try reader.readData(count: 64)
+        let executableBytes = executableData.prefix { $0 != 0 }
+        let executableName = String(data: executableBytes, encoding: .utf8) ?? ""
+        return WineBridgeForegroundDiagnostic(
+            targetProcessID: targetProcessID,
+            foregroundProcessID: foregroundProcessID,
+            targetThreadID: targetThreadID,
+            foregroundThreadID: foregroundThreadID,
+            targetWindow: targetWindow,
+            foregroundWindow: foregroundWindow,
+            activeWindow: activeWindow,
+            focusWindow: focusWindow,
+            captureWindow: captureWindow,
+            menuOwnerWindow: menuOwnerWindow,
+            moveSizeWindow: moveSizeWindow,
+            setForegroundResult: setForegroundResult,
+            flags: flags,
+            testVirtualKey: testVirtualKey,
+            asyncKeyState: asyncKeyState,
+            foregroundExecutableName: executableName)
+    }
+
+    var logDescription: String {
+        "targetPID=\(targetProcessID) hwnd=0x\(String(targetWindow, radix: 16)) "
+            + "valid=\(targetIsWindow) visible=\(targetIsVisible) "
+            + "foregroundPID=\(foregroundProcessID) "
+            + "foregroundExe=\(foregroundExecutableName.isEmpty ? "<unknown>" : foregroundExecutableName) "
+            + "foreground=0x\(String(foregroundWindow, radix: 16)) "
+            + "active=0x\(String(activeWindow, radix: 16)) "
+            + "focus=0x\(String(focusWindow, radix: 16)) "
+            + "capture=0x\(String(captureWindow, radix: 16)) "
+            + "menu=0x\(String(menuOwnerWindow, radix: 16)) "
+            + "moveSize=0x\(String(moveSizeWindow, radix: 16)) "
+            + "targetThread=\(targetThreadID) foregroundThread=\(foregroundThreadID) "
+            + "testVK=0x\(String(testVirtualKey, radix: 16)) "
+            + "async=0x\(String(asyncKeyState, radix: 16)) "
+            + "setForeground=\(setForegroundResult)"
     }
 }
 

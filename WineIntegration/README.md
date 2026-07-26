@@ -14,8 +14,9 @@ The work is intentionally split into two stages:
    to support an explicitly registered virtual foreground window.
 
 Stage one must not claim background input support. The production default in
-betterGI-mac remains `foregroundCGEvent`; the bridge is enabled only by a
-development command-line argument.
+betterGI-mac remains `foregroundCGEvent`. The launch page exposes the
+experimental Wine Bridge backend while the runtime is stopped, persists the
+selection, and still allows a command-line override for development.
 
 ## Locked Engine
 
@@ -56,8 +57,14 @@ this repository.
 
 ## Development Launch
 
-Build the helper with `scripts/verify-wine-bridge.sh`, package betterGI-mac
-through the normal signed app workflow, then launch the app bundle with:
+The normal app packaging workflow builds the helper and includes it at:
+
+```text
+Contents/Resources/WineIntegration/BetterGIWineInputBridge.exe
+```
+
+Select `Wine Bridge（实验）` on the launch page while the runtime is stopped, or
+launch the app bundle with an explicit command-line override:
 
 ```bash
 open MacGI/.build/App/betterGI-mac.app --args \
@@ -77,6 +84,7 @@ per-user data directory. Development overrides are available when needed:
 Without an override, target discovery checks both `YuanShen.exe` (CN) and
 `GenshinImpact.exe` (global).
 
-The bridge is not bundled into release artifacts during this experimental
-stage. The game must remain the macOS foreground application; this branch does
-not yet patch Wine virtual foreground behavior.
+The game must remain the macOS foreground application during normal use. The
+explicit `--wine-background-diagnostic` launch mode exists only to measure
+unmodified Wine behavior and does not claim supported background automation.
+This branch does not yet patch Wine virtual foreground behavior.

@@ -176,7 +176,89 @@ static bool send_inputs(INPUT *inputs, UINT count)
             inputs[index].mi.dwExtraInfo = (ULONG_PTR)BGI_WINE_INPUT_MARKER;
         }
     }
-    return SendInput(count, inputs, sizeof(INPUT)) == count;
+    SetLastError(ERROR_SUCCESS);
+    UINT sent = SendInput(count, inputs, sizeof(INPUT));
+    fprintf(stderr, "input count=%u sent=%u error=%lu\n",
+        count, sent, sent == count ? ERROR_SUCCESS : GetLastError());
+    fflush(stderr);
+    return sent == count;
+}
+
+static void collect_foreground_diagnostic(
+    const struct bridge_state *state,
+    uint16_t test_virtual_key,
+    int32_t set_foreground_result,
+    struct bgi_wine_foreground_diagnostic *diagnostic)
+{
+    memset(diagnostic, 0, sizeof(*diagnostic));
+    HWND target = (HWND)(uintptr_t)state->target.window_handle;
+    HWND foreground = GetForegroundWindow();
+    diagnostic->target_process_id = state->target.process_id;
+    diagnostic->target_window = state->target.window_handle;
+    diagnostic->foreground_window = (uint64_t)(uintptr_t)foreground;
+    diagnostic->set_foreground_result = set_foreground_result;
+    diagnostic->test_virtual_key = test_virtual_key;
+    diagnostic->async_key_state = (uint16_t)GetAsyncKeyState(test_virtual_key);
+    if (IsWindow(target)) {
+        diagnostic->flags |= BGI_WINE_DIAGNOSTIC_TARGET_IS_WINDOW;
+    }
+    if (IsWindowVisible(target)) {
+        diagnostic->flags |= BGI_WINE_DIAGNOSTIC_TARGET_IS_VISIBLE;
+    }
+    DWORD target_process_id = 0;
+    DWORD foreground_process_id = 0;
+    diagnostic->target_thread_id =
+        GetWindowThreadProcessId(target, &target_process_id);
+    diagnostic->foreground_thread_id =
+        GetWindowThreadProcessId(foreground, &foreground_process_id);
+    diagnostic->target_process_id = (uint32_t)target_process_id;
+    diagnostic->foreground_process_id = (uint32_t)foreground_process_id;
+    if (diagnostic->target_thread_id != 0) {
+        GUITHREADINFO info = {0};
+        info.cbSize = sizeof(info);
+        if (GetGUIThreadInfo(diagnostic->target_thread_id, &info)) {
+            diagnostic->active_window = (uint64_t)(uintptr_t)info.hwndActive;
+            diagnostic->focus_window = (uint64_t)(uintptr_t)info.hwndFocus;
+            diagnostic->capture_window = (uint64_t)(uintptr_t)info.hwndCapture;
+            diagnostic->menu_owner_window = (uint64_t)(uintptr_t)info.hwndMenuOwner;
+            diagnostic->move_size_window = (uint64_t)(uintptr_t)info.hwndMoveSize;
+        }
+    }
+    if (diagnostic->foreground_process_id != 0) {
+        query_process_name(
+            diagnostic->foreground_process_id,
+            diagnostic->foreground_executable_name,
+            sizeof(diagnostic->foreground_executable_name));
+    }
+}
+
+static uint32_t foreground_diagnostic(
+    struct bridge_state *state,
+    const struct bgi_wine_packet_header *request,
+    const uint8_t *payload,
+    bool set_foreground,
+    void *response_payload,
+    uint32_t *response_length)
+{
+    if (request->payload_length != sizeof(struct bgi_wine_query_key)) {
+        return BGI_WINE_STATUS_INVALID_PAYLOAD;
+    }
+    const struct bgi_wine_query_key *query =
+        (const struct bgi_wine_query_key *)payload;
+    int32_t set_result = -1;
+    if (set_foreground) {
+        SetLastError(ERROR_SUCCESS);
+        set_result = SetForegroundWindow(
+            (HWND)(uintptr_t)state->target.window_handle) ? 1 : 0;
+        fprintf(stderr, "setForeground result=%d error=%lu\n",
+            set_result, set_result ? ERROR_SUCCESS : GetLastError());
+        fflush(stderr);
+    }
+    struct bgi_wine_foreground_diagnostic diagnostic;
+    collect_foreground_diagnostic(state, query->virtual_key, set_result, &diagnostic);
+    memcpy(response_payload, &diagnostic, sizeof(diagnostic));
+    *response_length = sizeof(diagnostic);
+    return BGI_WINE_STATUS_OK;
 }
 
 static bool send_key(struct bridge_state *state, WORD virtual_key, bool down)
@@ -423,8 +505,10 @@ static bool release_all(struct bridge_state *state)
 
 static bool command_requires_target(uint16_t command)
 {
-    return command >= BGI_WINE_COMMAND_KEY_DOWN
-        && command <= BGI_WINE_COMMAND_QUERY_MOUSE_BUTTON_STATE;
+    return command == BGI_WINE_COMMAND_QUERY_FOREGROUND
+        || command == BGI_WINE_COMMAND_SET_FOREGROUND
+        || (command >= BGI_WINE_COMMAND_KEY_DOWN
+            && command <= BGI_WINE_COMMAND_QUERY_MOUSE_BUTTON_STATE);
 }
 
 static uint32_t handle_authenticated_command(
@@ -464,6 +548,12 @@ static uint32_t handle_authenticated_command(
         return BGI_WINE_STATUS_OK;
     case BGI_WINE_COMMAND_PING:
         return BGI_WINE_STATUS_OK;
+    case BGI_WINE_COMMAND_QUERY_FOREGROUND:
+        return foreground_diagnostic(
+            state, request, payload, false, response_payload, response_length);
+    case BGI_WINE_COMMAND_SET_FOREGROUND:
+        return foreground_diagnostic(
+            state, request, payload, true, response_payload, response_length);
     case BGI_WINE_COMMAND_KEY_DOWN:
     case BGI_WINE_COMMAND_KEY_UP:
     case BGI_WINE_COMMAND_KEY_PRESS:
@@ -591,7 +681,8 @@ static bool serve_client(struct bridge_state *state)
                 0,
                 BGI_WINE_CAP_KEYBOARD | BGI_WINE_CAP_MOUSE
                     | BGI_WINE_CAP_RELATIVE_MOUSE | BGI_WINE_CAP_TEXT
-                    | BGI_WINE_CAP_STATE_QUERY | BGI_WINE_CAP_TARGET_DISCOVERY,
+                    | BGI_WINE_CAP_STATE_QUERY | BGI_WINE_CAP_TARGET_DISCOVERY
+                    | BGI_WINE_CAP_FOREGROUND_DIAGNOSTICS,
                 BGI_WINE_INPUT_MARKER
             };
             memcpy(response_payload, &response, sizeof(response));
@@ -611,6 +702,14 @@ static bool serve_client(struct bridge_state *state)
             status = handle_authenticated_command(
                 state, &request, payload, response_payload, &response_length);
         }
+        fprintf(stderr, "command=%u status=%u targetPID=%lu hwnd=0x%llx\n",
+            request.command,
+            status,
+            state->has_target ? (unsigned long)state->target.process_id : 0,
+            state->has_target
+                ? (unsigned long long)state->target.window_handle
+                : 0);
+        fflush(stderr);
 
         if (!send_response(
             state->client, &request, status, response_payload, response_length)) {
@@ -641,6 +740,7 @@ static int self_test(void)
     if (sizeof(struct bgi_wine_mouse_button_payload) != 16) return 4;
     if (sizeof(struct bgi_wine_mouse_move) != 8) return 5;
     if (BGI_WINE_INPUT_MARKER != UINT64_C(0x42474957494E45)) return 6;
+    if (sizeof(struct bgi_wine_foreground_diagnostic) != 148) return 7;
     puts("BetterGIWineInputBridge self-test passed");
     return 0;
 }

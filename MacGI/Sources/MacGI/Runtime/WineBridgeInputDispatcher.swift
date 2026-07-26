@@ -1,3 +1,4 @@
+import AppKit
 import Darwin
 import Foundation
 import Security
@@ -40,12 +41,26 @@ enum WineBridgeError: LocalizedError, Equatable {
     }
 }
 
+enum WineRelativeMouseMode: String, Equatable {
+    case scaled
+    case raw
+}
+
+enum WineForegroundExperiment: String, Equatable {
+    case none
+    case once
+    case always
+}
+
 struct WineBridgeConfiguration: Equatable {
     let wineExecutableURL: URL
     let winePrefixURL: URL
     let bridgeExecutableURL: URL
     let targetExecutableNames: [String]
     let startupTimeout: TimeInterval
+    let backgroundDiagnosticEnabled: Bool
+    let relativeMouseMode: WineRelativeMouseMode
+    let foregroundExperiment: WineForegroundExperiment
 
     static func resolve(
         launchArguments: [String],
@@ -86,13 +101,30 @@ struct WineBridgeConfiguration: Equatable {
             arguments.value(after: "--wine-target-executable")
                 ?? environment["BETTERGI_WINE_TARGET_EXECUTABLE"]
         )
+        let backgroundDiagnosticEnabled =
+            launchArguments.contains("--wine-background-diagnostic")
+        let relativeMouseMode = try enumValue(
+            arguments.value(after: "--wine-relative-mouse") ?? "scaled",
+            description: "--wine-relative-mouse",
+            type: WineRelativeMouseMode.self)
+        let foregroundExperiment = try enumValue(
+            arguments.value(after: "--wine-foreground-experiment") ?? "none",
+            description: "--wine-foreground-experiment",
+            type: WineForegroundExperiment.self)
+        guard backgroundDiagnosticEnabled || foregroundExperiment == .none else {
+            throw WineBridgeError.invalidConfiguration(
+                "--wine-foreground-experiment requires --wine-background-diagnostic")
+        }
 
         return WineBridgeConfiguration(
             wineExecutableURL: wineExecutableURL,
             winePrefixURL: winePrefixURL,
             bridgeExecutableURL: bridgeExecutableURL,
             targetExecutableNames: targetExecutableNames,
-            startupTimeout: 12)
+            startupTimeout: 12,
+            backgroundDiagnosticEnabled: backgroundDiagnosticEnabled,
+            relativeMouseMode: relativeMouseMode,
+            foregroundExperiment: foregroundExperiment)
     }
 
     static func targetExecutableNames(from explicitValue: String?) throws -> [String] {
@@ -107,6 +139,18 @@ struct WineBridgeConfiguration: Equatable {
             throw WineBridgeError.invalidConfiguration("Invalid target executable name")
         }
         return values
+    }
+
+    private static func enumValue<Value: RawRepresentable>(
+        _ value: String,
+        description: String,
+        type: Value.Type
+    ) throws -> Value where Value.RawValue == String {
+        guard let parsed = Value(rawValue: value) else {
+            throw WineBridgeError.invalidConfiguration(
+                "Unsupported \(description) value \(value)")
+        }
+        return parsed
     }
 
     private static func resolveFile(
@@ -275,6 +319,8 @@ final class WineBridgeInputDispatcher: InputDispatching {
     private var connection: WineBridgeConnection?
     private var registeredTarget: WineBridgeTarget?
     private var hostTargetPID: pid_t?
+    private var outputPipe: Pipe?
+    private var backgroundEpisodeForegroundAttempted = false
 
     init(configuration: Result<WineBridgeConfiguration, Error>) {
         configurationResult = configuration
@@ -307,14 +353,26 @@ final class WineBridgeInputDispatcher: InputDispatching {
             return CGEventDispatchReport(eventCount: 0, detail: "releaseAll (bridge inactive)")
         }
         let session = try ensureSession(targetWindow: targetWindow)
+        let diagnostic = try prepareDiagnostic(
+            targetWindow: targetWindow,
+            through: session)
         let eventCount = try send(
             action,
             targetWindow: targetWindow,
             through: session)
         let windowHandle = String(registeredTarget?.windowHandle ?? 0, radix: 16)
+        if try configurationResult.get().backgroundDiagnosticEnabled {
+            logDiagnostic(
+                try queryForeground(through: session),
+                phase: "after \(action.displayName)",
+                hostIsFrontmost: isHostTargetFrontmost(targetWindow))
+        }
         return CGEventDispatchReport(
             eventCount: eventCount,
-            detail: "\(action.displayName) hwnd=0x\(windowHandle)")
+            detail: "\(action.displayName) hwnd=0x\(windowHandle)"
+                + (diagnostic.map {
+                    " foreground=0x\(String($0.foregroundWindow, radix: 16))"
+                } ?? ""))
     }
 
     func query(_ query: InputQuery, targetWindow: WindowInfo) throws -> Bool {
@@ -351,6 +409,9 @@ final class WineBridgeInputDispatcher: InputDispatching {
         connection = nil
         registeredTarget = nil
         hostTargetPID = nil
+        backgroundEpisodeForegroundAttempted = false
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        outputPipe = nil
         if let process, process.isRunning {
             Self.stopProcess(process)
         }
@@ -439,8 +500,20 @@ final class WineBridgeInputDispatcher: InputDispatching {
             environment["BETTERGI_WINE_BRIDGE_TOKEN"] = token
             environment["WINEDEBUG"] = "-all"
             process.environment = environment
-            process.standardOutput = FileHandle.nullDevice
-            process.standardError = FileHandle.nullDevice
+            let outputPipe = Pipe()
+            outputPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                guard !data.isEmpty,
+                      let text = String(data: data, encoding: .utf8) else { return }
+                let bounded = String(text.prefix(2_048))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !bounded.isEmpty {
+                    NSLog("Wine bridge: %@", bounded)
+                }
+            }
+            process.standardOutput = outputPipe
+            process.standardError = outputPipe
+            self.outputPipe = outputPipe
 
             do {
                 try process.run()
@@ -465,6 +538,8 @@ final class WineBridgeInputDispatcher: InputDispatching {
                 if process.isRunning {
                     Self.stopProcess(process)
                 }
+                outputPipe.fileHandleForReading.readabilityHandler = nil
+                self.outputPipe = nil
                 lastError = error
                 guard attempt < 3, Self.isRetryableStartupError(error) else {
                     throw error
@@ -524,10 +599,12 @@ final class WineBridgeInputDispatcher: InputDispatching {
                     point: Self.wineClientPoint(point, targetWindow: targetWindow)))
             return 1
         case let .mouseMoveRelative(deltaX, deltaY):
+            let configuration = try configurationResult.get()
             let delta = Self.wineRelativeDelta(
                 deltaX: deltaX,
                 deltaY: deltaY,
-                targetWindow: targetWindow)
+                targetWindow: targetWindow,
+                mode: configuration.relativeMouseMode)
             try connection.request(
                 .mouseMoveRelative,
                 payload: Self.mouseMovePayload(x: delta.x, y: delta.y))
@@ -661,10 +738,87 @@ final class WineBridgeInputDispatcher: InputDispatching {
     static func wineRelativeDelta(
         deltaX: CGFloat,
         deltaY: CGFloat,
-        targetWindow: WindowInfo
+        targetWindow: WindowInfo,
+        mode: WineRelativeMouseMode = .scaled
     ) -> CGPoint {
+        guard mode == .scaled else {
+            return CGPoint(x: deltaX, y: deltaY)
+        }
         let scale = max(1, targetWindow.scaleFactor)
         return CGPoint(x: deltaX / scale, y: deltaY / scale)
+    }
+
+    private func prepareDiagnostic(
+        targetWindow: WindowInfo,
+        through connection: WineBridgeConnection
+    ) throws -> WineBridgeForegroundDiagnostic? {
+        let configuration = try configurationResult.get()
+        guard configuration.backgroundDiagnosticEnabled else { return nil }
+        let hostIsFrontmost = isHostTargetFrontmost(targetWindow)
+        if hostIsFrontmost {
+            backgroundEpisodeForegroundAttempted = false
+        }
+
+        let shouldSetForeground: Bool
+        switch configuration.foregroundExperiment {
+        case .none:
+            shouldSetForeground = false
+        case .once:
+            shouldSetForeground = !hostIsFrontmost
+                && !backgroundEpisodeForegroundAttempted
+        case .always:
+            shouldSetForeground = !hostIsFrontmost
+        }
+        if shouldSetForeground {
+            backgroundEpisodeForegroundAttempted = true
+        }
+        let diagnostic = shouldSetForeground
+            ? try setForeground(through: connection)
+            : try queryForeground(through: connection)
+        logDiagnostic(
+            diagnostic,
+            phase: shouldSetForeground ? "before input, SetForegroundWindow" : "before input",
+            hostIsFrontmost: hostIsFrontmost)
+        return diagnostic
+    }
+
+    private func queryForeground(
+        through connection: WineBridgeConnection
+    ) throws -> WineBridgeForegroundDiagnostic {
+        try foregroundDiagnostic(.queryForeground, through: connection)
+    }
+
+    private func setForeground(
+        through connection: WineBridgeConnection
+    ) throws -> WineBridgeForegroundDiagnostic {
+        try foregroundDiagnostic(.setForeground, through: connection)
+    }
+
+    private func foregroundDiagnostic(
+        _ command: WineBridgeCommand,
+        through connection: WineBridgeConnection
+    ) throws -> WineBridgeForegroundDiagnostic {
+        var payload = Data()
+        payload.appendLittleEndian(UInt16(0x46))
+        payload.appendLittleEndian(UInt16(0))
+        return try WineBridgeForegroundDiagnostic.decode(
+            connection.request(command, payload: payload))
+    }
+
+    private func isHostTargetFrontmost(_ targetWindow: WindowInfo) -> Bool {
+        NSWorkspace.shared.frontmostApplication?.processIdentifier == targetWindow.ownerPID
+    }
+
+    private func logDiagnostic(
+        _ diagnostic: WineBridgeForegroundDiagnostic,
+        phase: String,
+        hostIsFrontmost: Bool
+    ) {
+        NSLog(
+            "Wine bridge diagnostic [%@] macOSFrontmost=%@ %@",
+            phase,
+            hostIsFrontmost.description,
+            diagnostic.logDescription)
     }
 
     private static func mouseButton(_ button: InputMouseButton) throws -> UInt8 {

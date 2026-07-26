@@ -14,6 +14,10 @@
 #define BGI_WINE_CAP_TEXT UINT32_C(1 << 3)
 #define BGI_WINE_CAP_STATE_QUERY UINT32_C(1 << 4)
 #define BGI_WINE_CAP_TARGET_DISCOVERY UINT32_C(1 << 5)
+#define BGI_WINE_CAP_FOREGROUND_DIAGNOSTICS UINT32_C(1 << 6)
+
+#define BGI_WINE_DIAGNOSTIC_TARGET_IS_WINDOW UINT32_C(1)
+#define BGI_WINE_DIAGNOSTIC_TARGET_IS_VISIBLE UINT32_C(1 << 1)
 
 enum bgi_wine_command {
     BGI_WINE_COMMAND_HELLO = 1,
@@ -21,6 +25,8 @@ enum bgi_wine_command {
     BGI_WINE_COMMAND_DISCOVER_TARGET = 3,
     BGI_WINE_COMMAND_REGISTER_TARGET = 4,
     BGI_WINE_COMMAND_PING = 5,
+    BGI_WINE_COMMAND_QUERY_FOREGROUND = 6,
+    BGI_WINE_COMMAND_SET_FOREGROUND = 7,
     BGI_WINE_COMMAND_KEY_DOWN = 10,
     BGI_WINE_COMMAND_KEY_UP = 11,
     BGI_WINE_COMMAND_KEY_PRESS = 12,
@@ -131,6 +137,25 @@ struct bgi_wine_query_mouse {
 struct bgi_wine_query_response {
     uint8_t is_down;
     uint8_t reserved[3];
+};
+
+struct bgi_wine_foreground_diagnostic {
+    uint32_t target_process_id;
+    uint32_t foreground_process_id;
+    uint32_t target_thread_id;
+    uint32_t foreground_thread_id;
+    uint64_t target_window;
+    uint64_t foreground_window;
+    uint64_t active_window;
+    uint64_t focus_window;
+    uint64_t capture_window;
+    uint64_t menu_owner_window;
+    uint64_t move_size_window;
+    int32_t set_foreground_result;
+    uint32_t flags;
+    uint16_t test_virtual_key;
+    uint16_t async_key_state;
+    char foreground_executable_name[64];
 };
 #pragma pack(pop)
 
