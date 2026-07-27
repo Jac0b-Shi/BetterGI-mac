@@ -109,6 +109,38 @@ struct WineBridgeProtocolTests {
             WineBridgeError.connectionFailed("closed")))
     }
 
+    @Test("Target discovery continues only after an explicit not-found response")
+    func targetDiscoveryErrorClassification() {
+        #expect(WineBridgeInputDispatcher.isTargetNotFoundDiscoveryError(
+            WineBridgeError.requestFailed(
+                .discoverTarget,
+                WineBridgeStatus.targetNotFound.rawValue)))
+        #expect(!WineBridgeInputDispatcher.isTargetNotFoundDiscoveryError(
+            WineBridgeError.requestFailed(
+                .discoverTarget,
+                WineBridgeStatus.targetMismatch.rawValue)))
+        #expect(!WineBridgeInputDispatcher.isTargetNotFoundDiscoveryError(
+            WineBridgeError.requestFailed(
+                .registerTarget,
+                WineBridgeStatus.targetNotFound.rawValue)))
+        #expect(!WineBridgeInputDispatcher.isTargetNotFoundDiscoveryError(
+            WineBridgeError.requestTimedOut(.discoverTarget)))
+    }
+
+    @Test("Helper receives a natural-exit grace period before termination")
+    func helperNaturalExitGracePeriod() throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", "sleep 0.1; exit 0"]
+        try process.run()
+
+        WineBridgeInputDispatcher.stopProcess(
+            process,
+            naturalExitGrace: 0.5)
+
+        #expect(process.terminationStatus == 0)
+    }
+
     @Test("Input request deadline includes the requested hold duration")
     func inputRequestDeadlineIncludesHoldDuration() {
         #expect(WineBridgeInputDispatcher.inputRequestTimeout(durationMs: 0) == 6)

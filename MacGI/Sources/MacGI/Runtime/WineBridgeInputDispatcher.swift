@@ -44,6 +44,11 @@ enum WineBridgeError: LocalizedError, Equatable {
     }
 }
 
+enum WineBridgeSessionInvalidationMode: Equatable {
+    case graceful
+    case fatal
+}
+
 enum WineRelativeMouseMode: String, Equatable {
     case scaled
     case raw
@@ -412,7 +417,7 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
             do {
                 try connection.request(.releaseAll, timeout: 2)
             } catch {
-                invalidateSession()
+                invalidateSession(mode: .fatal)
                 throw error
             }
             return CGEventDispatchReport(eventCount: 1, detail: "releaseAll")
@@ -430,22 +435,31 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
                     targetWindow: targetWindow,
                     through: session)
                 let windowHandle = String(registeredTarget?.windowHandle ?? 0, radix: 16)
-                if try configurationResult.get().backgroundDiagnosticEnabled {
-                    logDiagnostic(
-                        try queryForeground(through: session),
-                        phase: "after \(action.displayName)",
-                        hostIsFrontmost: isHostTargetFrontmost(targetWindow))
-                }
-                return CGEventDispatchReport(
+                let report = CGEventDispatchReport(
                     eventCount: eventCount,
                     detail: "\(action.displayName) hwnd=0x\(windowHandle)"
                         + (diagnostic.map {
                             " foreground=0x\(String($0.foregroundWindow, radix: 16))"
                         } ?? ""))
+                if try configurationResult.get().backgroundDiagnosticEnabled {
+                    do {
+                        logDiagnostic(
+                            try queryForeground(through: session),
+                            phase: "after \(action.displayName)",
+                            hostIsFrontmost: isHostTargetFrontmost(targetWindow))
+                    } catch {
+                        handlePostDeliveryDiagnosticFailure(
+                            error,
+                            action: action)
+                    }
+                }
+                return report
             } catch {
                 let targetRejected = Self.isTargetRefreshError(error)
-                if targetRejected || Self.isFatalSessionError(error) {
-                    invalidateSession()
+                if targetRejected {
+                    invalidateSession(mode: .graceful)
+                } else if Self.isFatalSessionError(error) {
+                    invalidateSession(mode: .fatal)
                 }
                 if attempt == 0, targetRejected {
                     NSLog(
@@ -485,8 +499,10 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
                 }
             } catch {
                 let targetRejected = Self.isTargetRefreshError(error)
-                if targetRejected || Self.isFatalSessionError(error) {
-                    invalidateSession()
+                if targetRejected {
+                    invalidateSession(mode: .graceful)
+                } else if Self.isFatalSessionError(error) {
+                    invalidateSession(mode: .fatal)
                 }
                 if attempt == 0, targetRejected {
                     continue
@@ -500,23 +516,7 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
     func shutdown() {
         lock.lock()
         defer { lock.unlock() }
-        if let connection {
-            _ = try? connection.request(.releaseAll)
-            _ = try? connection.request(.shutdown)
-            connection.close()
-        }
-        connection = nil
-        registeredTarget = nil
-        hostTargetPID = nil
-        hostTargetWindowID = nil
-        clearObservedHostTarget()
-        backgroundEpisodeForegroundAttempted = false
-        outputPipe?.fileHandleForReading.readabilityHandler = nil
-        outputPipe = nil
-        if let process, process.isRunning {
-            Self.stopProcess(process)
-        }
-        process = nil
+        invalidateSession(mode: .graceful)
     }
 
     private func ensureSession(targetWindow: WindowInfo) throws -> WineBridgeConnection {
@@ -525,11 +525,11 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
             currentWindowID: hostTargetWindowID,
             targetWindow: targetWindow)
         {
-            invalidateSession()
+            invalidateSession(mode: .graceful)
         }
         if let process, !process.isRunning {
             let status = process.terminationStatus
-            invalidateSession()
+            invalidateSession(mode: .fatal)
             throw WineBridgeError.bridgeExited(status)
         }
         if let connection, registeredTarget != nil {
@@ -540,17 +540,23 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
         let (process, connection) = try startAuthenticatedConnection(
             configuration: configuration)
         self.process = process
+        self.connection = connection
         do {
             var discoveredTarget: WineBridgeTarget?
             var discoveryError: Error?
+            let setupDeadline = WineBridgeMonotonicClock.deadline(after: 6)
             for executableName in configuration.targetExecutableNames {
                 do {
                     let discovery = try connection.request(
                         .discoverTarget,
-                        payload: Data(executableName.utf8))
+                        payload: Data(executableName.utf8),
+                        deadline: setupDeadline)
                     discoveredTarget = try WineBridgeTarget.decode(discovery)
                     break
                 } catch {
+                    guard Self.isTargetNotFoundDiscoveryError(error) else {
+                        throw error
+                    }
                     discoveryError = error
                 }
             }
@@ -558,13 +564,16 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
                 throw discoveryError ?? WineBridgeError.bridgeUnavailable(
                     "No supported Genshin executable was found")
             }
-            _ = try connection.request(.registerTarget, payload: try target.encoded())
+            _ = try connection.request(
+                .registerTarget,
+                payload: try target.encoded(),
+                deadline: setupDeadline)
             _ = try connection.request(
                 .configureInputContext,
                 payload: Self.inputContextPolicyPayload(
                     enabled: configuration.capabilities.supportsBackgroundDelivery,
-                    wakeButton: configuration.foregroundExperiment.wakeButton))
-            self.connection = connection
+                    wakeButton: configuration.foregroundExperiment.wakeButton),
+                deadline: setupDeadline)
             registeredTarget = target
             hostTargetPID = targetWindow.ownerPID
             hostTargetWindowID = targetWindow.id
@@ -576,28 +585,42 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
                 target.windowHandle)
             return connection
         } catch {
-            if process.isRunning {
-                Self.stopProcess(process)
-            }
-            self.process = nil
-            connection.close()
+            invalidateSession(
+                mode: Self.isFatalSessionError(error) ? .fatal : .graceful)
             throw error
         }
     }
 
-    private func invalidateSession() {
-        connection?.close()
+    private func invalidateSession(mode: WineBridgeSessionInvalidationMode) {
+        let currentConnection = connection
+        let currentProcess = process
+        if mode == .graceful, let currentConnection {
+            let cleanupDeadline = WineBridgeMonotonicClock.deadline(after: 1)
+            do {
+                _ = try currentConnection.request(
+                    .releaseAll,
+                    deadline: cleanupDeadline)
+                _ = try currentConnection.request(
+                    .shutdown,
+                    deadline: cleanupDeadline)
+            } catch {
+                NSLog(
+                    "Wine bridge graceful cleanup failed; closing session: %@",
+                    error.localizedDescription)
+            }
+        }
+        currentConnection?.close()
         connection = nil
         registeredTarget = nil
         hostTargetPID = nil
         hostTargetWindowID = nil
         clearObservedHostTarget()
         backgroundEpisodeForegroundAttempted = false
+        if let currentProcess {
+            Self.stopProcess(currentProcess)
+        }
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         outputPipe = nil
-        if let process, process.isRunning {
-            Self.stopProcess(process)
-        }
         process = nil
     }
 
@@ -699,6 +722,14 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
             || status == WineBridgeStatus.targetRequired.rawValue
     }
 
+    static func isTargetNotFoundDiscoveryError(_ error: Error) -> Bool {
+        guard case let WineBridgeError.requestFailed(command, status) = error else {
+            return false
+        }
+        return command == .discoverTarget
+            && status == WineBridgeStatus.targetNotFound.rawValue
+    }
+
     static func isFatalSessionError(_ error: Error) -> Bool {
         switch error {
         case WineBridgeError.connectionFailed,
@@ -719,6 +750,21 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
         guard currentHostPID != nil else { return false }
         return currentHostPID != targetWindow.ownerPID
             || currentWindowID != targetWindow.id
+    }
+
+    private func handlePostDeliveryDiagnosticFailure(
+        _ error: Error,
+        action: InputAction
+    ) {
+        if Self.isTargetRefreshError(error) {
+            invalidateSession(mode: .graceful)
+        } else if Self.isFatalSessionError(error) {
+            invalidateSession(mode: .fatal)
+        }
+        NSLog(
+            "Wine bridge diagnostic after delivered %@ failed without replay: %@",
+            action.displayName,
+            error.localizedDescription)
     }
 
     private func send(
@@ -1128,11 +1174,23 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
         return bytes.map { String(format: "%02x", $0) }.joined()
     }
 
-    private static func stopProcess(_ process: Process) {
-        guard process.isRunning else { return }
+    static func stopProcess(
+        _ process: Process,
+        naturalExitGrace: TimeInterval = 0.2
+    ) {
+        var deadline = WineBridgeMonotonicClock.deadline(after: naturalExitGrace)
+        while process.isRunning,
+              WineBridgeMonotonicClock.remaining(until: deadline) > 0 {
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        if !process.isRunning {
+            process.waitUntilExit()
+            return
+        }
         process.terminate()
-        let deadline = Date().addingTimeInterval(2)
-        while process.isRunning, Date() < deadline {
+        deadline = WineBridgeMonotonicClock.deadline(after: 2)
+        while process.isRunning,
+              WineBridgeMonotonicClock.remaining(until: deadline) > 0 {
             Thread.sleep(forTimeInterval: 0.02)
         }
         if process.isRunning {
