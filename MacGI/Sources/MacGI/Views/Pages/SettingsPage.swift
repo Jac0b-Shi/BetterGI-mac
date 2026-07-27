@@ -16,6 +16,19 @@ struct SettingsPage: View {
                     Toggle("", isOn: $appState.showOverlayLogBox)
                         .labelsHidden()
                 }
+                BGISettingLine(
+                    title: "HUD 最低日志等级",
+                    subtitle: "低于该等级的日志不会显示在游戏叠加层中。"
+                ) {
+                    Picker("", selection: $appState.hudMinimumLogLevel) {
+                        ForEach(LogLevel.allCases) { level in
+                            Text(level.settingsTitle).tag(level)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: 120)
+                }
                 BGISettingLine(title: "显示实时任务启用状态", subtitle: "在遮罩内显示实时任务启用状态。") {
                     Toggle("", isOn: $appState.showOverlayStatus)
                         .labelsHidden()
@@ -68,6 +81,28 @@ struct SettingsPage: View {
                 BGISettingLine(title: "HUD 最大日志行数", subtitle: "控制右下角 HUD 底部最近日志条数。") {
                     Stepper("\(appState.hudMaxLogLines)", value: $appState.hudMaxLogLines, in: 3...8)
                         .foregroundStyle(BGIColors.primaryText)
+                }
+            }
+
+            BGISettingGroup(
+                icon: "doc.text",
+                title: "日志",
+                subtitle: "控制 MacGI 本地运行日志文件的记录范围。"
+            ) {
+                EmptyView()
+            } content: {
+                BGISettingLine(
+                    title: "文件日志最低等级",
+                    subtitle: "低于该等级的日志不会写入本地运行日志文件。"
+                ) {
+                    Picker("", selection: $appState.fileMinimumLogLevel) {
+                        ForEach(LogLevel.allCases) { level in
+                            Text(level.settingsTitle).tag(level)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: 120)
                 }
             }
 

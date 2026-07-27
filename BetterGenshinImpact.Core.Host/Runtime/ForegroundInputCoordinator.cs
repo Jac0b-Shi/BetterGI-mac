@@ -1,6 +1,7 @@
 using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.Core.Script;
 using Newtonsoft.Json.Linq;
+using System.Diagnostics;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
@@ -14,6 +15,8 @@ public sealed class ForegroundInputCoordinator(
     Func<bool>? inputAvailabilityProbe = null)
 {
     private readonly TimeSpan _pollInterval = pollInterval ?? TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan TextForegroundStability =
+        TimeSpan.FromMilliseconds(200);
     private readonly AsyncLocal<CancellationToken?> _operationCancellation = new();
     private int _releaseRequired;
 
@@ -41,9 +44,16 @@ public sealed class ForegroundInputCoordinator(
     public void Dispatch(JObject parameters, CancellationToken cancellationToken = default)
     {
         using var linked = CreateLinkedCancellation(cancellationToken);
+        var isTextInput = string.Equals(
+            parameters.Value<string>("action"),
+            "inputText",
+            StringComparison.Ordinal);
         while (true)
         {
-            WaitForGameFocus(linked.Token);
+            if (isTextInput)
+                WaitForHostForegroundForText(linked.Token);
+            else
+                WaitForGameFocus(linked.Token);
 
             if (Interlocked.Exchange(ref _releaseRequired, 0) != 0)
                 RequireAcknowledgement(
@@ -57,8 +67,59 @@ public sealed class ForegroundInputCoordinator(
             catch (PlatformCallbackException exception)
                 when (exception.Message.Contains("not frontmost", StringComparison.OrdinalIgnoreCase))
             {
-                Interlocked.Exchange(ref _releaseRequired, 1);
+                if (!isTextInput)
+                    Interlocked.Exchange(ref _releaseRequired, 1);
             }
+        }
+    }
+
+    private void WaitForHostForegroundForText(CancellationToken cancellationToken)
+    {
+        if (focusProbe is not null)
+        {
+            if (focusProbe())
+                return;
+            WaitForStableTextForeground(cancellationToken, focusProbe);
+            return;
+        }
+
+        var metrics = Metrics(cancellationToken);
+        if (!ShouldWaitForHostForegroundForText(
+                metrics.Value<bool?>("isActive")
+                    ?? throw new InvalidDataException(
+                        "window.metrics did not return isActive."),
+                metrics.Value<string>("backgroundTextInputPolicy")))
+            return;
+
+        WaitForStableTextForeground(
+            cancellationToken,
+            () => Metrics(cancellationToken).Value<bool?>("isActive")
+                ?? throw new InvalidDataException(
+                    "window.metrics did not return isActive."));
+    }
+
+    private void WaitForStableTextForeground(
+        CancellationToken cancellationToken,
+        Func<bool> isFocused)
+    {
+        long? stableSince = null;
+        while (true)
+        {
+            ThrowIfTaskCancelled(cancellationToken);
+            if (!isFocused())
+            {
+                stableSince = null;
+            }
+            else if (stableSince is null)
+            {
+                stableSince = Stopwatch.GetTimestamp();
+            }
+            else if (Stopwatch.GetElapsedTime(stableSince.Value) >= TextForegroundStability)
+            {
+                return;
+            }
+
+            Task.Delay(_pollInterval, cancellationToken).GetAwaiter().GetResult();
         }
     }
 
@@ -109,6 +170,15 @@ public sealed class ForegroundInputCoordinator(
         bool requiresHostForeground,
         bool supportsBackgroundDelivery) =>
         isActive || !requiresHostForeground && supportsBackgroundDelivery;
+
+    public static bool ShouldWaitForHostForegroundForText(
+        bool isActive,
+        string? policy) =>
+        !isActive &&
+        !string.Equals(
+            policy,
+            "skipAndContinue",
+            StringComparison.Ordinal);
 
     private CancellationTokenSource CreateLinkedCancellation(CancellationToken cancellationToken)
     {

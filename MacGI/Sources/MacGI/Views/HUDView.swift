@@ -80,7 +80,7 @@ struct HUDView: View {
 
     private var logOverlay: some View {
         VStack(alignment: .leading, spacing: 3) {
-            ForEach(Array(appState.recentLogs.prefix(appState.hudMaxLogLines))) { entry in
+            ForEach(appState.hudLogs) { entry in
                 HStack(alignment: .top, spacing: 6) {
                     Text("[\(entry.timeText) \(entry.level.label)]")
                         .foregroundStyle(entry.level.tint)

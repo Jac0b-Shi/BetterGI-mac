@@ -12,6 +12,20 @@ enum InputDeliveryMode: String, Equatable, Sendable {
     case wineBridge
 }
 
+enum BackgroundTextInputPolicy: String, Equatable, Sendable {
+    case waitForForeground
+    case skipAndContinue
+
+    var subtitle: String {
+        switch self {
+        case .waitForForeground:
+            "原神在后台时等待你切回窗口，前台稳定后再输入文字。"
+        case .skipAndContinue:
+            "原神在后台时跳过文字输入并继续脚本，不会调用输入后端。"
+        }
+    }
+}
+
 struct InputDeliveryCapabilities: Equatable, Sendable {
     let requiresHostForeground: Bool
     let supportsBackgroundDelivery: Bool

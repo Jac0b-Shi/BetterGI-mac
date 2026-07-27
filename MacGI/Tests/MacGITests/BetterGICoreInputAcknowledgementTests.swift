@@ -255,24 +255,74 @@ struct BetterGICoreInputAcknowledgementTests {
         let appState = runningAppState(
             name: "runtime-input-text",
             dispatcher: dispatcher)
+        appState.updateGameWindowFocus(frontmostPID: appState.selectedWindow.ownerPID)
         let adapter = BetterGICorePlatformAdapter(appState: appState)
 
-        let error = await Task.detached {
+        let result = await Task.detached {
             do {
-                _ = try adapter.handle(
+                let response = try adapter.handle(
                     method: "input.dispatch",
                     parameters: [
                         "action": "inputText",
                         "text": "BetterGI 测试",
-                    ])
-                return nil as Error?
+                    ]) as? [String: Any]
+                return (
+                    response?["acknowledged"] as? Bool == true,
+                    response?["delivered"] as? Bool == true)
             } catch {
-                return error
+                return (false, false)
             }
         }.value
 
-        #expect(error == nil)
+        #expect(result.0)
+        #expect(result.1)
         #expect(dispatcher.actions == [.inputText("BetterGI 测试")])
+    }
+
+    @MainActor
+    @Test("Background text skip acknowledges without dispatching input")
+    func backgroundTextSkipDoesNotDispatch() async {
+        let dispatcher = RecordingInputDispatcher()
+        let suiteName = "bettergi-background-text-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let appState = AppState(
+            resourceStore: temporaryStore("runtime-skip-input-text"),
+            inputDispatcher: dispatcher,
+            isTargetWindowFrontmost: { _ in true },
+            userDefaults: defaults)
+        appState.selectedWindow = WindowInfo(
+            id: 42,
+            ownerPID: 42,
+            ownerName: "wine64-preloader",
+            title: "Genshin Impact",
+            frame: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+            layer: 0,
+            isOnScreen: true,
+            scaleFactor: 1)
+        appState.appStatus = .running
+        appState.runtimeLifecycle = .running
+        appState.backgroundTextInputPolicy = .skipAndContinue
+        appState.updateGameWindowFocus(frontmostPID: 999)
+        let adapter = BetterGICorePlatformAdapter(appState: appState)
+
+        let result = await Task.detached {
+            let response = try? adapter.handle(
+                method: "input.dispatch",
+                parameters: [
+                    "action": "inputText",
+                    "text": "千星奇域",
+                ]) as? [String: Any]
+            return (
+                response?["acknowledged"] as? Bool == true,
+                response?["delivered"] as? Bool == false,
+                response?["disposition"] as? String)
+        }.value
+
+        #expect(result.0)
+        #expect(result.1)
+        #expect(result.2 == "skippedBackgroundText")
+        #expect(dispatcher.actions.isEmpty)
     }
 
     @MainActor

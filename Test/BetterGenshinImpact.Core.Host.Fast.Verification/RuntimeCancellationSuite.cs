@@ -30,6 +30,16 @@ public sealed class RuntimeCancellationSuite : IVerificationSuite
             !ForegroundInputCoordinator.EvaluateInputAvailability(
                 false, false, false),
             "A backend without background-delivery support bypassed the gate.");
+        context.Require(
+            ForegroundInputCoordinator.ShouldWaitForHostForegroundForText(
+                false, "waitForForeground") &&
+            ForegroundInputCoordinator.ShouldWaitForHostForegroundForText(
+                false, null) &&
+            !ForegroundInputCoordinator.ShouldWaitForHostForegroundForText(
+                false, "skipAndContinue") &&
+            !ForegroundInputCoordinator.ShouldWaitForHostForegroundForText(
+                true, "waitForForeground"),
+            "Background text input policy did not preserve wait and skip semantics.");
 
         var coordinator = new ForegroundInputCoordinator(
             new PlatformCallbackChannel(), "verification", CancellationToken.None,

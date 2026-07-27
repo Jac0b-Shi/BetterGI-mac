@@ -211,7 +211,12 @@ Wine Bridge text delivery currently follows upstream Windows semantics by
 submitting `KEYEVENTF_UNICODE` key-down/key-up pairs. The helper ACK confirms
 that Wine accepted `SendInput`, not that a game text field consumed the text.
 Background entry of the Thousand Star stage name therefore remains unverified
-and must not be treated as a supported background-text contract yet.
+and must not be treated as a supported background-text contract yet. The launch
+page exposes a persisted `BackgroundTextInputPolicy`: its default
+`waitForForeground` path waits without changing held-input cleanup state, then
+requires 200 ms of stable host foreground before dispatch. `skipAndContinue`
+does not call the bridge and returns an acknowledged response with
+`delivered=false` and `disposition=skippedBackgroundText`.
 
 The local scheduler group `Wine 后台输入诊断` retains an ordinary relative
 mouse command before each input set as a comparison baseline:

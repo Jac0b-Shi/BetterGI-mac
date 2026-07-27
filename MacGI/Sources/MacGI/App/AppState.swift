@@ -93,7 +93,7 @@ enum RuntimeLifecycle: String, CaseIterable, Identifiable {
     var isTransitioning: Bool { self == .starting || self == .stopping }
 }
 
-enum LogLevel: String, CaseIterable, Identifiable, Sendable {
+enum LogLevel: String, CaseIterable, Identifiable, Sendable, Comparable {
     case trace
     case debug
     case info
@@ -110,6 +110,30 @@ enum LogLevel: String, CaseIterable, Identifiable, Sendable {
         case .warn: "WRN"
         case .error: "ERR"
         }
+    }
+
+    var settingsTitle: String {
+        switch self {
+        case .trace: "Trace"
+        case .debug: "Debug"
+        case .info: "Info"
+        case .warn: "Warning"
+        case .error: "Error"
+        }
+    }
+
+    private var severity: Int {
+        switch self {
+        case .trace: 0
+        case .debug: 1
+        case .info: 2
+        case .warn: 3
+        case .error: 4
+        }
+    }
+
+    static func < (lhs: LogLevel, rhs: LogLevel) -> Bool {
+        lhs.severity < rhs.severity
     }
 
     var tint: Color {
@@ -283,8 +307,29 @@ final class AppState: ObservableObject {
             recomputeHUDPresentation()
         }
     }
+    @Published var backgroundTextInputPolicy = BackgroundTextInputPolicy.waitForForeground {
+        didSet {
+            userDefaults.set(
+                backgroundTextInputPolicy.rawValue,
+                forKey: Self.backgroundTextInputPolicyKey)
+        }
+    }
     @Published var hudOpacity = 0.82
     @Published var hudMaxLogLines = 5
+    @Published var hudMinimumLogLevel = LogLevel.info {
+        didSet {
+            userDefaults.set(
+                hudMinimumLogLevel.rawValue,
+                forKey: Self.hudMinimumLogLevelKey)
+        }
+    }
+    @Published var fileMinimumLogLevel = LogLevel.debug {
+        didSet {
+            userDefaults.set(
+                fileMinimumLogLevel.rawValue,
+                forKey: Self.fileMinimumLogLevelKey)
+        }
+    }
     @Published var showOverlayLogBox = true
     @Published var showOverlayStatus = true
     @Published var showOverlayMetrics = true
@@ -534,6 +579,18 @@ final class AppState: ObservableObject {
         hideHUDWhenGameUnfocused = launchArguments.contains("--disable-hud-focus-hiding")
             ? false
             : storedFocusHiding
+        backgroundTextInputPolicy = userDefaults.string(
+            forKey: Self.backgroundTextInputPolicyKey)
+            .flatMap(BackgroundTextInputPolicy.init(rawValue:))
+            ?? .waitForForeground
+        hudMinimumLogLevel = userDefaults.string(
+            forKey: Self.hudMinimumLogLevelKey)
+            .flatMap(LogLevel.init(rawValue:))
+            ?? .info
+        fileMinimumLogLevel = userDefaults.string(
+            forKey: Self.fileMinimumLogLevelKey)
+            .flatMap(LogLevel.init(rawValue:))
+            ?? .debug
         autoStartSchedulerGroupNames = Self.startGroupNames(from: launchArguments)
         autoContinueSchedulerProgressName =
             Self.taskProgressName(from: launchArguments)
@@ -2059,6 +2116,9 @@ final class AppState: ObservableObject {
     }
 
     private static let hideHUDWhenGameUnfocusedKey = "hud.hideWhenGameUnfocused"
+    private static let backgroundTextInputPolicyKey = "input.backgroundTextPolicy"
+    private static let hudMinimumLogLevelKey = "logging.hudMinimumLevel"
+    private static let fileMinimumLogLevelKey = "logging.fileMinimumLevel"
     private static let inputBackendSelectionKey = "input.backend"
 
     var canChangeInputBackend: Bool {
@@ -2738,12 +2798,19 @@ final class AppState: ObservableObject {
 
     var filteredLogs: [LogEntry] {
         recentLogs
-            .filter { entry in
-                LogLevel.allCases.firstIndex(of: entry.level)! >= LogLevel.allCases.firstIndex(of: logLevelFilter)!
-            }
+            .filter { $0.level >= logLevelFilter }
             .filter { entry in
                 logSearchText.isEmpty || entry.message.localizedCaseInsensitiveContains(logSearchText)
             }
+    }
+
+    var hudLogs: [LogEntry] {
+        Array(
+            recentLogs
+                .lazy
+                .filter { $0.level >= self.hudMinimumLogLevel }
+                .prefix(hudMaxLogLines)
+        )
     }
 
     var stateDump: String {
@@ -2813,7 +2880,13 @@ final class AppState: ObservableObject {
         if recentLogs.count > 160 {
             recentLogs.removeLast(recentLogs.count - 160)
         }
-        runtimeLogWriter.append(entry)
+        if entry.level >= fileMinimumLogLevel {
+            runtimeLogWriter.append(entry)
+        }
+    }
+
+    func flushRuntimeLogs() {
+        runtimeLogWriter.flush()
     }
 
     func clearLogs() {

@@ -98,6 +98,24 @@ struct OverviewPage: View {
                     Toggle("", isOn: $appState.hideHUDWhenGameUnfocused)
                         .labelsHidden()
                 }
+                BGISettingLine(
+                    title: "后台遇到文字输入时暂停脚本",
+                    subtitle: appState.backgroundTextInputPolicy.subtitle
+                ) {
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: {
+                                appState.backgroundTextInputPolicy == .waitForForeground
+                            },
+                            set: {
+                                appState.backgroundTextInputPolicy = $0
+                                    ? .waitForForeground
+                                    : .skipAndContinue
+                            })
+                    )
+                    .labelsHidden()
+                }
             }
         }
     }

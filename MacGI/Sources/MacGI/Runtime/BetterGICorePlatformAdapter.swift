@@ -166,6 +166,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                 "supportsBackgroundInputDelivery":
                     appState.inputDeliveryCapabilities.supportsBackgroundDelivery,
                 "inputDeliveryMode": appState.inputDeliveryMode.rawValue,
+                "backgroundTextInputPolicy": appState.backgroundTextInputPolicy.rawValue,
             ]
         case "clipboard.write":
             guard let text = parameters?["text"] as? String, !text.isEmpty else {
@@ -335,11 +336,32 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             }
             return ["type": "none"]
         case "input.dispatch":
+            if parameters?["action"] as? String == "inputText",
+               !appState.isGameWindowFrontmost
+            {
+                switch appState.backgroundTextInputPolicy {
+                case .waitForForeground:
+                    throw BetterGICorePlatformAdapterError.inputRejected(
+                        "Game window is not frontmost for text input.")
+                case .skipAndContinue:
+                    let codeUnitCount = (parameters?["text"] as? String)?
+                        .utf16.count ?? 0
+                    appState.addLog(
+                        .warn,
+                        "后台文字输入已跳过，UTF-16 codeUnits=\(codeUnitCount)")
+                    return [
+                        "acknowledged": true,
+                        "delivered": false,
+                        "disposition": "skippedBackgroundText",
+                        "reason": "Background Chinese text input is unsupported",
+                    ]
+                }
+            }
             let action = try makeInputAction(parameters, appState: appState)
             let gate = appState.dispatchInput(action, source: .runtimeTrigger)
             switch gate {
             case .allow:
-                return ["acknowledged": true]
+                return ["acknowledged": true, "delivered": true]
             case .dryRun(let reason), .blocked(let reason):
                 throw BetterGICorePlatformAdapterError.inputRejected(reason)
             }
