@@ -546,11 +546,14 @@ final class AppState: ObservableObject {
         addLog(.info, "betterGI-mac Swift UI initialized")
         addLog(.info, "Input backend: \(self.inputDispatcher.deliveryMode.rawValue)")
         if self.inputDispatcher.capabilities.supportsBackgroundDelivery {
+            let wakeButton = CommandLineOptions(launchArguments)
+                .value(after: "--wine-foreground-experiment")
+                == WineForegroundExperiment.inputContextWakeLeft.rawValue ? "左键" : "中键"
             addLog(
                 .warn,
-                "Wine Bridge 后台操控已启用：原神窗口失焦后需要发送一次左键点击"
-                    + "以恢复输入；仅当 Wine 鼠标位于游戏客户区内时才会发送，"
-                    + "否则本次后台输入会被拒绝。")
+                "Wine Bridge 后台操控已启用：原神窗口失焦后需要发送一次\(wakeButton)点击"
+                    + "以恢复输入；点击前会将 Wine 光标定位并确认在游戏客户区中心，"
+                    + "无法安全定位时会拒绝本次后台输入。")
         } else if launchArguments.contains("--wine-background-diagnostic") {
             addLog(
                 .error,

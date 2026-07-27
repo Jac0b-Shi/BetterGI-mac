@@ -112,17 +112,21 @@ sends a zero-delta relative mouse prime on the first request. As soon as
 HWND, that same retried business command immediately executes its real input;
 there is no separate ready-query/input window. Because real-game testing proved
 Wine can consume input while still reporting its desktop HWND, the helper also
-adds one private complete left-button click on the next request through the normal
-`send_mouse_button()` down/up path. This is deliberately experimental: the
-tested cold-focus path swallowed the complete click and delivered the following
-F6 without a visible extra attack. An unexpected early recovery could still
-make the probe visible as one attack. Before emitting the click, the helper
-requires `GetCursorPos()` to fall inside the registered target client rectangle
-and requires `WindowFromPoint()` to resolve to that target root window. A title
-bar, resize border, another Wine window or an indeterminate hit is never clicked.
-The command remains pending and eventually fails instead of entering best-effort
-delivery when this safety check cannot be satisfied. After a 500 ms settle
-window, a retry
+adds one private complete middle-button click on the next request. Real-game
+validation confirmed that this wakes background delivery; Genshin maps middle
+click to camera recentering, which is materially safer than a left-button attack
+or UI click. Before emitting the click, the helper
+computes the registered target's Win32 client center, converts it with
+`ClientToScreen()`, submits the existing absolute virtual-desktop movement and
+confirms `GetCursorPos()` reached the expected point within two pixels. The
+positioning confirmation may span Bridge requests so Wine can process its event
+loop. `WindowFromPoint()` must resolve to the target root or one of its children;
+a successful `WM_NCHITTEST` must return `HTCLIENT`. A title bar, resize border,
+another Wine window or an indeterminate hit is never clicked. Unsafe points and
+unconfirmed cursor positioning return distinct protocol failures instead of
+entering best-effort delivery. The button down/up pair is one `SendInput` batch,
+with a defensive release on partial failure, and does not alter normal held-button
+tracking. After a 100 ms settle window, a retry
 enters the best-effort ready state and executes the original
 input exactly once and ACKs only when that real `SendInput` succeeds. The ready
 state is cached for the current registered Bridge target and is invalidated
@@ -189,6 +193,19 @@ the target-HWND check remains diagnostic rather than a complete delivery oracle.
 An observed host-window full-screen transition proved that an unqualified click
 can hit Wine window chrome, so client-area hit validation is a required safety
 boundary rather than an optional diagnostic.
+
+The `mouse-prime-middle` experiment validated that a centered middle-button
+transition wakes the unmodified YAAgl Wine input context. `mouse-prime` now uses
+that result as its default. The observed game-side effect is camera recentering,
+with no attack or UI activation. The former left-button behavior remains
+available only for controlled comparison:
+
+```bash
+open MacGI/.build/App/betterGI-mac.app --args \
+  --input-backend wine-bridge \
+  --wine-background-diagnostic \
+  --wine-foreground-experiment mouse-prime-left
+```
 
 Wine Bridge text delivery currently follows upstream Windows semantics by
 submitting `KEYEVENTF_UNICODE` key-down/key-up pairs. The helper ACK confirms

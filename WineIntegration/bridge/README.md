@@ -55,17 +55,20 @@ action. The client retries the same command with delays of 20, 40, 80 and
 120 ms followed by a 200 ms ceiling, allowing Wine to process each prime
 between requests. The first retry that observes the target HWND immediately
 executes the original input in that same helper request. If Wine keeps reporting
-its desktop HWND, the next request sends one private complete left click through the same
-`send_mouse_button()` down/up path used by normal script mouse actions. It then
-marks the registered target best-effort ready after a 500 ms settle window and
-executes the original input exactly once. This click is experimental: the tested cold-focus
-path swallowed it, delivered the following F6 on its first attempt and showed no
-extra attack. An unexpected early recovery could still expose the probe as one
-attack. The helper sends it only when `GetCursorPos()` is inside the registered
-target client rectangle and `WindowFromPoint()` belongs to that target root. It
-never clicks title bars, resize borders, other Wine windows or unknown locations.
-An unsafe cursor hit remains pending until the wake deadline and never enters
-best-effort delivery. Probe state is not exposed to Core. The
+its desktop HWND, the helper computes the registered HWND client center, moves
+the Wine cursor there with absolute virtual-desktop `SendInput`, and confirms
+`GetCursorPos()` reached the expected screen point before clicking. Positioning
+may span requests so Wine can process its event loop. `WindowFromPoint()` must
+resolve to the target root or child, and a successful `WM_NCHITTEST` must report
+`HTCLIENT`. It then sends middle-button down/up in one `SendInput` batch and marks the
+registered target best-effort ready after a 100 ms settle window. The original
+input executes exactly once. Real-game testing confirmed that the middle-button
+transition wakes background input; in Genshin its visible effect is limited to
+camera recentering instead of an attack or UI click. The helper never clicks
+title bars, resize borders, other Wine windows or
+unknown locations. Unsafe geometry and unconfirmed cursor movement return
+distinct protocol errors and never enter best-effort delivery. Probe state is
+not exposed to Core. The
 helper ACKs only when the real business `SendInput` succeeds. Swift invalidates
 best-effort readiness after observing the game become the macOS frontmost
 application and then lose host focus again. The 3-second monotonic deadline
@@ -100,8 +103,9 @@ mis-input remains an explicit user-facing warning.
 
 The validated mouse-prime policy is the normal Wine Bridge default and
 advertises background delivery to Swift and Core. Other foreground experiments
-remain diagnostics and do not bypass host foreground checks. The private
-left-click wake probe can become visible if Wine recovers earlier than expected,
-so the app presents an explicit warning in its runtime log. Client-area hit
-validation prevents the probe from activating Wine window chrome; a failed
-validation rejects background delivery instead of risking a host-window action.
+remain diagnostics and do not bypass host foreground checks. The default private
+middle-click wake probe can recenter the game camera, so the app presents this
+side effect in its runtime log. Client-area hit validation prevents the probe
+from activating Wine window chrome; a failed validation rejects background
+delivery instead of risking a host-window action. `mouse-prime-left` preserves
+the former left-button probe only for controlled diagnostic comparison.

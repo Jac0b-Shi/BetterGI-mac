@@ -194,12 +194,24 @@ struct WineBridgeProtocolTests {
             startupTimeout: base.startupTimeout,
             backgroundDiagnosticEnabled: false,
             relativeMouseMode: base.relativeMouseMode,
-            foregroundExperiment: .mousePrime)
+            foregroundExperiment: .inputContextWake)
+        let middle = WineBridgeConfiguration(
+            wineExecutableURL: base.wineExecutableURL,
+            winePrefixURL: base.winePrefixURL,
+            bridgeExecutableURL: base.bridgeExecutableURL,
+            targetExecutableNames: base.targetExecutableNames,
+            startupTimeout: base.startupTimeout,
+            backgroundDiagnosticEnabled: true,
+            relativeMouseMode: base.relativeMouseMode,
+            foregroundExperiment: .inputContextWakeMiddle)
 
         #expect(base.capabilities == .foregroundOnly)
         #expect(validated.capabilities == InputDeliveryCapabilities(
             requiresHostForeground: false,
             supportsBackgroundDelivery: true))
+        #expect(middle.capabilities.supportsBackgroundDelivery)
+        #expect(WineForegroundExperiment.inputContextWake.wakeButton == .middle)
+        #expect(WineForegroundExperiment.inputContextWakeLeft.wakeButton == .left)
         #expect(InputBackendSelection.allCases.first == .wineBridge)
     }
 
@@ -209,8 +221,16 @@ struct WineBridgeProtocolTests {
             WineBridgeInputDispatcher.inputContextPolicyPayload(enabled: true))
 
         #expect(try reader.readUInt8() == 1)
-        #expect(try reader.readUInt8() == 0)
+        #expect(try reader.readUInt8() == 3)
         #expect(try reader.readUInt16() == 3_000)
+
+        var leftReader = WineBridgeDataReader(
+            WineBridgeInputDispatcher.inputContextPolicyPayload(
+                enabled: true,
+                wakeButton: .left))
+        #expect(try leftReader.readUInt8() == 1)
+        #expect(try leftReader.readUInt8() == 1)
+        #expect(try leftReader.readUInt16() == 3_000)
     }
 
     @Test("Wine Bridge is the default and invalid overrides never fall back")
@@ -253,7 +273,7 @@ struct WineBridgeProtocolTests {
                 "BETTERGI_WINE_BRIDGE_EXE": bridge.path,
             ])
 
-        #expect(configuration.foregroundExperiment == .mousePrime)
+        #expect(configuration.foregroundExperiment == .inputContextWake)
         #expect(configuration.capabilities.supportsBackgroundDelivery)
         #expect(!configuration.capabilities.requiresHostForeground)
     }

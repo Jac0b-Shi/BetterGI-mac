@@ -50,7 +50,20 @@ enum WineForegroundExperiment: String, Equatable {
     case none
     case once
     case always
-    case mousePrime = "mouse-prime"
+    case inputContextWake = "mouse-prime"
+    case inputContextWakeLeft = "mouse-prime-left"
+    case inputContextWakeMiddle = "mouse-prime-middle"
+
+    var wakeButton: InputMouseButton? {
+        switch self {
+        case .inputContextWakeLeft:
+            .left
+        case .inputContextWake, .inputContextWakeMiddle:
+            .middle
+        case .none, .once, .always:
+            nil
+        }
+    }
 }
 
 struct WineBridgeConfiguration: Equatable {
@@ -64,7 +77,7 @@ struct WineBridgeConfiguration: Equatable {
     let foregroundExperiment: WineForegroundExperiment
 
     var capabilities: InputDeliveryCapabilities {
-        let supportsBackgroundDelivery = foregroundExperiment == .mousePrime
+        let supportsBackgroundDelivery = foregroundExperiment.wakeButton != nil
         return InputDeliveryCapabilities(
             requiresHostForeground: !supportsBackgroundDelivery,
             supportsBackgroundDelivery: supportsBackgroundDelivery)
@@ -121,7 +134,7 @@ struct WineBridgeConfiguration: Equatable {
             type: WineForegroundExperiment.self)
         guard backgroundDiagnosticEnabled
                 || foregroundExperiment == .none
-                || foregroundExperiment == .mousePrime else {
+                || foregroundExperiment.wakeButton != nil else {
             throw WineBridgeError.invalidConfiguration(
                 "once/always foreground experiments require "
                     + "--wine-background-diagnostic")
@@ -512,7 +525,8 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
             _ = try connection.request(
                 .configureInputContext,
                 payload: Self.inputContextPolicyPayload(
-                    enabled: configuration.capabilities.supportsBackgroundDelivery))
+                    enabled: configuration.capabilities.supportsBackgroundDelivery,
+                    wakeButton: configuration.foregroundExperiment.wakeButton))
             self.connection = connection
             registeredTarget = target
             hostTargetPID = targetWindow.ownerPID
@@ -814,7 +828,8 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
         _ = try connection.request(
             .configureInputContext,
             payload: Self.inputContextPolicyPayload(
-                enabled: configuration.capabilities.supportsBackgroundDelivery))
+                enabled: configuration.capabilities.supportsBackgroundDelivery,
+                wakeButton: configuration.foregroundExperiment.wakeButton))
         NSLog(
             "Wine bridge input context invalidated after host focus cycle generation=%llu",
             generation)
@@ -919,7 +934,7 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
                 && !backgroundEpisodeForegroundAttempted
         case .always:
             shouldSetForeground = !hostIsFrontmost
-        case .mousePrime:
+        case .inputContextWake, .inputContextWakeLeft, .inputContextWakeMiddle:
             let beforePrime = try queryForeground(through: connection)
             logDiagnostic(
                 beforePrime,
@@ -952,8 +967,12 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
         try foregroundDiagnostic(.setForeground, through: connection)
     }
 
-    static func inputContextPolicyPayload(enabled: Bool) -> Data {
-        var payload = Data([enabled ? 1 : 0, 0])
+    static func inputContextPolicyPayload(
+        enabled: Bool,
+        wakeButton: InputMouseButton? = .middle
+    ) -> Data {
+        let wakeButtonValue = wakeButton.flatMap { try? mouseButton($0) } ?? 0
+        var payload = Data([enabled ? 1 : 0, wakeButtonValue])
         payload.appendLittleEndian(inputContextWakeTimeoutMs)
         return payload
     }
