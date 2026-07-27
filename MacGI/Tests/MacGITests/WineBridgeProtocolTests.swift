@@ -1,4 +1,5 @@
 import CoreGraphics
+import Darwin
 import Foundation
 @testable import MacGI
 import Testing
@@ -53,6 +54,114 @@ struct WineBridgeProtocolTests {
             WineBridgeError.requestFailed(.authenticate, 1)))
         #expect(!WineBridgeInputDispatcher.isRetryableStartupError(
             WineBridgeError.invalidResponse("header")))
+    }
+
+    @Test("Window recreation invalidates a Wine bridge session identity")
+    func sessionIdentityTracksHostWindowID() {
+        let original = WindowInfo(
+            id: 42,
+            ownerPID: 100,
+            ownerName: "wine",
+            title: "Genshin Impact",
+            frame: .zero,
+            layer: 0,
+            isOnScreen: true,
+            scaleFactor: 2)
+        let recreated = WindowInfo(
+            id: 43,
+            ownerPID: 100,
+            ownerName: "wine",
+            title: "Genshin Impact",
+            frame: .zero,
+            layer: 0,
+            isOnScreen: true,
+            scaleFactor: 2)
+
+        #expect(!WineBridgeInputDispatcher.sessionIdentityChanged(
+            currentHostPID: 100,
+            currentWindowID: 42,
+            targetWindow: original))
+        #expect(WineBridgeInputDispatcher.sessionIdentityChanged(
+            currentHostPID: 100,
+            currentWindowID: 42,
+            targetWindow: recreated))
+        #expect(WineBridgeInputDispatcher.sessionIdentityChanged(
+            currentHostPID: 101,
+            currentWindowID: 42,
+            targetWindow: original))
+    }
+
+    @Test("Only pre-delivery target rejection permits action replay")
+    func targetRefreshErrorClassification() {
+        #expect(WineBridgeInputDispatcher.isTargetRefreshError(
+            WineBridgeError.requestFailed(
+                .keyDown,
+                WineBridgeStatus.targetMismatch.rawValue)))
+        #expect(WineBridgeInputDispatcher.isTargetRefreshError(
+            WineBridgeError.requestFailed(
+                .keyDown,
+                WineBridgeStatus.targetRequired.rawValue)))
+        #expect(!WineBridgeInputDispatcher.isTargetRefreshError(
+            WineBridgeError.requestFailed(
+                .keyDown,
+                WineBridgeStatus.inputFailed.rawValue)))
+        #expect(!WineBridgeInputDispatcher.isTargetRefreshError(
+            WineBridgeError.connectionFailed("closed")))
+    }
+
+    @Test("Input request deadline includes the requested hold duration")
+    func inputRequestDeadlineIncludesHoldDuration() {
+        #expect(WineBridgeInputDispatcher.inputRequestTimeout(durationMs: 0) == 6)
+        #expect(WineBridgeInputDispatcher.inputRequestTimeout(durationMs: 10_000) == 16)
+    }
+
+    @Test("A silent bridge peer cannot block a request indefinitely")
+    func requestReceiveTimeout() throws {
+        let listener = Darwin.socket(AF_INET, SOCK_STREAM, 0)
+        #expect(listener >= 0)
+        defer { Darwin.close(listener) }
+
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = 0
+        address.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
+        let bindResult = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.bind(
+                    listener,
+                    $0,
+                    socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        #expect(bindResult == 0)
+        #expect(Darwin.listen(listener, 1) == 0)
+
+        var resolved = sockaddr_in()
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let nameResult = withUnsafeMutablePointer(to: &resolved) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                getsockname(listener, $0, &length)
+            }
+        }
+        #expect(nameResult == 0)
+
+        let connection = try WineBridgeConnection.connect(
+            port: UInt16(bigEndian: resolved.sin_port),
+            deadline: WineBridgeMonotonicClock.deadline(after: 1),
+            processIsRunning: { true })
+        defer { connection.close() }
+
+        let started = DispatchTime.now().uptimeNanoseconds
+        do {
+            _ = try connection.request(.ping, timeout: 0.1)
+            Issue.record("Silent bridge peer unexpectedly returned a response")
+        } catch {
+            #expect(error as? WineBridgeError == .requestTimedOut(.ping))
+        }
+        let elapsed = TimeInterval(
+            DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
+        #expect(elapsed < 1)
     }
 
     @Test("Relative mouse payload preserves signed deltas")

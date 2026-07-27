@@ -19,12 +19,14 @@ on:
       - "Test/BetterGenshinImpact.Verification.Framework/**"
       - "Test/BetterGenshinImpact.RealUser.Verification/**"
       - "MacGI/**"
+      - "WineIntegration/**"
       - "scripts/verify-core-extraction.sh"
       - "scripts/verify-core-development.sh"
       - "scripts/verify-core-fast.sh"
       - "scripts/verify-core-full.sh"
       - "scripts/verify-core-static.sh"
       - "scripts/verify-pathing-library.sh"
+      - "scripts/verify-wine-bridge.sh"
       - ".github/workflows/mac-core.yml"
 
 concurrency:

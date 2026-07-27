@@ -11,6 +11,8 @@
 #include <string.h>
 #include <wchar.h>
 
+static bool diagnostic_logging;
+
 struct bridge_state {
     SOCKET client;
     bool authenticated;
@@ -193,9 +195,11 @@ static bool send_inputs(INPUT *inputs, UINT count)
     }
     SetLastError(ERROR_SUCCESS);
     UINT sent = SendInput(count, inputs, sizeof(INPUT));
-    fprintf(stderr, "input count=%u sent=%u error=%lu\n",
-        count, sent, sent == count ? ERROR_SUCCESS : GetLastError());
-    fflush(stderr);
+    if (diagnostic_logging || sent != count) {
+        fprintf(stderr, "input count=%u sent=%u error=%lu\n",
+            count, sent, sent == count ? ERROR_SUCCESS : GetLastError());
+        fflush(stderr);
+    }
     return sent == count;
 }
 
@@ -914,13 +918,15 @@ static bool input_text(struct bridge_state *state, const uint8_t *payload, uint3
         inputs[index * 2 + 1].ki.dwFlags |= KEYEVENTF_KEYUP;
     }
 
-    fprintf(stderr,
-        "inputText codeUnits=%lu nonAscii=%d foreground=0x%llx target=0x%llx\n",
-        (unsigned long)code_unit_count,
-        contains_non_ascii,
-        (unsigned long long)(uintptr_t)GetForegroundWindow(),
-        (unsigned long long)state->target.window_handle);
-    fflush(stderr);
+    if (diagnostic_logging) {
+        fprintf(stderr,
+            "inputText codeUnits=%lu nonAscii=%d foreground=0x%llx target=0x%llx\n",
+            (unsigned long)code_unit_count,
+            contains_non_ascii,
+            (unsigned long long)(uintptr_t)GetForegroundWindow(),
+            (unsigned long long)state->target.window_handle);
+        fflush(stderr);
+    }
     bool success = send_inputs(inputs, input_count);
     free(inputs);
     return success;
@@ -1007,6 +1013,11 @@ static uint32_t handle_authenticated_command(
         state->has_target = true;
         state->input_context_best_effort_ready = false;
         reset_input_context_wake(state);
+        fprintf(stderr, "target registered pid=%lu hwnd=0x%llx executable=%s\n",
+            (unsigned long)state->target.process_id,
+            (unsigned long long)state->target.window_handle,
+            state->target.executable_name);
+        fflush(stderr);
         return BGI_WINE_STATUS_OK;
     case BGI_WINE_COMMAND_PING:
         return BGI_WINE_STATUS_OK;
@@ -1166,6 +1177,8 @@ static bool serve_client(struct bridge_state *state)
                 status = BGI_WINE_STATUS_AUTHENTICATION_FAILED;
             } else {
                 state->authenticated = true;
+                fputs("client authenticated\n", stderr);
+                fflush(stderr);
             }
         } else if (!state->authenticated) {
             status = BGI_WINE_STATUS_AUTHENTICATION_REQUIRED;
@@ -1173,14 +1186,18 @@ static bool serve_client(struct bridge_state *state)
             status = handle_authenticated_command(
                 state, &request, payload, response_payload, &response_length);
         }
-        fprintf(stderr, "command=%u status=%u targetPID=%lu hwnd=0x%llx\n",
-            request.command,
-            status,
-            state->has_target ? (unsigned long)state->target.process_id : 0,
-            state->has_target
-                ? (unsigned long long)state->target.window_handle
-                : 0);
-        fflush(stderr);
+        if (diagnostic_logging
+            || (status != BGI_WINE_STATUS_OK
+                && status != BGI_WINE_STATUS_INPUT_CONTEXT_WAKE_PENDING)) {
+            fprintf(stderr, "command=%u status=%u targetPID=%lu hwnd=0x%llx\n",
+                request.command,
+                status,
+                state->has_target ? (unsigned long)state->target.process_id : 0,
+                state->has_target
+                    ? (unsigned long long)state->target.window_handle
+                    : 0);
+            fflush(stderr);
+        }
 
         if (!send_response(
             state->client, &request, status, response_payload, response_length)) {
@@ -1232,6 +1249,13 @@ int main(int argc, char **argv)
     }
 
     struct bridge_state state = {0};
+    char diagnostic_value[8] = {0};
+    diagnostic_logging =
+        GetEnvironmentVariableA(
+            "BETTERGI_WINE_BRIDGE_DIAGNOSTIC",
+            diagnostic_value,
+            (DWORD)sizeof(diagnostic_value)) > 0
+        && strcmp(diagnostic_value, "1") == 0;
     DWORD token_length = GetEnvironmentVariableA(
         "BETTERGI_WINE_BRIDGE_TOKEN", state.token, (DWORD)sizeof(state.token));
     if (token_length < 32 || token_length >= sizeof(state.token)) {

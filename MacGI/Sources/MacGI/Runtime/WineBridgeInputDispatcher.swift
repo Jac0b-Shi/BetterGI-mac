@@ -8,6 +8,7 @@ enum WineBridgeError: LocalizedError, Equatable {
     case bridgeUnavailable(String)
     case bridgeExited(Int32)
     case connectionFailed(String)
+    case requestTimedOut(WineBridgeCommand)
     case invalidResponse(String)
     case requestFailed(WineBridgeCommand, UInt32)
     case unsupportedKey(KeyCode)
@@ -25,6 +26,8 @@ enum WineBridgeError: LocalizedError, Equatable {
             "Wine bridge exited with status \(status)"
         case let .connectionFailed(detail):
             "Wine bridge connection failed: \(detail)"
+        case let .requestTimedOut(command):
+            "Wine bridge command \(command) timed out"
         case let .invalidResponse(detail):
             "Wine bridge returned an invalid response: \(detail)"
         case let .requestFailed(command, status):
@@ -348,6 +351,7 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
     private var connection: WineBridgeConnection?
     private var registeredTarget: WineBridgeTarget?
     private var hostTargetPID: pid_t?
+    private var hostTargetWindowID: CGWindowID?
     private var outputPipe: Pipe?
     private var backgroundEpisodeForegroundAttempted = false
     private var hostFocusObserver: NSObjectProtocol?
@@ -405,32 +409,53 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
                     eventCount: 0,
                     detail: "releaseAll (bridge inactive)")
             }
-            try connection.request(.releaseAll)
+            do {
+                try connection.request(.releaseAll, timeout: 2)
+            } catch {
+                invalidateSession()
+                throw error
+            }
             return CGEventDispatchReport(eventCount: 1, detail: "releaseAll")
         }
-        let session = try ensureSession(targetWindow: targetWindow)
-        try resetInputContextAfterHostFocusCycle(through: session)
-        let diagnostic = try prepareDiagnostic(
-            action: action,
-            targetWindow: targetWindow,
-            through: session)
-        let eventCount = try send(
-            action,
-            targetWindow: targetWindow,
-            through: session)
-        let windowHandle = String(registeredTarget?.windowHandle ?? 0, radix: 16)
-        if try configurationResult.get().backgroundDiagnosticEnabled {
-            logDiagnostic(
-                try queryForeground(through: session),
-                phase: "after \(action.displayName)",
-                hostIsFrontmost: isHostTargetFrontmost(targetWindow))
+        for attempt in 0 ... 1 {
+            do {
+                let session = try ensureSession(targetWindow: targetWindow)
+                try resetInputContextAfterHostFocusCycle(through: session)
+                let diagnostic = try prepareDiagnostic(
+                    action: action,
+                    targetWindow: targetWindow,
+                    through: session)
+                let eventCount = try send(
+                    action,
+                    targetWindow: targetWindow,
+                    through: session)
+                let windowHandle = String(registeredTarget?.windowHandle ?? 0, radix: 16)
+                if try configurationResult.get().backgroundDiagnosticEnabled {
+                    logDiagnostic(
+                        try queryForeground(through: session),
+                        phase: "after \(action.displayName)",
+                        hostIsFrontmost: isHostTargetFrontmost(targetWindow))
+                }
+                return CGEventDispatchReport(
+                    eventCount: eventCount,
+                    detail: "\(action.displayName) hwnd=0x\(windowHandle)"
+                        + (diagnostic.map {
+                            " foreground=0x\(String($0.foregroundWindow, radix: 16))"
+                        } ?? ""))
+            } catch {
+                let targetRejected = Self.isTargetRefreshError(error)
+                if targetRejected || Self.isFatalSessionError(error) {
+                    invalidateSession()
+                }
+                if attempt == 0, targetRejected {
+                    NSLog(
+                        "Wine bridge target became stale; rebuilding session and retrying once")
+                    continue
+                }
+                throw error
+            }
         }
-        return CGEventDispatchReport(
-            eventCount: eventCount,
-            detail: "\(action.displayName) hwnd=0x\(windowHandle)"
-                + (diagnostic.map {
-                    " foreground=0x\(String($0.foregroundWindow, radix: 16))"
-                } ?? ""))
+        throw WineBridgeError.bridgeUnavailable("Target recovery exhausted")
     }
 
     func query(_ query: InputQuery, targetWindow: WindowInfo) throws -> Bool {
@@ -439,21 +464,37 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
         }
         lock.lock()
         defer { lock.unlock() }
-        let session = try ensureSession(targetWindow: targetWindow)
-        switch query {
-        case let .key(key):
-            guard let virtualKey = BetterGICoreInputKeyMapper.windowsVirtualKey(from: key) else {
-                throw WineBridgeError.unsupportedKey(key)
+        for attempt in 0 ... 1 {
+            do {
+                let session = try ensureSession(targetWindow: targetWindow)
+                switch query {
+                case let .key(key):
+                    guard let virtualKey =
+                        BetterGICoreInputKeyMapper.windowsVirtualKey(from: key)
+                    else {
+                        throw WineBridgeError.unsupportedKey(key)
+                    }
+                    var payload = Data()
+                    payload.appendLittleEndian(UInt16(virtualKey))
+                    payload.appendLittleEndian(UInt16(0))
+                    return try session.query(.queryKeyState, payload: payload)
+                case let .mouseButton(button):
+                    return try session.query(
+                        .queryMouseButtonState,
+                        payload: Data([try Self.mouseButton(button), 0, 0, 0]))
+                }
+            } catch {
+                let targetRejected = Self.isTargetRefreshError(error)
+                if targetRejected || Self.isFatalSessionError(error) {
+                    invalidateSession()
+                }
+                if attempt == 0, targetRejected {
+                    continue
+                }
+                throw error
             }
-            var payload = Data()
-            payload.appendLittleEndian(UInt16(virtualKey))
-            payload.appendLittleEndian(UInt16(0))
-            return try session.query(.queryKeyState, payload: payload)
-        case let .mouseButton(button):
-            return try session.query(
-                .queryMouseButtonState,
-                payload: Data([try Self.mouseButton(button), 0, 0, 0]))
         }
+        throw WineBridgeError.bridgeUnavailable("Target recovery exhausted")
     }
 
     func shutdown() {
@@ -467,6 +508,7 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
         connection = nil
         registeredTarget = nil
         hostTargetPID = nil
+        hostTargetWindowID = nil
         clearObservedHostTarget()
         backgroundEpisodeForegroundAttempted = false
         outputPipe?.fileHandleForReading.readabilityHandler = nil
@@ -478,21 +520,16 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
     }
 
     private func ensureSession(targetWindow: WindowInfo) throws -> WineBridgeConnection {
-        if hostTargetPID != nil, hostTargetPID != targetWindow.ownerPID {
-            connection?.close()
-            connection = nil
-            registeredTarget = nil
-            if let process, process.isRunning {
-                Self.stopProcess(process)
-            }
-            self.process = nil
+        if Self.sessionIdentityChanged(
+            currentHostPID: hostTargetPID,
+            currentWindowID: hostTargetWindowID,
+            targetWindow: targetWindow)
+        {
+            invalidateSession()
         }
         if let process, !process.isRunning {
             let status = process.terminationStatus
-            connection?.close()
-            connection = nil
-            registeredTarget = nil
-            self.process = nil
+            invalidateSession()
             throw WineBridgeError.bridgeExited(status)
         }
         if let connection, registeredTarget != nil {
@@ -530,6 +567,7 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
             self.connection = connection
             registeredTarget = target
             hostTargetPID = targetWindow.ownerPID
+            hostTargetWindowID = targetWindow.id
             observeHostTarget(targetWindow.ownerPID)
             NSLog(
                 "Wine bridge ready hostPID=%d windowsPID=%u hwnd=0x%llx",
@@ -542,15 +580,37 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
                 Self.stopProcess(process)
             }
             self.process = nil
+            connection.close()
             throw error
         }
+    }
+
+    private func invalidateSession() {
+        connection?.close()
+        connection = nil
+        registeredTarget = nil
+        hostTargetPID = nil
+        hostTargetWindowID = nil
+        clearObservedHostTarget()
+        backgroundEpisodeForegroundAttempted = false
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        outputPipe = nil
+        if let process, process.isRunning {
+            Self.stopProcess(process)
+        }
+        process = nil
     }
 
     private func startAuthenticatedConnection(
         configuration: WineBridgeConfiguration
     ) throws -> (Process, WineBridgeConnection) {
+        let startupDeadline = WineBridgeMonotonicClock.deadline(
+            after: configuration.startupTimeout)
         var lastError: Error?
         for attempt in 1 ... 3 {
+            guard WineBridgeMonotonicClock.remaining(until: startupDeadline) > 0 else {
+                break
+            }
             let port = try Self.reserveLoopbackPort()
             let token = try Self.randomToken()
             let process = Process()
@@ -564,6 +624,8 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
             environment["WINEPREFIX"] = configuration.winePrefixURL.path
             environment["BETTERGI_WINE_BRIDGE_TOKEN"] = token
             environment["WINEDEBUG"] = "-all"
+            environment["BETTERGI_WINE_BRIDGE_DIAGNOSTIC"] =
+                configuration.backgroundDiagnosticEnabled ? "1" : "0"
             process.environment = environment
             let outputPipe = Pipe()
             outputPipe.fileHandleForReading.readabilityHandler = { handle in
@@ -590,13 +652,14 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
             do {
                 let connected = try WineBridgeConnection.connect(
                     port: port,
-                    timeout: configuration.startupTimeout,
+                    deadline: startupDeadline,
                     processIsRunning: { process.isRunning })
                 connection = connected
-                _ = try connected.request(.hello)
+                _ = try connected.request(.hello, deadline: startupDeadline)
                 _ = try connected.request(
                     .authenticate,
-                    payload: Data(token.utf8))
+                    payload: Data(token.utf8),
+                    deadline: startupDeadline)
                 return (process, connected)
             } catch {
                 connection?.close()
@@ -626,6 +689,36 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
         default:
             false
         }
+    }
+
+    static func isTargetRefreshError(_ error: Error) -> Bool {
+        guard case let WineBridgeError.requestFailed(_, status) = error else {
+            return false
+        }
+        return status == WineBridgeStatus.targetMismatch.rawValue
+            || status == WineBridgeStatus.targetRequired.rawValue
+    }
+
+    static func isFatalSessionError(_ error: Error) -> Bool {
+        switch error {
+        case WineBridgeError.connectionFailed,
+             WineBridgeError.requestTimedOut,
+             WineBridgeError.invalidResponse,
+             WineBridgeError.bridgeExited:
+            true
+        default:
+            false
+        }
+    }
+
+    static func sessionIdentityChanged(
+        currentHostPID: pid_t?,
+        currentWindowID: CGWindowID?,
+        targetWindow: WindowInfo
+    ) -> Bool {
+        guard currentHostPID != nil else { return false }
+        return currentHostPID != targetWindow.ownerPID
+            || currentWindowID != targetWindow.id
     }
 
     private func send(
@@ -659,6 +752,7 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
                     key,
                     modifiers: modifiers,
                     durationMs: durationMs),
+                durationMs: durationMs,
                 through: connection)
             return 2
         case let .mouseMove(point):
@@ -722,6 +816,7 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
                         Self.wineClientPoint($0, targetWindow: targetWindow)
                     },
                     durationMs: durationMs),
+                durationMs: durationMs,
                 through: connection)
             return point == nil ? 2 : 3
         case let .verticalScroll(clicks):
@@ -747,7 +842,7 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
                 through: connection)
             return point == nil ? 2 : 3
         case .releaseAll:
-            try connection.request(.releaseAll)
+            try connection.request(.releaseAll, timeout: 2)
             return 1
         }
     }
@@ -755,12 +850,15 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
     private func requestInput(
         _ command: WineBridgeCommand,
         payload: Data = Data(),
+        durationMs: Int = 0,
         through connection: WineBridgeConnection
     ) throws {
+        let deadline = WineBridgeMonotonicClock.deadline(
+            after: Self.inputRequestTimeout(durationMs: durationMs))
         var pollDelay: TimeInterval = 0.02
         while true {
             do {
-                _ = try connection.request(command, payload: payload)
+                _ = try connection.request(command, payload: payload, deadline: deadline)
                 return
             } catch let error as WineBridgeError {
                 guard case let .requestFailed(failedCommand, status) = error,
@@ -768,7 +866,11 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
                       status == WineBridgeStatus.inputContextWakePending.rawValue else {
                     throw error
                 }
-                Thread.sleep(forTimeInterval: pollDelay)
+                let remaining = WineBridgeMonotonicClock.remaining(until: deadline)
+                guard remaining > 0 else {
+                    throw WineBridgeError.requestTimedOut(command)
+                }
+                Thread.sleep(forTimeInterval: min(pollDelay, remaining))
                 if pollDelay < 0.04 {
                     pollDelay = 0.04
                 } else if pollDelay < 0.08 {
@@ -780,6 +882,10 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
                 }
             }
         }
+    }
+
+    static func inputRequestTimeout(durationMs: Int) -> TimeInterval {
+        6 + TimeInterval(max(0, durationMs)) / 1_000
     }
 
     private func observeHostTarget(_ processIdentifier: pid_t) {
@@ -1068,12 +1174,28 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
     }
 }
 
-private final class WineBridgeConnection {
+enum WineBridgeMonotonicClock {
+    static func deadline(after timeout: TimeInterval) -> UInt64 {
+        let now = DispatchTime.now().uptimeNanoseconds
+        let nanoseconds = UInt64(max(0, timeout) * 1_000_000_000)
+        let (deadline, overflow) = now.addingReportingOverflow(nanoseconds)
+        return overflow ? UInt64.max : deadline
+    }
+
+    static func remaining(until deadline: UInt64) -> TimeInterval {
+        let now = DispatchTime.now().uptimeNanoseconds
+        guard deadline > now else { return 0 }
+        return TimeInterval(deadline - now) / 1_000_000_000
+    }
+}
+
+final class WineBridgeConnection {
     private var socketDescriptor: Int32
     private var nextRequestID: UInt32 = 1
 
-    private init(socketDescriptor: Int32) {
+    init(socketDescriptor: Int32) throws {
         self.socketDescriptor = socketDescriptor
+        try Self.configureConnectedSocket(socketDescriptor)
     }
 
     deinit {
@@ -1082,12 +1204,12 @@ private final class WineBridgeConnection {
 
     static func connect(
         port: UInt16,
-        timeout: TimeInterval,
+        deadline: UInt64,
         processIsRunning: () -> Bool
     ) throws -> WineBridgeConnection {
-        let deadline = Date().addingTimeInterval(timeout)
         var lastError = "startup timeout"
-        while Date() < deadline, processIsRunning() {
+        while WineBridgeMonotonicClock.remaining(until: deadline) > 0,
+              processIsRunning() {
             let descriptor = Darwin.socket(AF_INET, SOCK_STREAM, 0)
             guard descriptor >= 0 else {
                 throw WineBridgeError.connectionFailed(String(cString: strerror(errno)))
@@ -1106,14 +1228,12 @@ private final class WineBridgeConnection {
                 }
             }
             if result == 0 {
-                var noDelay: Int32 = 1
-                setsockopt(
-                    descriptor,
-                    IPPROTO_TCP,
-                    TCP_NODELAY,
-                    &noDelay,
-                    socklen_t(MemoryLayout<Int32>.size))
-                return WineBridgeConnection(socketDescriptor: descriptor)
+                do {
+                    return try WineBridgeConnection(socketDescriptor: descriptor)
+                } catch {
+                    Darwin.close(descriptor)
+                    throw error
+                }
             }
             lastError = String(cString: strerror(errno))
             Darwin.close(descriptor)
@@ -1123,7 +1243,23 @@ private final class WineBridgeConnection {
     }
 
     @discardableResult
-    func request(_ command: WineBridgeCommand, payload: Data = Data()) throws -> Data {
+    func request(
+        _ command: WineBridgeCommand,
+        payload: Data = Data(),
+        timeout: TimeInterval = 6
+    ) throws -> Data {
+        try request(
+            command,
+            payload: payload,
+            deadline: WineBridgeMonotonicClock.deadline(after: timeout))
+    }
+
+    @discardableResult
+    func request(
+        _ command: WineBridgeCommand,
+        payload: Data = Data(),
+        deadline: UInt64
+    ) throws -> Data {
         guard payload.count <= WineBridgeProtocol.maximumPayloadSize else {
             throw WineBridgeError.invalidConfiguration("Bridge payload is too large")
         }
@@ -1134,16 +1270,24 @@ private final class WineBridgeConnection {
             requestID: requestID,
             payloadLength: UInt32(payload.count),
             status: 0)
-        try send(header.encoded())
-        if !payload.isEmpty { try send(payload) }
+        try send(header.encoded(), command: command, deadline: deadline)
+        if !payload.isEmpty {
+            try send(payload, command: command, deadline: deadline)
+        }
 
         let responseHeader = try WineBridgePacketHeader.decode(
-            receive(count: WineBridgeProtocol.headerSize))
+            receive(
+                count: WineBridgeProtocol.headerSize,
+                command: command,
+                deadline: deadline))
         guard responseHeader.command == command,
               responseHeader.requestID == requestID else {
             throw WineBridgeError.invalidResponse("request correlation")
         }
-        let response = try receive(count: Int(responseHeader.payloadLength))
+        let response = try receive(
+            count: Int(responseHeader.payloadLength),
+            command: command,
+            deadline: deadline)
         guard responseHeader.status == WineBridgeStatus.ok.rawValue else {
             throw WineBridgeError.requestFailed(command, responseHeader.status)
         }
@@ -1165,15 +1309,74 @@ private final class WineBridgeConnection {
         socketDescriptor = -1
     }
 
-    private func send(_ data: Data) throws {
+    private static func configureConnectedSocket(_ descriptor: Int32) throws {
+        var enabled: Int32 = 1
+        guard setsockopt(
+            descriptor,
+            SOL_SOCKET,
+            SO_NOSIGPIPE,
+            &enabled,
+            socklen_t(MemoryLayout<Int32>.size)) == 0
+        else {
+            throw WineBridgeError.connectionFailed(String(cString: strerror(errno)))
+        }
+        guard setsockopt(
+            descriptor,
+            IPPROTO_TCP,
+            TCP_NODELAY,
+            &enabled,
+            socklen_t(MemoryLayout<Int32>.size)) == 0
+        else {
+            throw WineBridgeError.connectionFailed(String(cString: strerror(errno)))
+        }
+    }
+
+    private func configureTimeout(_ option: Int32, deadline: UInt64) throws {
+        let remaining = WineBridgeMonotonicClock.remaining(until: deadline)
+        guard remaining > 0 else {
+            throw WineBridgeError.connectionFailed("request deadline elapsed")
+        }
+        let seconds = floor(remaining)
+        var timeout = timeval(
+            tv_sec: Int(seconds),
+            tv_usec: Int32((remaining - seconds) * 1_000_000))
+        if timeout.tv_sec == 0, timeout.tv_usec == 0 {
+            timeout.tv_usec = 1
+        }
+        guard setsockopt(
+            socketDescriptor,
+            SOL_SOCKET,
+            option,
+            &timeout,
+            socklen_t(MemoryLayout<timeval>.size)) == 0
+        else {
+            throw WineBridgeError.connectionFailed(String(cString: strerror(errno)))
+        }
+    }
+
+    private func send(
+        _ data: Data,
+        command: WineBridgeCommand,
+        deadline: UInt64
+    ) throws {
         try data.withUnsafeBytes { rawBuffer in
             var offset = 0
             while offset < rawBuffer.count {
+                guard WineBridgeMonotonicClock.remaining(until: deadline) > 0 else {
+                    throw WineBridgeError.requestTimedOut(command)
+                }
+                try configureTimeout(SO_SNDTIMEO, deadline: deadline)
                 let result = Darwin.send(
                     socketDescriptor,
                     rawBuffer.baseAddress!.advanced(by: offset),
                     rawBuffer.count - offset,
                     0)
+                if result < 0, errno == EINTR {
+                    continue
+                }
+                if result < 0, errno == EAGAIN || errno == EWOULDBLOCK {
+                    throw WineBridgeError.requestTimedOut(command)
+                }
                 guard result > 0 else {
                     throw WineBridgeError.connectionFailed(String(cString: strerror(errno)))
                 }
@@ -1182,7 +1385,11 @@ private final class WineBridgeConnection {
         }
     }
 
-    private func receive(count: Int) throws -> Data {
+    private func receive(
+        count: Int,
+        command: WineBridgeCommand,
+        deadline: UInt64
+    ) throws -> Data {
         guard count >= 0, count <= WineBridgeProtocol.maximumPayloadSize else {
             throw WineBridgeError.invalidResponse("payload length \(count)")
         }
@@ -1191,11 +1398,21 @@ private final class WineBridgeConnection {
         try data.withUnsafeMutableBytes { rawBuffer in
             var offset = 0
             while offset < count {
+                guard WineBridgeMonotonicClock.remaining(until: deadline) > 0 else {
+                    throw WineBridgeError.requestTimedOut(command)
+                }
+                try configureTimeout(SO_RCVTIMEO, deadline: deadline)
                 let result = Darwin.recv(
                     socketDescriptor,
                     rawBuffer.baseAddress!.advanced(by: offset),
                     count - offset,
                     0)
+                if result < 0, errno == EINTR {
+                    continue
+                }
+                if result < 0, errno == EAGAIN || errno == EWOULDBLOCK {
+                    throw WineBridgeError.requestTimedOut(command)
+                }
                 guard result > 0 else {
                     throw WineBridgeError.connectionFailed(
                         result == 0 ? "connection closed" : String(cString: strerror(errno)))

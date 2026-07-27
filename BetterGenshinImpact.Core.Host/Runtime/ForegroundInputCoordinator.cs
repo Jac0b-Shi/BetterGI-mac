@@ -79,34 +79,50 @@ public sealed class ForegroundInputCoordinator(
         {
             if (focusProbe())
                 return;
-            WaitForStableTextForeground(cancellationToken, focusProbe);
+            WaitForStableTextForeground(
+                cancellationToken,
+                () => (focusProbe(), true));
             return;
         }
 
-        var metrics = Metrics(cancellationToken);
+        var initialMetrics = Metrics(cancellationToken);
+        var initiallyActive = initialMetrics.Value<bool?>("isActive")
+            ?? throw new InvalidDataException(
+                "window.metrics did not return isActive.");
         if (!ShouldWaitForHostForegroundForText(
-                metrics.Value<bool?>("isActive")
-                    ?? throw new InvalidDataException(
-                        "window.metrics did not return isActive."),
-                metrics.Value<string>("backgroundTextInputPolicy")))
+                initiallyActive,
+                initialMetrics.Value<string>("backgroundTextInputPolicy")))
             return;
 
         WaitForStableTextForeground(
             cancellationToken,
-            () => Metrics(cancellationToken).Value<bool?>("isActive")
-                ?? throw new InvalidDataException(
-                    "window.metrics did not return isActive."));
+            () =>
+            {
+                var metrics = Metrics(cancellationToken);
+                var isActive = metrics.Value<bool?>("isActive")
+                    ?? throw new InvalidDataException(
+                        "window.metrics did not return isActive.");
+                return (
+                    isActive,
+                    !string.Equals(
+                        metrics.Value<string>("backgroundTextInputPolicy"),
+                        "skipAndContinue",
+                        StringComparison.Ordinal));
+            });
     }
 
     private void WaitForStableTextForeground(
         CancellationToken cancellationToken,
-        Func<bool> isFocused)
+        Func<(bool IsFocused, bool ShouldWait)> stateProbe)
     {
         long? stableSince = null;
         while (true)
         {
             ThrowIfTaskCancelled(cancellationToken);
-            if (!isFocused())
+            var state = stateProbe();
+            if (!state.ShouldWait)
+                return;
+            if (!state.IsFocused)
             {
                 stableSince = null;
             }
