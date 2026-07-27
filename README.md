@@ -2,7 +2,7 @@
   <h1>BetterGI macOS</h1>
   <p>BetterGI 的非官方 macOS 移植</p>
   <p>
-    <a href="https://github.com/Jac0b-Shi/BetterGI-mac/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Jac0b-Shi/BetterGI-mac?style=flat-square&logo=github"></a>
+    <a href="https://github.com/Jac0b-Shi/BetterGI-mac/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Jac0b-Shi/BetterGI-mac?include_prereleases&sort=semver&style=flat-square&logo=github"></a>
     <img alt="平台" src="https://img.shields.io/badge/platform-macOS%2014%2B-black?style=flat-square&logo=apple">
     <img alt="架构" src="https://img.shields.io/badge/architecture-Apple%20Silicon-black?style=flat-square&logo=apple">
     <a href="https://github.com/Jac0b-Shi/BetterGI-mac/actions/workflows/mac-core.yml"><img alt="macOS Core Extraction" src="https://github.com/Jac0b-Shi/BetterGI-mac/actions/workflows/mac-core.yml/badge.svg"></a>
@@ -77,11 +77,7 @@ helper，通过 `SendInput` 投递按键、点击、滚轮和相对鼠标移动�
 也不会回退并泄漏到当前前台应用。
 
 原神窗口每次从 macOS 前台切到后台后，Wine Bridge 会发送一次中键点击来恢复 Wine
-输入上下文。原神中的中键只会将视角居中，比左键攻击或界面点击更适合作为预热动作。
-预热前会通过 Win32 客户区坐标将 Wine 光标定位到已注册原神窗口的客户区中心，并在
-确认光标到位、中心点仍命中目标客户区后才批量发送按下和抬起。标题栏、窗口边框、
-其他 Wine 窗口或无法确认的位置不会被点击，避免触发窗口缩放或全屏。应用启动时
-也会在左下角日志区显示此限制。
+输入上下文。
 
 “macOS CGEvent”保留为兼容后端，适用于云原神、远程控制另一台电脑或其他不使用
 本机 Wine prefix 的客户端。CGEvent 后端仍要求游戏位于 macOS 前台，失焦时会暂停
