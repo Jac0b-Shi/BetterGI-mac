@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-07-26",
+  "yaagl": {
+    "productName": "Yaagl OS",
+    "applicationId": "com.3shain.yaagl",
+    "packagedVersion": "1.0.0",
+    "dataRoot": "~/Library/Application Support/Yaagl OS",
+    "upstreamRepository": "https://github.com/yaagl/yet-another-anime-game-launcher",
+    "upstreamCommitChecked": "ca78abc29c2fc236261d088c6907d28cab6e9476"
+  },
+  "distribution": {
+    "id": "11.0-1-crossover-signed-experimental",
+    "displayName": "Wine 11.0-1 Crossover (signed, experimental)",
+    "releaseTag": "wine-crossover-11.0-1-signed",
+    "assetName": "wine-crossover-11.0-1-osx64-signed.tar.xz",
+    "assetUrl": "https://github.com/yaagl/anime-game-wine/releases/download/wine-crossover-11.0-1-signed/wine-crossover-11.0-1-osx64-signed.tar.xz",
+    "assetSize": 456021524,
+    "assetSha256": "89fa7e90fb626523a90d5867a03c6be785d017176739c6320a3b86c7838c3a35",
+    "assetDigestSource": "GitHub Release asset metadata",
+    "assetDigestVerifiedLocally": false,
+    "installedTreeContentManifest": {
+      "algorithm": "sha256(sorted(relative-path file-sha256 lines), excluding .DS_Store)",
+      "fileCount": 11027,
+      "sha256": "2bf39883b039e60d51fb848b8d61d67965e062140a272e6165eb5bd83ef2fc17"
+    }
+  },
+  "runtime": {
+    "installedRoot": "<yaagl-data-root>/wine",
+    "wineVersion": "wine-11.0",
+    "launcher": {
+      "path": "bin/wine",
+      "format": "Mach-O 64-bit executable",
+      "architecture": "x86_64"
+    },
+    "wine64Path": null,
+    "winePreloaderPath": null,
+    "wineServer": {
+      "path": "bin/wineserver",
+      "format": "Mach-O 64-bit executable",
+      "architecture": "x86_64"
+    },
+    "unixLoader": {
+      "path": "lib/wine/x86_64-unix/wine",
+      "format": "Mach-O 64-bit executable",
+      "architecture": "x86_64"
+    },
+    "macDriverUnixModule": {
+      "path": "lib/wine/x86_64-unix/winemac.so",
+      "format": "Mach-O 64-bit dynamically linked shared library",
+      "architecture": "x86_64"
+    },
+    "macDriverWindowsModules": [
+      {
+        "path": "lib/wine/x86_64-windows/winemac.drv",
+        "format": "PE32+ DLL",
+        "architecture": "x86_64"
+      },
+      {
+        "path": "lib/wine/i386-windows/winemac.drv",
+        "format": "PE32 DLL",
+        "architecture": "i386"
+      }
+    ]
+  },
+  "codeSigning": {
+    "summary": "The inspected Mach-O runtime files are ad-hoc signed despite the distribution display name containing signed.",
+    "authority": null,
+    "teamIdentifier": null,
+    "entitlements": {},
+    "flags": [
+      "adhoc"
+    ],
+    "inspectedPaths": [
+      "bin/wine",
+      "bin/wineserver",
+      "lib/wine/x86_64-unix/wine",
+      "lib/wine/x86_64-unix/winemac.so",
+      "lib/wine/x86_64-unix/win32u.so",
+      "lib/wine/x86_64-unix/ntdll.so"
+    ]
+  },
+  "sourceProvenance": {
+    "distributionRepository": "https://github.com/yaagl/anime-game-wine",
+    "distributionRepositoryCommitChecked": "66b9e0e9284c43ccb9d1d546325fb53d63f88128",
+    "declaredSourceRepository": "https://github.com/riverfog7/macports-wine",
+    "wineBaseVersion": "11.0",
+    "crossOverPatchBase": "declared by release notes; exact source release not identified",
+    "macPortsOverlayCommit": null,
+    "yaaglPatchSeries": null,
+    "reproducibility": "unverified",
+    "missingEvidence": [
+      "Exact riverfog7/macports-wine commit used for the release",
+      "Exact CodeWeavers CrossOver source release or commit",
+      "Ordered patch series for timeout, CN game and Media Foundation changes",
+      "Build configuration and signing script used for the release"
+    ]
+  }
+}

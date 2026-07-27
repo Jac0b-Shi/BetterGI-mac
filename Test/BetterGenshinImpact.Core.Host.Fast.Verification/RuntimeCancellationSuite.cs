@@ -14,6 +14,33 @@ public sealed class RuntimeCancellationSuite : IVerificationSuite
 
     public async Task RunAsync(VerificationContext context, CancellationToken cancellationToken)
     {
+        context.Require(
+            ForegroundInputCoordinator.EvaluateInputAvailability(
+                true, true, false),
+            "Foreground input was rejected.");
+        context.Require(
+            !ForegroundInputCoordinator.EvaluateInputAvailability(
+                false, true, false),
+            "A foreground-only backend bypassed the host foreground gate.");
+        context.Require(
+            ForegroundInputCoordinator.EvaluateInputAvailability(
+                false, false, true),
+            "A validated background-delivery capability was rejected.");
+        context.Require(
+            !ForegroundInputCoordinator.EvaluateInputAvailability(
+                false, false, false),
+            "A backend without background-delivery support bypassed the gate.");
+        context.Require(
+            ForegroundInputCoordinator.ShouldWaitForHostForegroundForText(
+                false, "waitForForeground") &&
+            ForegroundInputCoordinator.ShouldWaitForHostForegroundForText(
+                false, null) &&
+            !ForegroundInputCoordinator.ShouldWaitForHostForegroundForText(
+                false, "skipAndContinue") &&
+            !ForegroundInputCoordinator.ShouldWaitForHostForegroundForText(
+                true, "waitForForeground"),
+            "Background text input policy did not preserve wait and skip semantics.");
+
         var coordinator = new ForegroundInputCoordinator(
             new PlatformCallbackChannel(), "verification", CancellationToken.None,
             TimeSpan.FromMilliseconds(5), () => false);
@@ -37,6 +64,11 @@ public sealed class RuntimeCancellationSuite : IVerificationSuite
         catch (OperationCanceledException)
         {
         }
+
+        var diagnosticCoordinator = new ForegroundInputCoordinator(
+            new PlatformCallbackChannel(), "verification", CancellationToken.None,
+            TimeSpan.FromMilliseconds(5), () => false, () => true);
+        diagnosticCoordinator.WaitForGameFocus(cancellationToken);
 
         CancellationContext.Instance.Set();
         var scriptCancellation = CancellationContext.Instance.Cts.Token;

@@ -93,7 +93,7 @@ enum RuntimeLifecycle: String, CaseIterable, Identifiable {
     var isTransitioning: Bool { self == .starting || self == .stopping }
 }
 
-enum LogLevel: String, CaseIterable, Identifiable, Sendable {
+enum LogLevel: String, CaseIterable, Identifiable, Sendable, Comparable {
     case trace
     case debug
     case info
@@ -110,6 +110,30 @@ enum LogLevel: String, CaseIterable, Identifiable, Sendable {
         case .warn: "WRN"
         case .error: "ERR"
         }
+    }
+
+    var settingsTitle: String {
+        switch self {
+        case .trace: "Trace"
+        case .debug: "Debug"
+        case .info: "Info"
+        case .warn: "Warning"
+        case .error: "Error"
+        }
+    }
+
+    private var severity: Int {
+        switch self {
+        case .trace: 0
+        case .debug: 1
+        case .info: 2
+        case .warn: 3
+        case .error: 4
+        }
+    }
+
+    static func < (lhs: LogLevel, rhs: LogLevel) -> Bool {
+        lhs.severity < rhs.severity
     }
 
     var tint: Color {
@@ -283,8 +307,29 @@ final class AppState: ObservableObject {
             recomputeHUDPresentation()
         }
     }
+    @Published var backgroundTextInputPolicy = BackgroundTextInputPolicy.waitForForeground {
+        didSet {
+            userDefaults.set(
+                backgroundTextInputPolicy.rawValue,
+                forKey: Self.backgroundTextInputPolicyKey)
+        }
+    }
     @Published var hudOpacity = 0.82
     @Published var hudMaxLogLines = 5
+    @Published var hudMinimumLogLevel = LogLevel.info {
+        didSet {
+            userDefaults.set(
+                hudMinimumLogLevel.rawValue,
+                forKey: Self.hudMinimumLogLevelKey)
+        }
+    }
+    @Published var fileMinimumLogLevel = LogLevel.debug {
+        didSet {
+            userDefaults.set(
+                fileMinimumLogLevel.rawValue,
+                forKey: Self.fileMinimumLogLevelKey)
+        }
+    }
     @Published var showOverlayLogBox = true
     @Published var showOverlayStatus = true
     @Published var showOverlayMetrics = true
@@ -351,11 +396,17 @@ final class AppState: ObservableObject {
     let safetyGate: InputSafetyGate
 
     private let frameProvider = ScreenCaptureKitFrameProvider()
-    private let inputDispatcher: any InputDispatching
+    private var inputDispatcher: any InputDispatching
+    private let inputDispatcherWasInjected: Bool
     private let isTargetWindowFrontmost: (WindowInfo) -> Bool
     private let runtimeResourceStore: BGIRuntimeResourceStore
     private let runtimeLogWriter: RuntimeLogFileWriter
     private let userDefaults: UserDefaults
+    private let launchArguments: [String]
+    var inputDeliveryMode: InputDeliveryMode { inputDispatcher.deliveryMode }
+    var inputDeliveryCapabilities: InputDeliveryCapabilities {
+        inputDispatcher.capabilities
+    }
     let latestFrameStore = LatestFrameStore()
     private var runtimeFrameIndex: UInt64 = 0
     private var schedulerExecutionTask: Task<Void, Never>?
@@ -404,6 +455,7 @@ final class AppState: ObservableObject {
     private var confirmedMapMaskSelectedLabelIDs: Set<String> = []
     private var captureTimestamps: [Date] = []
     @Published private(set) var measuredCaptureFPS = 0
+    @Published private(set) var inputBackendSelection: InputBackendSelection
 
     // MARK: Derived capture metrics (from lastCapturedFrame)
 
@@ -493,7 +545,7 @@ final class AppState: ObservableObject {
 
     init(
         resourceStore: BGIRuntimeResourceStore = .defaultStore(),
-        inputDispatcher: any InputDispatching = CGEventInputDispatcher(),
+        inputDispatcher: (any InputDispatching)? = nil,
         isTargetWindowFrontmost: @escaping (WindowInfo) -> Bool = ForegroundWindowGuard.isTargetFrontmost,
         launchArguments: [String] = ProcessInfo.processInfo.arguments,
         userDefaults: UserDefaults = .standard,
@@ -502,6 +554,7 @@ final class AppState: ObservableObject {
         self.screenCapturePermissionCoordinator =
             screenCapturePermissionCoordinator ?? ScreenCapturePermissionCoordinator()
         self.userDefaults = userDefaults
+        self.launchArguments = launchArguments
         dryRunLaunchEnabled = launchArguments.contains("--dry-run")
         safetyGate = InputSafetyGate(
             dryRun: dryRunLaunchEnabled,
@@ -509,13 +562,35 @@ final class AppState: ObservableObject {
         allowRuntimeRealInput = !dryRunLaunchEnabled
         runtimeResourceStore = resourceStore
         runtimeLogWriter = RuntimeLogFileWriter(directory: resourceStore.logURL)
-        self.inputDispatcher = inputDispatcher
+        inputDispatcherWasInjected = inputDispatcher != nil
+        let storedInputBackend = userDefaults.string(forKey: Self.inputBackendSelectionKey)
+        let selectedInputBackend = InputDispatcherFactory.selection(
+            launchArguments: launchArguments,
+            storedValue: storedInputBackend)
+        inputBackendSelection = inputDispatcher.map {
+            $0.deliveryMode == .wineBridge ? .wineBridge : .foregroundCGEvent
+        } ?? selectedInputBackend
+        self.inputDispatcher = inputDispatcher ?? InputDispatcherFactory.make(
+            launchArguments: launchArguments,
+            fallbackSelection: selectedInputBackend)
         self.isTargetWindowFrontmost = isTargetWindowFrontmost
         let storedFocusHiding = userDefaults.object(forKey: Self.hideHUDWhenGameUnfocusedKey)
             as? Bool ?? true
         hideHUDWhenGameUnfocused = launchArguments.contains("--disable-hud-focus-hiding")
             ? false
             : storedFocusHiding
+        backgroundTextInputPolicy = userDefaults.string(
+            forKey: Self.backgroundTextInputPolicyKey)
+            .flatMap(BackgroundTextInputPolicy.init(rawValue:))
+            ?? .waitForForeground
+        hudMinimumLogLevel = userDefaults.string(
+            forKey: Self.hudMinimumLogLevelKey)
+            .flatMap(LogLevel.init(rawValue:))
+            ?? .info
+        fileMinimumLogLevel = userDefaults.string(
+            forKey: Self.fileMinimumLogLevelKey)
+            .flatMap(LogLevel.init(rawValue:))
+            ?? .debug
         autoStartSchedulerGroupNames = Self.startGroupNames(from: launchArguments)
         autoContinueSchedulerProgressName =
             Self.taskProgressName(from: launchArguments)
@@ -526,6 +601,22 @@ final class AppState: ObservableObject {
             || autoContinueSchedulerProgressName != nil
             || relativeMouseDiagnosticPending
         addLog(.info, "betterGI-mac Swift UI initialized")
+        addLog(.info, "Input backend: \(self.inputDispatcher.deliveryMode.rawValue)")
+        if self.inputDispatcher.capabilities.supportsBackgroundDelivery {
+            let wakeButton = CommandLineOptions(launchArguments)
+                .value(after: "--wine-foreground-experiment")
+                == WineForegroundExperiment.inputContextWakeLeft.rawValue ? "左键" : "中键"
+            addLog(
+                .warn,
+                "Wine Bridge 后台操控已启用：原神窗口失焦后需要发送一次\(wakeButton)点击"
+                    + "以恢复输入；点击前会将 Wine 光标定位并确认在游戏客户区中心，"
+                    + "无法安全定位时会拒绝本次后台输入。")
+        } else if launchArguments.contains("--wine-background-diagnostic") {
+            addLog(
+                .error,
+                "--wine-background-diagnostic does not enable background delivery "
+                    + "without Wine Bridge mouse-prime.")
+        }
         if dryRunLaunchEnabled {
             addLog(.info, "Dry-Run enabled by --dry-run; real input is disabled")
         }
@@ -2025,6 +2116,31 @@ final class AppState: ObservableObject {
     }
 
     private static let hideHUDWhenGameUnfocusedKey = "hud.hideWhenGameUnfocused"
+    private static let backgroundTextInputPolicyKey = "input.backgroundTextPolicy"
+    private static let hudMinimumLogLevelKey = "logging.hudMinimumLevel"
+    private static let fileMinimumLogLevelKey = "logging.fileMinimumLevel"
+    private static let inputBackendSelectionKey = "input.backend"
+
+    var canChangeInputBackend: Bool {
+        !inputDispatcherWasInjected
+            && (runtimeLifecycle == .stopped || runtimeLifecycle == .failed)
+    }
+
+    func setInputBackendSelection(_ selection: InputBackendSelection) {
+        guard canChangeInputBackend else {
+            addLog(.warn, "Stop the BetterGI runtime before changing the input backend.")
+            return
+        }
+        guard selection != inputBackendSelection else { return }
+
+        inputDispatcher.shutdown()
+        inputDispatcher = InputDispatcherFactory.make(
+            selection: selection,
+            launchArguments: launchArguments)
+        inputBackendSelection = selection
+        userDefaults.set(selection.rawValue, forKey: Self.inputBackendSelectionKey)
+        addLog(.info, "Input backend changed to \(selection.deliveryMode.rawValue)")
+    }
 
     func requestScreenCapturePermission() {
         let state = screenCapturePermissionCoordinator.requestOnce(
@@ -2682,12 +2798,19 @@ final class AppState: ObservableObject {
 
     var filteredLogs: [LogEntry] {
         recentLogs
-            .filter { entry in
-                LogLevel.allCases.firstIndex(of: entry.level)! >= LogLevel.allCases.firstIndex(of: logLevelFilter)!
-            }
+            .filter { $0.level >= logLevelFilter }
             .filter { entry in
                 logSearchText.isEmpty || entry.message.localizedCaseInsensitiveContains(logSearchText)
             }
+    }
+
+    var hudLogs: [LogEntry] {
+        Array(
+            recentLogs
+                .lazy
+                .filter { $0.level >= self.hudMinimumLogLevel }
+                .prefix(hudMaxLogLines)
+        )
     }
 
     var stateDump: String {
@@ -2757,7 +2880,13 @@ final class AppState: ObservableObject {
         if recentLogs.count > 160 {
             recentLogs.removeLast(recentLogs.count - 160)
         }
-        runtimeLogWriter.append(entry)
+        if entry.level >= fileMinimumLogLevel {
+            runtimeLogWriter.append(entry)
+        }
+    }
+
+    func flushRuntimeLogs() {
+        runtimeLogWriter.flush()
     }
 
     func clearLogs() {
@@ -4903,6 +5032,7 @@ final class AppState: ObservableObject {
             source == .runtimeTrigger
             && !safetyGate.dryRun
             && safetyGate.realInputEnabled
+            && inputDispatcher.capabilities.requiresHostForeground
 
         let foregroundOK = requiresForegroundCheck
             ? isTargetWindowFrontmost(selectedWindow)
@@ -4946,6 +5076,23 @@ final class AppState: ObservableObject {
             addLog(.warn, "Input blocked: \(result.reason)")
         }
         return result
+    }
+
+    func queryInput(_ query: InputQuery) throws -> Bool {
+        do {
+            return try inputDispatcher.query(query, targetWindow: selectedWindow)
+        } catch {
+            let reason =
+                "Input query failed: backend=\(inputDispatcher.deliveryMode.rawValue), "
+                + "targetPID=\(selectedWindow.ownerPID), "
+                + error.localizedDescription
+            addLog(.error, reason)
+            throw BetterGICorePlatformAdapterError.inputRejected(reason)
+        }
+    }
+
+    func shutdownInputBackend() {
+        inputDispatcher.shutdown()
     }
 
     @discardableResult

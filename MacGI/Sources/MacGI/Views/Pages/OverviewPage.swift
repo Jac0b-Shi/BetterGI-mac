@@ -66,6 +66,24 @@ struct OverviewPage: View {
                     Text("ScreenCaptureKit")
                         .foregroundStyle(.secondary)
                 }
+                BGISettingLine(
+                    title: "输入后端",
+                    subtitle: appState.inputBackendSelection.subtitle
+                ) {
+                    Picker(
+                        "输入后端",
+                        selection: Binding(
+                            get: { appState.inputBackendSelection },
+                            set: { appState.setInputBackendSelection($0) })
+                    ) {
+                        ForEach(InputBackendSelection.allCases) { backend in
+                            Text(backend.title).tag(backend)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .disabled(!appState.canChangeInputBackend)
+                }
                 BGISettingLine(title: "测试图像捕获", subtitle: "测试功能，测试几种截图模式的效果。") {
                     Text("使用真实运行帧")
                         .font(.caption)
@@ -79,6 +97,24 @@ struct OverviewPage: View {
                 BGISettingLine(title: "原神失焦时隐藏 HUD", subtitle: "切换到其他应用时隐藏叠加层，返回原神后自动恢复。") {
                     Toggle("", isOn: $appState.hideHUDWhenGameUnfocused)
                         .labelsHidden()
+                }
+                BGISettingLine(
+                    title: "后台遇到文字输入时暂停脚本",
+                    subtitle: appState.backgroundTextInputPolicy.subtitle
+                ) {
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: {
+                                appState.backgroundTextInputPolicy == .waitForForeground
+                            },
+                            set: {
+                                appState.backgroundTextInputPolicy = $0
+                                    ? .waitForForeground
+                                    : .skipAndContinue
+                            })
+                    )
+                    .labelsHidden()
                 }
             }
         }

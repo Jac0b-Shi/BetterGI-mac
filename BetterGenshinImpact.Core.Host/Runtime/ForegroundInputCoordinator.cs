@@ -1,6 +1,7 @@
 using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.Core.Script;
 using Newtonsoft.Json.Linq;
+using System.Diagnostics;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
@@ -10,9 +11,12 @@ public sealed class ForegroundInputCoordinator(
     string sessionToken,
     CancellationToken hostCancellationToken,
     TimeSpan? pollInterval = null,
-    Func<bool>? focusProbe = null)
+    Func<bool>? focusProbe = null,
+    Func<bool>? inputAvailabilityProbe = null)
 {
     private readonly TimeSpan _pollInterval = pollInterval ?? TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan TextForegroundStability =
+        TimeSpan.FromMilliseconds(200);
     private readonly AsyncLocal<CancellationToken?> _operationCancellation = new();
     private int _releaseRequired;
 
@@ -29,7 +33,7 @@ public sealed class ForegroundInputCoordinator(
         while (true)
         {
             ThrowIfTaskCancelled(linked.Token);
-            if (IsGameFocused(linked.Token))
+            if (IsInputAvailable(linked.Token))
                 return;
 
             Interlocked.Exchange(ref _releaseRequired, 1);
@@ -40,9 +44,16 @@ public sealed class ForegroundInputCoordinator(
     public void Dispatch(JObject parameters, CancellationToken cancellationToken = default)
     {
         using var linked = CreateLinkedCancellation(cancellationToken);
+        var isTextInput = string.Equals(
+            parameters.Value<string>("action"),
+            "inputText",
+            StringComparison.Ordinal);
         while (true)
         {
-            WaitForGameFocus(linked.Token);
+            if (isTextInput)
+                WaitForHostForegroundForText(linked.Token);
+            else
+                WaitForGameFocus(linked.Token);
 
             if (Interlocked.Exchange(ref _releaseRequired, 0) != 0)
                 RequireAcknowledgement(
@@ -56,15 +67,82 @@ public sealed class ForegroundInputCoordinator(
             catch (PlatformCallbackException exception)
                 when (exception.Message.Contains("not frontmost", StringComparison.OrdinalIgnoreCase))
             {
-                Interlocked.Exchange(ref _releaseRequired, 1);
+                if (!isTextInput)
+                    Interlocked.Exchange(ref _releaseRequired, 1);
             }
+        }
+    }
+
+    private void WaitForHostForegroundForText(CancellationToken cancellationToken)
+    {
+        if (focusProbe is not null)
+        {
+            if (focusProbe())
+                return;
+            WaitForStableTextForeground(
+                cancellationToken,
+                () => (focusProbe(), true));
+            return;
+        }
+
+        var initialMetrics = Metrics(cancellationToken);
+        var initiallyActive = initialMetrics.Value<bool?>("isActive")
+            ?? throw new InvalidDataException(
+                "window.metrics did not return isActive.");
+        if (!ShouldWaitForHostForegroundForText(
+                initiallyActive,
+                initialMetrics.Value<string>("backgroundTextInputPolicy")))
+            return;
+
+        WaitForStableTextForeground(
+            cancellationToken,
+            () =>
+            {
+                var metrics = Metrics(cancellationToken);
+                var isActive = metrics.Value<bool?>("isActive")
+                    ?? throw new InvalidDataException(
+                        "window.metrics did not return isActive.");
+                return (
+                    isActive,
+                    !string.Equals(
+                        metrics.Value<string>("backgroundTextInputPolicy"),
+                        "skipAndContinue",
+                        StringComparison.Ordinal));
+            });
+    }
+
+    private void WaitForStableTextForeground(
+        CancellationToken cancellationToken,
+        Func<(bool IsFocused, bool ShouldWait)> stateProbe)
+    {
+        long? stableSince = null;
+        while (true)
+        {
+            ThrowIfTaskCancelled(cancellationToken);
+            var state = stateProbe();
+            if (!state.ShouldWait)
+                return;
+            if (!state.IsFocused)
+            {
+                stableSince = null;
+            }
+            else if (stableSince is null)
+            {
+                stableSince = Stopwatch.GetTimestamp();
+            }
+            else if (Stopwatch.GetElapsedTime(stableSince.Value) >= TextForegroundStability)
+            {
+                return;
+            }
+
+            Task.Delay(_pollInterval, cancellationToken).GetAwaiter().GetResult();
         }
     }
 
     public void ReleaseAllWhenFocused(CancellationToken cancellationToken = default)
     {
         using var linked = CreateLinkedCancellation(cancellationToken);
-        if (!IsGameFocused(linked.Token))
+        if (!IsInputAvailable(linked.Token))
         {
             Interlocked.Exchange(ref _releaseRequired, 1);
             return;
@@ -84,6 +162,39 @@ public sealed class ForegroundInputCoordinator(
         focusProbe?.Invoke()
         ?? Metrics(cancellationToken).Value<bool?>("isActive")
         ?? throw new InvalidDataException("window.metrics did not return isActive.");
+
+    public bool IsInputAvailable(CancellationToken cancellationToken = default)
+    {
+        if (inputAvailabilityProbe is not null)
+            return inputAvailabilityProbe();
+        if (focusProbe is not null)
+            return focusProbe();
+
+        var metrics = Metrics(cancellationToken);
+        var isActive = metrics.Value<bool?>("isActive")
+            ?? throw new InvalidDataException("window.metrics did not return isActive.");
+        var requiresHostForeground =
+            metrics.Value<bool?>("inputRequiresHostForeground") ?? true;
+        var supportsBackgroundDelivery =
+            metrics.Value<bool?>("supportsBackgroundInputDelivery") == true;
+        return EvaluateInputAvailability(
+            isActive, requiresHostForeground, supportsBackgroundDelivery);
+    }
+
+    public static bool EvaluateInputAvailability(
+        bool isActive,
+        bool requiresHostForeground,
+        bool supportsBackgroundDelivery) =>
+        isActive || !requiresHostForeground && supportsBackgroundDelivery;
+
+    public static bool ShouldWaitForHostForegroundForText(
+        bool isActive,
+        string? policy) =>
+        !isActive &&
+        !string.Equals(
+            policy,
+            "skipAndContinue",
+            StringComparison.Ordinal);
 
     private CancellationTokenSource CreateLinkedCancellation(CancellationToken cancellationToken)
     {

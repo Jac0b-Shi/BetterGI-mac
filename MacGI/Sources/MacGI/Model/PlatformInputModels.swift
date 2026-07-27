@@ -12,6 +12,34 @@ enum InputDeliveryMode: String, Equatable, Sendable {
     case wineBridge
 }
 
+enum BackgroundTextInputPolicy: String, Equatable, Sendable {
+    case waitForForeground
+    case skipAndContinue
+
+    var subtitle: String {
+        switch self {
+        case .waitForForeground:
+            "原神在后台时等待你切回窗口，前台稳定后再输入文字。"
+        case .skipAndContinue:
+            "原神在后台时跳过文字输入并继续脚本，不会调用输入后端。"
+        }
+    }
+}
+
+struct InputDeliveryCapabilities: Equatable, Sendable {
+    let requiresHostForeground: Bool
+    let supportsBackgroundDelivery: Bool
+
+    static let foregroundOnly = InputDeliveryCapabilities(
+        requiresHostForeground: true,
+        supportsBackgroundDelivery: false)
+}
+
+enum InputQuery: Equatable, Sendable {
+    case key(KeyCode)
+    case mouseButton(InputMouseButton)
+}
+
 // MARK: - InputMouseButton
 
 enum InputMouseButton: Equatable, Sendable {
@@ -70,6 +98,9 @@ enum InputAction: Equatable, Sendable {
     /// Vertical scroll wheel clicks. Positive values scroll up, negative down.
     case verticalScroll(clicks: Int)
 
+    /// Text input whose delivery is owned by the selected platform backend.
+    case inputText(String)
+
     /// Left click at absolute screen coordinates.
     case leftClick(at: CGPoint? = nil)
 
@@ -102,6 +133,8 @@ enum InputAction: Equatable, Sendable {
             return "\(base) Hold \(dur)ms"
         case let .verticalScroll(clicks):
             return "Scroll \(clicks)"
+        case let .inputText(text):
+            return "Text (\(text.count) characters)"
         case let .leftClick(at):
             if let pt = at { return "Click (\(Int(pt.x)), \(Int(pt.y)))" }
             return "Click Center"

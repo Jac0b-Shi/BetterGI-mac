@@ -161,6 +161,12 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                 "workingAreaX": Int(workingArea.minX * scale), "workingAreaY": Int(workingArea.minY * scale),
                 "workingAreaWidth": Int(workingArea.width * scale), "workingAreaHeight": Int(workingArea.height * scale),
                 "isActive": isActive,
+                "inputRequiresHostForeground":
+                    appState.inputDeliveryCapabilities.requiresHostForeground,
+                "supportsBackgroundInputDelivery":
+                    appState.inputDeliveryCapabilities.supportsBackgroundDelivery,
+                "inputDeliveryMode": appState.inputDeliveryMode.rawValue,
+                "backgroundTextInputPolicy": appState.backgroundTextInputPolicy.rawValue,
             ]
         case "clipboard.write":
             guard let text = parameters?["text"] as? String, !text.isEmpty else {
@@ -330,11 +336,32 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             }
             return ["type": "none"]
         case "input.dispatch":
+            if parameters?["action"] as? String == "inputText",
+               !appState.isGameWindowFrontmost
+            {
+                switch appState.backgroundTextInputPolicy {
+                case .waitForForeground:
+                    throw BetterGICorePlatformAdapterError.inputRejected(
+                        "Game window is not frontmost for text input.")
+                case .skipAndContinue:
+                    let codeUnitCount = (parameters?["text"] as? String)?
+                        .utf16.count ?? 0
+                    appState.addLog(
+                        .warn,
+                        "后台文字输入已跳过，UTF-16 codeUnits=\(codeUnitCount)")
+                    return [
+                        "acknowledged": true,
+                        "delivered": false,
+                        "disposition": "skippedBackgroundText",
+                        "reason": "Background Chinese text input is unsupported",
+                    ]
+                }
+            }
             let action = try makeInputAction(parameters, appState: appState)
             let gate = appState.dispatchInput(action, source: .runtimeTrigger)
             switch gate {
             case .allow:
-                return ["acknowledged": true]
+                return ["acknowledged": true, "delivered": true]
             case .dryRun(let reason), .blocked(let reason):
                 throw BetterGICorePlatformAdapterError.inputRejected(reason)
             }
@@ -354,19 +381,11 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                 }
                 if let windowsVirtualKey = parameters["windowsVirtualKey"] as? Int,
                    let keyCode = BetterGICoreInputKeyMapper.keyCode(
-                    fromWindowsVirtualKey: windowsVirtualKey),
-                   let virtualKey = keyCode.cgKeyCode {
-                    return ["isDown": CGEventSource.keyState(.combinedSessionState, key: virtualKey)]
+                    fromWindowsVirtualKey: windowsVirtualKey) {
+                    return ["isDown": try appState.queryInput(.key(keyCode))]
                 }
                 if let mouseButton = mouseButton(parameters["mouseButton"] as? String) {
-                    let button: CGMouseButton = switch mouseButton {
-                    case .left: .left
-                    case .right: .right
-                    case .middle: .center
-                    case .side1: CGMouseButton(rawValue: 3)!
-                    case .side2: CGMouseButton(rawValue: 4)!
-                    }
-                    return ["isDown": CGEventSource.buttonState(.combinedSessionState, button: button)]
+                    return ["isDown": try appState.queryInput(.mouseButton(mouseButton))]
                 }
             case "isKeyDown":
                 guard let rawKey = parameters["key"] as? String else {
@@ -374,12 +393,11 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                         "isKeyDown requires a key."
                     )
                 }
-                if let key = BetterGICoreInputKeyMapper.keyCode(from: rawKey),
-                   let virtualKey = key.cgKeyCode {
-                    return ["isDown": CGEventSource.keyState(.combinedSessionState, key: virtualKey)]
+                if let key = BetterGICoreInputKeyMapper.keyCode(from: rawKey) {
+                    return ["isDown": try appState.queryInput(.key(key))]
                 }
-                if let button = BetterGICoreInputKeyMapper.mouseButton(from: rawKey) {
-                    return ["isDown": CGEventSource.buttonState(.combinedSessionState, button: button)]
+                if let button = mouseButton(rawKey) {
+                    return ["isDown": try appState.queryInput(.mouseButton(button))]
                 }
             default:
                 break
@@ -616,11 +634,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             guard let text = parameters["text"] as? String, !text.isEmpty else {
                 throw BetterGICorePlatformAdapterError.invalidParameters("inputText requires non-empty text.")
             }
-            NSPasteboard.general.clearContents()
-            guard NSPasteboard.general.setString(text, forType: .string) else {
-                throw BetterGICorePlatformAdapterError.invalidParameters("Failed to write text to the pasteboard.")
-            }
-            return .keyPress(key: .v, modifiers: .command)
+            return .inputText(text)
         case "releaseAll":
             return .releaseAll
         default:

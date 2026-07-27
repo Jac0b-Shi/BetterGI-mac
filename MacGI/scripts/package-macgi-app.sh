@@ -3,6 +3,7 @@ set -euo pipefail
 
 script_dir=${0:A:h}
 macgi_root=${script_dir:h}
+repository_root=${macgi_root:h}
 configuration=${CONFIGURATION:-Release}
 swift_configuration=${(L)configuration}
 app_name=${MACGI_APP_NAME:-betterGI-mac.app}
@@ -61,6 +62,9 @@ swift build --package-path ${macgi_root} -c ${swift_configuration} --product ${e
 bin_dir=$(swift build --package-path ${macgi_root} -c ${swift_configuration} --show-bin-path)
 executable=${bin_dir}/${executable_name}
 resource_bundle=${bin_dir}/${executable_name}_MacGI.bundle
+wine_bridge_root=${repository_root}/WineIntegration/bridge
+wine_bridge_build=${wine_bridge_root}/build
+wine_bridge_executable=${wine_bridge_build}/BetterGIWineInputBridge.exe
 
 if [[ ! -x ${executable} ]]; then
   print -u2 "Swift executable is missing: ${executable}"
@@ -71,10 +75,24 @@ if [[ ! -d ${resource_bundle} ]]; then
   exit 3
 fi
 
+cmake \
+  -S ${wine_bridge_root} \
+  -B ${wine_bridge_build} \
+  -DCMAKE_TOOLCHAIN_FILE=${wine_bridge_root}/toolchains/mingw-x86_64.cmake \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build ${wine_bridge_build} --parallel
+if [[ ! -f ${wine_bridge_executable} ]]; then
+  print -u2 "Wine input bridge is missing: ${wine_bridge_executable}"
+  exit 6
+fi
+
 rm -rf ${app}
 mkdir -p ${contents}/MacOS ${contents}/Resources
 cp ${executable} ${contents}/MacOS/${executable_name}
 cp -R ${resource_bundle} ${contents}/Resources/${resource_bundle:t}
+mkdir -p ${contents}/Resources/WineIntegration
+cp ${wine_bridge_executable} \
+  ${contents}/Resources/WineIntegration/BetterGIWineInputBridge.exe
 bundled_resources=${contents}/Resources/${resource_bundle:t}/Resources
 ${script_dir}/stage-game-task-assets.sh \
   ${bundled_resources}/GameTask

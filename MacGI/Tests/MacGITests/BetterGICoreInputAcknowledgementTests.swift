@@ -248,6 +248,122 @@ struct BetterGICoreInputAcknowledgementTests {
         ])
     }
 
+    @MainActor
+    @Test("Core text input remains a backend-owned text action")
+    func coreTextInputRemainsBackendOwned() async {
+        let dispatcher = RecordingInputDispatcher()
+        let appState = runningAppState(
+            name: "runtime-input-text",
+            dispatcher: dispatcher)
+        appState.updateGameWindowFocus(frontmostPID: appState.selectedWindow.ownerPID)
+        let adapter = BetterGICorePlatformAdapter(appState: appState)
+
+        let result = await Task.detached {
+            do {
+                let response = try adapter.handle(
+                    method: "input.dispatch",
+                    parameters: [
+                        "action": "inputText",
+                        "text": "BetterGI 测试",
+                    ]) as? [String: Any]
+                return (
+                    response?["acknowledged"] as? Bool == true,
+                    response?["delivered"] as? Bool == true)
+            } catch {
+                return (false, false)
+            }
+        }.value
+
+        #expect(result.0)
+        #expect(result.1)
+        #expect(dispatcher.actions == [.inputText("BetterGI 测试")])
+    }
+
+    @MainActor
+    @Test("Background text skip acknowledges without dispatching input")
+    func backgroundTextSkipDoesNotDispatch() async {
+        let dispatcher = RecordingInputDispatcher()
+        let suiteName = "bettergi-background-text-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let appState = AppState(
+            resourceStore: temporaryStore("runtime-skip-input-text"),
+            inputDispatcher: dispatcher,
+            isTargetWindowFrontmost: { _ in true },
+            userDefaults: defaults)
+        appState.selectedWindow = WindowInfo(
+            id: 42,
+            ownerPID: 42,
+            ownerName: "wine64-preloader",
+            title: "Genshin Impact",
+            frame: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+            layer: 0,
+            isOnScreen: true,
+            scaleFactor: 1)
+        appState.appStatus = .running
+        appState.runtimeLifecycle = .running
+        appState.backgroundTextInputPolicy = .skipAndContinue
+        appState.updateGameWindowFocus(frontmostPID: 999)
+        let adapter = BetterGICorePlatformAdapter(appState: appState)
+
+        let result = await Task.detached {
+            let response = try? adapter.handle(
+                method: "input.dispatch",
+                parameters: [
+                    "action": "inputText",
+                    "text": "千星奇域",
+                ]) as? [String: Any]
+            return (
+                response?["acknowledged"] as? Bool == true,
+                response?["delivered"] as? Bool == false,
+                response?["disposition"] as? String)
+        }.value
+
+        #expect(result.0)
+        #expect(result.1)
+        #expect(result.2 == "skippedBackgroundText")
+        #expect(dispatcher.actions.isEmpty)
+    }
+
+    @MainActor
+    @Test("Core input query uses the selected input backend")
+    func coreInputQueryUsesSelectedBackend() async {
+        let dispatcher = RecordingInputDispatcher()
+        dispatcher.queryResult = true
+        let appState = runningAppState(
+            name: "runtime-input-query",
+            dispatcher: dispatcher)
+        let adapter = BetterGICorePlatformAdapter(appState: appState)
+
+        let isDown = await Task.detached {
+            guard let result = try? adapter.handle(
+                method: "input.query",
+                parameters: [
+                    "action": "isKeyDown",
+                    "key": "F",
+                ]) as? [String: Any] else {
+                return false
+            }
+            return result["isDown"] as? Bool == true
+        }.value
+
+        #expect(isDown)
+        #expect(dispatcher.queries == [.key(.f)])
+    }
+
+    @MainActor
+    @Test("App shutdown closes the selected input backend")
+    func appShutdownClosesSelectedBackend() {
+        let dispatcher = RecordingInputDispatcher()
+        let appState = AppState(
+            resourceStore: temporaryStore("input-backend-shutdown"),
+            inputDispatcher: dispatcher)
+
+        appState.shutdownInputBackend()
+
+        #expect(dispatcher.shutdownCount == 1)
+    }
+
     @Test("Relative CGEvent preserves delta and injection marker")
     func relativeCGEventPreservesDeltaAndMarker() throws {
         let event = try CGEventInputDispatcher.makeRelativeMouseEvent(
@@ -374,10 +490,22 @@ private struct RejectingInputDispatcher: InputDispatching {
 
 private final class RecordingInputDispatcher: InputDispatching {
     private(set) var actions: [InputAction] = []
+    private(set) var queries: [InputQuery] = []
+    private(set) var shutdownCount = 0
+    var queryResult = false
 
     func perform(_ action: InputAction, targetWindow: WindowInfo) throws -> CGEventDispatchReport {
         actions.append(action)
         return CGEventDispatchReport(eventCount: 1, detail: action.displayName)
+    }
+
+    func query(_ query: InputQuery, targetWindow: WindowInfo) throws -> Bool {
+        queries.append(query)
+        return queryResult
+    }
+
+    func shutdown() {
+        shutdownCount += 1
     }
 }
 
