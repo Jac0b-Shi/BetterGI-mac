@@ -116,7 +116,13 @@ adds one private complete left-button click on the next request through the norm
 `send_mouse_button()` down/up path. This is deliberately experimental: the
 tested cold-focus path swallowed the complete click and delivered the following
 F6 without a visible extra attack. An unexpected early recovery could still
-make the probe visible as one attack. After a 500 ms settle window, a retry
+make the probe visible as one attack. Before emitting the click, the helper
+requires `GetCursorPos()` to fall inside the registered target client rectangle
+and requires `WindowFromPoint()` to resolve to that target root window. A title
+bar, resize border, another Wine window or an indeterminate hit is never clicked.
+The command remains pending and eventually fails instead of entering best-effort
+delivery when this safety check cannot be satisfied. After a 500 ms settle
+window, a retry
 enters the best-effort ready state and executes the original
 input exactly once and ACKs only when that real `SendInput` succeeds. The ready
 state is cached for the current registered Bridge target and is invalidated
@@ -180,6 +186,15 @@ first complete click was swallowed and the following click was the first
 visible attack. The private-click variant subsequently delivered F6 on its first
 attempt without a visible extra input. Until the Wine/macdrv path is understood,
 the target-HWND check remains diagnostic rather than a complete delivery oracle.
+An observed host-window full-screen transition proved that an unqualified click
+can hit Wine window chrome, so client-area hit validation is a required safety
+boundary rather than an optional diagnostic.
+
+Wine Bridge text delivery currently follows upstream Windows semantics by
+submitting `KEYEVENTF_UNICODE` key-down/key-up pairs. The helper ACK confirms
+that Wine accepted `SendInput`, not that a game text field consumed the text.
+Background entry of the Thousand Star stage name therefore remains unverified
+and must not be treated as a supported background-text contract yet.
 
 The local scheduler group `Wine 后台输入诊断` retains an ordinary relative
 mouse command before each input set as a comparison baseline:

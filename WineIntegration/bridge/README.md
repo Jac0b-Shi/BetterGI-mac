@@ -61,7 +61,11 @@ marks the registered target best-effort ready after a 500 ms settle window and
 executes the original input exactly once. This click is experimental: the tested cold-focus
 path swallowed it, delivered the following F6 on its first attempt and showed no
 extra attack. An unexpected early recovery could still expose the probe as one
-attack. Probe state is not exposed to Core. The
+attack. The helper sends it only when `GetCursorPos()` is inside the registered
+target client rectangle and `WindowFromPoint()` belongs to that target root. It
+never clicks title bars, resize borders, other Wine windows or unknown locations.
+An unsafe cursor hit remains pending until the wake deadline and never enters
+best-effort delivery. Probe state is not exposed to Core. The
 helper ACKs only when the real business `SendInput` succeeds. Swift invalidates
 best-effort readiness after observing the game become the macOS frontmost
 application and then lose host focus again. The 3-second monotonic deadline
@@ -98,4 +102,6 @@ The validated mouse-prime policy is the normal Wine Bridge default and
 advertises background delivery to Swift and Core. Other foreground experiments
 remain diagnostics and do not bypass host foreground checks. The private
 left-click wake probe can become visible if Wine recovers earlier than expected,
-so the app presents an explicit warning in its runtime log.
+so the app presents an explicit warning in its runtime log. Client-area hit
+validation prevents the probe from activating Wine window chrome; a failed
+validation rejects background delivery instead of risking a host-window action.

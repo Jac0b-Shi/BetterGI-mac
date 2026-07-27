@@ -27,6 +27,7 @@ struct bridge_state {
     uint8_t input_context_probe_count;
     int input_context_first_prime_result;
     bool input_context_best_effort_ready;
+    bool input_context_unsafe_probe_logged;
     bool held_keys[256];
     bool held_mouse[6];
 };
@@ -195,11 +196,54 @@ static bool send_inputs(INPUT *inputs, UINT count)
 
 static bool move_mouse_relative(int32_t delta_x, int32_t delta_y);
 static bool send_mouse_button(struct bridge_state *state, uint8_t button, bool down);
+static bool release_all(struct bridge_state *state);
 
-static bool send_input_wake_probe(struct bridge_state *state)
+enum input_wake_probe_result {
+    INPUT_WAKE_PROBE_SENT,
+    INPUT_WAKE_PROBE_UNSAFE,
+    INPUT_WAKE_PROBE_FAILED
+};
+
+static bool cursor_is_in_target_client(const struct bridge_state *state, POINT *cursor)
 {
-    if (!send_mouse_button(state, BGI_WINE_MOUSE_LEFT, true)) return false;
-    return send_mouse_button(state, BGI_WINE_MOUSE_LEFT, false);
+    HWND target = (HWND)(uintptr_t)state->target.window_handle;
+    RECT client_rect;
+    POINT client_point;
+    HWND hit_window;
+
+    if (!GetCursorPos(cursor) || !GetClientRect(target, &client_rect)) return false;
+    client_point = *cursor;
+    if (!ScreenToClient(target, &client_point)
+        || !PtInRect(&client_rect, client_point)) return false;
+
+    hit_window = WindowFromPoint(*cursor);
+    return hit_window != NULL && GetAncestor(hit_window, GA_ROOT) == target;
+}
+
+static enum input_wake_probe_result send_input_wake_probe(struct bridge_state *state)
+{
+    POINT cursor;
+    if (!cursor_is_in_target_client(state, &cursor)) {
+        if (!state->input_context_unsafe_probe_logged) {
+            fprintf(stderr,
+                "input-context click probe blocked: cursor is not inside "
+                "registered target client area\n");
+            fflush(stderr);
+            state->input_context_unsafe_probe_logged = true;
+        }
+        return INPUT_WAKE_PROBE_UNSAFE;
+    }
+
+    fprintf(stderr, "input-context click probe client-safe screen=(%ld,%ld)\n",
+        cursor.x, cursor.y);
+    fflush(stderr);
+    if (!send_mouse_button(state, BGI_WINE_MOUSE_LEFT, true)) {
+        return INPUT_WAKE_PROBE_FAILED;
+    }
+    if (!send_mouse_button(state, BGI_WINE_MOUSE_LEFT, false)) {
+        return INPUT_WAKE_PROBE_FAILED;
+    }
+    return INPUT_WAKE_PROBE_SENT;
 }
 
 static void collect_foreground_diagnostic(
@@ -359,6 +403,7 @@ static void reset_input_context_wake(struct bridge_state *state)
     state->input_context_next_prime_index = 0;
     state->input_context_probe_count = 0;
     state->input_context_first_prime_result = -1;
+    state->input_context_unsafe_probe_logged = false;
 }
 
 static uint32_t ensure_target_input_context(struct bridge_state *state)
@@ -451,14 +496,20 @@ static uint32_t ensure_target_input_context(struct bridge_state *state)
     if (state->input_context_probe_count < input_probe_offset_count
         && elapsed_ms
             >= input_probe_offsets_ms[state->input_context_probe_count]) {
-        if (!send_input_wake_probe(state)) {
+        enum input_wake_probe_result probe_result = send_input_wake_probe(state);
+        if (probe_result == INPUT_WAKE_PROBE_UNSAFE) {
+            return BGI_WINE_STATUS_INPUT_CONTEXT_WAKE_PENDING;
+        }
+        if (probe_result == INPUT_WAKE_PROBE_FAILED) {
+            release_all(state);
             reset_input_context_wake(state);
             return BGI_WINE_STATUS_INPUT_FAILED;
         }
         state->input_context_probe_count++;
         return BGI_WINE_STATUS_INPUT_CONTEXT_WAKE_PENDING;
     }
-    if (elapsed_ms >= best_effort_settle_ms) {
+    if (state->input_context_probe_count > 0
+        && elapsed_ms >= best_effort_settle_ms) {
         fprintf(stderr,
             "input-context wake settled best-effort elapsedMs=%llu "
             "mousePrimes=%u inputProbes=%u firstPrimeResult=%d "
@@ -687,19 +738,34 @@ static bool perform_mouse_button(
 
 static bool input_text(struct bridge_state *state, const uint8_t *payload, uint32_t length)
 {
-    (void)state;
     if (length == 0 || (length % sizeof(uint16_t)) != 0) return false;
-    for (uint32_t offset = 0; offset < length; offset += 2) {
+    uint32_t code_unit_count = length / sizeof(uint16_t);
+    UINT input_count = (UINT)(code_unit_count * 2);
+    INPUT *inputs = calloc(input_count, sizeof(*inputs));
+    bool contains_non_ascii = false;
+    if (inputs == NULL) return false;
+
+    for (uint32_t index = 0; index < code_unit_count; ++index) {
+        uint32_t offset = index * 2;
         uint16_t code_unit = (uint16_t)(payload[offset] | (payload[offset + 1] << 8));
-        INPUT inputs[2] = {0};
-        inputs[0].type = INPUT_KEYBOARD;
-        inputs[0].ki.wScan = code_unit;
-        inputs[0].ki.dwFlags = KEYEVENTF_UNICODE;
-        inputs[1] = inputs[0];
-        inputs[1].ki.dwFlags |= KEYEVENTF_KEYUP;
-        if (!send_inputs(inputs, 2)) return false;
+        contains_non_ascii = contains_non_ascii || code_unit > 0x7f;
+        inputs[index * 2].type = INPUT_KEYBOARD;
+        inputs[index * 2].ki.wScan = code_unit;
+        inputs[index * 2].ki.dwFlags = KEYEVENTF_UNICODE;
+        inputs[index * 2 + 1] = inputs[index * 2];
+        inputs[index * 2 + 1].ki.dwFlags |= KEYEVENTF_KEYUP;
     }
-    return true;
+
+    fprintf(stderr,
+        "inputText codeUnits=%lu nonAscii=%d foreground=0x%llx target=0x%llx\n",
+        (unsigned long)code_unit_count,
+        contains_non_ascii,
+        (unsigned long long)(uintptr_t)GetForegroundWindow(),
+        (unsigned long long)state->target.window_handle);
+    fflush(stderr);
+    bool success = send_inputs(inputs, input_count);
+    free(inputs);
+    return success;
 }
 
 static bool release_all(struct bridge_state *state)

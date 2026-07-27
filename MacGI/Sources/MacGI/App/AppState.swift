@@ -549,7 +549,8 @@ final class AppState: ObservableObject {
             addLog(
                 .warn,
                 "Wine Bridge 后台操控已启用：原神窗口失焦后需要发送一次左键点击"
-                    + "以恢复输入，少数情况下可能造成一次误输入。")
+                    + "以恢复输入；仅当 Wine 鼠标位于游戏客户区内时才会发送，"
+                    + "否则本次后台输入会被拒绝。")
         } else if launchArguments.contains("--wine-background-diagnostic") {
             addLog(
                 .error,
