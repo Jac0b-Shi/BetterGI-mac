@@ -377,6 +377,7 @@ struct BetterGICoreAutoBossSettings: Sendable, Equatable {
     let returnToStatueAfterEachRound: Bool
     let rewardRecognitionEnabled: Bool
     let reviveRetryCount: Int
+    let timeout: Int
 }
 
 struct BetterGICoreAutoLeyLineOutcropSettings: Sendable, Equatable {
@@ -603,6 +604,11 @@ actor BetterGICoreProcessSupervisor {
         NSLog("BetterGI Core resolving executable URL")
         self.executableURL = try executableURL ?? Self.resolveExecutableURL()
         NSLog("BetterGI Core executable resolved: %@", self.executableURL.path)
+    }
+
+    func processIdentifierForMetrics() -> pid_t? {
+        guard let process, process.isRunning else { return nil }
+        return process.processIdentifier
     }
 
     func start(
@@ -2794,6 +2800,7 @@ actor BetterGICoreProcessSupervisor {
                 "returnToStatueAfterEachRound": settings.returnToStatueAfterEachRound,
                 "rewardRecognitionEnabled": settings.rewardRecognitionEnabled,
                 "reviveRetryCount": settings.reviveRetryCount,
+                "timeout": settings.timeout,
             ]]
         ))
     }
@@ -3114,7 +3121,8 @@ actor BetterGICoreProcessSupervisor {
               let useFragileResin = value["useFragileResin"] as? Bool,
               let returnToStatue = value["returnToStatueAfterEachRound"] as? Bool,
               let rewardRecognition = value["rewardRecognitionEnabled"] as? Bool,
-              let reviveRetryCount = value["reviveRetryCount"] as? Int else {
+              let reviveRetryCount = value["reviveRetryCount"] as? Int,
+              let timeout = value["timeout"] as? Int else {
             throw BetterGICoreRPCError.protocolViolation("Invalid AutoBoss settings.")
         }
         return .init(bossName: bossName, bossOptions: bossOptions,
@@ -3124,7 +3132,8 @@ actor BetterGICoreProcessSupervisor {
                      useFragileResin: useFragileResin,
                      returnToStatueAfterEachRound: returnToStatue,
                      rewardRecognitionEnabled: rewardRecognition,
-                     reviveRetryCount: reviveRetryCount)
+                     reviveRetryCount: reviveRetryCount,
+                     timeout: timeout)
     }
 
     private func decodeAutoDomainSettings(_ value: Any) throws -> BetterGICoreAutoDomainSettings {

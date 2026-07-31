@@ -223,6 +223,7 @@ public sealed class MacOneDragonExecutionPlatform(
                 config.AutoBossReturnToStatueAfterEachRound,
             RewardRecognitionEnabled =
                 config.AutoBossRewardRecognitionEnabled,
+            Timeout = config.AutoBossTimeout,
         };
         parameter.CombatStrategyPath = strategyPath;
         await new AutoBossTask(

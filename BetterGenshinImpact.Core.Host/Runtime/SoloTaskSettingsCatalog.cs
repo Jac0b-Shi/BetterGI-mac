@@ -364,6 +364,10 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         var strategyName = RequiredString(settings, "strategyName");
         if (!StrategyOptions().Contains(strategyName, StringComparer.Ordinal))
             throw new ArgumentException($"Unknown AutoFight strategy: {strategyName}");
+        var timeout = RequiredInt(settings, "timeout");
+        if (timeout is < 1 or > 3600)
+            throw new ArgumentOutOfRangeException(nameof(timeout), timeout,
+                "timeout must be between 1 and 3600 seconds.");
         var config = new AutoBossConfig
         {
             BossName = bossName,
@@ -377,6 +381,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
                 settings, "returnToStatueAfterEachRound"),
             RewardRecognitionEnabled = RequiredBool(settings, "rewardRecognitionEnabled"),
             ReviveRetryCount = Math.Max(0, RequiredInt(settings, "reviveRetryCount")),
+            Timeout = timeout,
         };
         if (!config.SpecifyRunCount)
         {
@@ -719,6 +724,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         returnToStatueAfterEachRound = config.ReturnToStatueAfterEachRound,
         rewardRecognitionEnabled = config.RewardRecognitionEnabled,
         reviveRetryCount = config.ReviveRetryCount,
+        timeout = config.Timeout,
     };
 
     private object Describe(AutoFightConfig config) => new

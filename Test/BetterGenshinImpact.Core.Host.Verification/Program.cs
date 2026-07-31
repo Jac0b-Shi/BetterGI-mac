@@ -3219,7 +3219,8 @@ try
                 useFragileResin = true,
                 returnToStatueAfterEachRound = true,
                 rewardRecognitionEnabled = true,
-                reviveRetryCount = -1
+                reviveRetryCount = -1,
+                timeout = 360
             }
         }), cancellation.Token);
     Require(bossSettings.Error is null && bossSettings.Result is JObject bossSettingsJson &&
@@ -3229,6 +3230,7 @@ try
                 .Contains(Path.Combine("nested", "boss")) == true &&
             bossSettingsJson.Value<int>("runCount") == 1 &&
             bossSettingsJson.Value<int>("reviveRetryCount") == 0 &&
+            bossSettingsJson.Value<int>("timeout") == 360 &&
             !bossSettingsJson.Value<bool>("useTransientResin") &&
             !bossSettingsJson.Value<bool>("useFragileResin"),
         bossSettings.Error?.Message ?? "solo.settings.save did not preserve AutoBoss model semantics");

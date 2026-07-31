@@ -680,6 +680,16 @@ struct SoloTasksPage: View {
                     Text("\(settings.reviveRetryCount)").frame(minWidth: 30, alignment: .trailing)
                 }
             }
+            BGISettingLine(
+                title: "战斗超时",
+                subtitle: "单次首领战斗超过该时长后停止，范围 1–3600 秒"
+            ) {
+                Stepper(value: Binding(
+                    get: { settings.timeout },
+                    set: { appState.saveAutoBossSettings(timeout: $0) }), in: 1...3600) {
+                    Text("\(settings.timeout) 秒").frame(minWidth: 64, alignment: .trailing)
+                }
+            }
         } else { settingsLoading }
     }
 

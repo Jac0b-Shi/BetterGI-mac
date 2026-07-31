@@ -333,6 +333,7 @@ final class AppState: ObservableObject {
     @Published var showOverlayLogBox = true
     @Published var showOverlayStatus = true
     @Published var showOverlayMetrics = true
+    @Published private(set) var systemMetrics = MacSystemMetricsSnapshot.empty
     @Published var showOverlayBorder = true
     @Published var showOverlayRecognition = true
     @Published var showOverlayDirections = true
@@ -413,6 +414,8 @@ final class AppState: ObservableObject {
     private var oneDragonExecutionTask: Task<Void, Never>?
     private var betterGICoreSupervisor: BetterGICoreProcessSupervisor?
     private var coreStartupTask: Task<Void, Never>?
+    private let systemMetricsSampler = MacSystemMetricsSampler()
+    private var systemMetricsSamplingTask: Task<Void, Never>?
     private var coreStartupInFlight = false
     private var autoStartRuntimePending: Bool
     private var autoStartSchedulerGroupNames: [String]
@@ -634,6 +637,7 @@ final class AppState: ObservableObject {
     }
 
     func beginCoreStartup() {
+        startSystemMetricsSampling()
         guard coreStartupTask == nil, !coreStartupInFlight, betterGICoreSupervisor == nil else { return }
         runtimeLaunchReady = true
         NSLog("BetterGI Core startup scheduled")
@@ -2789,11 +2793,42 @@ final class AppState: ObservableObject {
     }
 
     var overlayMetricDisplayItems: [OverlayDisplayMetric] {
-        [
-            OverlayDisplayMetric(id: "game-fps", name: "游戏帧率", value: "\(captureFPS)"),
-            OverlayDisplayMetric(id: "core-status", name: "Core", value: coreStatus.label),
-            OverlayDisplayMetric(id: "scheduler-status", name: "调度器", value: schedulerExecutionStatus)
+        var items = [
+            OverlayDisplayMetric(id: "capture-fps", name: "截图帧率", value: "\(captureFPS)")
         ]
+        if let value = systemMetrics.gpuPercent {
+            items.append(OverlayDisplayMetric(
+                id: "gpu-usage", name: "GPU占用", value: Self.formatPercent(value)))
+        }
+        if let value = systemMetrics.systemCPUPercent {
+            items.append(OverlayDisplayMetric(
+                id: "cpu-usage", name: "CPU占用", value: Self.formatPercent(value)))
+        }
+        if let value = systemMetrics.systemMemoryPercent {
+            items.append(OverlayDisplayMetric(
+                id: "memory-usage", name: "内存占用", value: Self.formatPercent(value)))
+        }
+        if let bytes = systemMetrics.bgiPhysicalFootprintBytes {
+            items.append(OverlayDisplayMetric(
+                id: "bgi-memory", name: "BGI内存", value: Self.formatMemory(bytes)))
+        }
+        if let value = systemMetrics.bgiCPUPercent {
+            items.append(OverlayDisplayMetric(
+                id: "bgi-cpu", name: "BGI CPU", value: String(format: "%.1f%%", value)))
+        }
+        return items
+    }
+
+    private static func formatPercent(_ value: Double) -> String {
+        String(format: "%.0f%%", value)
+    }
+
+    private static func formatMemory(_ bytes: UInt64) -> String {
+        let mebibytes = Double(bytes) / 1_048_576
+        if mebibytes >= 1_024 {
+            return String(format: "%.1fGB", mebibytes / 1_024)
+        }
+        return String(format: "%.0fMB", mebibytes)
     }
 
     var filteredLogs: [LogEntry] {
@@ -4495,7 +4530,8 @@ final class AppState: ObservableObject {
         specifyRunCount: Bool? = nil, runCount: Int? = nil,
         useTransientResin: Bool? = nil, useFragileResin: Bool? = nil,
         returnToStatueAfterEachRound: Bool? = nil,
-        rewardRecognitionEnabled: Bool? = nil, reviveRetryCount: Int? = nil
+        rewardRecognitionEnabled: Bool? = nil, reviveRetryCount: Int? = nil,
+        timeout: Int? = nil
     ) {
         guard let supervisor = betterGICoreSupervisor, let current = autoBossSettings else { return }
         let next = BetterGICoreAutoBossSettings(
@@ -4510,7 +4546,8 @@ final class AppState: ObservableObject {
                 returnToStatueAfterEachRound ?? current.returnToStatueAfterEachRound,
             rewardRecognitionEnabled:
                 rewardRecognitionEnabled ?? current.rewardRecognitionEnabled,
-            reviveRetryCount: reviveRetryCount ?? current.reviveRetryCount)
+            reviveRetryCount: reviveRetryCount ?? current.reviveRetryCount,
+            timeout: timeout ?? current.timeout)
         Task { [weak self] in
             do { self?.autoBossSettings = try await supervisor.saveAutoBossSettings(next) }
             catch { self?.addLog(.error, "AutoBoss settings save failed: \(error.localizedDescription)") }
@@ -5092,7 +5129,33 @@ final class AppState: ObservableObject {
     }
 
     func shutdownInputBackend() {
+        systemMetricsSamplingTask?.cancel()
+        systemMetricsSamplingTask = nil
         inputDispatcher.shutdown()
+    }
+
+    private func startSystemMetricsSampling() {
+        guard systemMetricsSamplingTask == nil else { return }
+        let appProcessID = ProcessInfo.processInfo.processIdentifier
+        systemMetricsSamplingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                var processIDs = [appProcessID]
+                if let supervisor = self.betterGICoreSupervisor,
+                   let coreProcessID = await supervisor.processIdentifierForMetrics() {
+                    processIDs.append(coreProcessID)
+                }
+                let snapshot = await self.systemMetricsSampler.sample(
+                    bgiProcessIDs: processIDs)
+                guard !Task.isCancelled else { return }
+                self.systemMetrics = snapshot
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    return
+                }
+            }
+        }
     }
 
     @discardableResult

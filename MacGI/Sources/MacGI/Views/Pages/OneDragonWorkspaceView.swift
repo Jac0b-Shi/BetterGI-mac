@@ -466,6 +466,10 @@ struct OneDragonWorkspaceView: View {
                     "复苏重试次数：\(appState.oneDragonIntValue("AutoBossReviveRetryCount", default: 3))",
                     value: intBinding("AutoBossReviveRetryCount", default: 3),
                     in: 0 ... 20)
+                Stepper(
+                    "战斗超时：\(appState.oneDragonIntValue("AutoBossTimeout", default: 240)) 秒",
+                    value: intBinding("AutoBossTimeout", default: 240),
+                    in: 1 ... 3_600)
                 Toggle(
                     "每轮结束后返回七天神像",
                     isOn: boolBinding("AutoBossReturnToStatueAfterEachRound"))
