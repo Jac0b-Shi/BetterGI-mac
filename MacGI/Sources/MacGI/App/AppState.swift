@@ -333,6 +333,7 @@ final class AppState: ObservableObject {
     @Published var showOverlayLogBox = true
     @Published var showOverlayStatus = true
     @Published var showOverlayMetrics = true
+    @Published private(set) var systemMetrics = MacSystemMetricsSnapshot.empty
     @Published var showOverlayBorder = true
     @Published var showOverlayRecognition = true
     @Published var showOverlayDirections = true
@@ -413,6 +414,8 @@ final class AppState: ObservableObject {
     private var oneDragonExecutionTask: Task<Void, Never>?
     private var betterGICoreSupervisor: BetterGICoreProcessSupervisor?
     private var coreStartupTask: Task<Void, Never>?
+    private let systemMetricsSampler = MacSystemMetricsSampler()
+    private var systemMetricsSamplingTask: Task<Void, Never>?
     private var coreStartupInFlight = false
     private var autoStartRuntimePending: Bool
     private var autoStartSchedulerGroupNames: [String]
@@ -425,6 +428,8 @@ final class AppState: ObservableObject {
     private var pendingRuntimeGeometryPixelSize: CGSize?
     private var runtimeGeometryRefreshTask: Task<Void, Never>?
     private var runtimeTargetProcessID: pid_t?
+    private var pendingRuntimeWindowSelection: WindowInfo?
+    private var manuallySelectedWindowID: CGWindowID?
     private var mapMaskSelectionSaveTask: Task<Void, Never>?
     private var mapMaskPointDetailRequestRevision = 0
     private let keyMouseEventRecorder = MacKeyMouseEventRecorder()
@@ -634,6 +639,7 @@ final class AppState: ObservableObject {
     }
 
     func beginCoreStartup() {
+        startSystemMetricsSampling()
         guard coreStartupTask == nil, !coreStartupInFlight, betterGICoreSupervisor == nil else { return }
         runtimeLaunchReady = true
         NSLog("BetterGI Core startup scheduled")
@@ -2401,7 +2407,15 @@ final class AppState: ObservableObject {
                 self.runtimeLifecycleMessage = completionMessage
                 self.appStatus = .idle
                 self.addLog(.info, completionLog)
+                if let window = self.pendingRuntimeWindowSelection {
+                    self.pendingRuntimeWindowSelection = nil
+                    self.applySelectedWindow(window)
+                    self.addLog(.info,
+                        "Restarting BetterGI runtime with the selected capture window.")
+                    self.startRuntime()
+                }
             } catch {
+                self.pendingRuntimeWindowSelection = nil
                 self.runtimeTargetProcessID = nil
                 self.runtimeLifecycle = .failed
                 self.runtimeLifecycleMessage = "停止失败：\(error.localizedDescription)"
@@ -2789,11 +2803,42 @@ final class AppState: ObservableObject {
     }
 
     var overlayMetricDisplayItems: [OverlayDisplayMetric] {
-        [
-            OverlayDisplayMetric(id: "game-fps", name: "游戏帧率", value: "\(captureFPS)"),
-            OverlayDisplayMetric(id: "core-status", name: "Core", value: coreStatus.label),
-            OverlayDisplayMetric(id: "scheduler-status", name: "调度器", value: schedulerExecutionStatus)
+        var items = [
+            OverlayDisplayMetric(id: "capture-fps", name: "截图帧率", value: "\(captureFPS)")
         ]
+        if let value = systemMetrics.gpuPercent {
+            items.append(OverlayDisplayMetric(
+                id: "gpu-usage", name: "GPU占用", value: Self.formatPercent(value)))
+        }
+        if let value = systemMetrics.systemCPUPercent {
+            items.append(OverlayDisplayMetric(
+                id: "cpu-usage", name: "CPU占用", value: Self.formatPercent(value)))
+        }
+        if let value = systemMetrics.systemMemoryPercent {
+            items.append(OverlayDisplayMetric(
+                id: "memory-usage", name: "内存占用", value: Self.formatPercent(value)))
+        }
+        if let bytes = systemMetrics.bgiPhysicalFootprintBytes {
+            items.append(OverlayDisplayMetric(
+                id: "bgi-memory", name: "BGI内存", value: Self.formatMemory(bytes)))
+        }
+        if let value = systemMetrics.bgiCPUPercent {
+            items.append(OverlayDisplayMetric(
+                id: "bgi-cpu", name: "BGI CPU", value: String(format: "%.1f%%", value)))
+        }
+        return items
+    }
+
+    private static func formatPercent(_ value: Double) -> String {
+        String(format: "%.0f%%", value)
+    }
+
+    private static func formatMemory(_ bytes: UInt64) -> String {
+        let mebibytes = Double(bytes) / 1_048_576
+        if mebibytes >= 1_024 {
+            return String(format: "%.1fGB", mebibytes / 1_024)
+        }
+        return String(format: "%.0fMB", mebibytes)
     }
 
     var filteredLogs: [LogEntry] {
@@ -4495,7 +4540,8 @@ final class AppState: ObservableObject {
         specifyRunCount: Bool? = nil, runCount: Int? = nil,
         useTransientResin: Bool? = nil, useFragileResin: Bool? = nil,
         returnToStatueAfterEachRound: Bool? = nil,
-        rewardRecognitionEnabled: Bool? = nil, reviveRetryCount: Int? = nil
+        rewardRecognitionEnabled: Bool? = nil, reviveRetryCount: Int? = nil,
+        timeout: Int? = nil
     ) {
         guard let supervisor = betterGICoreSupervisor, let current = autoBossSettings else { return }
         let next = BetterGICoreAutoBossSettings(
@@ -4510,7 +4556,8 @@ final class AppState: ObservableObject {
                 returnToStatueAfterEachRound ?? current.returnToStatueAfterEachRound,
             rewardRecognitionEnabled:
                 rewardRecognitionEnabled ?? current.rewardRecognitionEnabled,
-            reviveRetryCount: reviveRetryCount ?? current.reviveRetryCount)
+            reviveRetryCount: reviveRetryCount ?? current.reviveRetryCount,
+            timeout: timeout ?? current.timeout)
         Task { [weak self] in
             do { self?.autoBossSettings = try await supervisor.saveAutoBossSettings(next) }
             catch { self?.addLog(.error, "AutoBoss settings save failed: \(error.localizedDescription)") }
@@ -4796,13 +4843,31 @@ final class AppState: ObservableObject {
                 gameWindowStatus = .missing
                 return
             }
-        } else if let preserved = windows.first(where: { $0.id == selectedWindow.id }) {
-            selectedWindow = preserved
-        } else if let best = QuartzWindowEnumerator.bestGameWindow(from: windows) {
-            selectedWindow = best
+        } else {
+            let preserved = windows.first(where: { $0.id == selectedWindow.id })
+            if manuallySelectedWindowID != nil, preserved == nil {
+                manuallySelectedWindowID = nil
+            }
+            let best = QuartzWindowEnumerator.bestGameWindow(from: windows)
+            if let preserved, preserved.id == manuallySelectedWindowID {
+                selectedWindow = preserved
+            } else if let best {
+                if let preserved, preserved.isLikelyGameWindow,
+                   preserved.gameWindowSelectionPriority >=
+                    best.gameWindowSelectionPriority {
+                    selectedWindow = preserved
+                } else {
+                    selectedWindow = best
+                }
+            } else if let preserved, preserved.isLikelyGameWindow {
+                selectedWindow = preserved
+            } else {
+                selectedWindow = .unavailable(title: "No game window selected")
+            }
         }
 
-        gameWindowStatus = selectedWindow.isLikelyGameWindow ? .detected : .missing
+        gameWindowStatus = selectedWindow.isLikelyGameWindow
+            || selectedWindow.id == manuallySelectedWindowID ? .detected : .missing
         let likelyCount = windows.filter(\.isLikelyGameWindow).count
         addLog(.debug, "Quartz window list refreshed — \(windows.count) windows, \(likelyCount) likely game windows")
         addLog(.info, "Selected game window: \(selectedWindow.displayName)")
@@ -4820,7 +4885,8 @@ final class AppState: ObservableObject {
                runtimeGeometryPixelSize != refreshed.capturePixelSize {
                 scheduleRuntimeGeometryRefresh(for: refreshed.capturePixelSize)
             }
-            gameWindowStatus = refreshed.isLikelyGameWindow ? .detected : .missing
+            gameWindowStatus = refreshed.isLikelyGameWindow
+                || refreshed.id == manuallySelectedWindowID ? .detected : .missing
             return refreshed
         }
 
@@ -4855,6 +4921,7 @@ final class AppState: ObservableObject {
 
         if let replacement = QuartzWindowEnumerator.bestGameWindow(from: windows) {
             let previousWindowID = selectedWindow.isSynthetic ? nil : selectedWindow.id
+            manuallySelectedWindowID = nil
             selectedWindow = replacement
             availableWindows = windows
             gameWindowStatus = .detected
@@ -4872,6 +4939,7 @@ final class AppState: ObservableObject {
         }
 
         if !selectedWindow.isSynthetic {
+            manuallySelectedWindowID = nil
             selectedWindow = .unavailable(title: "Game window unavailable")
             availableWindows = windows
             gameWindowStatus = .missing
@@ -4969,7 +5037,28 @@ final class AppState: ObservableObject {
     }
 
     func setSelectedWindow(_ window: WindowInfo) {
+        guard !runtimeLifecycle.isTransitioning else {
+            addLog(.warn, "Cannot change the capture window while the runtime is transitioning.")
+            return
+        }
+        guard window.id != 0, window.isOnScreen, !window.isSynthetic else {
+            addLog(.warn, "Rejected an unavailable capture window: \(window.displayName)")
+            return
+        }
+        if runtimeLifecycle == .running, window.id != selectedWindow.id {
+            pendingRuntimeWindowSelection = window
+            stopRuntime(
+                completionMessage: "正在切换捕获窗口...",
+                completionLog: "BetterGI runtime stopped before changing the capture window.")
+            return
+        }
+        applySelectedWindow(window)
+    }
+
+    private func applySelectedWindow(_ window: WindowInfo) {
+        manuallySelectedWindowID = window.id
         selectedWindow = window
+        gameWindowStatus = .detected
         addLog(.info, "Window selected: \(window.displayName)")
         guard window.id != 0, window.isOnScreen, !window.isSynthetic, coreStatus != .ok else { return }
         coreStartupTask = Task { [weak self] in
@@ -5092,7 +5181,33 @@ final class AppState: ObservableObject {
     }
 
     func shutdownInputBackend() {
+        systemMetricsSamplingTask?.cancel()
+        systemMetricsSamplingTask = nil
         inputDispatcher.shutdown()
+    }
+
+    private func startSystemMetricsSampling() {
+        guard systemMetricsSamplingTask == nil else { return }
+        let appProcessID = ProcessInfo.processInfo.processIdentifier
+        systemMetricsSamplingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                var processIDs = [appProcessID]
+                if let supervisor = self.betterGICoreSupervisor,
+                   let coreProcessID = await supervisor.processIdentifierForMetrics() {
+                    processIDs.append(coreProcessID)
+                }
+                let snapshot = await self.systemMetricsSampler.sample(
+                    bgiProcessIDs: processIDs)
+                guard !Task.isCancelled else { return }
+                self.systemMetrics = snapshot
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    return
+                }
+            }
+        }
     }
 
     @discardableResult
@@ -5160,6 +5275,7 @@ final class AppState: ObservableObject {
         captureTimestamps = []
         measuredCaptureFPS = 0
         runtimeTargetProcessID = nil
+        pendingRuntimeWindowSelection = nil
         schedulerExecutionStatus = "Idle"
         currentSchedulerProjectID = nil
         safetyGate.resetCounters()

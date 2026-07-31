@@ -21,8 +21,7 @@ enum QuartzWindowEnumerator {
                 window.ownerPID != currentPID
                 && window.layer == 0
                 && window.isOnScreen
-                && window.frame.width >= 80
-                && window.frame.height >= 60
+                && !window.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             }
             .sorted(by: sortForGameSelection)
     }

@@ -132,7 +132,7 @@ public class QuickTeleportTrigger : ITaskTrigger
 
         // 全匹配一遍
         var assets = _assets ?? QuickTeleportAssets.Get(content.CaptureRectArea);
-        using var mapChooseIconRoi = content.CaptureRectArea.CacheGreyMat[assets.MapChooseIconRoi].Clone();
+        using var mapChooseIconRoi = content.CaptureRectArea.CacheGreyMat[assets.MapChooseIconRoi];
         var rResultList = MatchTemplateHelper.MatchMultiPicForOnePic(mapChooseIconRoi, assets.MapChooseIconGreyMatList, isHdrCapture ? 0.7 : 0.8);
 
         // 按高度排序

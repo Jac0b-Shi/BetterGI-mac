@@ -88,6 +88,11 @@ public class AutoBossParam : BaseTaskParam<AutoBossTask>
     public bool RewardRecognitionEnabled { get; set; }
 
     /// <summary>
+    /// 战斗超时
+    /// </summary>
+    public int Timeout { get; set; } = 240;
+
+    /// <summary>
     /// 使用当前全局 AutoBoss 配置创建参数，主要用于 JS 无参构造和一条龙默认启动。
     /// </summary>
 #if !BGI_PLATFORM_MAC
@@ -155,6 +160,7 @@ public class AutoBossParam : BaseTaskParam<AutoBossTask>
         ReviveRetryCount = config.ReviveRetryCount;
         ReturnToStatueAfterEachRound = config.ReturnToStatueAfterEachRound;
         RewardRecognitionEnabled = config.RewardRecognitionEnabled;
+        Timeout = config.Timeout;
     }
 
     /// <summary>

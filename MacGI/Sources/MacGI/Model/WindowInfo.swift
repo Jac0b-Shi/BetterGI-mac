@@ -121,9 +121,6 @@ struct WindowInfo: Identifiable, Equatable, Hashable, Sendable {
         if isWine && (hasLocalizedGameTitle || hasEnglishGameTitle) {
             return 100
         }
-        if hasLocalizedGameTitle || hasEnglishGameTitle {
-            return 90
-        }
         if isWine && hasImpactTitle {
             return 80
         }

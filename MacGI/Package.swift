@@ -25,6 +25,7 @@ let package = Package(
                 .copy("Resources")
             ],
             linkerSettings: [
+                .linkedFramework("IOKit")
             ]
         ),
         .testTarget(

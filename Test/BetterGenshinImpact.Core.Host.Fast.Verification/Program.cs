@@ -24,4 +24,5 @@ return await VerificationRunner.RunAsync(args,
     new ScriptStartupSuite(),
     new ScriptFilePathSuite(),
     new LogParseSuite(),
+    new TemplateMatchingSuite(),
 ]);

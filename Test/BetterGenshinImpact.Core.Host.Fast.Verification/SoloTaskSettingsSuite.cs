@@ -99,6 +99,25 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
 
             var catalog = new SoloTaskSettingsCatalog(layout);
             var commonSettingsCatalog = new CommonSettingsCatalog(layout);
+            var bossSettings = JObject.FromObject(catalog.Save(
+                "AutoBoss",
+                JObject.FromObject(new
+                {
+                    bossName = "",
+                    strategyName = "根据队伍自动选择",
+                    teamName = "",
+                    specifyRunCount = false,
+                    runCount = 1,
+                    useTransientResin = false,
+                    useFragileResin = false,
+                    returnToStatueAfterEachRound = false,
+                    rewardRecognitionEnabled = false,
+                    reviveRetryCount = 3,
+                    timeout = 360,
+                })));
+            context.Require(
+                bossSettings.Value<int>("timeout") == 360,
+                "AutoBoss did not preserve the upstream configurable combat timeout.");
             _ = catalog.Save("AutoFishing", JObject.FromObject(new
             {
                 autoThrowRodTimeOut = 15,

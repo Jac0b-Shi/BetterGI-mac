@@ -2097,8 +2097,12 @@ finally
 Assert("Pyro ElementalCollectHandler uses the configured real CombatScenes team",
     pyroCollectTeamNames.SequenceEqual(["烟绯", "钟离", "夜兰", "纳西妲"]),
     string.Join(",", pyroCollectTeamNames));
-Assert("Pyro ElementalCollectHandler preserves Yanfei normal-attack behavior",
-    recordingTaskControl.Calls.SequenceEqual(["action:NormalAttack:KeyPress"]),
+Assert("Pyro ElementalCollectHandler switches to Yanfei before the normal attack",
+    recordingTaskControl.Calls.SequenceEqual([
+        "action:Drop:KeyPress",
+        "action:SwitchMember1:KeyPress",
+        "action:NormalAttack:KeyPress"
+    ]),
     string.Join(" | ", recordingTaskControl.Calls));
 Assert("Pyro ElementalCollectHandler consumes main-UI, team and active-avatar captures",
     pyroCollectCaptureCount == 3, $"captures={pyroCollectCaptureCount}");

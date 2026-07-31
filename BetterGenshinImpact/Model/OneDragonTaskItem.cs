@@ -155,6 +155,7 @@ public partial class OneDragonTaskItem : ObservableObject
                     param.ReviveRetryCount = config.AutoBossReviveRetryCount;
                     param.ReturnToStatueAfterEachRound = config.AutoBossReturnToStatueAfterEachRound;
                     param.RewardRecognitionEnabled = config.AutoBossRewardRecognitionEnabled;
+                    param.Timeout = config.AutoBossTimeout;
                     await new AutoBossTask(param).Start(CancellationContext.Instance.Cts.Token);
                 };
                 break;
