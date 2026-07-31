@@ -71,6 +71,26 @@ struct QuartzWindowEnumeratorTests {
         #expect(QuartzWindowEnumerator.bestGameWindow(from: [ordinaryWindow]) == nil)
     }
 
+    @Test("Browser titles mentioning the BetterGI repository are not game windows")
+    func browserRepositoryTitleIsNotSelected() {
+        let browser = makeWindow(
+            id: 6,
+            ownerName: "Google Chrome",
+            title: "babalae/better-genshin-impact: Better Genshin Impact",
+            frame: CGRect(x: 20, y: 48, width: 1480, height: 930)
+        )
+        let game = makeWindow(
+            id: 7,
+            ownerName: "wine",
+            title: "原神",
+            frame: CGRect(x: 879, y: 174, width: 960, height: 572)
+        )
+
+        #expect(!browser.isLikelyGameWindow)
+        #expect(browser.gameWindowSelectionPriority == 0)
+        #expect(QuartzWindowEnumerator.bestGameWindow(from: [browser, game]) == game)
+    }
+
     @Test("HUD frame follows Quartz window geometry")
     @MainActor
     func hudFrameFollowsQuartzWindowGeometry() {

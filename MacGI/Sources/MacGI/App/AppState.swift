@@ -428,6 +428,7 @@ final class AppState: ObservableObject {
     private var pendingRuntimeGeometryPixelSize: CGSize?
     private var runtimeGeometryRefreshTask: Task<Void, Never>?
     private var runtimeTargetProcessID: pid_t?
+    private var pendingRuntimeWindowSelection: WindowInfo?
     private var mapMaskSelectionSaveTask: Task<Void, Never>?
     private var mapMaskPointDetailRequestRevision = 0
     private let keyMouseEventRecorder = MacKeyMouseEventRecorder()
@@ -2405,7 +2406,15 @@ final class AppState: ObservableObject {
                 self.runtimeLifecycleMessage = completionMessage
                 self.appStatus = .idle
                 self.addLog(.info, completionLog)
+                if let window = self.pendingRuntimeWindowSelection {
+                    self.pendingRuntimeWindowSelection = nil
+                    self.applySelectedWindow(window)
+                    self.addLog(.info,
+                        "Restarting BetterGI runtime with the selected capture window.")
+                    self.startRuntime()
+                }
             } catch {
+                self.pendingRuntimeWindowSelection = nil
                 self.runtimeTargetProcessID = nil
                 self.runtimeLifecycle = .failed
                 self.runtimeLifecycleMessage = "停止失败：\(error.localizedDescription)"
@@ -4833,10 +4842,22 @@ final class AppState: ObservableObject {
                 gameWindowStatus = .missing
                 return
             }
-        } else if let preserved = windows.first(where: { $0.id == selectedWindow.id }) {
-            selectedWindow = preserved
-        } else if let best = QuartzWindowEnumerator.bestGameWindow(from: windows) {
-            selectedWindow = best
+        } else {
+            let preserved = windows.first(where: { $0.id == selectedWindow.id })
+            let best = QuartzWindowEnumerator.bestGameWindow(from: windows)
+            if let best {
+                if let preserved, preserved.isLikelyGameWindow,
+                   preserved.gameWindowSelectionPriority >=
+                    best.gameWindowSelectionPriority {
+                    selectedWindow = preserved
+                } else {
+                    selectedWindow = best
+                }
+            } else if let preserved, preserved.isLikelyGameWindow {
+                selectedWindow = preserved
+            } else {
+                selectedWindow = .unavailable(title: "No game window selected")
+            }
         }
 
         gameWindowStatus = selectedWindow.isLikelyGameWindow ? .detected : .missing
@@ -5006,7 +5027,28 @@ final class AppState: ObservableObject {
     }
 
     func setSelectedWindow(_ window: WindowInfo) {
+        guard !runtimeLifecycle.isTransitioning else {
+            addLog(.warn, "Cannot change the capture window while the runtime is transitioning.")
+            return
+        }
+        guard window.id != 0, window.isOnScreen, !window.isSynthetic,
+              window.isLikelyGameWindow else {
+            addLog(.warn, "Rejected a non-game capture window: \(window.displayName)")
+            return
+        }
+        if runtimeLifecycle == .running, window.id != selectedWindow.id {
+            pendingRuntimeWindowSelection = window
+            stopRuntime(
+                completionMessage: "正在切换捕获窗口...",
+                completionLog: "BetterGI runtime stopped before changing the capture window.")
+            return
+        }
+        applySelectedWindow(window)
+    }
+
+    private func applySelectedWindow(_ window: WindowInfo) {
         selectedWindow = window
+        gameWindowStatus = .detected
         addLog(.info, "Window selected: \(window.displayName)")
         guard window.id != 0, window.isOnScreen, !window.isSynthetic, coreStatus != .ok else { return }
         coreStartupTask = Task { [weak self] in
@@ -5223,6 +5265,7 @@ final class AppState: ObservableObject {
         captureTimestamps = []
         measuredCaptureFPS = 0
         runtimeTargetProcessID = nil
+        pendingRuntimeWindowSelection = nil
         schedulerExecutionStatus = "Idle"
         currentSchedulerProjectID = nil
         safetyGate.resetCounters()
