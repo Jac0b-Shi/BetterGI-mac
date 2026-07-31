@@ -954,7 +954,7 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
             ExpBasedPickupEnabled = false,
             KazuhaPickupEnabled = false,
             PickDropsAfterFightEnabled = false,
-            Timeout = 600,
+            Timeout = _taskParam.Timeout,
         };
 
         var jsonTask = new AutoFightJsonTask(jsonParam);
@@ -987,9 +987,9 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
             ExpBasedPickupEnabled = false,
             KazuhaPartyName = string.Empty,
             BattleThresholdForLoot = -1,
-            OnlyPickEliteDropsMode = "DisableAutoPickupForNonElite"
+            OnlyPickEliteDropsMode = "DisableAutoPickupForNonElite",
+            Timeout = _taskParam.Timeout
         };
-
         return taskParam;
     }
 
