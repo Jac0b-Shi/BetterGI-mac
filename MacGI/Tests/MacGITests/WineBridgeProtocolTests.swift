@@ -6,6 +6,16 @@ import Testing
 
 @Suite("Wine bridge protocol")
 struct WineBridgeProtocolTests {
+    @Test("Process output EOF detaches its readability handler")
+    func processOutputEOFStopsMonitoring() {
+        let pipe = Pipe()
+        pipe.fileHandleForReading.readabilityHandler = { _ in }
+        pipe.fileHandleForWriting.closeFile()
+
+        #expect(readAvailableProcessOutput(from: pipe.fileHandleForReading) == nil)
+        #expect(pipe.fileHandleForReading.readabilityHandler == nil)
+    }
+
     @Test("Packet header round-trips fixed little-endian fields")
     func packetHeaderRoundTrip() throws {
         let header = WineBridgePacketHeader(

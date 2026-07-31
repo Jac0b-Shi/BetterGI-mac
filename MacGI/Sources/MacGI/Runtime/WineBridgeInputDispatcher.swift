@@ -652,9 +652,8 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
             process.environment = environment
             let outputPipe = Pipe()
             outputPipe.fileHandleForReading.readabilityHandler = { handle in
-                let data = handle.availableData
-                guard !data.isEmpty,
-                      let text = String(data: data, encoding: .utf8) else { return }
+                guard let data = readAvailableProcessOutput(from: handle) else { return }
+                guard let text = String(data: data, encoding: .utf8) else { return }
                 let bounded = String(text.prefix(2_048))
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if !bounded.isEmpty {

@@ -639,7 +639,8 @@ actor BetterGICoreProcessSupervisor {
         let outputPipe = Pipe()
         let outputForwarder = CoreOutputForwarder(handler: logHandler)
         outputPipe.fileHandleForReading.readabilityHandler = { handle in
-            outputForwarder.consume(handle.availableData)
+            guard let data = readAvailableProcessOutput(from: handle) else { return }
+            outputForwarder.consume(data)
         }
         process.standardOutput = outputPipe
         process.standardError = outputPipe
