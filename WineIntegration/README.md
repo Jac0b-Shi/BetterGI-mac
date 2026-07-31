@@ -207,12 +207,13 @@ open MacGI/.build/App/betterGI-mac.app --args \
   --wine-foreground-experiment mouse-prime-left
 ```
 
-Wine Bridge text delivery currently follows upstream Windows semantics by
-submitting `KEYEVENTF_UNICODE` key-down/key-up pairs. The helper ACK confirms
-that Wine accepted `SendInput`, not that a game text field consumed the text.
-Background entry of the Thousand Star stage name therefore remains unverified
-and must not be treated as a supported background-text contract yet. The launch
-page exposes a persisted `BackgroundTextInputPolicy`: its default
+Wine Bridge script text delivery follows upstream `GlobalMethod.InputText`
+semantics: it writes the UTF-16 payload to the Wine `CF_UNICODETEXT` clipboard,
+then submits `Ctrl+V`. This avoids Wine/game text controls degrading CJK input
+from `KEYEVENTF_UNICODE` into question marks. Background entry still remains an
+explicit foreground-gated operation rather than a supported background-text
+contract. The launch page exposes a persisted `BackgroundTextInputPolicy`: its
+default
 `waitForForeground` path waits without changing held-input cleanup state, then
 requires 200 ms of stable host foreground before dispatch. `skipAndContinue`
 does not call the bridge and returns an acknowledged response with

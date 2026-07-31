@@ -429,6 +429,7 @@ final class AppState: ObservableObject {
     private var runtimeGeometryRefreshTask: Task<Void, Never>?
     private var runtimeTargetProcessID: pid_t?
     private var pendingRuntimeWindowSelection: WindowInfo?
+    private var manuallySelectedWindowID: CGWindowID?
     private var mapMaskSelectionSaveTask: Task<Void, Never>?
     private var mapMaskPointDetailRequestRevision = 0
     private let keyMouseEventRecorder = MacKeyMouseEventRecorder()
@@ -4844,8 +4845,13 @@ final class AppState: ObservableObject {
             }
         } else {
             let preserved = windows.first(where: { $0.id == selectedWindow.id })
+            if manuallySelectedWindowID != nil, preserved == nil {
+                manuallySelectedWindowID = nil
+            }
             let best = QuartzWindowEnumerator.bestGameWindow(from: windows)
-            if let best {
+            if let preserved, preserved.id == manuallySelectedWindowID {
+                selectedWindow = preserved
+            } else if let best {
                 if let preserved, preserved.isLikelyGameWindow,
                    preserved.gameWindowSelectionPriority >=
                     best.gameWindowSelectionPriority {
@@ -4860,7 +4866,8 @@ final class AppState: ObservableObject {
             }
         }
 
-        gameWindowStatus = selectedWindow.isLikelyGameWindow ? .detected : .missing
+        gameWindowStatus = selectedWindow.isLikelyGameWindow
+            || selectedWindow.id == manuallySelectedWindowID ? .detected : .missing
         let likelyCount = windows.filter(\.isLikelyGameWindow).count
         addLog(.debug, "Quartz window list refreshed — \(windows.count) windows, \(likelyCount) likely game windows")
         addLog(.info, "Selected game window: \(selectedWindow.displayName)")
@@ -4878,7 +4885,8 @@ final class AppState: ObservableObject {
                runtimeGeometryPixelSize != refreshed.capturePixelSize {
                 scheduleRuntimeGeometryRefresh(for: refreshed.capturePixelSize)
             }
-            gameWindowStatus = refreshed.isLikelyGameWindow ? .detected : .missing
+            gameWindowStatus = refreshed.isLikelyGameWindow
+                || refreshed.id == manuallySelectedWindowID ? .detected : .missing
             return refreshed
         }
 
@@ -4913,6 +4921,7 @@ final class AppState: ObservableObject {
 
         if let replacement = QuartzWindowEnumerator.bestGameWindow(from: windows) {
             let previousWindowID = selectedWindow.isSynthetic ? nil : selectedWindow.id
+            manuallySelectedWindowID = nil
             selectedWindow = replacement
             availableWindows = windows
             gameWindowStatus = .detected
@@ -4930,6 +4939,7 @@ final class AppState: ObservableObject {
         }
 
         if !selectedWindow.isSynthetic {
+            manuallySelectedWindowID = nil
             selectedWindow = .unavailable(title: "Game window unavailable")
             availableWindows = windows
             gameWindowStatus = .missing
@@ -5031,9 +5041,8 @@ final class AppState: ObservableObject {
             addLog(.warn, "Cannot change the capture window while the runtime is transitioning.")
             return
         }
-        guard window.id != 0, window.isOnScreen, !window.isSynthetic,
-              window.isLikelyGameWindow else {
-            addLog(.warn, "Rejected a non-game capture window: \(window.displayName)")
+        guard window.id != 0, window.isOnScreen, !window.isSynthetic else {
+            addLog(.warn, "Rejected an unavailable capture window: \(window.displayName)")
             return
         }
         if runtimeLifecycle == .running, window.id != selectedWindow.id {
@@ -5047,6 +5056,7 @@ final class AppState: ObservableObject {
     }
 
     private func applySelectedWindow(_ window: WindowInfo) {
+        manuallySelectedWindowID = window.id
         selectedWindow = window
         gameWindowStatus = .detected
         addLog(.info, "Window selected: \(window.displayName)")

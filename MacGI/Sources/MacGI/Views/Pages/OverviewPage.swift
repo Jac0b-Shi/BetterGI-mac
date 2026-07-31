@@ -190,24 +190,24 @@ struct OverviewPage: View {
 private struct CaptureWindowPickerSheet: View {
     @EnvironmentObject private var appState: AppState
     @Binding var isPresented: Bool
-
-    private var candidates: [WindowInfo] {
-        appState.availableWindows.filter(\.isLikelyGameWindow)
-    }
+    @State private var pendingUnrecognizedWindow: WindowInfo?
 
     var body: some View {
         NavigationStack {
             Group {
-                if candidates.isEmpty {
+                if appState.availableWindows.isEmpty {
                     ContentUnavailableView(
-                        "没有找到 Wine 原神窗口",
+                        "没有可捕获窗口",
                         systemImage: "macwindow.badge.plus",
-                        description: Text("请确认游戏窗口已显示在桌面上，然后刷新列表。"))
+                        description: Text("请确认目标窗口已显示在桌面上，然后刷新列表。"))
                 } else {
-                    List(candidates) { window in
+                    List(appState.availableWindows) { window in
                         Button {
-                            appState.setSelectedWindow(window)
-                            isPresented = false
+                            if window.isLikelyGameWindow {
+                                select(window)
+                            } else {
+                                pendingUnrecognizedWindow = window
+                            }
                         } label: {
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -217,6 +217,11 @@ private struct CaptureWindowPickerSheet: View {
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
+                                if window.isLikelyGameWindow {
+                                    Text("原神")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                                 if window.id == appState.selectedWindow.id {
                                     Image(systemName: "checkmark.circle.fill")
                                         .foregroundStyle(.green)
@@ -228,7 +233,7 @@ private struct CaptureWindowPickerSheet: View {
                     }
                 }
             }
-            .navigationTitle("选择原神捕获窗口")
+            .navigationTitle("选择捕获窗口")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("关闭") { isPresented = false }
@@ -242,6 +247,25 @@ private struct CaptureWindowPickerSheet: View {
                 }
             }
         }
+        .alert(
+            "这看起来不像是原神",
+            isPresented: Binding(
+                get: { pendingUnrecognizedWindow != nil },
+                set: { if !$0 { pendingUnrecognizedWindow = nil } }
+            ),
+            presenting: pendingUnrecognizedWindow
+        ) { window in
+            Button("仍然选择") { select(window) }
+            Button("取消", role: .cancel) { pendingUnrecognizedWindow = nil }
+        } message: { window in
+            Text("“\(window.displayName)”未被识别为原神窗口，确定要选择这个窗口吗？")
+        }
         .frame(minWidth: 620, minHeight: 360)
+    }
+
+    private func select(_ window: WindowInfo) {
+        appState.setSelectedWindow(window)
+        pendingUnrecognizedWindow = nil
+        isPresented = false
     }
 }

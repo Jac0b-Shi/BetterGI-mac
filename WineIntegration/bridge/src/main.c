@@ -902,20 +902,11 @@ static bool input_text(struct bridge_state *state, const uint8_t *payload, uint3
 {
     if (length == 0 || (length % sizeof(uint16_t)) != 0) return false;
     uint32_t code_unit_count = length / sizeof(uint16_t);
-    UINT input_count = (UINT)(code_unit_count * 2);
-    INPUT *inputs = calloc(input_count, sizeof(*inputs));
     bool contains_non_ascii = false;
-    if (inputs == NULL) return false;
-
     for (uint32_t index = 0; index < code_unit_count; ++index) {
         uint32_t offset = index * 2;
         uint16_t code_unit = (uint16_t)(payload[offset] | (payload[offset + 1] << 8));
         contains_non_ascii = contains_non_ascii || code_unit > 0x7f;
-        inputs[index * 2].type = INPUT_KEYBOARD;
-        inputs[index * 2].ki.wScan = code_unit;
-        inputs[index * 2].ki.dwFlags = KEYEVENTF_UNICODE;
-        inputs[index * 2 + 1] = inputs[index * 2];
-        inputs[index * 2 + 1].ki.dwFlags |= KEYEVENTF_KEYUP;
     }
 
     if (diagnostic_logging) {
@@ -927,8 +918,49 @@ static bool input_text(struct bridge_state *state, const uint8_t *payload, uint3
             (unsigned long long)state->target.window_handle);
         fflush(stderr);
     }
-    bool success = send_inputs(inputs, input_count);
-    free(inputs);
+
+    HGLOBAL clipboard_memory = GlobalAlloc(GMEM_MOVEABLE, (SIZE_T)length + sizeof(WCHAR));
+    if (clipboard_memory == NULL) return false;
+    void *clipboard_text = GlobalLock(clipboard_memory);
+    if (clipboard_text == NULL) {
+        GlobalFree(clipboard_memory);
+        return false;
+    }
+    memcpy(clipboard_text, payload, length);
+    memset((uint8_t *)clipboard_text + length, 0, sizeof(WCHAR));
+    GlobalUnlock(clipboard_memory);
+
+    bool clipboard_open = false;
+    for (unsigned int attempt = 0; attempt < 10 && !clipboard_open; ++attempt) {
+        clipboard_open = OpenClipboard(NULL) != FALSE;
+        if (!clipboard_open) Sleep(10);
+    }
+    if (!clipboard_open) {
+        GlobalFree(clipboard_memory);
+        return false;
+    }
+    bool clipboard_set = EmptyClipboard() != FALSE
+        && SetClipboardData(CF_UNICODETEXT, clipboard_memory) != NULL;
+    CloseClipboard();
+    if (!clipboard_set) {
+        GlobalFree(clipboard_memory);
+        return false;
+    }
+    /* SetClipboardData owns clipboard_memory after a successful call. */
+
+    bool temporary_control = !state->held_keys[VK_LCONTROL];
+    if (temporary_control && !send_key(state, VK_LCONTROL, true)) return false;
+    Sleep(20);
+    bool success = send_key(state, 'V', true);
+    if (success) {
+        Sleep(20);
+        success = send_key(state, 'V', false);
+    }
+    if (temporary_control) {
+        bool released = send_key(state, VK_LCONTROL, false);
+        success = success && released;
+    }
+    if (success) Sleep(100);
     return success;
 }
 
