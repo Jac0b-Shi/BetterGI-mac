@@ -97,6 +97,11 @@ bundled_resources=${contents}/Resources/${resource_bundle:t}/Resources
 ${script_dir}/stage-game-task-assets.sh \
   ${bundled_resources}/GameTask
 
+app_icon_source=${macgi_root}/Resources/AppIcon.icns
+if [[ -f ${app_icon_source} ]]; then
+  cp ${app_icon_source} ${contents}/Resources/AppIcon.icns
+fi
+
 plist=${contents}/Info.plist
 plutil -create xml1 ${plist}
 /usr/libexec/PlistBuddy -c "Add :CFBundleName string betterGI-mac" ${plist}
@@ -104,6 +109,9 @@ plutil -create xml1 ${plist}
 /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string ${bundle_identifier}" ${plist}
 /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string ${executable_name}" ${plist}
 /usr/libexec/PlistBuddy -c "Add :CFBundlePackageType string APPL" ${plist}
+if [[ -f ${contents}/Resources/AppIcon.icns ]]; then
+  /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" ${plist}
+fi
 /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string ${short_version}" ${plist}
 /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string ${bundle_version}" ${plist}
 /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 14.0" ${plist}
