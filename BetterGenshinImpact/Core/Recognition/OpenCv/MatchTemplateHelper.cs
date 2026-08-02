@@ -242,7 +242,8 @@ public class MatchTemplateHelper
                 var score = isLowerBetter ? 1 - rawScore : rawScore;
                 matches.Add(new TemplateMatchResult(location, score));
 
-                // 抑制与当前结果 IoU 过高的邻近候选，避免同一目标被重复返回。
+                // 保持旧实现的零重叠语义：任何与当前模板区域相交的候选都应被抑制。
+                // AutoPick 与计数类调用方依赖这一行为避免相邻响应峰重复计数。
                 SuppressOverlappingCandidates(candidateMask, location, template.Width, template.Height);
             }
         }
@@ -260,7 +261,7 @@ public class MatchTemplateHelper
     }
 
     /// <summary>
-    ///     在候选掩码中清除与已选结果的 IoU 达到阈值的候选点，避免重复返回同一目标。
+    ///     在候选掩码中清除所有与已选模板区域相交的候选点，避免重复返回同一目标。
     /// </summary>
     /// <param name="candidateMask">候选点掩码，非零像素表示该坐标仍可参与匹配。</param>
     /// <param name="selected">已选模板在源图中的左上角坐标。</param>
@@ -272,9 +273,8 @@ public class MatchTemplateHelper
         int templateWidth,
         int templateHeight)
     {
-        // 根据 IoU 阈值推导可能触发抑制的最大坐标偏移，只遍历已选点附近区域。
-        var maxDeltaX = (int)Math.Floor(templateWidth * (1 - 0.5) / (1 + 0.5)) + 1;
-        var maxDeltaY = (int)Math.Floor(templateHeight * (1 - 0.5) / (1 + 0.5)) + 1;
+        var maxDeltaX = templateWidth - 1;
+        var maxDeltaY = templateHeight - 1;
 
         // 将搜索区域裁剪到候选掩码边界内，防止访问越界。
         var minX = Math.Max(0, selected.X - maxDeltaX);
@@ -297,21 +297,19 @@ public class MatchTemplateHelper
     }
 
     /// <summary>
-    ///     判断两个相同尺寸的模板矩形是否达到 NMS 抑制所需的重叠比例。
+    ///     判断两个相同尺寸的模板矩形是否存在任何面积重叠。
     /// </summary>
     /// <param name="first">第一个模板矩形的左上角坐标。</param>
     /// <param name="second">第二个模板矩形的左上角坐标。</param>
     /// <param name="templateWidth">模板矩形宽度。</param>
     /// <param name="templateHeight">模板矩形高度。</param>
-    /// <returns>两个矩形的 IoU 大于或等于 0.5 时返回 <see langword="true"/>。</returns>
+    /// <returns>两个矩形存在非零交集时返回 <see langword="true"/>。</returns>
     private static bool HasSuppressingOverlap(
         Point first,
         Point second,
         int templateWidth,
         int templateHeight)
     {
-        var templateArea = (double)templateWidth * templateHeight;
-
         // 两个矩形尺寸相同，因此重叠边长等于模板边长减去对应方向的坐标偏移。
         var overlapWidth = templateWidth - Math.Abs(first.X - second.X);
         var overlapHeight = templateHeight - Math.Abs(first.Y - second.Y);
@@ -320,9 +318,6 @@ public class MatchTemplateHelper
             return false;
         }
 
-        // IoU = 交集面积 / 并集面积；并集为两个模板面积之和减去交集面积。
-        var intersection = (double)overlapWidth * overlapHeight;
-        var union = templateArea * 2 - intersection;
-        return intersection / union >= 0.5;
+        return true;
     }
 }

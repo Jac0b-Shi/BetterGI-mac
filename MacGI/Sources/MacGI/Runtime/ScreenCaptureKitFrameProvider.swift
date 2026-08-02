@@ -235,12 +235,16 @@ final class ScreenCaptureKitFrameProvider {
         let frame = fallbackWindow.frame.isEmpty
             ? filter.contentRect
             : fallbackWindow.frame
+        let nativeWidth = max(1, frame.width * scale)
+        let outputScale = min(1, 1920 / nativeWidth)
         let configuration = SCStreamConfiguration()
-        configuration.width = max(1, Int((frame.width * scale).rounded()))
-        configuration.height = max(1, Int((frame.height * scale).rounded()))
+        configuration.width = max(1, Int((nativeWidth * outputScale).rounded()))
+        configuration.height = max(
+            1,
+            Int((frame.height * scale * outputScale).rounded()))
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
         configuration.showsCursor = false
-        configuration.scalesToFit = false
+        configuration.scalesToFit = true
         configuration.preservesAspectRatio = true
         configuration.ignoreShadowsSingleWindow = true
         configuration.queueDepth = 3
@@ -254,8 +258,12 @@ final class ScreenCaptureKitFrameProvider {
     ) throws -> CGImage {
         let topInsetPoints = window.captureRect.minY - window.frame.minY
         guard topInsetPoints > 0 else { return image }
-        let expectedWidth = Int(window.capturePixelSize.width.rounded())
-        let expectedHeight = Int(window.capturePixelSize.height.rounded())
+        let sourceWidthPoints = max(1, window.frame.width)
+        let outputPixelsPerPoint = CGFloat(image.width) / sourceWidthPoints
+        let expectedWidth = Int(
+            (window.captureRect.width * outputPixelsPerPoint).rounded())
+        let expectedHeight = Int(
+            (window.captureRect.height * outputPixelsPerPoint).rounded())
         guard abs(image.width - expectedWidth) <= 2,
               image.height >= expectedHeight,
               image.height - expectedHeight > 0 else {
@@ -263,7 +271,7 @@ final class ScreenCaptureKitFrameProvider {
         }
         let topInsetPixels = min(
             image.height - expectedHeight,
-            Int((topInsetPoints * window.scaleFactor).rounded())
+            Int((topInsetPoints * outputPixelsPerPoint).rounded())
         )
         guard let cropped = image.cropping(to: CGRect(
             x: 0,

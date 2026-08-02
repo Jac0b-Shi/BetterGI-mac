@@ -23,13 +23,18 @@ public sealed class CaptureRingConsistencyException : IOException
 public sealed class SharedCaptureRingReader(
     RuntimeLayout layout,
     Func<DesktopRegion>? desktopRegionProvider = null,
-    bool allowFileFixture = false)
+    bool allowFileFixture = false) : IDisposable
 {
     private const long HeaderSize = 128;
     private const int OpenReadOnly = 0;
     private const int ProtectRead = 0x01;
     private const int MapShared = 0x0001;
     private static readonly byte[] Magic = Encoding.ASCII.GetBytes("BGIRING1");
+    private readonly object _mappingLock = new();
+    private string? _mappedName;
+    private long _mappedSlotCapacity;
+    private SafeFileHandle? _mappedHandle;
+    private PosixMappedView? _mappedView;
 
     public GameCaptureRegion ReadLatest(
         Func<JToken> responseProvider,
@@ -67,22 +72,75 @@ public sealed class SharedCaptureRingReader(
         if (!SharedMemoryNamePattern().IsMatch(name))
             throw new InvalidDataException("capture.request returned an invalid shared-memory ring name.");
 
+        lock (_mappingLock)
+        {
+            var view = GetOrCreateSharedMemoryView(name);
+            return ReadView(view, response);
+        }
+    }
+
+    private PosixMappedView GetOrCreateSharedMemoryView(string name)
+    {
+        if (_mappedView is not null && _mappedName == name)
+        {
+            var currentCapacity = checked((long)_mappedView.ReadUInt64(16));
+            if (currentCapacity == _mappedSlotCapacity)
+                return _mappedView;
+        }
+
+        DisposeMapping();
         var descriptor = ShmOpen(name, OpenReadOnly, 0);
         if (descriptor < 0)
             throw new IOException(
                 $"Unable to open capture shared memory '{name}': " +
                 Marshal.GetLastPInvokeErrorMessage());
-        using var handle = new SafeFileHandle((IntPtr)descriptor, ownsHandle: true);
-        using var header = PosixMappedView.Open(
-            descriptor, HeaderSize, ProtectRead, MapShared);
-        var slotCapacity = checked((long)header.ReadUInt64(16));
-        if (slotCapacity <= 0 || slotCapacity > 1L << 30)
-            throw new InvalidDataException(
-                "Capture shared-memory slot capacity is invalid.");
-        var mappingLength = checked(HeaderSize + 2 * slotCapacity);
-        using var view = PosixMappedView.Open(
-            descriptor, mappingLength, ProtectRead, MapShared);
-        return ReadView(view, response);
+
+        var handle = new SafeFileHandle((IntPtr)descriptor, ownsHandle: true);
+        try
+        {
+            long slotCapacity;
+            using (var header = PosixMappedView.Open(
+                       descriptor, HeaderSize, ProtectRead, MapShared))
+            {
+                slotCapacity = checked((long)header.ReadUInt64(16));
+            }
+
+            if (slotCapacity <= 0 || slotCapacity > 1L << 30)
+                throw new InvalidDataException(
+                    "Capture shared-memory slot capacity is invalid.");
+            var mappingLength = checked(HeaderSize + 2 * slotCapacity);
+            var view = PosixMappedView.Open(
+                descriptor, mappingLength, ProtectRead, MapShared);
+            _mappedName = name;
+            _mappedSlotCapacity = slotCapacity;
+            _mappedHandle = handle;
+            _mappedView = view;
+            return view;
+        }
+        catch
+        {
+            handle.Dispose();
+            throw;
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_mappingLock)
+        {
+            DisposeMapping();
+        }
+        GC.SuppressFinalize(this);
+    }
+
+    private void DisposeMapping()
+    {
+        _mappedView?.Dispose();
+        _mappedHandle?.Dispose();
+        _mappedView = null;
+        _mappedHandle = null;
+        _mappedName = null;
+        _mappedSlotCapacity = 0;
     }
 
     private GameCaptureRegion ReadFileFixture(string path, JToken response)
@@ -183,9 +241,15 @@ public sealed class SharedCaptureRingReader(
 
             var desktop = desktopRegionProvider?.Invoke() ??
                 new DesktopRegion(width, height);
+            var captureWidth = response.Value<int?>("captureWidth") ?? width;
+            var captureHeight = response.Value<int?>("captureHeight") ?? height;
             return new GameCaptureRegion(
                 mat, captureX, captureY, desktop,
-                new TranslationConverter(captureX, captureY));
+                new CaptureScaleTranslationConverter(
+                    (double)captureWidth / width,
+                    (double)captureHeight / height,
+                    captureX,
+                    captureY));
         }
         catch
         {
@@ -233,6 +297,22 @@ public sealed class SharedCaptureRingReader(
     private static readonly Regex SharedMemoryNameRegex = new(
         "^/bettergi-mac-capture-[0-9]+-[0-9]+$",
         RegexOptions.CultureInvariant);
+
+    private sealed class CaptureScaleTranslationConverter(
+        double scaleX,
+        double scaleY,
+        int offsetX,
+        int offsetY) : INodeConverter
+    {
+        public (int x, int y, int w, int h) ToPrev(
+            int x, int y, int w, int h) =>
+            (
+                offsetX + (int)Math.Round(x * scaleX),
+                offsetY + (int)Math.Round(y * scaleY),
+                (int)Math.Round(w * scaleX),
+                (int)Math.Round(h * scaleY)
+            );
+    }
 
     private interface IReadView
     {

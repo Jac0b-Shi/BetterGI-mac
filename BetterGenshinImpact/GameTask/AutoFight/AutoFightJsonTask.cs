@@ -597,7 +597,7 @@ public class AutoFightJsonTask : ISoloTask
     }
 
     /// <summary>战斗结束检测</summary>
-    private async Task<bool> CheckFightFinish(int delayTime = 1500, int detectDelayTime = 450)
+    public async Task<bool> CheckFightFinish(int delayTime = 1500, int detectDelayTime = 450)
     {
         using (AvatarRecognition.BeginExclusiveOperation())
         {
@@ -658,8 +658,7 @@ public class AutoFightJsonTask : ISoloTask
             var whiteTile = ra.SrcMat.At<Vec3b>(50, 768); //白块
             SimulateAction(GIActions.Drop);
 
-            if (IsWhite(whiteTile.Item2, whiteTile.Item1, whiteTile.Item0) &&
-                IsYellow(b3.Item2, b3.Item1, b3.Item0))
+            if (AutoFightEndDetector.IsFightFinished(ra.SrcMat))
             {
                 Logger.LogInformation("识别到战斗结束");
                 SimulateAction(GIActions.OpenPartySetupScreen);
@@ -692,20 +691,6 @@ public class AutoFightJsonTask : ISoloTask
             _lastFightFlagTime = DateTime.Now;
             return false;
         }
-    }
-
-    private bool IsYellow(int r, int g, int b)
-    {
-        return (r >= 200 && r <= 255) &&
-               (g >= 200 && g <= 255) &&
-               (b >= 0 && b <= 100);
-    }
-
-    private bool IsWhite(int r, int g, int b)
-    {
-        return (r >= 240 && r <= 255) &&
-               (g >= 240 && g <= 255) &&
-               (b >= 240 && b <= 255);
     }
 
     /// <summary>日志防刷：同一动作名在1秒内至多输出一次日志</summary>

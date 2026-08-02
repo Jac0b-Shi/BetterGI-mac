@@ -213,6 +213,7 @@ struct BetterGICoreInputAcknowledgementTests {
         #expect(dispatcher.actions == [
             .mouseMoveRelative(deltaX: -37, deltaY: 19)
         ])
+        #expect(dispatcher.lastPerformWasOnMainThread == false)
     }
 
     @MainActor
@@ -492,9 +493,11 @@ private final class RecordingInputDispatcher: InputDispatching {
     private(set) var actions: [InputAction] = []
     private(set) var queries: [InputQuery] = []
     private(set) var shutdownCount = 0
+    private(set) var lastPerformWasOnMainThread: Bool?
     var queryResult = false
 
     func perform(_ action: InputAction, targetWindow: WindowInfo) throws -> CGEventDispatchReport {
+        lastPerformWasOnMainThread = Thread.isMainThread
         actions.append(action)
         return CGEventDispatchReport(eventCount: 1, detail: action.displayName)
     }

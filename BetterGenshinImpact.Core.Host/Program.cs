@@ -108,7 +108,7 @@ server.AttachRuntimeArtifactInitializer(() =>
     runtimeArtifactProvisioner.EnsureInstalled(shutdown.Token));
 var gameTaskManagerPlatform = new MacGameTaskManagerPlatform(
     layout, server.PlatformCallbacks, sessionToken, shutdown.Token, loggerFactory);
-var captureRing = new SharedCaptureRingReader(
+using var captureRing = new SharedCaptureRingReader(
     layout, () => gameTaskManagerPlatform.SystemInfo.DesktopRectArea);
 server.AttachGameScreenshotAction(new MacGameScreenshotAction(
     layout,

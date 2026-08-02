@@ -47,8 +47,11 @@ final class BetterGICoreCaptureRing {
     }
 
     func write(_ frame: CaptureImageFrame) throws -> [String: Any] {
-        let width = frame.cgImage.width
-        let height = frame.cgImage.height
+        let sourceWidth = frame.cgImage.width
+        let sourceHeight = frame.cgImage.height
+        let outputScale = min(1, 1920 / CGFloat(max(1, sourceWidth)))
+        let width = max(1, Int((CGFloat(sourceWidth) * outputScale).rounded()))
+        let height = max(1, Int((CGFloat(sourceHeight) * outputScale).rounded()))
         let stride = width * 4
         let dataLength = stride * height
         try ensureCapacity(for: dataLength)
