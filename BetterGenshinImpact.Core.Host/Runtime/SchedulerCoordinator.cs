@@ -196,24 +196,28 @@ public sealed class SchedulerCoordinator(
             await operation(cancellationToken);
             var state = CancellationContext.Instance.IsManualStop ? "cancelled" : "completed";
             SetExecutionStatus(taskId, state);
-            await EmitAsync(taskId, state, null);
+            await TryEmitTerminalAsync(taskId, state, null);
         }
         catch (OperationCanceledException) when (
             CancellationContext.Instance.IsManualStop || cancellationToken.IsCancellationRequested)
         {
             SetExecutionStatus(taskId, "cancelled");
-            await EmitAsync(taskId, "cancelled", null);
+            await TryEmitTerminalAsync(taskId, "cancelled", null);
         }
-        catch (Exception) when (
-            CancellationContext.Instance.IsManualStop || cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (
+            (CancellationContext.Instance.IsManualStop || cancellationToken.IsCancellationRequested) &&
+            IsCancellationTransportFailure(ex))
         {
             SetExecutionStatus(taskId, "cancelled");
-            await EmitAsync(taskId, "cancelled", null);
+            await TryEmitTerminalAsync(taskId, "cancelled", null);
         }
         catch (Exception ex)
         {
             SetExecutionStatus(taskId, "failed", ex.Message);
-            await EmitAsync(taskId, "failed", new { code = ex.GetType().Name, message = ex.Message });
+            await TryEmitTerminalAsync(
+                taskId,
+                "failed",
+                new { code = ex.GetType().Name, message = ex.Message });
         }
         finally
         {
@@ -234,6 +238,7 @@ public sealed class SchedulerCoordinator(
             var service = new ScriptService();
             do
             {
+                var ranGroup = false;
                 for (var index = 0; index < groups.Count; index++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -246,11 +251,18 @@ public sealed class SchedulerCoordinator(
                     {
                         continue;
                     }
+                    ranGroup = true;
                     taskProgress.CurrentScriptGroupName = group.Name;
                     TaskProgressManager.SaveTaskProgress(taskProgress);
                     await service.RunMulti(group.Projects, group.Name, taskProgress);
                     cancellationToken.ThrowIfCancellationRequested();
                     await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                }
+
+                if (!ranGroup && taskProgress.Next is not null)
+                {
+                    throw new InvalidDataException(
+                        $"Scheduler resume group '{taskProgress.Next.GroupName}' is not present in the task group list.");
                 }
 
                 taskProgress.LoopCount++;
@@ -323,6 +335,23 @@ public sealed class SchedulerCoordinator(
         if (response?.Value<bool?>("acknowledged") != true)
             throw new InvalidDataException("scheduler.event did not return acknowledged=true.");
     }
+
+    private async Task TryEmitTerminalAsync(string taskId, string state, object? error)
+    {
+        try
+        {
+            await EmitAsync(taskId, state, error);
+        }
+        catch
+        {
+            // Terminal status is already stored locally. A detached Swift callback
+            // channel must not fault the unobserved scheduler execution task.
+        }
+    }
+
+    private static bool IsCancellationTransportFailure(Exception exception) =>
+        exception is IOException or EndOfStreamException or TimeoutException or
+        InvalidOperationException or PlatformCallbackException;
 
     private void RequireActive(string taskId)
     {

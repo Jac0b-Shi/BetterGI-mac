@@ -3,6 +3,7 @@ using BetterGenshinImpact.Core.Script.Dependence;
 using BetterGenshinImpact.Core.Script.Utils;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Diagnostics;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
@@ -76,6 +77,7 @@ internal sealed class MacHtmlMask : IDisposable
             windowIds = [.. _openedWindowIds];
             _openedWindowIds.Clear();
         }
+        List<Exception>? failures = null;
         foreach (var windowId in windowIds)
         {
             try
@@ -83,11 +85,13 @@ internal sealed class MacHtmlMask : IDisposable
                 _ = RequireObject(
                     "htmlMask.close", JObject.FromObject(new { windowId }));
             }
-            catch (OperationCanceledException) when (_disposed)
+            catch (Exception exception)
             {
-                return;
+                (failures ??= []).Add(exception);
             }
         }
+        if (failures is not null)
+            throw new AggregateException("One or more macOS HTML mask windows failed to close.", failures);
     }
 
     public string[] GetWindowIds()
@@ -189,8 +193,15 @@ internal sealed class MacHtmlMask : IDisposable
     {
         if (_disposed)
             return;
-        CloseAll();
         _disposed = true;
+        try
+        {
+            CloseAll();
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"Failed to close macOS HTML mask windows during disposal: {exception}");
+        }
     }
 
     private string ResolveUrl(string url)

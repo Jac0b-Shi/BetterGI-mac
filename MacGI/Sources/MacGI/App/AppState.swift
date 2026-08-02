@@ -382,6 +382,11 @@ final class AppState: ObservableObject {
 
     /// Available game windows from the tracker.
     @Published var availableWindows: [WindowInfo] = []
+    var windowPickerOptions: [WindowInfo] {
+        availableWindows.filter {
+            !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
 
     /// Most recently captured frame (nil if no capture session).
     @Published var lastCapturedFrame: CapturedFrame?

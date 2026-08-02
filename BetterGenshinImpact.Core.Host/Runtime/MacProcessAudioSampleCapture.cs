@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.GameTask.AutoSkip;
 using Newtonsoft.Json.Linq;
@@ -59,7 +60,14 @@ public sealed class MacProcessAudioSampleCapture : IAutoSkipAudioSampleCapture
     {
         if (_disposed) return;
         _disposed = true;
-        RequireAcknowledgement("audio.stop", null);
+        try
+        {
+            RequireAcknowledgement("audio.stop", null);
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"Failed to stop macOS process audio capture during disposal: {exception}");
+        }
     }
 
     private JToken Invoke(string method, JObject? parameters) => _callbacks.InvokeAsync(

@@ -7,6 +7,7 @@ enum BetterGICorePlatformAdapterError: LocalizedError {
     case invalidParameters(String)
     case unsupportedMethod(String)
     case inputRejected(String)
+    case inputNotFrontmost
     case notificationRejected(String)
     case htmlMaskRejected(String)
 
@@ -15,6 +16,7 @@ enum BetterGICorePlatformAdapterError: LocalizedError {
         case .invalidParameters(let message): message
         case .unsupportedMethod(let method): "Unsupported Core platform callback: \(method)"
         case .inputRejected(let reason): "InputSafetyGate rejected Core input: \(reason)"
+        case .inputNotFrontmost: "Game window is not frontmost for text input."
         case .notificationRejected(let reason): "macOS rejected Core notification: \(reason)"
         case .htmlMaskRejected(let reason): "macOS rejected Core HTML mask: \(reason)"
         }
@@ -341,8 +343,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             {
                 switch appState.backgroundTextInputPolicy {
                 case .waitForForeground:
-                    throw BetterGICorePlatformAdapterError.inputRejected(
-                        "Game window is not frontmost for text input.")
+                    throw BetterGICorePlatformAdapterError.inputNotFrontmost
                 case .skipAndContinue:
                     let codeUnitCount = (parameters?["text"] as? String)?
                         .utf16.count ?? 0

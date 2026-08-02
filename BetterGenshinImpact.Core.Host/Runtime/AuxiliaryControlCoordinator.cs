@@ -61,9 +61,9 @@ public sealed class AuxiliaryControlCoordinator(
             _acceptingInput = false;
             activeControls = _activeControls.Values.ToArray();
             _activeControls.Clear();
+            foreach (var active in activeControls)
+                active.Cancellation.Cancel();
         }
-        foreach (var active in activeControls)
-            active.Cancellation.Cancel();
         await Task.WhenAll(activeControls.Select(active => active.Task));
     }
 
@@ -133,8 +133,8 @@ public sealed class AuxiliaryControlCoordinator(
         {
             if (!_activeControls.Remove(control, out active))
                 return;
+            active.Cancellation.Cancel();
         }
-        active.Cancellation.Cancel();
     }
 
     private static ControlSpecification ResolveSpecification(

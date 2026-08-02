@@ -12,7 +12,7 @@ struct CapturePage: View {
                             get: { appState.selectedWindow.id },
                             set: { appState.selectWindow(byID: $0) }
                         )) {
-                            ForEach(appState.availableWindows, id: \.id) { window in
+                            ForEach(appState.windowPickerOptions, id: \.id) { window in
                                 Text(window.displayName).tag(window.id)
                             }
                         }

@@ -156,32 +156,30 @@ public sealed class SharedCaptureRingReader(
                 "capture.request dimensions do not match the ring header.");
 
         var source = HeaderSize + checked(slot * slotCapacity);
-        var frame = new byte[checked((int)dataLength)];
-        view.ReadArray(source, frame, 0, frame.Length);
-        var sequenceAfter = view.ReadUInt64(80);
-        if (sequenceAfter != sequenceBefore || (sequenceAfter & 1) != 0)
-            throw new CaptureRingConsistencyException(
-                "Capture ring frame changed while it was being read.");
-
         var mat = new Mat(height, width, MatType.CV_8UC4);
         try
         {
             var destinationStride = checked((int)mat.Step());
             if (stride == destinationStride)
             {
-                Marshal.Copy(frame, 0, mat.Data, frame.Length);
+                view.CopyTo(source, mat.Data, checked((int)dataLength));
             }
             else
             {
                 var rowLength = checked(width * 4);
                 for (var y = 0; y < height; y++)
                 {
-                    Marshal.Copy(
-                        frame, checked(y * stride),
+                    view.CopyTo(
+                        source + checked((long)y * stride),
                         mat.Data + checked(y * destinationStride),
                         rowLength);
                 }
             }
+
+            var sequenceAfter = view.ReadUInt64(80);
+            if (sequenceAfter != sequenceBefore || (sequenceAfter & 1) != 0)
+                throw new CaptureRingConsistencyException(
+                    "Capture ring frame changed while it was being read.");
 
             var desktop = desktopRegionProvider?.Invoke() ??
                 new DesktopRegion(width, height);
@@ -227,6 +225,9 @@ public sealed class SharedCaptureRingReader(
     [DllImport("libSystem.B.dylib", EntryPoint = "munmap", SetLastError = true)]
     private static extern int Munmap(IntPtr address, nuint length);
 
+    [DllImport("libSystem.B.dylib", EntryPoint = "memcpy")]
+    private static extern IntPtr Memcpy(IntPtr destination, IntPtr source, nuint count);
+
     private static Regex SharedMemoryNamePattern() => SharedMemoryNameRegex;
 
     private static readonly Regex SharedMemoryNameRegex = new(
@@ -240,6 +241,7 @@ public sealed class SharedCaptureRingReader(
         uint ReadUInt32(long offset);
         ulong ReadUInt64(long offset);
         void ReadArray(long offset, byte[] destination, int index, int count);
+        void CopyTo(long offset, IntPtr destination, int count);
     }
 
     private sealed class AccessorView(
@@ -255,6 +257,13 @@ public sealed class SharedCaptureRingReader(
             int index,
             int count) =>
             accessor.ReadArray(offset, destination, index, count);
+
+        public void CopyTo(long offset, IntPtr destination, int count)
+        {
+            var buffer = new byte[count];
+            accessor.ReadArray(offset, buffer, 0, count);
+            Marshal.Copy(buffer, 0, destination, count);
+        }
     }
 
     private sealed class PosixMappedView : IReadView, IDisposable
@@ -311,6 +320,13 @@ public sealed class SharedCaptureRingReader(
                 index > destination.Length - count)
                 throw new ArgumentOutOfRangeException(nameof(index));
             Marshal.Copy(Address(offset, count), destination, index, count);
+        }
+
+        public void CopyTo(long offset, IntPtr destination, int count)
+        {
+            if (destination == IntPtr.Zero)
+                throw new ArgumentException("Capture destination cannot be null.", nameof(destination));
+            _ = Memcpy(destination, Address(offset, count), checked((nuint)count));
         }
 
         public void Dispose()

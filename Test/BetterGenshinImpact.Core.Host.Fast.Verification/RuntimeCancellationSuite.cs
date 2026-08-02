@@ -97,7 +97,41 @@ public sealed class RuntimeCancellationSuite : IVerificationSuite
             cleanupCount == 1 && !dispatcher.IsRunning,
             "Runtime stop did not close the platform-owned HTML masks.");
 
+        await VerifyTriggerStopCancellation(context, cancellationToken);
         await VerifyInFlightPlatformCallbackCancellation(context, cancellationToken);
+        await VerifyPlatformCallbackTimeout(context, cancellationToken);
+    }
+
+    private static async Task VerifyTriggerStopCancellation(
+        VerificationContext context,
+        CancellationToken cancellationToken)
+    {
+        var releaseLoop = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcher = new MacTriggerDispatcher(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MacTriggerDispatcher>.Instance,
+            cancellationToken,
+            _ => releaseLoop.Task);
+        dispatcher.Start();
+        using var stopCancellation = new CancellationTokenSource(
+            TimeSpan.FromMilliseconds(50));
+        try
+        {
+            await dispatcher.StopAsync(stopCancellation.Token);
+            throw new InvalidDataException(
+                "Trigger dispatcher stop ignored caller cancellation.");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            releaseLoop.TrySetResult();
+        }
+        await dispatcher.StopAsync(cancellationToken);
+        context.Require(
+            !dispatcher.IsRunning,
+            "Trigger dispatcher did not finish after its blocked loop was released.");
     }
 
     private static async Task VerifyInFlightPlatformCallbackCancellation(
@@ -168,6 +202,58 @@ public sealed class RuntimeCancellationSuite : IVerificationSuite
                 "Platform callback channel could not be reused after cancellation.");
 
             callbacks.Detach(coreConnection);
+            await attached;
+        }
+        finally
+        {
+            try { File.Delete(socketPath); }
+            catch { }
+        }
+    }
+
+    private static async Task VerifyPlatformCallbackTimeout(
+        VerificationContext context,
+        CancellationToken cancellationToken)
+    {
+        var socketPath = $"/tmp/bgi-callback-timeout-{Guid.NewGuid():N}.sock";
+        using var listener = new Socket(
+            AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        try
+        {
+            listener.Bind(new UnixDomainSocketEndPoint(socketPath));
+            listener.Listen(1);
+            using var swiftSocket = new Socket(
+                AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            var connectTask = swiftSocket.ConnectAsync(
+                new UnixDomainSocketEndPoint(socketPath), cancellationToken);
+            using var coreSocket = await listener.AcceptAsync(cancellationToken);
+            await connectTask;
+
+            await using var coreConnection = new FramedJsonConnection(coreSocket);
+            await using var swiftConnection = new FramedJsonConnection(swiftSocket);
+            var callbacks = new PlatformCallbackChannel(
+                TimeSpan.FromMilliseconds(50));
+            var attached = callbacks.AttachAsync(
+                coreConnection, CancellationToken.None);
+            var invoke = callbacks.InvokeAsync(
+                "capture.request", null, "verification", cancellationToken);
+            _ = await swiftConnection.ReadRequestAsync(cancellationToken)
+                ?? throw new EndOfStreamException(
+                    "Core did not send the timed platform callback.");
+
+            try
+            {
+                await invoke;
+                throw new InvalidDataException(
+                    "Platform callback response timeout was not enforced.");
+            }
+            catch (TimeoutException)
+            {
+            }
+
+            context.Require(
+                !callbacks.IsAttached,
+                "A timed-out platform callback left the shared channel attached.");
             await attached;
         }
         finally

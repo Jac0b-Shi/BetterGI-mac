@@ -195,13 +195,13 @@ private struct CaptureWindowPickerSheet: View {
     var body: some View {
         NavigationStack {
             Group {
-                if appState.availableWindows.isEmpty {
+                if appState.windowPickerOptions.isEmpty {
                     ContentUnavailableView(
                         "没有可捕获窗口",
                         systemImage: "macwindow.badge.plus",
                         description: Text("请确认目标窗口已显示在桌面上，然后刷新列表。"))
                 } else {
-                    List(appState.availableWindows) { window in
+                    List(appState.windowPickerOptions) { window in
                         Button {
                             if window.isLikelyGameWindow {
                                 select(window)
