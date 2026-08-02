@@ -96,6 +96,7 @@ public sealed class AuxiliaryControlCoordinator(
                 await Task.Delay(
                     TimeSpan.FromMilliseconds(specification.IntervalMilliseconds),
                     active.Cancellation.Token);
+                active.Cancellation.Token.ThrowIfCancellationRequested();
                 pressKey(
                     specification.WindowsVirtualKey,
                     active.Cancellation.Token);
