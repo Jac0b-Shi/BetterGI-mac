@@ -1411,6 +1411,7 @@ try
         "Common/Element/Assets/1920x1080/party_btn_choose_view.png",
         "Common/Element/Assets/1920x1080/party_btn_delete.png",
         "Common/Element/Assets/1920x1080/primogem.png",
+        "Common/Element/Assets/1920x1080/btn_white_confirm.png",
         "AutoFight/Assets/1920x1080/confirm.png",
         "GameLoading/Assets/1920x1080/girl_moon.png",
         "GameLoading/Assets/1920x1080/welkin_moon_logo.png"
@@ -1595,6 +1596,16 @@ try
             "crafting-bench fixture did not match the upstream talk-UI recognizer.");
         await WriteCaptureRingFrameAsync(captureRingPath, talkFrame, 9UL);
     }
+    // 上游拆分后 goToCraftingBench 会追加 SelectLastOptionUntilEnd：第二帧改为已打开
+    // 合成界面的画面（含白色确认按钮），让结束条件命中并退出循环。
+    using var craftingConfirmFrame = new OpenCvSharp.Mat(
+        schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black);
+    using (var confirmButton = OpenCvSharp.Cv2.ImRead(
+               Path.Combine(sourceRoot, "Common/Element/Assets/1920x1080/btn_white_confirm.png"),
+               OpenCvSharp.ImreadModes.Color))
+    using (var target = new OpenCvSharp.Mat(
+               craftingConfirmFrame, new OpenCvSharp.Rect(1600, 980, confirmButton.Width, confirmButton.Height)))
+        confirmButton.CopyTo(target);
     var craftingBenchMetricsCount = 0;
     var craftingBenchCaptureCount = 0;
     var craftingBenchActivationCount = 0;
@@ -1630,9 +1641,15 @@ try
                 Require(callback.Method == "capture.request",
                     $"genshin.goToCraftingBench emitted unexpected callback {callback.Method}.");
                 craftingBenchCaptureCount++;
+                var servingConfirmFrame = craftingBenchCaptureCount > 1;
+                if (servingConfirmFrame)
+                {
+                    await WriteCaptureRingFrameAsync(captureRingPath, craftingConfirmFrame, 10UL);
+                }
                 await callbackConnection.WriteResponseAsync(RpcResponse.Success(callback.Id, new
                 {
-                    ringPath = captureRingPath, frameId = 9UL, sequence = 2UL, slot = 0,
+                    ringPath = captureRingPath, frameId = servingConfirmFrame ? 10UL : 9UL,
+                    sequence = 2UL, slot = 0,
                     width = schedulerWidth, height = schedulerHeight, stride = schedulerStride,
                     pixelFormat = "BGRA8"
                 }), craftingBenchResponseCancellation.Token);
@@ -1655,7 +1672,7 @@ try
         "genshin.goToCraftingBench bypassed PathExecutor game metrics.");
     Require(craftingBenchActivationCount == 0,
         "genshin.goToCraftingBench forced the game window to the foreground.");
-    Require(craftingBenchCaptureCount == 1,
+    Require(craftingBenchCaptureCount == 2,
         $"genshin.goToCraftingBench talk-UI capture sequence changed: {craftingBenchCaptureCount}.");
     Console.WriteLine(
         "Real BetterGI genshin.goToCraftingBench passed: ClearScript, route loading, PathExecutor and talk-UI recognition.");
