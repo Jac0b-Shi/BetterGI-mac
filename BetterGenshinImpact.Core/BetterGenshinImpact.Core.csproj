@@ -113,6 +113,9 @@
     <Compile Include="../BetterGenshinImpact/GameTask/UseRedeemCode/AutoRedeemCodeConfig.cs" Link="GameTask/UseRedeemCode/AutoRedeemCodeConfig.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/UseRedeemCode/Model/RedeemCode.cs" Link="GameTask/UseRedeemCode/Model/RedeemCode.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/Avatar.cs" Link="GameTask/AutoFight/Model/Avatar.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/AvatarRecognition.cs" Link="GameTask/AutoFight/Model/AvatarRecognition.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/AvatarSpecialActions.cs" Link="GameTask/AutoFight/Model/AvatarSpecialActions.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/ImageFeatureScorer.cs" Link="GameTask/AutoFight/Model/ImageFeatureScorer.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/AvatarActiveCheckContext.cs" Link="GameTask/AutoFight/Model/AvatarActiveCheckContext.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/AvatarMacro.cs" Link="GameTask/AutoFight/Model/AvatarMacro.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/BurstReadyState.cs" Link="GameTask/AutoFight/Model/BurstReadyState.cs" />

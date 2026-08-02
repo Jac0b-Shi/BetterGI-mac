@@ -150,7 +150,7 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
             // 导航阶段
             (StygianState.MainWorld, [StygianState.EventMenu, StygianState.StygianOnslaughtPage]),
             (StygianState.EventMenu, [StygianState.StygianOnslaughtPage]),
-            (StygianState.StygianOnslaughtPage, [StygianState.TeleportMap, StygianState.DomainEntrance]),
+            (StygianState.StygianOnslaughtPage, [StygianState.MainWorld, StygianState.TeleportMap, StygianState.DomainEntrance]),
             (StygianState.TeleportMap, [StygianState.DomainEntrance]),
             (StygianState.DomainEntrance, [StygianState.DifficultySelect]),
             (StygianState.DifficultySelect, [StygianState.DomainLobby]),
@@ -176,9 +176,10 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
         Init();
         _runtime.Notify(AutoStygianOnslaughtNotification.Start, $"{Name}启动");
 
+        var shouldContinuePostProcessing = true;
         try
         {
-            await DoDomain();
+            shouldContinuePostProcessing = await DoDomain();
         }
         catch (TaskCanceledException)
         {
@@ -189,24 +190,38 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
             Logger.LogInformation(e.Message);
         }
 
+        if (!shouldContinuePostProcessing)
+        {
+            _runtime.Notify(AutoStygianOnslaughtNotification.End, $"{Name}结束");
+            return;
+        }
+
         await Delay(3000, ct);
         await ArtifactSalvage();
         _runtime.Notify(AutoStygianOnslaughtNotification.End, $"{Name}结束");
     }
 
-    private async Task DoDomain()
+    private async Task<bool> DoDomain()
     {
         var page = new BvPage(_ct);
 
         // 阶段1：导航到秘境 - 状态机自动驱动
         // MainWorld → EventMenu → StygianOnslaughtPage → TeleportMap → DomainEntrance → DifficultySelect → DomainLobby → BossSelect → BattleArena
         await new ReturnMainUiTask().Start(_ct);
-        await RunStateMachineUntil(page, StygianState.BattleArena);
+        await RunStateMachineUntil(page, StygianState.StygianOnslaughtPage);
+        await RunStateMachineUntil(page, [StygianState.BattleArena, StygianState.MainWorld]);
+
+        if (CurrentState == StygianState.MainWorld)
+        {
+            Logger.LogInformation($"{Name}：活动已结束，已返回主界面");
+            return false;
+        }
 
         // 阶段2：战斗循环
         await BattleLoopStateMachine(page);
 
         await ExitDomain(page);
+        return true;
     }
 
     #region 状态检测器 - 注册给基类使用（接收 ImageRegion 参数复用截图）
@@ -324,8 +339,9 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
     [StateDetector(StygianState.StygianOnslaughtPage, Order = 140)]
     private bool DetectStygianOnslaughtPage(ImageRegion ra)
     {
-        return ra.FindMulti(RecognitionObject.Ocr(ra.Width * 0.55, ra.Height * 0.3, ra.Width * 0.4, ra.Height * 0.6))
-                 .Any(o => o.Text.Contains("前往挑战"));
+        // 活动详情页右侧主标题：左上角(1135, 278)，右下角(1400, 353)
+        return ra.FindMulti(RecognitionObject.Ocr(1135, 278, 1400 - 1135, 353 - 278))
+                 .Any(o => o.Text.Contains("幽境危战"));
     }
 
     #endregion
@@ -391,6 +407,19 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
     [StateHandler(StygianState.StygianOnslaughtPage, RetryTimes = 10)]
     private async Task<StateHandlerResult> HandleStygianOnslaughtPageState(BvPage page)
     {
+        using (var ra = CaptureToRectArea())
+        {
+            var ocrResult = ra.FindMulti(RecognitionObject.Ocr(ra.Width * 0.32, ra.Height * 0.68, ra.Width * 0.16, ra.Height * 0.1));
+            if (ocrResult.Any(o => o.Text.Contains("紊乱爆发期")) &&
+                ocrResult.Any(o => o.Text.Contains("已结束")))
+            {
+                Logger.LogInformation($"{Name}：检测到紊乱爆发期已结束，按 Esc 返回主界面");
+                TaskControlPlatform.Current.PressEscape();
+                await Delay(300, _ct);
+                return StateHandlerResult.SuccessTo(StygianState.MainWorld);
+            }
+        }
+
         Logger.LogInformation($"{Name}：点击前往挑战");
         var challengeButton = page.GetByText("前往挑战").WithRoi(r => r.CutRight(0.5)).FindAll().FirstOrDefault();
         if (challengeButton == null)
@@ -401,7 +430,9 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
 
         challengeButton.Click();
         await Delay(300, _ct);
-        return StateHandlerResult.Success; // 等待转换到 TeleportMap 或 DomainEntrance
+        return StateHandlerResult.SuccessTo(
+            StygianState.TeleportMap,
+            StygianState.DomainEntrance);
     }
 
     [StateHandler(StygianState.TeleportMap)]
