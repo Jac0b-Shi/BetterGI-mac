@@ -155,6 +155,7 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/SwitchPartyTask.cs" Link="GameTask/Common/Job/SwitchPartyTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/SwitchCharacterStateMachineTask.cs" Link="GameTask/Common/Job/SwitchCharacterStateMachineTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/AvatarGridIconRecognizer.cs" Link="GameTask/Common/Job/AvatarGridIconRecognizer.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/CharacterDevelopment/*.cs" Link="GameTask/CharacterDevelopment/%(Filename)%(Extension)" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/StateMachine/StateMachineBase.cs" Link="GameTask/Common/StateMachine/StateMachineBase.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/LinneaMiningTask.cs" Link="GameTask/Common/Job/LinneaMiningTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/GoToAdventurersGuildTask.cs" Link="GameTask/Common/Job/GoToAdventurersGuildTask.cs" />

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "artifactSetVersion": "0.62.0",
+  "artifactSetVersion": "0.62.0-model-1.0.29",
   "sources": [
     {
       "id": "bettergi-release-0.62.0-portable-7z",
@@ -15,6 +15,21 @@
         "releaseTag": "0.62.0",
         "commitSha": "92b8beab53da3a1f86d625914c10d180fb05b0cd",
         "publishedAt": "2026-07-05T02:40:50Z"
+      }
+    },
+    {
+      "id": "bettergi-assets-model-1.0.29-nupkg",
+      "type": "archive",
+      "url": "https://api.nuget.org/v3-flatcontainer/bettergi.assets.model/1.0.29/bettergi.assets.model.1.0.29.nupkg",
+      "sha256": "a203be429d99c70d4a43048ba935cde3506317e969e9852d79ceef95128a160a",
+      "format": "nupkg",
+      "sizeBytes": 167866513,
+      "memberCount": 50,
+      "provenance": {
+        "project": "babalae/bettergi-libraries",
+        "releaseTag": "BetterGI.Assets.Model/1.0.29",
+        "commitSha": "7cf7fbb65a6e70ba9ce631e0138fbe2c063d0e74",
+        "publishedAt": "2026-07-05T07:06:26.23Z"
       }
     }
   ],
@@ -458,6 +473,32 @@
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
         "source": "BetterGI release Teyvat big-map SIFT data; bettergi repository root LICENSE GPLv3",
+        "redistributionStatus": "allowed-under-GPLv3"
+      }
+    },
+    {
+      "destinationRelativePath": "Assets/Model/AvatarGridIcon/avatar.onnx",
+      "sourceId": "bettergi-assets-model-1.0.29-nupkg",
+      "memberPath": "contentFiles/any/any/Assets/Model/AvatarGridIcon/avatar.onnx",
+      "sizeBytes": 7006294,
+      "sha256": "f5d99b4302f181c81703cd157badd26c7c5d13ce27a0d6d661c7811d6240eed1",
+      "transformation": "relocate",
+      "licenseEvidence": {
+        "spdxId": "GPL-3.0",
+        "source": "BetterGI.Assets.Model 1.0.29 Assets/Model/LICENSE and signed NuGet package",
+        "redistributionStatus": "allowed-under-GPLv3"
+      }
+    },
+    {
+      "destinationRelativePath": "Assets/Model/AvatarGridIcon/avatar.csv",
+      "sourceId": "bettergi-assets-model-1.0.29-nupkg",
+      "memberPath": "contentFiles/any/any/Assets/Model/AvatarGridIcon/avatar.csv",
+      "sizeBytes": 268633,
+      "sha256": "c2f460aba7c91f527b89a88b9eeb08f0df84e556cd7e318252567dcb7ee0f0ae",
+      "transformation": "relocate",
+      "licenseEvidence": {
+        "spdxId": "GPL-3.0",
+        "source": "BetterGI.Assets.Model 1.0.29 Assets/Model/LICENSE and signed NuGet package",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },

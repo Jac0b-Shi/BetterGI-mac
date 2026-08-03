@@ -131,6 +131,14 @@
       "sidecars": ["Assets/Model/Item/items.csv"]
     },
     {
+      "id": "AvatarGridIcon",
+      "kind": "onnx",
+      "relativePath": "Assets/Model/AvatarGridIcon/avatar.onnx",
+      "registryKey": "AvatarGridIcon",
+      "requiredFor": ["CharacterDevelopment.AvatarRecognition", "SwitchCharacter.AvatarRecognition"],
+      "sidecars": ["Assets/Model/AvatarGridIcon/avatar.csv"]
+    },
+    {
       "id": "BgiMine",
       "kind": "onnx",
       "relativePath": "Assets/Model/Mine/bgi_mine.onnx",

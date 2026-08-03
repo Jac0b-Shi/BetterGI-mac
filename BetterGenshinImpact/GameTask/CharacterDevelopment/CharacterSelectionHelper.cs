@@ -1,7 +1,6 @@
 using BetterGenshinImpact.Core.BgiVision;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.AutoFight.Config;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.Model.Area;
@@ -132,7 +131,7 @@ internal static class CharacterSelectionHelper
         Cv2.InRange(hsv, new Scalar(0, 0, 0), new Scalar(180, 95, 120), darkMask);
         using var binary = new Mat(tagRegion.SrcMat.Size(), MatType.CV_8UC3, Scalar.White);
         binary.SetTo(Scalar.Black, darkMask);
-        var result = OcrFactory.Paddle.OcrResult(binary);
+        var result = CharacterDevelopmentRuntimePlatform.Current.OcrService.OcrResult(binary);
         return result.Regions
             .OrderBy(region => region.Rect.Center.Y)
             .ThenBy(region => region.Rect.Center.X)
@@ -217,7 +216,7 @@ internal static class CharacterSelectionHelper
         CancellationToken ct)
     {
         var gridParams = new GridParams(GridRoi1080, 5, 3, 40, 32, 0.024);
-        var scroller = new GridScroller(gridParams, logger, Simulation.SendInput, ct);
+        var scroller = new GridScroller(gridParams, logger, ct);
         var gridRoi = Rect1080(assetScale, GridRoi1080.X, GridRoi1080.Y, GridRoi1080.Width, GridRoi1080.Height);
 
         while (true)

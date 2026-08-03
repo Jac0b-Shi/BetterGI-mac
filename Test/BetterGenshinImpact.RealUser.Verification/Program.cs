@@ -5,6 +5,7 @@ using BetterGenshinImpact.Core.Script.Project;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.Core.Script.Dependence;
 using BetterGenshinImpact.GameTask.AutoPathing;
+using BetterGenshinImpact.GameTask.CharacterDevelopment;
 using BetterGenshinImpact.GameTask.Model.Area;
 using Newtonsoft.Json.Linq;
 using Microsoft.ClearScript;
@@ -139,7 +140,7 @@ static void VerifyProductionHostSurface(
     string[] hostObjectNames =
     [
         "genshin", "dispatcher", "pathingScript", "keyMouseScript", "file", "log",
-        "notification", "http", "strategyFile", "host", "htmlMask"
+        "notification", "http", "strategyFile", "host", "htmlMask", "characterDevelopmentTask"
     ];
     var hostPattern = new Regex(
         $@"\b(?<host>{string.Join("|", hostObjectNames.Select(Regex.Escape))})\s*\.\s*(?<member>[A-Za-z_$][A-Za-z0-9_$]*)",
@@ -188,7 +189,8 @@ static void VerifyProductionHostSurface(
         ["http"] = typeof(Http),
         ["strategyFile"] = typeof(StrategyFile),
         ["host"] = typeof(CustomHostFunctions),
-        ["htmlMask"] = typeof(MacHtmlMask)
+        ["htmlMask"] = typeof(MacHtmlMask),
+        ["characterDevelopmentTask"] = typeof(CharacterDevelopmentTask)
     };
     var missingRoots = hostObjectNames
         .Where(name => !Convert.ToBoolean(engine.Evaluate(

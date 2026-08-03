@@ -3791,7 +3791,8 @@ static async Task StageMapBack3Async(string runtimeRoot, CancellationToken cance
     var sourceLockPath = Path.Combine(
         Directory.GetCurrentDirectory(), "BetterGenshinImpact.Core", "Manifest", "model-artifacts.source-lock.json");
     var source = BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader
-        .LoadSourceLock(sourceLockPath).Sources.Single();
+        .LoadSourceLock(sourceLockPath).Sources.Single(source =>
+            source.Id == "bettergi-release-0.62.0-portable-7z");
     var localArchive = Path.Combine(
         Directory.GetCurrentDirectory(), "artifacts", "provenance-audit", "release-0.62.0",
         "downloads", "BetterGI_v0.62.0.7z");

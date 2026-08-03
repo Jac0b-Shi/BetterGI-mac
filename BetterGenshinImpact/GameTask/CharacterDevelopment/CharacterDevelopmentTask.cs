@@ -3,8 +3,8 @@ using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Core.Script;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
+using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.Common.StateMachine;
@@ -19,7 +19,6 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.CharacterDevelopment;
@@ -228,12 +227,13 @@ internal sealed class CharacterDevelopmentStateMachineTask : StateMachineBase<Ch
     private static readonly Regex NumberRegex = new(@"\d+", RegexOptions.Compiled);
     private static readonly Regex TalentBonusRegex = new(@"天赋\s*等级\s*[+＋]\s*3", RegexOptions.Compiled);
 
-    private readonly ILogger<CharacterDevelopmentStateMachineTask> _logger = App.GetLogger<CharacterDevelopmentStateMachineTask>();
+    private static ICharacterDevelopmentRuntimePlatform Runtime => CharacterDevelopmentRuntimePlatform.Current;
+    private readonly ILogger<CharacterDevelopmentStateMachineTask> _logger = Runtime.GetLogger<CharacterDevelopmentStateMachineTask>();
     private readonly ReturnMainUiTask _returnMainUiTask = new();
     private readonly CharacterDevelopmentCategory _categories;
     private readonly List<CharacterSelectionTarget> _targets;
     private readonly List<CharacterDevelopmentResult> _results = [];
-    private readonly double _assetScale = TaskContext.Instance().SystemInfo.AssetScale;
+    private readonly double _assetScale = Runtime.SystemInfo.AssetScale;
     private readonly CharacterDevelopmentAssets _assets;
 
     private CharacterDevelopmentState _workflowState = CharacterDevelopmentState.OpenCharacterList;
@@ -274,7 +274,7 @@ internal sealed class CharacterDevelopmentStateMachineTask : StateMachineBase<Ch
 
         _categories = categories;
         _targets = characterNames.Select(CharacterSelectionHelper.CreateTarget).ToList();
-        var captureRect = TaskContext.Instance().SystemInfo.ScaleMax1080PCaptureRect;
+        var captureRect = Runtime.SystemInfo.ScaleMax1080PCaptureRect;
         _assets = CharacterDevelopmentAssets.Get(captureRect.Width, captureRect.Height);
 
         RegisterStateMethodsByAttribute();
@@ -307,7 +307,7 @@ internal sealed class CharacterDevelopmentStateMachineTask : StateMachineBase<Ch
     public async Task<List<CharacterDevelopmentResult>> Start(CancellationToken ct)
     {
         Initialize(ct, CharacterDevelopmentState.Unknown);
-        using var recognizer = new AvatarGridIconRecognizer();
+        using var recognizer = new AvatarGridIconRecognizer(Runtime.OnnxFactory);
         _recognizer = recognizer;
         PrepareCharacter(0);
 
@@ -539,7 +539,7 @@ internal sealed class CharacterDevelopmentStateMachineTask : StateMachineBase<Ch
     [StateHandler(CharacterDevelopmentState.MainUi, RetryTimeout = 15000, RetryInterval = 500, TransitionTimeout = 7000)]
     private async Task<StateHandlerResult> HandleMainUi(BvPage page)
     {
-        Simulation.SendInput.SimulateAction(GIActions.OpenCharacterScreen);
+        TaskControlPlatform.Current.SimulateAction(GIActions.OpenCharacterScreen);
         _workflowState = CharacterDevelopmentState.OpenCharacterList;
         await Delay(500, _ct);
         return StateHandlerResult.Success;
@@ -692,7 +692,7 @@ internal sealed class CharacterDevelopmentStateMachineTask : StateMachineBase<Ch
     [StateHandler(CharacterDevelopmentState.SelectedCharacter, RetryTimeout = 12000, RetryInterval = 300, TransitionTimeout = 5000)]
     private Task<StateHandlerResult> HandleSelectedCharacter(BvPage page)
     {
-        Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+        TaskControlPlatform.Current.PressEscape();
         _workflowState = CharacterDevelopmentState.SwitchCategory;
         return Task.FromResult(StateHandlerResult.Success);
     }
@@ -820,7 +820,7 @@ internal sealed class CharacterDevelopmentStateMachineTask : StateMachineBase<Ch
                 throw new InvalidOperationException("未能完整识别普通攻击、元素战技和元素爆发三个天赋。");
             }
 
-            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+            TaskControlPlatform.Current.PressEscape();
             _workflowState = CharacterDevelopmentState.SwitchCategory;
         }
 
@@ -878,7 +878,7 @@ internal sealed class CharacterDevelopmentStateMachineTask : StateMachineBase<Ch
         using var mask = new Mat();
         Cv2.InRange(hsv, new Scalar(0, 0, 243), new Scalar(30, 19, 249), mask);
         using var binary = mask.CvtColor(ColorConversionCodes.GRAY2BGR);
-        var ocrResult = OcrFactory.Paddle.OcrResult(binary);
+        var ocrResult = Runtime.OcrService.OcrResult(binary);
         var categoryText = GetCategoryText(category);
         var matched = ocrResult.Regions.Any(region => region.Text.Contains(categoryText, StringComparison.Ordinal));
         return matched;
@@ -1186,7 +1186,7 @@ internal sealed class CharacterDevelopmentStateMachineTask : StateMachineBase<Ch
         }
 
         using var region = capture.DeriveCrop(safeRoi);
-        return OcrFactory.Paddle.OcrResult(region.SrcMat).Text.Trim();
+        return Runtime.OcrService.OcrResult(region.SrcMat).Text.Trim();
     }
 
     private Rect Rect1080(int x, int y, int width, int height)
@@ -1200,7 +1200,7 @@ internal sealed class CharacterDevelopmentStateMachineTask : StateMachineBase<Ch
 
     private Rect GetLeftTabsRoi()
     {
-        var captureRect = TaskContext.Instance().SystemInfo.ScaleMax1080PCaptureRect;
+        var captureRect = Runtime.SystemInfo.ScaleMax1080PCaptureRect;
         return new Rect(0, 0, (int)(captureRect.Width * 0.2), captureRect.Height);
     }
 

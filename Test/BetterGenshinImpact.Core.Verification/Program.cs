@@ -761,21 +761,21 @@ Assert("B11.5 Loader leaves stream open", manifestReadStream.CanRead, "stream wa
 manifestReadStream.Close();
 Assert("B11.5 Loader parses successfully", manifest != null, "null");
 Assert("B11.5 Manifest version is 1", manifest!.Version == 1, $"got {manifest.Version}");
-Assert("B11.5 Model artifacts count is 19", manifest.Artifacts.Count == 19, $"got {manifest.Artifacts.Count}");
+Assert("B11.5 Model artifacts count is 20", manifest.Artifacts.Count == 20, $"got {manifest.Artifacts.Count}");
 Assert("B11.5 Sidecar artifacts count is 2", manifest.SidecarArtifacts.Count == 2, $"got {manifest.SidecarArtifacts.Count}");
-// Physical file count: 19 model ONNX + 9 model-bound sidecars + 2 preheat sidecars = 30
+// Physical file count: 20 model ONNX + 10 model-bound sidecars + 2 preheat sidecars = 32
 var modelsWithSidecar = manifest.Artifacts.FindAll(a => a.Sidecars.Count > 0);
-Assert("B11.5 Models with sidecar count 9", modelsWithSidecar.Count == 9, $"got {modelsWithSidecar.Count}");
+Assert("B11.5 Models with sidecar count 10", modelsWithSidecar.Count == 10, $"got {modelsWithSidecar.Count}");
 var allPhysicalPaths =
     manifest.Artifacts.Select(a => a.RelativePath)
     .Concat(manifest.Artifacts.SelectMany(a => a.Sidecars))
     .Concat(manifest.SidecarArtifacts.Select(s => s.RelativePath))
     .ToList();
-Assert("B11.5 Physical paths count 30", allPhysicalPaths.Count == 30, $"got {allPhysicalPaths.Count}");
-Assert("B11.5 Physical paths unique", allPhysicalPaths.Distinct(System.StringComparer.Ordinal).Count() == 30, "duplicate paths");
+Assert("B11.5 Physical paths count 32", allPhysicalPaths.Count == 32, $"got {allPhysicalPaths.Count}");
+Assert("B11.5 Physical paths unique", allPhysicalPaths.Distinct(System.StringComparer.Ordinal).Count() == 32, "duplicate paths");
 // Uniqueness
-Assert("B11.5 Artifact ids unique", manifest.Artifacts.Select(a => a.Id).Distinct().Count() == 19, "duplicate ids");
-Assert("B11.5 Registry keys unique", manifest.Artifacts.Select(a => a.RegistryKey).Distinct().Count() == 19, "duplicate keys");
+Assert("B11.5 Artifact ids unique", manifest.Artifacts.Select(a => a.Id).Distinct().Count() == 20, "duplicate ids");
+Assert("B11.5 Registry keys unique", manifest.Artifacts.Select(a => a.RegistryKey).Distinct().Count() == 20, "duplicate keys");
 Assert("B11.5 Sidecar ids unique", manifest.SidecarArtifacts.Select(s => s.Id).Distinct().Count() == 2, "duplicate sidecar ids");
 // Invariants: all paths use forward slash, not rooted, no ..
 foreach (var a in manifest.Artifacts)
@@ -819,11 +819,12 @@ var registryMap = new Dictionary<string, BetterGenshinImpact.Core.Recognition.ON
     ["BgiTree"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.BgiTree,
     ["BgiFish"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.BgiFish,
     ["GridIcon"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.GridIcon,
+    ["AvatarGridIcon"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.AvatarGridIcon,
     ["BgiMine"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.BgiMine,
     ["SileroVad"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.SileroVad,
     ["BgiWorld"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.BgiWorld
 };
-Assert("B11.5 Registry map has 19 entries", registryMap.Count == 19, $"got {registryMap.Count}");
+Assert("B11.5 Registry map has 20 entries", registryMap.Count == 20, $"got {registryMap.Count}");
 foreach (var entry in manifest.Artifacts)
 {
     Assert($"B11.5 Registry key {entry.RegistryKey} in map", registryMap.ContainsKey(entry.RegistryKey), $"missing {entry.RegistryKey}");
@@ -1002,9 +1003,10 @@ foreach (var art in artifactsArray.EnumerateArray())
     Assert($"B11.6.1.4 sha256 unique {dest}", lockHashes.Add(sha), $"duplicate hash {sha[..8]}...");
     // Size > 0
     Assert($"B11.6.1.4 sizeBytes > 0 {dest}", size > 0, $"size={size}");
-    // MemberPath non-empty and starts with BetterGI/
+    // MemberPath non-empty and rooted in the selected locked archive.
     Assert($"B11.6.1.4 memberPath non-empty {dest}", !string.IsNullOrEmpty(mp), "");
-    Assert($"B11.6.1.4 memberPath starts with BetterGI/ {dest}", mp.StartsWith("BetterGI/"), mp);
+    Assert($"B11.6.1.4 memberPath has a supported archive root {dest}",
+        mp.StartsWith("BetterGI/") || mp.StartsWith("contentFiles/any/any/"), mp);
     // Transformation is valid enum
     Assert($"B11.6.1.4 transformation valid {dest}", trans == "relocate" || trans == "relocate-and-rename", trans);
     Assert($"B11.6.1.4 destination is required {dest}",
@@ -1028,11 +1030,13 @@ Assert("B11.6.1.4 covers every model manifest path", manifestPhysicalPaths.IsSub
 Assert("B11.6.1.4 contains exact runtime asset set",
     lockDests.Except(manifestPhysicalPaths).ToHashSet(StringComparer.Ordinal).SetEquals(requiredRuntimeAssetPaths),
     $"unexpected {string.Join(", ", lockDests.Except(manifestPhysicalPaths))}");
-// Verify source has url and sha256
-var source = sourcesArray[0];
-Assert("B11.6.1.4 source has url", source.TryGetProperty("url", out var srcUrl) && !string.IsNullOrEmpty(srcUrl.GetString()), "");
-Assert("B11.6.1.4 source has sha256", source.TryGetProperty("sha256", out var srcSha) && srcSha.GetString()!.Length == 64, "");
-Assert("B11.6.1.4 source has provenance.commitSha", source.GetProperty("provenance").TryGetProperty("commitSha", out _), "");
+// Verify every locked source has integrity and provenance metadata.
+foreach (var source in sourcesArray.EnumerateArray())
+{
+    Assert("B11.6.1.4 source has url", source.TryGetProperty("url", out var srcUrl) && !string.IsNullOrEmpty(srcUrl.GetString()), "");
+    Assert("B11.6.1.4 source has sha256", source.TryGetProperty("sha256", out var srcSha) && srcSha.GetString()!.Length == 64, "");
+    Assert("B11.6.1.4 source has provenance.commitSha", source.GetProperty("provenance").TryGetProperty("commitSha", out _), "");
+}
 Console.WriteLine();
 
 // ==== B11.6.2 ArtifactDownloader source-lock loading ====
@@ -1041,11 +1045,13 @@ var downloaderLock = BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.
     ?? throw new InvalidDataException("Artifact source lock loader returned null.");
 Assert("B11.6.2 Downloader loads source-lock", downloaderLock != null, "null");
 Assert("B11.6.2 Downloader schema version", downloaderLock!.SchemaVersion == 1, $"got {downloaderLock.SchemaVersion}");
-Assert("B11.6.2 Downloader has 1 source", downloaderLock.Sources.Count == 1, $"got {downloaderLock.Sources.Count}");
-var dlSource = downloaderLock.Sources[0];
-Assert("B11.6.2 Downloader source has url", !string.IsNullOrEmpty(dlSource.Url), "");
-Assert("B11.6.2 Downloader source has sha256", dlSource.Sha256.Length == 64, $"len={dlSource.Sha256.Length}");
-Assert("B11.6.2 Downloader source has provenance", dlSource.Provenance.CommitSha.Length == 40, "");
+Assert("B11.6.2 Downloader has 2 sources", downloaderLock.Sources.Count == 2, $"got {downloaderLock.Sources.Count}");
+foreach (var dlSource in downloaderLock.Sources)
+{
+    Assert("B11.6.2 Downloader source has url", !string.IsNullOrEmpty(dlSource.Url), "");
+    Assert("B11.6.2 Downloader source has sha256", dlSource.Sha256.Length == 64, $"len={dlSource.Sha256.Length}");
+    Assert("B11.6.2 Downloader source has provenance", dlSource.Provenance.CommitSha.Length == 40, "");
+}
 Assert(
     $"B11.6.2 Downloader has {expectedLockedArtifactCount} artifacts",
     downloaderLock.Artifacts.Count == expectedLockedArtifactCount,
@@ -1054,7 +1060,8 @@ Assert(
 foreach (var art in downloaderLock.Artifacts)
 {
     Assert($"B11.6.2 {art.DestinationRelativePath} has sourceId", !string.IsNullOrEmpty(art.SourceId), "");
-    Assert($"B11.6.2 {art.DestinationRelativePath} has memberPath", art.MemberPath.StartsWith("BetterGI/"), art.MemberPath);
+    Assert($"B11.6.2 {art.DestinationRelativePath} has memberPath",
+        art.MemberPath.StartsWith("BetterGI/") || art.MemberPath.StartsWith("contentFiles/any/any/"), art.MemberPath);
     Assert($"B11.6.2 {art.DestinationRelativePath} has valid transformation", art.Transformation is "relocate" or "relocate-and-rename", art.Transformation);
     Assert($"B11.6.2 {art.DestinationRelativePath} sizeBytes > 0", art.SizeBytes > 0, $"size={art.SizeBytes}");
     Assert($"B11.6.2 {art.DestinationRelativePath} licenseEvidence present", art.LicenseEvidence != null, "");
@@ -1370,7 +1377,8 @@ var lockedRuntimeRoot = Path.Combine(Path.GetTempPath(), "bgi-locked-runtime-" +
     var temporaryLockPath = Path.Combine(Path.GetTempPath(), "bgi-locked-source-" + Guid.NewGuid().ToString("N") + ".json");
     if (File.Exists(localReleaseArchive))
     {
-        var officialUrl = downloaderLock.Sources.Single().Url;
+        var officialUrl = downloaderLock.Sources.Single(source =>
+            source.Id == "bettergi-release-0.62.0-portable-7z").Url;
         File.WriteAllText(temporaryLockPath,
             lockJson.Replace(officialUrl, "file://" + localReleaseArchive, StringComparison.Ordinal));
         lockedTestSourcePath = temporaryLockPath;
@@ -2895,7 +2903,8 @@ try
 
     // Stage the real MapBack_3 layer (covers the 雷音权现前往 route) from the verified
     // 0.62.0 release archive through the same hash-checked downloader pipeline as B12.2.
-    var releaseSource = downloaderLock.Sources.Single();
+    var releaseSource = downloaderLock.Sources.Single(source =>
+        source.Id == "bettergi-release-0.62.0-portable-7z");
     var mapStageSource = new ArtifactDownloader.SourceEntry
     {
         Id = releaseSource.Id,

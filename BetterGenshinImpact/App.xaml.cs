@@ -296,6 +296,8 @@ public partial class App : Application
             new Core.Runtime.Windows.WindowsCombatSceneProvider());
         GameTask.AutoFight.AutoFightRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsAutoFightRuntimePlatform());
+        GameTask.CharacterDevelopment.CharacterDevelopmentRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsCharacterDevelopmentRuntimePlatform());
         GameTask.AutoFishing.AutoFishingRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsAutoFishingRuntimePlatform());
         GameTask.Model.TaskParameterPlatform.Configure(
