@@ -19,6 +19,7 @@ using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
 using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.AutoStygianOnslaught;
+using BetterGenshinImpact.GameTask.CharacterDevelopment;
 using BetterGenshinImpact.GameTask.Model.GameUI;
 
 namespace BetterGenshinImpact.Core.Script;
@@ -40,6 +41,7 @@ public class EngineExtend
         engine.AddHostObject("pathingScript", new AutoPathingScript(
             workDir, config, ScriptGroupExecutionServices.Current));
         engine.AddHostObject("genshin", new Dependence.Genshin());
+        engine.AddHostObject("characterDevelopmentTask", new CharacterDevelopmentTask());
         engine.AddHostObject("log", new Log());
         engine.AddHostObject("file", new LimitedFile(workDir)); // 限制文件访问
         engine.AddHostObject("http", new Http()); // 限制文件访问
