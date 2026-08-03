@@ -179,6 +179,46 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                     "Auxiliary controls accepted a late key-down edge after runtime stop.");
             }
 
+            using (var dispatchStarted = new ManualResetEventSlim())
+            using (var allowDispatchToFinish = new ManualResetEventSlim())
+            using (var auxiliaryControls = new AuxiliaryControlCoordinator(
+                       macroCatalog,
+                       (_, token) =>
+                       {
+                           dispatchStarted.Set();
+                           allowDispatchToFinish.Wait(token);
+                       },
+                       cancellationToken,
+                       loggerFactory.CreateLogger<AuxiliaryControlCoordinator>()))
+            {
+                auxiliaryControls.Start();
+                _ = auxiliaryControls.HandleKeyEdge(
+                    AuxiliaryControlCoordinator.PickUpOrInteractControl,
+                    true);
+                context.Require(
+                    dispatchStarted.Wait(TimeSpan.FromSeconds(2), cancellationToken),
+                    "Auxiliary control dispatch did not start before the release synchronization check.");
+
+                var releaseTask = Task.Run(() => auxiliaryControls.HandleKeyEdge(
+                    AuxiliaryControlCoordinator.PickUpOrInteractControl,
+                    false));
+                bool releaseCompletedDuringDispatch;
+                try
+                {
+                    releaseCompletedDuringDispatch = await Task.WhenAny(
+                        releaseTask,
+                        Task.Delay(100, cancellationToken)) == releaseTask;
+                }
+                finally
+                {
+                    allowDispatchToFinish.Set();
+                }
+                _ = await releaseTask;
+                context.Require(
+                    !releaseCompletedDuringDispatch,
+                    "Auxiliary control release returned while an input dispatch was still in flight.");
+            }
+
             var turnAroundPlatform =
                 new RecordingTurnAroundRuntimePlatform(macroCatalog);
             TurnAroundRuntimePlatform.Configure(turnAroundPlatform);

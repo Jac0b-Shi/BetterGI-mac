@@ -61,9 +61,9 @@ public sealed class AuxiliaryControlCoordinator(
             _acceptingInput = false;
             activeControls = _activeControls.Values.ToArray();
             _activeControls.Clear();
-            foreach (var active in activeControls)
-                active.Cancellation.Cancel();
         }
+        foreach (var active in activeControls)
+            active.Cancel();
         await Task.WhenAll(activeControls.Select(active => active.Task));
     }
 
@@ -96,10 +96,9 @@ public sealed class AuxiliaryControlCoordinator(
                 await Task.Delay(
                     TimeSpan.FromMilliseconds(specification.IntervalMilliseconds),
                     active.Cancellation.Token);
-                active.Cancellation.Token.ThrowIfCancellationRequested();
-                pressKey(
-                    specification.WindowsVirtualKey,
-                    active.Cancellation.Token);
+                active.Dispatch(
+                    pressKey,
+                    specification.WindowsVirtualKey);
             }
         }
         catch (OperationCanceledException)
@@ -123,7 +122,7 @@ public sealed class AuxiliaryControlCoordinator(
                     _activeControls.Remove(control);
                 }
             }
-            active.Cancellation.Dispose();
+            active.Dispose();
         }
     }
 
@@ -134,8 +133,8 @@ public sealed class AuxiliaryControlCoordinator(
         {
             if (!_activeControls.Remove(control, out active))
                 return;
-            active.Cancellation.Cancel();
         }
+        active.Cancel();
     }
 
     private static ControlSpecification ResolveSpecification(
@@ -165,8 +164,43 @@ public sealed class AuxiliaryControlCoordinator(
 
     private sealed class ActiveControl(CancellationTokenSource cancellation)
     {
+        private readonly object _dispatchLock = new();
+        private bool _disposed;
+
         public CancellationTokenSource Cancellation { get; } = cancellation;
         public Task Task { get; set; } = Task.CompletedTask;
+
+        public void Cancel()
+        {
+            lock (_dispatchLock)
+            {
+                if (_disposed)
+                    return;
+                Cancellation.Cancel();
+            }
+        }
+
+        public void Dispatch(
+            Action<int, CancellationToken> pressKey,
+            int windowsVirtualKey)
+        {
+            lock (_dispatchLock)
+            {
+                Cancellation.Token.ThrowIfCancellationRequested();
+                pressKey(windowsVirtualKey, Cancellation.Token);
+            }
+        }
+
+        public void Dispose()
+        {
+            lock (_dispatchLock)
+            {
+                if (_disposed)
+                    return;
+                _disposed = true;
+                Cancellation.Dispose();
+            }
+        }
     }
 
     private sealed record ControlSpecification(
