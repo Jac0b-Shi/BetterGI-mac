@@ -162,11 +162,14 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 _ = auxiliaryControls.HandleKeyEdge(
                     AuxiliaryControlCoordinator.PickUpOrInteractControl,
                     false);
+                int releasedKeyCount;
+                lock (repeatedKeys)
+                    releasedKeyCount = repeatedKeys.Count;
                 await Task.Delay(120, cancellationToken);
                 lock (repeatedKeys)
                 {
                     context.Require(
-                        repeatedKeys.Count == emittedKeys.Length,
+                        repeatedKeys.Count == releasedKeyCount,
                         "Auxiliary controls continued after the physical key-up edge.");
                 }
                 await auxiliaryControls.StopAsync();
