@@ -56,9 +56,11 @@ public sealed class MacTriggerDispatcher(
             if (_loop is { IsCompleted: false })
                 throw new InvalidOperationException("macOS trigger dispatcher has already been started.");
             _runCancellation?.Dispose();
-            _runCancellation = CancellationTokenSource.CreateLinkedTokenSource(shutdown);
-            var cancellationToken = _runCancellation.Token;
-            _loop = Task.Run(() => RunConfiguredLoopAsync(cancellationToken), CancellationToken.None);
+            var runCancellation = CancellationTokenSource.CreateLinkedTokenSource(shutdown);
+            _runCancellation = runCancellation;
+            _loop = Task.Run(
+                () => RunConfiguredLoopAsync(runCancellation),
+                CancellationToken.None);
         }
     }
 
@@ -72,15 +74,16 @@ public sealed class MacTriggerDispatcher(
                 _runCancellation?.Cancel();
         }
 
-        if (loop is not null)
-            await loop;
         InvalidateMapMask();
+        if (loop is not null)
+            await loop.WaitAsync(cancellationToken);
         if (stopCleanup is not null)
             await stopCleanup(cancellationToken);
     }
 
-    private async Task RunConfiguredLoopAsync(CancellationToken cancellationToken)
+    private async Task RunConfiguredLoopAsync(CancellationTokenSource runCancellation)
     {
+        var cancellationToken = runCancellation.Token;
         try
         {
             if (runLoop is null)
@@ -94,6 +97,15 @@ public sealed class MacTriggerDispatcher(
         catch (Exception exception)
         {
             logger.LogError(exception, "macOS trigger dispatcher stopped unexpectedly");
+        }
+        finally
+        {
+            lock (_startLock)
+            {
+                if (ReferenceEquals(_runCancellation, runCancellation))
+                    _runCancellation = null;
+            }
+            runCancellation.Dispose();
         }
     }
 

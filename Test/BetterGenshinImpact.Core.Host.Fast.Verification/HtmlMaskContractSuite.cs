@@ -20,10 +20,10 @@ public sealed class HtmlMaskContractSuite : IVerificationSuite
         var root = Path.Combine(
             Path.GetTempPath(), $"bettergi-html-mask-{Guid.NewGuid():N}");
         Directory.CreateDirectory(Path.Combine(root, "assets"));
-        var calls = new List<(string Method, JObject? Parameters)>();
-        using var mask = new MacHtmlMask(root, (method, parameters) =>
+        var calls = new List<(string Method, JObject? Parameters, TimeSpan? ResponseTimeout)>();
+        using var mask = new MacHtmlMask(root, (method, parameters, responseTimeout) =>
         {
-            calls.Add((method, parameters));
+            calls.Add((method, parameters, responseTimeout));
             return method switch
             {
                 "htmlMask.show" => JObject.FromObject(new
@@ -59,7 +59,7 @@ public sealed class HtmlMaskContractSuite : IVerificationSuite
         mask.Send(id, "/progress", """{"progress":25}""");
         var response = await mask.Request(
             id, "/showskill", """{"show":true}""", 1_000);
-        var received = await mask.Receive(id, 100);
+        var received = await mask.Receive(id);
         var polled = mask.Poll(id);
         var all = mask.PollAll(id);
         mask.SetClickThrough(id, true);
@@ -78,6 +78,8 @@ public sealed class HtmlMaskContractSuite : IVerificationSuite
 
         var show = calls.Single(call => call.Method == "htmlMask.show").Parameters!;
         var send = calls.Single(call => call.Method == "htmlMask.send").Parameters!;
+        var request = calls.Single(call => call.Method == "htmlMask.request");
+        var receive = calls.Single(call => call.Method == "htmlMask.receive");
         context.Require(
             show.Value<string>("url") == new Uri(
                 Path.Combine(root, "assets", "progress-mask.html")).AbsoluteUri &&
@@ -85,6 +87,10 @@ public sealed class HtmlMaskContractSuite : IVerificationSuite
             show.Value<bool>("allowHTTP") == false &&
             send["data"]?.Value<int>("progress") == 25,
             "Mac htmlMask did not preserve the script root or structured JSON payload.");
+        context.Require(
+            request.ResponseTimeout == TimeSpan.FromSeconds(6) &&
+            receive.ResponseTimeout == Timeout.InfiniteTimeSpan,
+            "Mac htmlMask did not preserve caller-defined finite and infinite response deadlines.");
 
         context.Require(
             Throws<ArgumentException>(() =>

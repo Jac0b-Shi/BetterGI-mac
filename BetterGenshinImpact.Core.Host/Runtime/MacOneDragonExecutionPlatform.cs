@@ -49,7 +49,7 @@ public sealed class MacOneDragonExecutionPlatform(
                 await new ClaimMailRewardsTask().Start(cancellationToken);
                 return;
             case OneDragonBuiltInTask.CraftCondensedResin:
-                await new GoToCraftingBenchTask().Start(
+                await new GoToCraftingBenchTask().GoCraftResin(
                     request.Config.CraftingBenchCountry,
                     cancellationToken);
                 return;

@@ -344,6 +344,8 @@ private struct UnavailableInputDispatcher: InputDispatching {
 }
 
 final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
+    private static let processCleanupQueue = DispatchQueue(
+        label: "BetterGI.WineBridge.ProcessCleanup")
     private static let inputContextWakeTimeoutMs: UInt16 = 3_000
 
     let deliveryMode = InputDeliveryMode.wineBridge
@@ -617,7 +619,7 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
         clearObservedHostTarget()
         backgroundEpisodeForegroundAttempted = false
         if let currentProcess {
-            Self.stopProcess(currentProcess)
+            Self.stopProcessAsynchronously(currentProcess)
         }
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         outputPipe = nil
@@ -667,6 +669,10 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
             do {
                 try process.run()
             } catch {
+                outputPipe.fileHandleForReading.readabilityHandler = nil
+                if self.outputPipe === outputPipe {
+                    self.outputPipe = nil
+                }
                 throw WineBridgeError.bridgeUnavailable(error.localizedDescription)
             }
 
@@ -1196,6 +1202,24 @@ final class WineBridgeInputDispatcher: InputDispatching, @unchecked Sendable {
             Darwin.kill(process.processIdentifier, SIGKILL)
         }
         process.waitUntilExit()
+    }
+
+    private static func stopProcessAsynchronously(
+        _ process: Process,
+        naturalExitGrace: TimeInterval = 0.2
+    ) {
+        guard process.isRunning else { return }
+        process.terminationHandler = { terminatedProcess in
+            terminatedProcess.terminationHandler = nil
+        }
+        processCleanupQueue.asyncAfter(deadline: .now() + naturalExitGrace) {
+            guard process.isRunning else { return }
+            process.terminate()
+            processCleanupQueue.asyncAfter(deadline: .now() + 2) {
+                guard process.isRunning else { return }
+                Darwin.kill(process.processIdentifier, SIGKILL)
+            }
+        }
     }
 
     private static func reserveLoopbackPort() throws -> UInt16 {

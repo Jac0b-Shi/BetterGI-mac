@@ -82,6 +82,31 @@ rg -q -- '--recognition-smoke --runtime-root' MacGI/scripts/package-macgi-app.sh
   || fail "App packaging does not verify its staged recognition resources"
 rg -qx 'AutoGeniusInvokation' MacGI/Resources/game-task-assets.manifest \
   || fail "composed AutoGeniusInvokation assets are missing from the canonical package manifest"
+rg -qx 'CharacterDevelopment' MacGI/Resources/game-task-assets.manifest \
+  || fail "CharacterDevelopment recognition assets are missing from the canonical package manifest"
+
+character_development_sources=(
+  BetterGenshinImpact/GameTask/CharacterDevelopment/CharacterDevelopmentTask.cs
+  BetterGenshinImpact/GameTask/CharacterDevelopment/CharacterSelectionHelper.cs
+)
+if rg -n '\b(TaskContext|Simulation\.|OcrFactory|App\.GetLogger|Vanara|User32)\b' \
+  "${character_development_sources[@]}"; then
+  fail "CharacterDevelopment still owns Windows runtime or global OCR dependencies"
+fi
+rg -q 'GameTask/CharacterDevelopment/\*\.cs' \
+  BetterGenshinImpact.Core/BetterGenshinImpact.Core.csproj \
+  && rg -q 'CharacterDevelopmentRuntimePlatform\.Configure' \
+    BetterGenshinImpact.Core.Host/Program.cs \
+  && rg -q 'AddHostObject\("characterDevelopmentTask", new CharacterDevelopmentTask' \
+    BetterGenshinImpact.Core.Host/Runtime/MacScriptProjectHostInitializer.cs \
+  || fail "CharacterDevelopment is not linked and composed through the macOS Core script host"
+rg -q 'Assets/Model/AvatarGridIcon/avatar.onnx' \
+  BetterGenshinImpact.Core/Manifest/model-artifacts.manifest.json \
+  && rg -q 'bettergi-assets-model-1.0.29-nupkg' \
+    BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json \
+  && rg -q 'class ArtifactDownloaderSuite' \
+    Test/BetterGenshinImpact.Core.Host.Fast.Verification/ArtifactDownloaderSuite.cs \
+  || fail "CharacterDevelopment AvatarGridIcon artifacts are not source-locked and multi-source verified"
 
 if rg -n 'layout, gameTaskManagerPlatform\.SystemInfo' BetterGenshinImpact.Core.Host/Program.cs; then
   echo "Core Host must not query Swift window metrics before the callback channel attaches." >&2

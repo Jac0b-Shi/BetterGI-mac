@@ -28,6 +28,8 @@ public sealed class MacGenshinRuntimePlatform(
         new ClaimBattlePassRewardsTask().Start(cancellationToken);
     public Task GoToCraftingBench(string country, CancellationToken cancellationToken) =>
         new GoToCraftingBenchTask().GoToCraftingBench(country, cancellationToken);
+    public Task GoCraftResin(string country, CancellationToken cancellationToken) =>
+        new GoToCraftingBenchTask().GoCraftResin(country, cancellationToken);
     public Task ChooseTalkOption(string option, int skipTimes, bool isOrange,
         CancellationToken cancellationToken) =>
         new ChooseTalkOptionTask(

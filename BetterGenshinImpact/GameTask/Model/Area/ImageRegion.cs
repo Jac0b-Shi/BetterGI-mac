@@ -234,11 +234,10 @@ public class ImageRegion : Region
                 return new Region();
             }
 
-            var roi = SrcMat;
-            if (effectiveRegionOfInterest != default)
-            {
-                roi = new Mat(SrcMat, effectiveRegionOfInterest);
-            }
+            using var roiView = effectiveRegionOfInterest != default
+                ? new Mat(SrcMat, effectiveRegionOfInterest)
+                : null;
+            var roi = roiView ?? SrcMat;
 
             var result = ImageRegionOcrPlatform.Current.OcrResult(roi);
             var text = NormalizeOcrText(result.Text);
@@ -313,72 +312,78 @@ public class ImageRegion : Region
                 return new Region();
             }
 
+            using var roiView = effectiveRegionOfInterest != default
+                ? new Mat(SrcMat, effectiveRegionOfInterest)
+                : null;
+            var roiSource = roiView ?? SrcMat;
             Mat roi;
             if (RecognitionTypes.ColorRangeAndOcr.Equals(ro.RecognitionType))
             {
-                roi = SrcMat;
-                if (effectiveRegionOfInterest != default)
-                {
-                    roi = new Mat(SrcMat, effectiveRegionOfInterest);
-                }
-
-                roi = roi.Clone();
-                if (ro.ColorConversionCode != ColorConversionCodes.BGRA2BGR)
-                {
-                    Cv2.CvtColor(roi, roi, ro.ColorConversionCode);
-                }
-
-                Cv2.InRange(roi, ro.LowerColor, ro.UpperColor, roi);
+                roi = roiSource.Clone();
             }
             else
             {
-                roi = SrcMat;
-                if (effectiveRegionOfInterest != default)
-                {
-                    roi = new Mat(SrcMat, effectiveRegionOfInterest);
-                }
+                roi = roiSource;
             }
 
-            var result = ImageRegionOcrPlatform.Current.OcrResult(roi);
-            var text = NormalizeOcrText(result.Text);
-            text = ApplyTextReplacements(text, ro.ReplaceDictionary);
-
-            if (!string.IsNullOrEmpty(text))
+            try
             {
-                if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
+                if (RecognitionTypes.ColorRangeAndOcr.Equals(ro.RecognitionType))
                 {
-#if BGI_FULL_WINDOWS
-                    // 画出OCR识别到的区域
-                    var drawList = result.Regions.Select(item =>
-                        this.ToRectDrawable(item.Rect.BoundingRect() + effectiveRegionOfInterest.Location, ro.Name,
-                            ro.DrawOnWindowPen)).ToList();
-                    VisionContext.Instance().DrawContent.PutOrRemoveRectList(ro.Name, drawList);
-#endif
+                    if (ro.ColorConversionCode != ColorConversionCodes.BGRA2BGR)
+                    {
+                        Cv2.CvtColor(roi, roi, ro.ColorConversionCode);
+                    }
+
+                    Cv2.InRange(roi, ro.LowerColor, ro.UpperColor, roi);
                 }
 
-                if (effectiveRegionOfInterest != default)
+                var result = ImageRegionOcrPlatform.Current.OcrResult(roi);
+                var text = NormalizeOcrText(result.Text);
+                text = ApplyTextReplacements(text, ro.ReplaceDictionary);
+
+                if (!string.IsNullOrEmpty(text))
                 {
-                    var newRa = Derive(effectiveRegionOfInterest);
-                    newRa.Text = text;
-                    successAction?.Invoke(newRa);
-                    return newRa;
+                    if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
+                    {
+#if BGI_FULL_WINDOWS
+                        // 画出OCR识别到的区域
+                        var drawList = result.Regions.Select(item =>
+                            this.ToRectDrawable(item.Rect.BoundingRect() + effectiveRegionOfInterest.Location, ro.Name,
+                                ro.DrawOnWindowPen)).ToList();
+                        VisionContext.Instance().DrawContent.PutOrRemoveRectList(ro.Name, drawList);
+#endif
+                    }
+
+                    if (effectiveRegionOfInterest != default)
+                    {
+                        var newRa = Derive(effectiveRegionOfInterest);
+                        newRa.Text = text;
+                        successAction?.Invoke(newRa);
+                        return newRa;
+                    }
+                    else
+                    {
+                        this.Text = text;
+                        successAction?.Invoke(this);
+                        return this;
+                    }
                 }
                 else
                 {
-                    this.Text = text;
-                    successAction?.Invoke(this);
-                    return this;
+                    if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
+                    {
+                        OverlayDrawPlatform.Current.RemoveRectangles(ro.Name);
+                    }
+
+                    failAction?.Invoke();
+                    return new Region();
                 }
             }
-            else
+            finally
             {
-                if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
-                {
-                    OverlayDrawPlatform.Current.RemoveRectangles(ro.Name);
-                }
-
-                failAction?.Invoke();
-                return new Region();
+                if (!ReferenceEquals(roi, roiSource))
+                    roi.Dispose();
             }
         }
         else
@@ -513,11 +518,10 @@ public class ImageRegion : Region
                 return [];
             }
 
-            var roi = SrcMat;
-            if (effectiveRegionOfInterest != default)
-            {
-                roi = new Mat(SrcMat, effectiveRegionOfInterest);
-            }
+            using var roiView = effectiveRegionOfInterest != default
+                ? new Mat(SrcMat, effectiveRegionOfInterest)
+                : null;
+            var roi = roiView ?? SrcMat;
 
             var result = ImageRegionOcrPlatform.Current.OcrResult(roi);
 
@@ -593,7 +597,7 @@ public class ImageRegion : Region
         return text;
     }
 
-    public new void Dispose()
+    public override void Dispose()
     {
         _cacheImage?.Dispose();
         _cacheGreyMat?.Dispose();

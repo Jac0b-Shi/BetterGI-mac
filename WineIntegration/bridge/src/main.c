@@ -948,7 +948,8 @@ static bool input_text(struct bridge_state *state, const uint8_t *payload, uint3
     }
     /* SetClipboardData owns clipboard_memory after a successful call. */
 
-    bool temporary_control = !state->held_keys[VK_LCONTROL];
+    bool temporary_control =
+        !state->held_keys[VK_LCONTROL] && !state->held_keys[VK_RCONTROL];
     if (temporary_control && !send_key(state, VK_LCONTROL, true)) return false;
     Sleep(20);
     bool success = send_key(state, 'V', true);
@@ -1035,13 +1036,15 @@ static uint32_t handle_authenticated_command(
         *response_length = sizeof(target);
         return BGI_WINE_STATUS_OK;
     }
-    case BGI_WINE_COMMAND_REGISTER_TARGET:
+    case BGI_WINE_COMMAND_REGISTER_TARGET: {
         if (request->payload_length != sizeof(struct bgi_wine_target)) {
             return BGI_WINE_STATUS_INVALID_PAYLOAD;
         }
-        memcpy(&state->target, payload, sizeof(state->target));
-        state->target.executable_name[sizeof(state->target.executable_name) - 1] = '\0';
-        if (!validate_target(&state->target)) return BGI_WINE_STATUS_TARGET_MISMATCH;
+        struct bgi_wine_target target = {0};
+        memcpy(&target, payload, sizeof(target));
+        target.executable_name[sizeof(target.executable_name) - 1] = '\0';
+        if (!validate_target(&target)) return BGI_WINE_STATUS_TARGET_MISMATCH;
+        state->target = target;
         state->has_target = true;
         state->input_context_best_effort_ready = false;
         reset_input_context_wake(state);
@@ -1051,6 +1054,7 @@ static uint32_t handle_authenticated_command(
             state->target.executable_name);
         fflush(stderr);
         return BGI_WINE_STATUS_OK;
+    }
     case BGI_WINE_COMMAND_PING:
         return BGI_WINE_STATUS_OK;
     case BGI_WINE_COMMAND_QUERY_FOREGROUND:
@@ -1317,6 +1321,17 @@ int main(int argc, char **argv)
 
     puts("BETTERGI_WINE_BRIDGE_READY");
     fflush(stdout);
+    fd_set listener_set;
+    FD_ZERO(&listener_set);
+    FD_SET(listener, &listener_set);
+    struct timeval accept_timeout = {60, 0};
+    int ready = select(0, &listener_set, NULL, NULL, &accept_timeout);
+    if (ready <= 0) {
+        closesocket(listener);
+        WSACleanup();
+        SecureZeroMemory(state.token, sizeof(state.token));
+        return 7;
+    }
     state.client = accept(listener, NULL, NULL);
     closesocket(listener);
     if (state.client == INVALID_SOCKET) {

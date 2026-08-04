@@ -153,6 +153,8 @@ public partial class App : Application
                 services.AddView<MapPathingPage, MapPathingViewModel>();
                 services.AddView<OneDragonFlowPage, OneDragonFlowViewModel>();
                 services.AddSingleton<PathingConfigViewModel>();
+                services.AddSingleton<IBannerImageService, BannerImageService>();
+                services.AddTransient<WebImageInputViewModel>();
                 // services.AddView<PathingConfigView, PathingConfigViewModel>();
                 services.AddView<KeyBindingsSettingsPage, KeyBindingsSettingsPageViewModel>();
 
@@ -172,6 +174,7 @@ public partial class App : Application
                 services.AddSingleton<RawInputMonitor>();
                 services.AddSingleton<IRelativeMouseInputMonitorFactory, RelativeMouseInputMonitorFactory>();
                 services.AddSingleton<OverlayMetricsService>();
+                services.AddSingleton<CustomHtmlMaskService>();
                 services.AddSingleton<TaskTriggerDispatcher>();
                 services.AddSingleton<NotificationService>();
                 services.AddHostedService(sp => sp.GetRequiredService<NotificationService>());
@@ -293,6 +296,8 @@ public partial class App : Application
             new Core.Runtime.Windows.WindowsCombatSceneProvider());
         GameTask.AutoFight.AutoFightRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsAutoFightRuntimePlatform());
+        GameTask.CharacterDevelopment.CharacterDevelopmentRuntimePlatform.Configure(
+            new Core.Runtime.Windows.WindowsCharacterDevelopmentRuntimePlatform());
         GameTask.AutoFishing.AutoFishingRuntimePlatform.Configure(
             new Core.Runtime.Windows.WindowsAutoFishingRuntimePlatform());
         GameTask.Model.TaskParameterPlatform.Configure(

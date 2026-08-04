@@ -17,11 +17,15 @@ cmake_arguments=(
   -B "${build_root}"
   -DCMAKE_BUILD_TYPE=Release
 )
-if [[ ! -f "${build_root}/CMakeCache.txt" ]]; then
-  cmake_arguments+=(
-    -DCMAKE_TOOLCHAIN_FILE=toolchains/mingw-x86_64.cmake
-  )
+expected_toolchain=${bridge_root}/toolchains/mingw-x86_64.cmake
+if [[ -f "${build_root}/CMakeCache.txt" ]] &&
+   ! grep -Fq "CMAKE_TOOLCHAIN_FILE:FILEPATH=${expected_toolchain}" "${build_root}/CMakeCache.txt"; then
+  printf 'Removing bridge build directory configured for a different toolchain: %s\n' "${build_root}" >&2
+  rm -rf -- "${build_root}"
 fi
+cmake_arguments+=(
+  -DCMAKE_TOOLCHAIN_FILE=toolchains/mingw-x86_64.cmake
+)
 cmake "${cmake_arguments[@]}"
 cmake --build "${build_root}"
 

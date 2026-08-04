@@ -277,6 +277,33 @@ struct OverlayDisplayMetric: Identifiable {
     var value: String
 }
 
+struct PreparedCoreInputDispatch {
+    let action: InputAction
+    let targetWindow: WindowInfo
+    let dispatcher: any InputDispatching
+    let deliveryMode: InputDeliveryMode
+
+    func perform() throws -> CGEventDispatchReport {
+        try dispatcher.perform(action, targetWindow: targetWindow)
+    }
+}
+
+enum CoreInputDispatchPreparation {
+    case immediate(InputSafetyGate.GateResult)
+    case dispatch(PreparedCoreInputDispatch)
+}
+
+struct PreparedCoreInputQuery {
+    let query: InputQuery
+    let targetWindow: WindowInfo
+    let dispatcher: any InputDispatching
+    let deliveryMode: InputDeliveryMode
+
+    func perform() throws -> Bool {
+        try dispatcher.query(query, targetWindow: targetWindow)
+    }
+}
+
 @MainActor
 final class AppState: ObservableObject {
     @Published var selectedPage: NavigationPage = .launch
@@ -382,6 +409,11 @@ final class AppState: ObservableObject {
 
     /// Available game windows from the tracker.
     @Published var availableWindows: [WindowInfo] = []
+    var windowPickerOptions: [WindowInfo] {
+        availableWindows.filter {
+            !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
 
     /// Most recently captured frame (nil if no capture session).
     @Published var lastCapturedFrame: CapturedFrame?
@@ -5116,6 +5148,20 @@ final class AppState: ObservableObject {
     /// Callers should NOT check the gate a second time.
     @discardableResult
     func dispatchInput(_ action: InputAction, source: ActionSource = .manual) -> InputSafetyGate.GateResult {
+        switch prepareCoreInputDispatch(action, source: source) {
+        case .immediate(let result):
+            return result
+        case .dispatch(let prepared):
+            return completeCoreInputDispatch(
+                prepared,
+                result: Result { try prepared.perform() })
+        }
+    }
+
+    func prepareCoreInputDispatch(
+        _ action: InputAction,
+        source: ActionSource = .runtimeTrigger
+    ) -> CoreInputDispatchPreparation {
         let isReleaseAll = action == .releaseAll
         let requiresForegroundCheck =
             source == .runtimeTrigger
@@ -5138,25 +5184,11 @@ final class AppState: ObservableObject {
         )
         switch result {
         case .allow:
-            do {
-                let report = try inputDispatcher.perform(action, targetWindow: selectedWindow)
-                inputStatus = .ok
-                recordInputAction(action.displayName, prefix: "→")
-                addLog(
-                    .debug,
-                    "Input dispatched: backend=\(inputDispatcher.deliveryMode.rawValue), "
-                        + "targetPID=\(selectedWindow.ownerPID), gate=passed, "
-                        + "\(report.detail), events=\(report.eventCount)")
-            } catch {
-                inputStatus = .error
-                recordInputAction(action.displayName, prefix: "✕")
-                let reason =
-                    "Input dispatch failed: backend=\(inputDispatcher.deliveryMode.rawValue), "
-                    + "targetPID=\(selectedWindow.ownerPID), "
-                    + error.localizedDescription
-                addLog(.error, reason)
-                return .blocked(reason: reason)
-            }
+            return .dispatch(PreparedCoreInputDispatch(
+                action: action,
+                targetWindow: selectedWindow,
+                dispatcher: inputDispatcher,
+                deliveryMode: inputDispatcher.deliveryMode))
         case .dryRun:
             recordInputAction(action.displayName, prefix: "○")
         case .blocked:
@@ -5164,20 +5196,62 @@ final class AppState: ObservableObject {
             recordInputAction(action.displayName, prefix: "✕")
             addLog(.warn, "Input blocked: \(result.reason)")
         }
-        return result
+        return .immediate(result)
+    }
+
+    func completeCoreInputDispatch(
+        _ prepared: PreparedCoreInputDispatch,
+        result: Result<CGEventDispatchReport, Error>
+    ) -> InputSafetyGate.GateResult {
+        switch result {
+        case .success(let report):
+            inputStatus = .ok
+            recordInputAction(prepared.action.displayName, prefix: "→")
+            addLog(
+                .debug,
+                "Input dispatched: backend=\(prepared.deliveryMode.rawValue), "
+                    + "targetPID=\(prepared.targetWindow.ownerPID), gate=passed, "
+                    + "\(report.detail), events=\(report.eventCount)")
+            return .allow
+        case .failure(let error):
+            inputStatus = .error
+            recordInputAction(prepared.action.displayName, prefix: "✕")
+            let reason =
+                "Input dispatch failed: backend=\(prepared.deliveryMode.rawValue), "
+                + "targetPID=\(prepared.targetWindow.ownerPID), "
+                + error.localizedDescription
+            addLog(.error, reason)
+            return .blocked(reason: reason)
+        }
     }
 
     func queryInput(_ query: InputQuery) throws -> Bool {
+        let prepared = prepareCoreInputQuery(query)
         do {
-            return try inputDispatcher.query(query, targetWindow: selectedWindow)
+            return try prepared.perform()
         } catch {
+            throw completeCoreInputQuery(prepared, error: error)
+        }
+    }
+
+    func prepareCoreInputQuery(_ query: InputQuery) -> PreparedCoreInputQuery {
+        PreparedCoreInputQuery(
+            query: query,
+            targetWindow: selectedWindow,
+            dispatcher: inputDispatcher,
+            deliveryMode: inputDispatcher.deliveryMode)
+    }
+
+    func completeCoreInputQuery(
+        _ prepared: PreparedCoreInputQuery,
+        error: Error
+    ) -> BetterGICorePlatformAdapterError {
             let reason =
-                "Input query failed: backend=\(inputDispatcher.deliveryMode.rawValue), "
-                + "targetPID=\(selectedWindow.ownerPID), "
+                "Input query failed: backend=\(prepared.deliveryMode.rawValue), "
+                + "targetPID=\(prepared.targetWindow.ownerPID), "
                 + error.localizedDescription
             addLog(.error, reason)
-            throw BetterGICorePlatformAdapterError.inputRejected(reason)
-        }
+            return BetterGICorePlatformAdapterError.inputRejected(reason)
     }
 
     func shutdownInputBackend() {

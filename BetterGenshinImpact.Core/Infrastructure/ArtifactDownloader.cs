@@ -229,156 +229,182 @@ public sealed class ArtifactDownloader : IDisposable
             return result;
         }
 
-        var source = lockDoc.Sources[0];
+        var sourceIds = lockDoc.Sources.Select(source => source.Id).ToHashSet(StringComparer.Ordinal);
+        var unknownSourceIds = lockDoc.Artifacts
+            .Select(artifact => artifact.SourceId)
+            .Where(sourceId => !sourceIds.Contains(sourceId))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (unknownSourceIds.Length > 0)
+        {
+            result.Errors.Add($"Artifacts reference unknown sources: {string.Join(", ", unknownSourceIds)}");
+            return result;
+        }
+
         var tempDir = Path.Combine(Path.GetTempPath(), "bgi-artifacts-" + Guid.NewGuid().ToString("N")[..12]);
         Directory.CreateDirectory(tempDir);
 
         try
         {
-            // 2. Download archive
-            var archiveFileName = $"bettergi-{lockDoc.ArtifactSetVersion}.7z";
-            var expectedHash = source.Sha256.ToLowerInvariant();
-            var archivePath = Path.Combine(tempDir, archiveFileName);
-            if (!string.IsNullOrWhiteSpace(archiveCacheDirectory))
+            modelRoot = Path.GetFullPath(modelRoot);
+            Directory.CreateDirectory(modelRoot);
+
+            for (var sourceIndex = 0; sourceIndex < lockDoc.Sources.Count; sourceIndex++)
             {
-                Directory.CreateDirectory(archiveCacheDirectory);
-                var cachedPath = Path.Combine(Path.GetFullPath(archiveCacheDirectory), archiveFileName);
-                if (File.Exists(cachedPath) &&
-                    await ComputeSha256Async(cachedPath) == expectedHash)
+                var source = lockDoc.Sources[sourceIndex];
+                var sourceArtifacts = lockDoc.Artifacts
+                    .Where(artifact => string.Equals(artifact.SourceId, source.Id, StringComparison.Ordinal))
+                    .ToArray();
+                if (sourceArtifacts.Length == 0) continue;
+
+                // 2. Download archive
+                var expectedHash = source.Sha256.ToLowerInvariant();
+                var archiveExtension = source.Format.All(char.IsLetterOrDigit) && source.Format.Length > 0
+                    ? source.Format.ToLowerInvariant()
+                    : "archive";
+                var archiveFileName =
+                    $"bettergi-{lockDoc.ArtifactSetVersion}-{sourceIndex}-{expectedHash[..12]}.{archiveExtension}";
+                var archivePath = Path.Combine(tempDir, archiveFileName);
+                if (!string.IsNullOrWhiteSpace(archiveCacheDirectory))
                 {
-                    archivePath = cachedPath;
-                    Console.WriteLine($"Using verified cached archive {cachedPath}");
+                    Directory.CreateDirectory(archiveCacheDirectory);
+                    var cachedPath = Path.Combine(Path.GetFullPath(archiveCacheDirectory), archiveFileName);
+                    if (File.Exists(cachedPath) &&
+                        await ComputeSha256Async(cachedPath) == expectedHash)
+                    {
+                        archivePath = cachedPath;
+                        Console.WriteLine($"Using verified cached archive {cachedPath}");
+                    }
+                    else
+                    {
+                        if (File.Exists(cachedPath)) File.Delete(cachedPath);
+                        Console.WriteLine($"Downloading {source.Url}");
+                        await DownloadFileAsync(source.Url, archivePath, source.SizeBytes, ct);
+                        Console.WriteLine($"Downloaded {new FileInfo(archivePath).Length:N0} bytes");
+                        var downloadedHash = await ComputeSha256Async(archivePath);
+                        if (downloadedHash != expectedHash)
+                        {
+                            result.Errors.Add(
+                                $"Archive SHA-256 mismatch: expected {expectedHash}, got {downloadedHash}");
+                            return result;
+                        }
+                        File.Move(archivePath, cachedPath, true);
+                        archivePath = cachedPath;
+                    }
                 }
                 else
                 {
-                    if (File.Exists(cachedPath)) File.Delete(cachedPath);
                     Console.WriteLine($"Downloading {source.Url}");
                     await DownloadFileAsync(source.Url, archivePath, source.SizeBytes, ct);
                     Console.WriteLine($"Downloaded {new FileInfo(archivePath).Length:N0} bytes");
-                    var downloadedHash = await ComputeSha256Async(archivePath);
-                    if (downloadedHash != expectedHash)
-                    {
-                        result.Errors.Add(
-                            $"Archive SHA-256 mismatch: expected {expectedHash}, got {downloadedHash}");
-                        return result;
-                    }
-                    File.Move(archivePath, cachedPath, true);
-                    archivePath = cachedPath;
-                }
-            }
-            else
-            {
-                Console.WriteLine($"Downloading {source.Url}");
-                await DownloadFileAsync(source.Url, archivePath, source.SizeBytes, ct);
-                Console.WriteLine($"Downloaded {new FileInfo(archivePath).Length:N0} bytes");
-            }
-
-            // 3. Verify archive SHA-256
-            var archiveHash = await ComputeSha256Async(archivePath);
-            if (archiveHash != expectedHash)
-            {
-                result.Errors.Add(
-                    $"Archive SHA-256 mismatch: expected {expectedHash}, got {archiveHash}");
-                return result;
-            }
-            Console.WriteLine($"Archive SHA-256 verified: {archiveHash[..16]}...");
-
-            // 4. Open and validate the 7z in-process. Core distribution must not
-            // depend on a Homebrew/system 7z executable.
-            // 5. Validate destinations up front, then scan the solid 7z exactly
-            // once. Opening every entry separately can decode the same solid
-            // block repeatedly and is unusably slow for the official archive.
-            modelRoot = Path.GetFullPath(modelRoot);
-            Directory.CreateDirectory(modelRoot);
-            var pendingArtifacts = new Dictionary<string, (ArtifactEntry Artifact, string Destination)>(StringComparer.Ordinal);
-            foreach (var artifact in lockDoc.Artifacts)
-            {
-                var destinationRelativePath = NormalizeArchiveMember(artifact.DestinationRelativePath);
-                if (!IsSafeArchiveMember(destinationRelativePath))
-                {
-                    result.Errors.Add($"Unsafe artifact destination path: {artifact.DestinationRelativePath}");
-                    result.ArtifactsSkipped++;
-                    continue;
                 }
 
-                var destPath = Path.GetFullPath(Path.Combine(modelRoot,
-                    destinationRelativePath.Replace('/', Path.DirectorySeparatorChar)));
-                if (!destPath.StartsWith(modelRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-                {
-                    result.Errors.Add($"Artifact destination escapes model root: {artifact.DestinationRelativePath}");
-                    result.ArtifactsSkipped++;
-                    continue;
-                }
-                var memberPath = NormalizeArchiveMember(artifact.MemberPath);
-                if (!IsSafeArchiveMember(memberPath))
-                {
-                    result.Errors.Add($"Unsafe locked archive member path: {artifact.MemberPath}");
-                    result.ArtifactsSkipped++;
-                    continue;
-                }
-                pendingArtifacts.Add(memberPath, (artifact, destPath));
-            }
-
-            async Task ProcessEntryAsync(string? rawKey, bool isDirectory, Func<Stream> openEntryStream)
-            {
-                ct.ThrowIfCancellationRequested();
-                if (rawKey is null || isDirectory) return;
-                var memberPath = NormalizeArchiveMember(rawKey);
-                if (!IsSafeArchiveMember(memberPath))
-                {
-                    throw new InvalidDataException($"Unsafe archive member path: {memberPath}");
-                }
-                if (!pendingArtifacts.Remove(memberPath, out var lockedArtifact)) return;
-
-                Directory.CreateDirectory(Path.GetDirectoryName(lockedArtifact.Destination)!);
-                await using (var input = openEntryStream())
-                await using (var output = new FileStream(
-                    lockedArtifact.Destination, FileMode.Create, FileAccess.Write, FileShare.None))
-                {
-                    await input.CopyToAsync(output, ct);
-                }
-
-                var actualSize = new FileInfo(lockedArtifact.Destination).Length;
-                var fileHash = await ComputeSha256Async(lockedArtifact.Destination);
-                var artifact = lockedArtifact.Artifact;
-                if (actualSize != artifact.SizeBytes || fileHash != artifact.Sha256.ToLowerInvariant())
+                // 3. Verify archive SHA-256
+                var archiveHash = await ComputeSha256Async(archivePath);
+                if (archiveHash != expectedHash)
                 {
                     result.Errors.Add(
-                        $"Artifact integrity mismatch for {artifact.DestinationRelativePath}: " +
-                        $"expected size/hash {artifact.SizeBytes}/{artifact.Sha256[..16]}..., " +
-                        $"got {actualSize}/{fileHash[..16]}...");
-                    File.Delete(lockedArtifact.Destination);
+                        $"Archive SHA-256 mismatch: expected {expectedHash}, got {archiveHash}");
+                    return result;
+                }
+                Console.WriteLine($"Archive SHA-256 verified: {archiveHash[..16]}...");
+
+                // 4. Open and validate the 7z in-process. Core distribution must not
+                // depend on a Homebrew/system 7z executable.
+                // 5. Validate destinations up front, then scan the solid 7z exactly
+                // once. Opening every entry separately can decode the same solid
+                // block repeatedly and is unusably slow for the official archive.
+                var pendingArtifacts = new Dictionary<string, (ArtifactEntry Artifact, string Destination)>(StringComparer.Ordinal);
+                foreach (var artifact in sourceArtifacts)
+                {
+                    var destinationRelativePath = NormalizeArchiveMember(artifact.DestinationRelativePath);
+                    if (!IsSafeArchiveMember(destinationRelativePath))
+                    {
+                        result.Errors.Add($"Unsafe artifact destination path: {artifact.DestinationRelativePath}");
+                        result.ArtifactsSkipped++;
+                        continue;
+                    }
+
+                    var destPath = Path.GetFullPath(Path.Combine(modelRoot,
+                        destinationRelativePath.Replace('/', Path.DirectorySeparatorChar)));
+                    if (!destPath.StartsWith(modelRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                    {
+                        result.Errors.Add($"Artifact destination escapes model root: {artifact.DestinationRelativePath}");
+                        result.ArtifactsSkipped++;
+                        continue;
+                    }
+                    var memberPath = NormalizeArchiveMember(artifact.MemberPath);
+                    if (!IsSafeArchiveMember(memberPath))
+                    {
+                        result.Errors.Add($"Unsafe locked archive member path: {artifact.MemberPath}");
+                        result.ArtifactsSkipped++;
+                        continue;
+                    }
+                    pendingArtifacts.Add(memberPath, (artifact, destPath));
+                }
+
+                async Task ProcessEntryAsync(string? rawKey, bool isDirectory, Func<Stream> openEntryStream)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (rawKey is null || isDirectory) return;
+                    var memberPath = NormalizeArchiveMember(rawKey);
+                    if (!IsSafeArchiveMember(memberPath))
+                    {
+                        throw new InvalidDataException($"Unsafe archive member path: {memberPath}");
+                    }
+                    if (!pendingArtifacts.Remove(memberPath, out var lockedArtifact)) return;
+
+                    Directory.CreateDirectory(Path.GetDirectoryName(lockedArtifact.Destination)!);
+                    await using (var input = openEntryStream())
+                    await using (var output = new FileStream(
+                        lockedArtifact.Destination, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        await input.CopyToAsync(output, ct);
+                    }
+
+                    var actualSize = new FileInfo(lockedArtifact.Destination).Length;
+                    var fileHash = await ComputeSha256Async(lockedArtifact.Destination);
+                    var artifact = lockedArtifact.Artifact;
+                    if (actualSize != artifact.SizeBytes || fileHash != artifact.Sha256.ToLowerInvariant())
+                    {
+                        result.Errors.Add(
+                            $"Artifact integrity mismatch for {artifact.DestinationRelativePath}: " +
+                            $"expected size/hash {artifact.SizeBytes}/{artifact.Sha256[..16]}..., " +
+                            $"got {actualSize}/{fileHash[..16]}...");
+                        File.Delete(lockedArtifact.Destination);
+                        result.ArtifactsSkipped++;
+                        return;
+                    }
+
+                    result.ArtifactsExtracted++;
+                }
+
+                using var archive = ArchiveFactory.OpenArchive(archivePath);
+                if (archive.Type == ArchiveType.SevenZip)
+                {
+                    using var reader = archive.ExtractAllEntries();
+                    while (reader.MoveToNextEntry())
+                    {
+                        await ProcessEntryAsync(reader.Entry.Key, reader.Entry.IsDirectory, reader.OpenEntryStream);
+                    }
+                }
+                else
+                {
+                    foreach (var entry in archive.Entries)
+                    {
+                        await ProcessEntryAsync(entry.Key, entry.IsDirectory, entry.OpenEntryStream);
+                    }
+                }
+
+                foreach (var missing in pendingArtifacts.Values)
+                {
+                    result.Errors.Add($"Archive member not found: {missing.Artifact.MemberPath}");
                     result.ArtifactsSkipped++;
-                    return;
                 }
 
-                result.ArtifactsExtracted++;
+                result.ArchivePath ??= archivePath;
             }
 
-            using var archive = ArchiveFactory.OpenArchive(archivePath);
-            if (archive.Type == ArchiveType.SevenZip)
-            {
-                using var reader = archive.ExtractAllEntries();
-                while (reader.MoveToNextEntry())
-                {
-                    await ProcessEntryAsync(reader.Entry.Key, reader.Entry.IsDirectory, reader.OpenEntryStream);
-                }
-            }
-            else
-            {
-                foreach (var entry in archive.Entries)
-                {
-                    await ProcessEntryAsync(entry.Key, entry.IsDirectory, entry.OpenEntryStream);
-                }
-            }
-
-            foreach (var missing in pendingArtifacts.Values)
-            {
-                result.Errors.Add($"Archive member not found: {missing.Artifact.MemberPath}");
-                result.ArtifactsSkipped++;
-            }
-
-            result.ArchivePath = archivePath;
             result.Success = result.Errors.Count == 0;
             return result;
         }

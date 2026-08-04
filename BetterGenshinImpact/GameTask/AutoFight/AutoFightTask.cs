@@ -16,7 +16,6 @@ using static BetterGenshinImpact.GameTask.Common.TaskControl;
 using BetterGenshinImpact.GameTask.Common.Job;
 using OpenCvSharp;
 using BetterGenshinImpact.Helpers;
-using Microsoft.Extensions.DependencyInjection;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.AutoPathing.Handler;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
@@ -41,20 +40,21 @@ public class AutoFightTask : ISoloTask
     private readonly BgiYoloPredictor? _predictor;
 
     private DateTime _lastFightFlagTime = DateTime.Now; // 战斗标志最近一次出现的时间
+    private int _skipCheckCounter;
 
     private readonly double _dpi = AutoFightRuntimePlatform.Current.DpiScale;
-    
+
     public static bool FightStatusFlag { get; set; } = false;
-    
-    private static readonly object PickLock = new object(); 
-    
+
+    private static readonly object PickLock = new object();
+
     private readonly double _assetScale = AutoFightRuntimePlatform.Current.SystemInfo.AssetScale;
-    
+
     private readonly ReturnMainUiTask _returnMainUiTask = new();
 
     // 战斗点位
     public static WaypointForTrack? FightWaypoint  {get; set;} = null;
-    
+
     private class TaskFightFinishDetectConfig
     {
         public int DelayTime = 1500;
@@ -64,6 +64,7 @@ public class AutoFightTask : ISoloTask
         public List<string> CheckNames = new();
         public bool FastCheckEnabled;
         public bool RotateFindEnemyEnabled = false;
+        public bool SkipFightEndCheckWhenEnemyVisible = false;
 
         public TaskFightFinishDetectConfig(AutoFightParam.FightFinishDetectConfig finishDetectConfig)
         {
@@ -77,6 +78,7 @@ public class AutoFightTask : ISoloTask
             DetectDelayTime =
                 (int)((double.TryParse(finishDetectConfig.BeforeDetectDelay, out var result) ? result : 0.45) * 1000);
             RotateFindEnemyEnabled = finishDetectConfig.RotateFindEnemyEnabled;
+            SkipFightEndCheckWhenEnemyVisible = finishDetectConfig.SkipFightEndCheckWhenEnemyVisible;
         }
 
         public (int, int, int) BattleEndProgressBarColor { get; }
@@ -219,7 +221,7 @@ public class AutoFightTask : ISoloTask
             {
                 return combatScenes;
             }
-        
+
             if (attempt < maxRetries)
             {
                 Thread.Sleep(retryDelayMs); // 可选：延迟再试
@@ -236,8 +238,11 @@ public class AutoFightTask : ISoloTask
     public async Task Start(CancellationToken ct)
     {
         _ct = ct;
-
-        LogScreenResolution();
+        AvatarRecognition.SetCurrentAutoFightParam(_taskParam);
+        AvatarRecognition.ClearLegendaryBarTracker();
+        try
+        {
+            LogScreenResolution();
         var combatScenes = GetCombatScenesWithRetry();
         /*var combatScenes = new CombatScenes().InitializeTeam(CaptureToRectArea());
         if (!combatScenes.CheckTeamInitialized())
@@ -285,24 +290,24 @@ public class AutoFightTask : ISoloTask
 
         //统计切换人打架次数
         var countFight = 0;
-        
+
         // 可以跳过的角色名,配置中有的和命令中有的取交
         var canBeSkippedAvatarNames = combatScenes.UpdateActionSchedulerByCd(_taskParam.ActionSchedulerByCd)
             .Where(s => s is not null && commandAvatarNames.Contains(s))
             .Select(s => s!)
             .ToList();
-        
+
         //所有角色是否都可被跳过
         var allCanBeSkipped = commandAvatarNames.All(a => canBeSkippedAvatarNames.Contains(a));
-        
+
         var delayTime = _finishDetectConfig.DelayTime;
         var detectDelayTime = _finishDetectConfig.DetectDelayTime;
-        
+
         //盾奶优先功能角色预处理
         var guardianAvatar = string.IsNullOrWhiteSpace(_taskParam.GuardianAvatar) ? null : combatScenes.SelectAvatar(int.Parse(_taskParam.GuardianAvatar));
-        
+
         AutoFightSeek.RotationCount= 0; // 重置旋转次数
-        
+
         // 基于经验值的战后拾取检测：在战斗过程中异步检测精英怪经验值图标
         // 仅在万叶拾取总开关开启时才启动经验值检测
         ExperienceDetector? expDetector = null;
@@ -320,7 +325,7 @@ public class AutoFightTask : ISoloTask
             try
             {
                 FightStatusFlag = true;
-                
+
                 while (!cts2.Token.IsCancellationRequested)
                 {
                     // 所有战斗角色都可以被取消
@@ -346,30 +351,33 @@ public class AutoFightTask : ISoloTask
                     var skipFightName = "";
 
                     #endregion
-                    
+
                     for (var i = 0; i < combatCommands.Count; i++)
                     {
                         var command = combatCommands[i];
                         var lastCommand = i == 0 ? command : combatCommands[i - 1];
-                        
+
                         #region 盾奶位技能优先功能
-                        
+
                         var skipModel = guardianAvatar != null && lastFightName != command.Name;
                         if (skipModel) await AutoFightSkill.EnsureGuardianSkill(guardianAvatar!,lastCommand,lastFightName,
                             _taskParam.GuardianAvatar,_taskParam.GuardianAvatarHold,5,ct,_taskParam.GuardianCombatSkip,_taskParam.BurstEnabled);
                         var avatar = combatScenes.SelectAvatar(command.Name);
-                        
+
                         #endregion
-                        
+
                         #region 初始寻敌处理
-                        
+
                         if ( _finishDetectConfig.RotateFindEnemyEnabled && i == 0 && _taskParam.IsFirstCheck)
                         {
-                            await AutoFightSeek.SeekAndFightAsync(Logger, detectDelayTime, delayTime, ct,true,_taskParam.RotaryFactor);
+                            using (AvatarRecognition.BeginExclusiveOperation())
+                            {
+                                await AutoFightSeek.SeekAndFightAsync(Logger, detectDelayTime, delayTime, ct, true, _taskParam.RotaryFactor);
+                            }
                         }
-                        
+
                         #endregion
-                        
+
                         if (avatar is null || (avatar.Name == guardianAvatar?.Name && (_taskParam.GuardianCombatSkip || _taskParam.BurstEnabled)))
                         {
                             continue;
@@ -430,8 +438,7 @@ public class AutoFightTask : ISoloTask
                         }
 
                         #region Q前寻敌处理
-                        if (_finishDetectConfig.RotateFindEnemyEnabled && _taskParam.CheckBeforeBurst &&
-                            (command.Method == Method.Burst || command.Args?.Contains("q") == true || command.Args?.Contains("Q") == true))
+                        if (_finishDetectConfig.RotateFindEnemyEnabled && _taskParam.CheckBeforeBurst && (command.Method == Method.Burst || command.Args?.Contains("q") == true || command.Args?.Contains("Q") == true))
                         {
                             fightEndFlag = await CheckFightFinish(delayTime, detectDelayTime);
                         }
@@ -475,7 +482,7 @@ public class AutoFightTask : ISoloTask
                                 {
                                     // Logger.LogInformation($"延时检查为{delayTime}毫秒");
                                 }
-                                
+
                                 fightEndFlag = await CheckFightFinish(delayTime, detectDelayTime);
                             }
                         }
@@ -506,7 +513,44 @@ public class AutoFightTask : ISoloTask
             }
         }, cts2.Token);
 
-        await fightTask;
+        // 在持续索敌循环启动前标记战斗进行中，避免索敌循环因 FightStatusFlag 仍为 false 而立即退出
+        FightStatusFlag = true;
+
+        // 启动持续索敌循环（异步后台运行，与战斗任务并发）
+        // 使用独立的 CancellationTokenSource，以便在战后独立取消索敌循环，不影响 cts2 关联的其他组件（如 expDetector）
+        using var targetingCts = CancellationTokenSource.CreateLinkedTokenSource(cts2.Token);
+        Task? targetingTask = null;
+        if (_taskParam.EnableCombatTargeting)
+        {
+            targetingTask = Task.Run(async () =>
+            {
+                try
+                {
+                    await AvatarRecognition.ContinuousTargetingLoopAsync(targetingCts.Token, () => !AutoFightTask.FightStatusFlag);
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception e)
+                {
+                    Logger.LogError(e, "持续索敌循环异常");
+                }
+            }, targetingCts.Token);
+        }
+
+        try
+        {
+            await fightTask;
+        }
+        finally
+        {
+            // 战斗结束后（无论正常/异常），停止并等待索敌循环完成清理（ReleaseAllKey / MiddleButtonClick），
+            // 避免其 finally 在拾取/切人过程中释放按键，干扰万叶E吸怪等操作
+            if (targetingTask != null)
+            {
+                await targetingCts.CancelAsync();
+                try { await targetingTask; } catch (OperationCanceledException) { }
+            }
+            FightStatusFlag = false;
+        }
 
         try
         {
@@ -556,12 +600,12 @@ public class AutoFightTask : ISoloTask
             Logger.LogInformation($"战斗人次（{countFight}）低于配置人次（{_taskParam.BattleThresholdForLoot}），跳过此次拾取！");
             return;
         }
-        
+
         if (_taskParam.KazuhaPickupEnabled)
         {
             // 队伍中存在万叶的时候使用一次长E
             var picker = combatScenes.SelectAvatar("枫原万叶") ?? combatScenes.SelectAvatar("琴");
-            
+
             string? oldPartyName = null;
             if (RunnerContext.Instance.PartyName is not null)
             {
@@ -592,7 +636,7 @@ public class AutoFightTask : ISoloTask
 
             if (!string.IsNullOrEmpty(_taskParam.KazuhaPartyName)){
                 await Delay(1000, ct);
-                    
+
                 //等待寻找2秒队伍按钮出现
                 var timeWaitStart = 0;
                 while(timeWaitStart < 6000)
@@ -609,7 +653,7 @@ public class AutoFightTask : ISoloTask
                         RegionOfInterest = new Rect(partyViewBtn.Right, partyViewBtn.Top, (int)(350 * _assetScale),
                             partyViewBtn.Height)
                     }).Text;
-                    
+
                     // 核心处理逻辑：1.空值兜底 2.去首尾空白 3.移除末尾的“口”字（仅最后一个是口才删）
                     if (string.IsNullOrWhiteSpace(rawPartyName))
                     {
@@ -622,18 +666,18 @@ public class AutoFightTask : ISoloTask
                             .Replace("\"", "")        // 移除所有双引号（核心新增，解决日志里的""问题）
                             .Replace("\r\n", "")      // 清理Windows换行符
                             .Replace("\r", "");   // 先清理所有双引号，避免引号干扰后续处理
-                            
+
                             // 核心逻辑：找到第一个换行符(\n)的位置，截断并删除换行+后面所有字符
                             int firstNewLineIndex = tempName.IndexOf('\n');
                             if (firstNewLineIndex != -1) // 存在换行符，截取到换行符前
                             {
                                 tempName = tempName.Substring(0, firstNewLineIndex);
                             }
-                        
+
                             // 最后统一去首尾所有空白（空格、制表符、回车符\r等），得到纯净队伍名
                             oldPartyName = tempName.Trim();
                     }
-                    
+
                     // 后续原有逻辑不变
                     Logger.LogInformation("换队拾取：当前队伍名称读取为：{oldPartyName}", oldPartyName);
                     // 加在rawPartyName赋值后，打印原始文本的“原始形态”（转义符会显示）
@@ -670,7 +714,7 @@ public class AutoFightTask : ISoloTask
                 }
 
             }
-            
+
             if (picker != null)
             {
                 TaskControlPlatform.Current.ReleasePressedInputs();
@@ -682,7 +726,7 @@ public class AutoFightTask : ISoloTask
                     // 如果配置了二次拾取，或者不满足跳过条件（上次是万叶且冷却时间>3秒），则执行拾取
                     bool shouldSkip = lastFightName == picker.Name && time.TotalSeconds > 3;
                     bool forcePickup = _taskParam.QinDoublePickUp;
-                    
+
                     if (forcePickup || !shouldSkip)
                     {
                         Logger.LogInformation("使用 枫原万叶-长E 拾取掉落物");
@@ -691,15 +735,15 @@ public class AutoFightTask : ISoloTask
                             await Delay(100, ct);
                             // 等待元素战技 CD 就绪
                             await picker.WaitSkillCd(ct);
-                            
+
                             // 调用统一的辅助方法，模拟万叶长按 E 的输入序列：
                             // 包含释放鼠标左键前摇防卡键 -> E 键 KeyDown -> 延时 800ms -> E 键 KeyUp -> 延时 50ms
-                            await SimulateHoldElementalSkillAsync(800, ct);    
-                            
+                            await SimulateHoldElementalSkillAsync(800, ct);
+
                             // 调用统一的辅助方法，模拟 6 次鼠标左键连续点击：
                             // 配合万叶长 E 的滞空特性执行下落攻击，内部包含 try/finally 以保证取消任务时安全释放左键
-                            await SimulateMouseLeftClickLoopAsync(6, ct);      
-                            
+                            await SimulateMouseLeftClickLoopAsync(6, ct);
+
                             // 等待下落攻击和聚怪拾取动作彻底结束
                             await Delay(1500, ct);
                             // 截图并更新技能最新冷却时间
@@ -714,7 +758,7 @@ public class AutoFightTask : ISoloTask
                 else if (picker.Name == "琴")
                 {
                     Logger.LogInformation("使用 琴-长E 拾取掉落物");
-                    
+
                     var actionsToUse = PickUpCollectHandler.PickUpActions
                         .Where(action => action.StartsWith("琴-长E" + " ", StringComparison.OrdinalIgnoreCase))
                         .Select(action => action.Replace("琴-长E","琴", StringComparison.OrdinalIgnoreCase))
@@ -777,7 +821,7 @@ public class AutoFightTask : ISoloTask
                                     break;
                                 }
                             }
-                            
+
                             TaskControlPlatform.Current.ReleasePressedInputs();
                         }
                     }
@@ -797,14 +841,14 @@ public class AutoFightTask : ISoloTask
                         RunnerContext.Instance.PartyName = oldPartyName;
                         RunnerContext.Instance.ClearCombatScenes();
                         await RunnerContext.Instance.GetCombatScenes(ct);
-    
+
                     }
                 }
                 catch (Exception)
                 {
                     Logger.LogInformation("恢复原队伍失败，跳过此步骤！");
                 }
-                    
+
             }
         }
 
@@ -812,6 +856,11 @@ public class AutoFightTask : ISoloTask
         {
             // 执行扫描掉落物光柱并靠近的功能
             await new ScanPickTask().Start(ct, _taskParam.PickDropsAfterFightSeconds);
+        }
+    }
+        finally
+        {
+            AvatarRecognition.ClearCurrentAutoFightParam();
         }
     }
 
@@ -830,66 +879,92 @@ public class AutoFightTask : ISoloTask
 
     public async Task<bool> CheckFightFinish(int delayTime = 1500, int detectDelayTime = 450)
     {
-        if (_finishDetectConfig.RotateFindEnemyEnabled)
+        using (AvatarRecognition.BeginExclusiveOperation())
         {
-            bool? result = null;
-            try
+            // 敌人可见时跳过战斗结束检查
+            if (_finishDetectConfig.SkipFightEndCheckWhenEnemyVisible)
             {
-                result = await AutoFightSeek.SeekAndFightAsync(Logger, detectDelayTime, delayTime, _ct);
+                if (_skipCheckCounter < 5)
+                {
+                    using var quickCapture = CaptureToRectArea();
+                    var bars = AvatarRecognition.FindBloodBars(quickCapture);
+                    // 不进行伤害数字识别。传奇血条（y<96或纵坐标连续出现5帧的y96-200血条）也会被 FindBloodBars 正常返回
+                    // 过滤左侧 UI 区域 (x <= 200)，避免队伍头像等红色元素被误判为敌人血条
+                    if (bars.Any(b => b.x > (int)(200 * _assetScale)))
+                    {
+                        _skipCheckCounter++;
+                        Logger.LogInformation("敌人可见，跳过战斗结束检查（已连续跳过{Count}次）", _skipCheckCounter);
+                        return false;
+                    }
+                }
+                _skipCheckCounter = 0;
             }
-            catch (Exception ex)
+            else
             {
-                Logger.LogError(ex, "SeekAndFightAsync 方法发生异常");
-                result = false;
+                _skipCheckCounter = 0;
             }
-            
-            AutoFightSeek.RotationCount = (result == null) ? 
-                AutoFightSeek.RotationCount + 1 :  0;
-            
-            if (result != null)
-            {
-                return result.Value;
-            }
-        }
 
-        if (!_finishDetectConfig.RotateFindEnemyEnabled)await Delay(delayTime, _ct);
-        
-        // Logger.LogInformation("打开编队界面检查战斗是否结束，延时{detectDelayTime}毫秒检查", detectDelayTime);
-        Logger.LogInformation("打开编队界面检查战斗是否结束");
-        // 最终方案确认战斗结束
-        TaskControlPlatform.Current.SimulateAction(GIActions.OpenPartySetupScreen, KeyType.KeyPress);
-        await Delay(detectDelayTime, _ct);
-        
-        using var ra = CaptureToRectArea();
-        //判断整个界面是否有红色色块，如果有，则战继续，否则战斗结束
-        // 只提取橙色
-        
-        var b3 = ra.SrcMat.At<Vec3b>(50, 790); //进度条颜色
-        var whiteTile = ra.SrcMat.At<Vec3b>(50, 768); //白块
-        TaskControlPlatform.Current.SimulateAction(GIActions.Drop, KeyType.KeyPress);
-        if (AutoFightEndDetector.IsFightFinished(ra.SrcMat))
-        {
-            Logger.LogInformation("识别到战斗结束");
-            //取消正在进行的换队
+            if (_finishDetectConfig.RotateFindEnemyEnabled)
+            {
+                bool? result = null;
+                try
+                {
+                    result = await AutoFightSeek.SeekAndFightAsync(Logger, detectDelayTime, delayTime, _ct);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "SeekAndFightAsync 方法发生异常");
+                    result = false;
+                }
+
+                AutoFightSeek.RotationCount = (result == null) ?
+                    AutoFightSeek.RotationCount + 1 :  0;
+
+                if (result != null)
+                {
+                    return result.Value;
+                }
+            }
+
+            if (!_finishDetectConfig.RotateFindEnemyEnabled)await Delay(delayTime, _ct);
+
+            // Logger.LogInformation("打开编队界面检查战斗是否结束，延时{detectDelayTime}毫秒检查", detectDelayTime);
+            Logger.LogInformation("打开编队界面检查战斗是否结束");
+            // 最终方案确认战斗结束
             TaskControlPlatform.Current.SimulateAction(GIActions.OpenPartySetupScreen, KeyType.KeyPress);
-            return true;
-        }
+            await Delay(detectDelayTime, _ct);
 
-        // Logger.LogInformation($"未识别到战斗结束yellow{b3.Item0},{b3.Item1},{b3.Item2}");
-        // Logger.LogInformation($"未识别到战斗结束white{whiteTile.Item0},{whiteTile.Item1},{whiteTile.Item2}");
-        Logger.LogInformation($"未识别到战斗结束: yellow{b3.Item0},{b3.Item1},{b3.Item2};white{whiteTile.Item0},{whiteTile.Item1},{whiteTile.Item2}");
+            using var ra = CaptureToRectArea();
+            //判断整个界面是否有红色色块，如果有，则战继续，否则战斗结束
+            // 只提取橙色
 
-        if (_finishDetectConfig.RotateFindEnemyEnabled)
-        {
-            _ = Task.Run(() =>
+            var b3 = ra.SrcMat.At<Vec3b>(50, 790); //进度条颜色
+            var whiteTile = ra.SrcMat.At<Vec3b>(50, 768); //白块
+            TaskControlPlatform.Current.SimulateAction(GIActions.Drop, KeyType.KeyPress);
+            if (AutoFightEndDetector.IsFightFinished(ra.SrcMat))
             {
-                Scalar bloodLower = new Scalar(255, 90, 90);
-                MoveForwardTask.MoveForwardAsync(bloodLower, bloodLower, Logger, _ct);
-            } ,_ct);
+                Logger.LogInformation("识别到战斗结束");
+                //取消正在进行的换队
+                TaskControlPlatform.Current.SimulateAction(GIActions.OpenPartySetupScreen, KeyType.KeyPress);
+                return true;
+            }
+
+            // Logger.LogInformation($"未识别到战斗结束yellow{b3.Item0},{b3.Item1},{b3.Item2}");
+            // Logger.LogInformation($"未识别到战斗结束white{whiteTile.Item0},{whiteTile.Item1},{whiteTile.Item2}");
+            Logger.LogInformation($"未识别到战斗结束: yellow{b3.Item0},{b3.Item1},{b3.Item2};white{whiteTile.Item0},{whiteTile.Item1},{whiteTile.Item2}");
+
+            if (_finishDetectConfig.RotateFindEnemyEnabled)
+            {
+                _ = Task.Run(() =>
+                {
+                    Scalar bloodLower = new Scalar(255, 90, 90);
+                    MoveForwardTask.MoveForwardAsync(bloodLower, bloodLower, Logger, _ct);
+                } ,_ct);
+            }
+
+            _lastFightFlagTime = DateTime.Now;
+            return false;
         }
-        
-        _lastFightFlagTime = DateTime.Now;
-        return false;
     }
 
     static double FindMax(double[] numbers)
@@ -948,8 +1023,7 @@ public class AutoFightTask : ISoloTask
         // {
         //     imageRegion.SrcMat.SaveImage(Global.Absolute(@"log\fight\" + $"{DateTime.Now:yyyyMMdd_HHmmss_ffff}.png"));
         // }
-        var predictor = _predictor ?? throw new InvalidOperationException(
-            "Fight-finish predictor was requested while fight-finish detection is disabled.");
+        var predictor = _predictor ?? throw new InvalidOperationException("自动战斗 YOLO 识别器尚未初始化");
         var dict = predictor.Detect(imageRegion);
         return dict.ContainsKey("health_bar") || dict.ContainsKey("enemy_identify");
     }

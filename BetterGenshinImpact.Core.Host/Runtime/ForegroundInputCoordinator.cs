@@ -65,7 +65,10 @@ public sealed class ForegroundInputCoordinator(
                 return;
             }
             catch (PlatformCallbackException exception)
-                when (exception.Message.Contains("not frontmost", StringComparison.OrdinalIgnoreCase))
+                when (string.Equals(
+                    exception.Code,
+                    "input_not_frontmost",
+                    StringComparison.Ordinal))
             {
                 if (!isTextInput)
                     Interlocked.Exchange(ref _releaseRequired, 1);

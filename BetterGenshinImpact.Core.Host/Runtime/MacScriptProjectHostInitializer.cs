@@ -8,6 +8,7 @@ using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoSkip;
+using BetterGenshinImpact.GameTask.CharacterDevelopment;
 using BetterGenshinImpact.GameTask.Model.Area;
 using Microsoft.ClearScript;
 using OpenCvSharp;
@@ -53,6 +54,7 @@ public sealed class MacScriptProjectHostInitializer : IScriptProjectHostInitiali
             "pathingScript",
             new AutoPathingScript(workDir, config, _executionServices));
         engine.AddHostObject("genshin", new Genshin());
+        engine.AddHostObject("characterDevelopmentTask", new CharacterDevelopmentTask());
         engine.AddHostObject("dispatcher", new Dispatcher(config ?? new object()));
         engine.AddHostObject("file", new LimitedFile(workDir));
         engine.AddHostObject("http", new Http());

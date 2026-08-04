@@ -56,10 +56,16 @@ final class BetterGICorePlatformCallbackClient: @unchecked Sendable {
                 let result = try handler(method, request["params"] as? [String: Any])
                 try writeEnvelope(["id": id, "result": result], descriptor: fd)
             } catch {
+                let code: String
+                if case BetterGICorePlatformAdapterError.inputNotFrontmost = error {
+                    code = "input_not_frontmost"
+                } else {
+                    code = "PlatformCallbackFailed"
+                }
                 try writeEnvelope([
                     "id": id,
                     "error": [
-                        "code": "PlatformCallbackFailed",
+                        "code": code,
                         "message": error.localizedDescription,
                     ],
                 ], descriptor: fd)

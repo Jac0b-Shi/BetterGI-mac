@@ -90,6 +90,23 @@ struct BetterGICoreCaptureRingTests {
         #expect(larger["height"] as? Int == 64)
     }
 
+    @Test("Downsamples wide frames before writing the shared ring")
+    func downsamplesWideFramesBeforeWriting() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "bettergi-capture-ring-downsample-\(UUID().uuidString)",
+                isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let ring = BetterGICoreCaptureRing(runURL: root)
+        let response = try ring.write(
+            makeSolidFrame(width: 2560, height: 1440))
+
+        #expect(response["width"] as? Int == 1920)
+        #expect(response["height"] as? Int == 1080)
+        #expect(response["stride"] as? Int == 1920 * 4)
+    }
+
     private func makeFrame() throws -> CaptureImageFrame {
         let pixelBytes: [UInt8] = [
             0, 0, 255, 255, 0, 255, 0, 255,

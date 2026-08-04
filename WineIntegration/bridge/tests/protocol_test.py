@@ -108,7 +108,12 @@ def wait_for_exit(process: subprocess.Popen, timeout: float = 10) -> None:
     assert status == 0
 
 
-def run_protocol_test(wine: Path, prefix: Path, bridge: Path) -> None:
+def run_protocol_test(
+    wine: Path,
+    prefix: Path,
+    bridge: Path,
+    idle_regression_seconds: float = 0,
+) -> None:
     port = free_port()
     token = "0123456789abcdef" * 4
     process = launch(wine, prefix, bridge, port, token)
@@ -126,6 +131,16 @@ def run_protocol_test(wine: Path, prefix: Path, bridge: Path) -> None:
 
     status, _ = client.request(AUTHENTICATE, token.encode())
     assert status == OK
+
+    if idle_regression_seconds > 0:
+        # The listening socket has a 60-second accept watchdog, but an
+        # authenticated session must remain usable beyond that period. This
+        # long-running regression is enabled only by the manual verifier.
+        time.sleep(idle_regression_seconds)
+        status, _ = client.request(PING)
+        assert status == OK
+        status, _ = client.request(RELEASE_ALL)
+        assert status == OK
 
     second = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     second.settimeout(1)
@@ -178,7 +193,12 @@ def main() -> int:
     prefix = Path(sys.argv[2]).resolve()
     bridge = Path(sys.argv[3]).resolve()
     prefix.mkdir(parents=True, exist_ok=True)
-    run_protocol_test(wine, prefix, bridge)
+    idle_regression_seconds = float(
+        os.environ.get("BETTERGI_WINE_BRIDGE_IDLE_TEST_SECONDS", "0")
+    )
+    if idle_regression_seconds < 0:
+        raise ValueError("idle regression duration cannot be negative")
+    run_protocol_test(wine, prefix, bridge, idle_regression_seconds)
     run_disconnect_test(wine, prefix, bridge)
     print("BetterGI Wine bridge protocol test passed")
     return 0

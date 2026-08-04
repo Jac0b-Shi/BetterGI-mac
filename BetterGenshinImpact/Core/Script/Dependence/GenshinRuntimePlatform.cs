@@ -17,6 +17,7 @@ public interface IGenshinRuntimePlatform
         CancellationToken cancellationToken);
     Task ClaimBattlePassRewards(CancellationToken cancellationToken);
     Task GoToCraftingBench(string country, CancellationToken cancellationToken);
+    Task GoCraftResin(string country, CancellationToken cancellationToken);
     Task ChooseTalkOption(string option, int skipTimes, bool isOrange,
         CancellationToken cancellationToken);
     Task SetTime(int hour, int minute, bool skip, CancellationToken cancellationToken);

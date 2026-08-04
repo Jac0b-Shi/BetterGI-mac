@@ -7,6 +7,7 @@ enum BetterGICorePlatformAdapterError: LocalizedError {
     case invalidParameters(String)
     case unsupportedMethod(String)
     case inputRejected(String)
+    case inputNotFrontmost
     case notificationRejected(String)
     case htmlMaskRejected(String)
 
@@ -15,6 +16,7 @@ enum BetterGICorePlatformAdapterError: LocalizedError {
         case .invalidParameters(let message): message
         case .unsupportedMethod(let method): "Unsupported Core platform callback: \(method)"
         case .inputRejected(let reason): "InputSafetyGate rejected Core input: \(reason)"
+        case .inputNotFrontmost: "Game window is not frontmost for text input."
         case .notificationRejected(let reason): "macOS rejected Core notification: \(reason)"
         case .htmlMaskRejected(let reason): "macOS rejected Core HTML mask: \(reason)"
         }
@@ -43,10 +45,35 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
         var result: Result<Any, Error>?
     }
 
+    private enum PreparedInputRequest {
+        case dispatch(PreparedCoreInputDispatch)
+        case query(PreparedCoreInputQuery)
+        case immediate(Any)
+    }
+
+    private final class InputPreparationTransfer: @unchecked Sendable {
+        let method: String
+        let parameters: [String: Any]?
+        var result: Result<PreparedInputRequest, Error>?
+
+        init(method: String, parameters: [String: Any]?) {
+            self.method = method
+            self.parameters = parameters
+        }
+    }
+
+    private final class InputCompletionTransfer: @unchecked Sendable {
+        var gate: InputSafetyGate.GateResult?
+        var error: Error?
+    }
+
     private weak var appState: AppState?
     private var audioCapture: BGIAudioSampleProvider?
     private let captureRing: BetterGICoreCaptureRing
     private let htmlMaskController: MacHTMLMaskController
+    private let inputQueue = DispatchQueue(
+        label: "bettergi.core.input",
+        qos: .userInteractive)
 
     @MainActor
     init(appState: AppState) {
@@ -57,6 +84,11 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
 
     func handle(method: String, parameters: [String: Any]?) throws -> Any {
         if method == "capture.request" { return try handleCaptureRequest() }
+        if method == "input.dispatch" || method == "input.query" {
+            return try inputQueue.sync {
+                try handleInputRequest(method: method, parameters: parameters)
+            }
+        }
         if method.hasPrefix("htmlMask.") {
             return try handleHTMLMaskRequest(method: method, parameters: parameters)
         }
@@ -81,6 +113,150 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             throw BetterGICorePlatformAdapterError.invalidParameters("Platform callback produced no result.")
         }
         return try result.get()
+    }
+
+    private func handleInputRequest(
+        method: String,
+        parameters: [String: Any]?
+    ) throws -> Any {
+        let transfer = InputPreparationTransfer(
+            method: method,
+            parameters: parameters)
+        DispatchQueue.main.sync { [weak self] in
+            MainActor.assumeIsolated {
+                do {
+                    guard let self, let appState = self.appState else {
+                        throw BetterGICorePlatformAdapterError.invalidParameters(
+                            "AppState is unavailable.")
+                    }
+                    if transfer.method == "input.dispatch" {
+                        if transfer.parameters?["action"] as? String == "inputText",
+                           !appState.isGameWindowFrontmost {
+                            switch appState.backgroundTextInputPolicy {
+                            case .waitForForeground:
+                                throw BetterGICorePlatformAdapterError.inputNotFrontmost
+                            case .skipAndContinue:
+                                let count = (transfer.parameters?["text"] as? String)?.utf16.count ?? 0
+                                appState.addLog(
+                                    .warn,
+                                    "后台文字输入已跳过，UTF-16 codeUnits=\(count)")
+                                transfer.result = .success(.immediate([
+                                    "acknowledged": true,
+                                    "delivered": false,
+                                    "disposition": "skippedBackgroundText",
+                                    "reason": "Background Chinese text input is unsupported",
+                                ]))
+                                return
+                            }
+                        }
+                        let action = try self.makeInputAction(
+                            transfer.parameters,
+                            appState: appState)
+                        switch appState.prepareCoreInputDispatch(action) {
+                        case .immediate(let gate):
+                            if case .dryRun(let reason) = gate {
+                                throw BetterGICorePlatformAdapterError.inputRejected(reason)
+                            }
+                            throw BetterGICorePlatformAdapterError.inputRejected(gate.reason)
+                        case .dispatch(let prepared):
+                            transfer.result = .success(.dispatch(prepared))
+                        }
+                    } else {
+                        transfer.result = .success(.query(
+                            appState.prepareCoreInputQuery(
+                                try self.makeInputQuery(transfer.parameters))))
+                    }
+                } catch {
+                    transfer.result = .failure(error)
+                }
+            }
+        }
+
+        guard let preparation = transfer.result else {
+            throw BetterGICorePlatformAdapterError.invalidParameters(
+                "Input callback produced no work item.")
+        }
+        switch try preparation.get() {
+        case .immediate(let response):
+            return response
+        case .dispatch(let prepared):
+            let execution = Result { try prepared.perform() }
+            let completion = InputCompletionTransfer()
+            DispatchQueue.main.sync { [weak self] in
+                MainActor.assumeIsolated {
+                    completion.gate = self?.appState?.completeCoreInputDispatch(
+                        prepared,
+                        result: execution)
+                }
+            }
+            guard let gate = completion.gate else {
+                throw BetterGICorePlatformAdapterError.invalidParameters(
+                    "AppState became unavailable while completing input.")
+            }
+            switch gate {
+            case .allow:
+                return ["acknowledged": true, "delivered": true]
+            case .dryRun(let reason), .blocked(let reason):
+                throw BetterGICorePlatformAdapterError.inputRejected(reason)
+            }
+        case .query(let prepared):
+            do {
+                return ["isDown": try prepared.perform()]
+            } catch {
+                let completion = InputCompletionTransfer()
+                DispatchQueue.main.sync { [weak self] in
+                    MainActor.assumeIsolated {
+                        if let appState = self?.appState {
+                            completion.error = appState.completeCoreInputQuery(
+                                prepared,
+                                error: error)
+                        }
+                    }
+                }
+                throw completion.error ?? error
+            }
+        }
+    }
+
+    @MainActor
+    private func makeInputQuery(
+        _ parameters: [String: Any]?
+    ) throws -> InputQuery {
+        guard let parameters, let query = parameters["action"] as? String else {
+            throw BetterGICorePlatformAdapterError.invalidParameters(
+                "input.query requires an action.")
+        }
+        switch query {
+        case "isGameActionDown":
+            guard let rawAction = parameters["gameAction"] as? String,
+                  GIAction(rawValue: rawAction) != nil else {
+                throw BetterGICorePlatformAdapterError.invalidParameters(
+                    "isGameActionDown requires a BetterGI gameAction.")
+            }
+            if let key = parameters["windowsVirtualKey"] as? Int,
+               let keyCode = BetterGICoreInputKeyMapper.keyCode(
+                   fromWindowsVirtualKey: key) {
+                return .key(keyCode)
+            }
+            if let button = mouseButton(parameters["mouseButton"] as? String) {
+                return .mouseButton(button)
+            }
+        case "isKeyDown":
+            guard let rawKey = parameters["key"] as? String else {
+                throw BetterGICorePlatformAdapterError.invalidParameters(
+                    "isKeyDown requires a key.")
+            }
+            if let key = BetterGICoreInputKeyMapper.keyCode(from: rawKey) {
+                return .key(key)
+            }
+            if let button = mouseButton(rawKey) {
+                return .mouseButton(button)
+            }
+        default:
+            break
+        }
+        throw BetterGICorePlatformAdapterError.invalidParameters(
+            "input.query contains an unsupported action or key mapping.")
     }
 
     private func handleHTMLMaskRequest(
@@ -341,8 +517,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             {
                 switch appState.backgroundTextInputPolicy {
                 case .waitForForeground:
-                    throw BetterGICorePlatformAdapterError.inputRejected(
-                        "Game window is not frontmost for text input.")
+                    throw BetterGICorePlatformAdapterError.inputNotFrontmost
                 case .skipAndContinue:
                     let codeUnitCount = (parameters?["text"] as? String)?
                         .utf16.count ?? 0

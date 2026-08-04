@@ -30,6 +30,7 @@ using BetterGenshinImpact.GameTask.MapMask;
 using BetterGenshinImpact.GameTask.SkillCd;
 using BetterGenshinImpact.GameTask.UseRedeemCode;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
+using BetterGenshinImpact.GameTask.CharacterDevelopment;
 using BetterGenshinImpact.Service;
 using BetterGenshinImpact.Service.Notification;
 using BetterGenshinImpact.Helpers;
@@ -108,7 +109,7 @@ server.AttachRuntimeArtifactInitializer(() =>
     runtimeArtifactProvisioner.EnsureInstalled(shutdown.Token));
 var gameTaskManagerPlatform = new MacGameTaskManagerPlatform(
     layout, server.PlatformCallbacks, sessionToken, shutdown.Token, loggerFactory);
-var captureRing = new SharedCaptureRingReader(
+using var captureRing = new SharedCaptureRingReader(
     layout, () => gameTaskManagerPlatform.SystemInfo.DesktopRectArea);
 server.AttachGameScreenshotAction(new MacGameScreenshotAction(
     layout,
@@ -306,6 +307,11 @@ var autoFightRuntimePlatform = new MacAutoFightRuntimePlatform(
     loggerFactory, server.MacroSettings);
 AutoFightRuntimePlatform.Configure(autoFightRuntimePlatform);
 server.SoloTaskSettings.AttachAutoFightConfigUpdated(autoFightRuntimePlatform.UpdateConfig);
+CharacterDevelopmentRuntimePlatform.Configure(
+    new MacCharacterDevelopmentRuntimePlatform(
+        () => gameTaskManagerPlatform.SystemInfo,
+        imageRegionOcrService,
+        loggerFactory));
 var autoWoodRuntimePlatform = new MacAutoWoodRuntimePlatform();
 var autoMusicGameRuntimePlatform = new MacAutoMusicGameRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo.AssetScale);

@@ -408,6 +408,16 @@ public class Genshin
     }
 
     /// <summary>
+    /// 前往合成台合成浓缩树脂
+    /// </summary>
+    /// <param name="country">国家名称</param>
+    /// <returns></returns>
+    public async Task GoCraftResin(string country)
+    {
+        await Platform.GoCraftResin(country, CancellationContext.Instance.Cts.Token);
+    }
+
+    /// <summary>
     /// 在当前已打开的合成界面中合成指定材料。
     /// </summary>
     /// <param name="materialName">目标成品材料名。</param>

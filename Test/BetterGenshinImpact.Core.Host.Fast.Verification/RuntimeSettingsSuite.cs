@@ -162,11 +162,14 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 _ = auxiliaryControls.HandleKeyEdge(
                     AuxiliaryControlCoordinator.PickUpOrInteractControl,
                     false);
+                int releasedKeyCount;
+                lock (repeatedKeys)
+                    releasedKeyCount = repeatedKeys.Count;
                 await Task.Delay(120, cancellationToken);
                 lock (repeatedKeys)
                 {
                     context.Require(
-                        repeatedKeys.Count == emittedKeys.Length,
+                        repeatedKeys.Count == releasedKeyCount,
                         "Auxiliary controls continued after the physical key-up edge.");
                 }
                 await auxiliaryControls.StopAsync();
@@ -177,6 +180,46 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 context.Require(
                     stopped.Value<string>("state") == "stopped",
                     "Auxiliary controls accepted a late key-down edge after runtime stop.");
+            }
+
+            using (var dispatchStarted = new ManualResetEventSlim())
+            using (var allowDispatchToFinish = new ManualResetEventSlim())
+            using (var auxiliaryControls = new AuxiliaryControlCoordinator(
+                       macroCatalog,
+                       (_, token) =>
+                       {
+                           dispatchStarted.Set();
+                           allowDispatchToFinish.Wait(token);
+                       },
+                       cancellationToken,
+                       loggerFactory.CreateLogger<AuxiliaryControlCoordinator>()))
+            {
+                auxiliaryControls.Start();
+                _ = auxiliaryControls.HandleKeyEdge(
+                    AuxiliaryControlCoordinator.PickUpOrInteractControl,
+                    true);
+                context.Require(
+                    dispatchStarted.Wait(TimeSpan.FromSeconds(2), cancellationToken),
+                    "Auxiliary control dispatch did not start before the release synchronization check.");
+
+                var releaseTask = Task.Run(() => auxiliaryControls.HandleKeyEdge(
+                    AuxiliaryControlCoordinator.PickUpOrInteractControl,
+                    false));
+                bool releaseCompletedDuringDispatch;
+                try
+                {
+                    releaseCompletedDuringDispatch = await Task.WhenAny(
+                        releaseTask,
+                        Task.Delay(100, cancellationToken)) == releaseTask;
+                }
+                finally
+                {
+                    allowDispatchToFinish.Set();
+                }
+                _ = await releaseTask;
+                context.Require(
+                    !releaseCompletedDuringDispatch,
+                    "Auxiliary control release returned while an input dispatch was still in flight.");
             }
 
             var turnAroundPlatform =

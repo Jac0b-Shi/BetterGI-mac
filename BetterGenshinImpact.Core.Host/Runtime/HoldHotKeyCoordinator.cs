@@ -9,6 +9,8 @@ public sealed class HoldHotKeyCoordinator(
     IReadOnlyDictionary<string, Action<CancellationToken>> actions)
     : IDisposable
 {
+    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan MinimumRepeatInterval = TimeSpan.FromMilliseconds(1);
     public const string TurnAroundHotKey = "TurnAroundHotkey";
     public const string ConfirmButtonHotKey = "ClickGenshinConfirmButtonHotkey";
     public const string CancelButtonHotKey = "ClickGenshinCancelButtonHotkey";
@@ -70,7 +72,7 @@ public sealed class HoldHotKeyCoordinator(
                 operation.Cancellation.Cancel();
             activeTasks = _active.Values.Select(operation => operation.Task).ToArray();
         }
-        await Task.WhenAll(activeTasks);
+        await Task.WhenAll(activeTasks).WaitAsync(StopTimeout);
     }
 
     public void Dispose()
@@ -81,7 +83,7 @@ public sealed class HoldHotKeyCoordinator(
         GC.SuppressFinalize(this);
     }
 
-    private Task RunAsync(
+    private async Task RunAsync(
         string id,
         Action<CancellationToken> action,
         ActiveOperation operation)
@@ -89,7 +91,11 @@ public sealed class HoldHotKeyCoordinator(
         try
         {
             while (true)
+            {
+                operation.Cancellation.Token.ThrowIfCancellationRequested();
                 action(operation.Cancellation.Token);
+                await Task.Delay(MinimumRepeatInterval, operation.Cancellation.Token);
+            }
         }
         catch (OperationCanceledException)
             when (operation.Cancellation.IsCancellationRequested)
@@ -112,7 +118,6 @@ public sealed class HoldHotKeyCoordinator(
             }
             operation.Cancellation.Dispose();
         }
-        return Task.CompletedTask;
     }
 
     private void Cancel(string id)

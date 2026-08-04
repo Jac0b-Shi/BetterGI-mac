@@ -7,8 +7,11 @@ namespace BetterGenshinImpact.Core.Host.Transport;
 /// Authenticated reverse-RPC channel owned by the Swift process. Calls are serialized so
 /// each response is paired with the request currently on the wire; no polling or fallback.
 /// </summary>
-public sealed class PlatformCallbackChannel
+public sealed class PlatformCallbackChannel(TimeSpan? responseTimeout = null)
 {
+    public static readonly TimeSpan CaptureResponseTimeout = TimeSpan.FromSeconds(20);
+
+    private readonly TimeSpan _responseTimeout = ValidateResponseTimeout(responseTimeout);
     private readonly SemaphoreSlim _callLock = new(1, 1);
     private readonly object _stateLock = new();
     private FramedJsonConnection? _connection;
@@ -34,8 +37,12 @@ public sealed class PlatformCallbackChannel
     }
 
     public async Task<JToken?> InvokeAsync(string method, JObject? parameters, string sessionToken,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, TimeSpan? responseTimeout = null)
     {
+        var effectiveResponseTimeout = responseTimeout ?? _responseTimeout;
+        if (effectiveResponseTimeout != Timeout.InfiniteTimeSpan)
+            ValidateResponseTimeout(effectiveResponseTimeout);
+
         await _callLock.WaitAsync(cancellationToken);
         try
         {
@@ -53,8 +60,29 @@ public sealed class PlatformCallbackChannel
                 await connection.WriteRequestAsync(
                     new RpcRequest(id, method, parameters, sessionToken),
                     CancellationToken.None);
-                var response = await connection.ReadResponseAsync(CancellationToken.None)
-                    ?? throw new EndOfStreamException("Swift disconnected before acknowledging the platform callback.");
+                var responseTask = connection.ReadResponseAsync(CancellationToken.None);
+                RpcResponse? response;
+                try
+                {
+                    response = effectiveResponseTimeout == Timeout.InfiniteTimeSpan
+                        ? await responseTask
+                        : await responseTask.WaitAsync(effectiveResponseTimeout);
+                }
+                catch (TimeoutException)
+                {
+                    _ = responseTask.ContinueWith(
+                        task => _ = task.Exception,
+                        CancellationToken.None,
+                        TaskContinuationOptions.OnlyOnFaulted |
+                        TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
+                    throw;
+                }
+                if (response is null)
+                {
+                    throw new EndOfStreamException(
+                        "Swift disconnected before acknowledging the platform callback.");
+                }
                 if (!string.Equals(response.Id, id, StringComparison.Ordinal))
                     throw new InvalidDataException($"Platform callback response id '{response.Id}' does not match '{id}'.");
                 cancellationToken.ThrowIfCancellationRequested();
@@ -94,6 +122,14 @@ public sealed class PlatformCallbackChannel
 
     private static TaskCompletionSource NewDetachedSource() =>
         new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private static TimeSpan ValidateResponseTimeout(TimeSpan? responseTimeout)
+    {
+        var value = responseTimeout ?? TimeSpan.FromSeconds(30);
+        if (value <= TimeSpan.Zero || value == Timeout.InfiniteTimeSpan)
+            throw new ArgumentOutOfRangeException(nameof(responseTimeout));
+        return value;
+    }
 }
 
 public sealed class PlatformCallbackException(string code, string message) : Exception(message)
