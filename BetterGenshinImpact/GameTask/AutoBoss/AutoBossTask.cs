@@ -27,7 +27,6 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.AutoBoss;
@@ -1517,7 +1516,7 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
                 return;
             }
 
-            page.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+            PressEscape();
             await page.Wait(300);
         }
 
