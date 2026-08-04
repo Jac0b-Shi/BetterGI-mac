@@ -74,7 +74,8 @@ public sealed class MacTaskControlPlatform(
         return captureRing.ReadLatest(
             () => Invoke(
                 "capture.request",
-                JObject.FromObject(new { forceNew }))).DeriveTo1080P();
+                JObject.FromObject(new { forceNew }),
+                PlatformCallbackChannel.CaptureResponseTimeout)).DeriveTo1080P();
     }
 
     public ImageRegion CaptureToRectArea(
@@ -161,9 +162,13 @@ public sealed class MacTaskControlPlatform(
             throw new InvalidDataException($"{method} did not return acknowledged=true.");
     }
 
-    private JToken Invoke(string method, JObject? parameters) =>
+    private JToken Invoke(
+        string method,
+        JObject? parameters,
+        TimeSpan? responseTimeout = null) =>
         callbacks.InvokeAsync(
-                method, parameters, sessionToken, EffectiveCancellation)
+                method, parameters, sessionToken, EffectiveCancellation,
+                responseTimeout)
             .GetAwaiter().GetResult()
         ?? throw new InvalidDataException($"{method} returned an empty response.");
 

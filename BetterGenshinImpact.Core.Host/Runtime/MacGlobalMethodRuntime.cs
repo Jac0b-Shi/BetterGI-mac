@@ -47,7 +47,9 @@ public sealed class MacGlobalMethodRuntime(
     public void InputText(string text) => Dispatch(new { action = "inputText", text });
 
     public ImageRegion CaptureGameRegion() =>
-        captureRing.Read(Invoke("capture.request", null)).DeriveTo1080P();
+        captureRing.Read(Invoke(
+            "capture.request", null, PlatformCallbackChannel.CaptureResponseTimeout))
+            .DeriveTo1080P();
 
     public string[] GetAvatars()
     {
@@ -102,8 +104,12 @@ public sealed class MacGlobalMethodRuntime(
         });
     }
 
-    private JToken Invoke(string method, JObject? parameters) =>
-        callbacks.InvokeAsync(method, parameters, sessionToken, CancellationToken)
+    private JToken Invoke(
+        string method,
+        JObject? parameters,
+        TimeSpan? responseTimeout = null) =>
+        callbacks.InvokeAsync(
+                method, parameters, sessionToken, CancellationToken, responseTimeout)
             .GetAwaiter().GetResult()
         ?? throw new InvalidDataException($"{method} returned an empty response.");
 }

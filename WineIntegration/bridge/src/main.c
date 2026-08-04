@@ -1343,10 +1343,6 @@ int main(int argc, char **argv)
     setsockopt(
         state.client, IPPROTO_TCP, TCP_NODELAY,
         (const char *)&no_delay, sizeof(no_delay));
-    DWORD receive_timeout_ms = 60000;
-    setsockopt(
-        state.client, SOL_SOCKET, SO_RCVTIMEO,
-        (const char *)&receive_timeout_ms, sizeof(receive_timeout_ms));
     bool success = serve_client(&state);
     shutdown(state.client, SD_BOTH);
     closesocket(state.client);

@@ -127,6 +127,14 @@ def run_protocol_test(wine: Path, prefix: Path, bridge: Path) -> None:
     status, _ = client.request(AUTHENTICATE, token.encode())
     assert status == OK
 
+    # The listening socket has a 60-second accept watchdog, but an authenticated
+    # client session must remain usable while idle for longer than that period.
+    time.sleep(61)
+    status, _ = client.request(PING)
+    assert status == OK
+    status, _ = client.request(RELEASE_ALL)
+    assert status == OK
+
     second = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     second.settimeout(1)
     assert second.connect_ex(("127.0.0.1", port)) != 0

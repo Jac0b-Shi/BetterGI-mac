@@ -171,7 +171,9 @@ public sealed class MacScriptServicePlatform(
 
     private async Task<BetterGenshinImpact.GameTask.Model.Area.ImageRegion> Capture(CancellationToken cancellationToken)
     {
-        var response = await callbacks.InvokeAsync("capture.request", null, sessionToken, cancellationToken)
+        var response = await callbacks.InvokeAsync(
+                "capture.request", null, sessionToken, cancellationToken,
+                PlatformCallbackChannel.CaptureResponseTimeout)
             ?? throw new InvalidDataException("capture.request returned an empty response.");
         return captureRing.Read(response).DeriveTo1080P();
     }

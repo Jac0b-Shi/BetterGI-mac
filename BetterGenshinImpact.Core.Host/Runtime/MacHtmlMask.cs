@@ -9,8 +9,9 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 
 internal sealed class MacHtmlMask : IDisposable
 {
+    private static readonly TimeSpan CallbackTransportGrace = TimeSpan.FromSeconds(5);
     private readonly string _workDir;
-    private readonly Func<string, JObject?, JToken?> _invoke;
+    private readonly Func<string, JObject?, TimeSpan?, JToken?> _invoke;
     private readonly HashSet<string> _openedWindowIds = new(StringComparer.Ordinal);
     private bool _disposed;
 
@@ -21,8 +22,8 @@ internal sealed class MacHtmlMask : IDisposable
         CancellationToken cancellationToken)
         : this(
             workDir,
-            (method, parameters) => callbacks.InvokeAsync(
-                    method, parameters, sessionToken, cancellationToken)
+            (method, parameters, responseTimeout) => callbacks.InvokeAsync(
+                    method, parameters, sessionToken, cancellationToken, responseTimeout)
                 .GetAwaiter()
                 .GetResult())
     {
@@ -30,7 +31,7 @@ internal sealed class MacHtmlMask : IDisposable
 
     internal MacHtmlMask(
         string workDir,
-        Func<string, JObject?, JToken?> invoke)
+        Func<string, JObject?, TimeSpan?, JToken?> invoke)
     {
         _workDir = Path.GetFullPath(workDir);
         _invoke = invoke;
@@ -155,7 +156,8 @@ internal sealed class MacHtmlMask : IDisposable
             throw new ArgumentOutOfRangeException(nameof(timeoutMs));
         var parameters = MessageParameters(windowId, url, jsonData, requestId: null);
         parameters["timeoutMs"] = timeoutMs;
-        var result = await Task.Run(() => RequireObject("htmlMask.request", parameters));
+        var result = await Task.Run(() => RequireObject(
+            "htmlMask.request", parameters, ResponseTimeout(timeoutMs)));
         return result.Value<string>("responseJSON");
     }
 
@@ -169,7 +171,8 @@ internal sealed class MacHtmlMask : IDisposable
             {
                 windowId = RequiredId(windowId),
                 timeoutMs,
-            })));
+            }),
+            ResponseTimeout(timeoutMs)));
         return SerializeOptional(result["message"]);
     }
 
@@ -274,12 +277,19 @@ internal sealed class MacHtmlMask : IDisposable
         return id;
     }
 
-    private JObject RequireObject(string method, JObject? parameters)
+    private JObject RequireObject(
+        string method,
+        JObject? parameters,
+        TimeSpan? responseTimeout = null)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        return _invoke(method, parameters) as JObject
+        return _invoke(method, parameters, responseTimeout) as JObject
             ?? throw new InvalidDataException($"{method} did not return an object.");
     }
+
+    private static TimeSpan ResponseTimeout(int timeoutMs) => timeoutMs == 0
+        ? Timeout.InfiniteTimeSpan
+        : TimeSpan.FromMilliseconds(timeoutMs) + CallbackTransportGrace;
 
     private void RequireAcknowledgement(string method, JObject parameters)
     {

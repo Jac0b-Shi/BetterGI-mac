@@ -99,6 +99,7 @@ public sealed class RuntimeCancellationSuite : IVerificationSuite
 
         await VerifyTriggerStopCancellation(context, cancellationToken);
         await VerifyInFlightPlatformCallbackCancellation(context, cancellationToken);
+        await VerifyPlatformCallbackTimeoutOverrides(context, cancellationToken);
         await VerifyPlatformCallbackTimeout(context, cancellationToken);
     }
 
@@ -254,6 +255,69 @@ public sealed class RuntimeCancellationSuite : IVerificationSuite
             context.Require(
                 !callbacks.IsAttached,
                 "A timed-out platform callback left the shared channel attached.");
+            await attached;
+        }
+        finally
+        {
+            try { File.Delete(socketPath); }
+            catch { }
+        }
+    }
+
+    private static async Task VerifyPlatformCallbackTimeoutOverrides(
+        VerificationContext context,
+        CancellationToken cancellationToken)
+    {
+        var socketPath = $"/tmp/bgi-callback-timeout-override-{Guid.NewGuid():N}.sock";
+        using var listener = new Socket(
+            AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        try
+        {
+            listener.Bind(new UnixDomainSocketEndPoint(socketPath));
+            listener.Listen(1);
+            using var swiftSocket = new Socket(
+                AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            var connectTask = swiftSocket.ConnectAsync(
+                new UnixDomainSocketEndPoint(socketPath), cancellationToken);
+            using var coreSocket = await listener.AcceptAsync(cancellationToken);
+            await connectTask;
+
+            await using var coreConnection = new FramedJsonConnection(coreSocket);
+            await using var swiftConnection = new FramedJsonConnection(swiftSocket);
+            var callbacks = new PlatformCallbackChannel(TimeSpan.FromMilliseconds(50));
+            var attached = callbacks.AttachAsync(coreConnection, CancellationToken.None);
+
+            var infiniteInvoke = callbacks.InvokeAsync(
+                "htmlMask.receive", JObject.FromObject(new { timeoutMs = 0 }),
+                "verification", cancellationToken, Timeout.InfiniteTimeSpan);
+            var infiniteRequest = await swiftConnection.ReadRequestAsync(cancellationToken)
+                ?? throw new EndOfStreamException(
+                    "Core did not send the infinite platform callback.");
+            await Task.Delay(100, cancellationToken);
+            context.Require(
+                !infiniteInvoke.IsCompleted && callbacks.IsAttached,
+                "An infinite HTML mask callback used the default response timeout.");
+            await swiftConnection.WriteResponseAsync(
+                RpcResponse.Success(infiniteRequest.Id, new { acknowledged = true }),
+                cancellationToken);
+            await infiniteInvoke;
+
+            var extendedInvoke = callbacks.InvokeAsync(
+                "htmlMask.request", JObject.FromObject(new { timeoutMs = 200 }),
+                "verification", cancellationToken, TimeSpan.FromMilliseconds(250));
+            var extendedRequest = await swiftConnection.ReadRequestAsync(cancellationToken)
+                ?? throw new EndOfStreamException(
+                    "Core did not send the extended platform callback.");
+            await Task.Delay(100, cancellationToken);
+            context.Require(
+                !extendedInvoke.IsCompleted && callbacks.IsAttached,
+                "A caller-defined platform callback deadline was replaced by the default timeout.");
+            await swiftConnection.WriteResponseAsync(
+                RpcResponse.Success(extendedRequest.Id, new { acknowledged = true }),
+                cancellationToken);
+            await extendedInvoke;
+
+            callbacks.Detach(coreConnection);
             await attached;
         }
         finally

@@ -50,7 +50,8 @@ public sealed class MacGameScreenshotAction(
         public Mat Capture()
         {
             var response = callbacks.InvokeAsync(
-                    "capture.request", null, sessionToken, cancellationToken)
+                    "capture.request", null, sessionToken, cancellationToken,
+                    PlatformCallbackChannel.CaptureResponseTimeout)
                 .GetAwaiter().GetResult()
                 ?? throw new InvalidDataException(
                     "capture.request returned an empty response.");

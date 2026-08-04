@@ -9,6 +9,8 @@ namespace BetterGenshinImpact.Core.Host.Transport;
 /// </summary>
 public sealed class PlatformCallbackChannel(TimeSpan? responseTimeout = null)
 {
+    public static readonly TimeSpan CaptureResponseTimeout = TimeSpan.FromSeconds(20);
+
     private readonly TimeSpan _responseTimeout = ValidateResponseTimeout(responseTimeout);
     private readonly SemaphoreSlim _callLock = new(1, 1);
     private readonly object _stateLock = new();
@@ -35,8 +37,12 @@ public sealed class PlatformCallbackChannel(TimeSpan? responseTimeout = null)
     }
 
     public async Task<JToken?> InvokeAsync(string method, JObject? parameters, string sessionToken,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, TimeSpan? responseTimeout = null)
     {
+        var effectiveResponseTimeout = responseTimeout ?? _responseTimeout;
+        if (effectiveResponseTimeout != Timeout.InfiniteTimeSpan)
+            ValidateResponseTimeout(effectiveResponseTimeout);
+
         await _callLock.WaitAsync(cancellationToken);
         try
         {
@@ -58,7 +64,9 @@ public sealed class PlatformCallbackChannel(TimeSpan? responseTimeout = null)
                 RpcResponse? response;
                 try
                 {
-                    response = await responseTask.WaitAsync(_responseTimeout);
+                    response = effectiveResponseTimeout == Timeout.InfiniteTimeSpan
+                        ? await responseTask
+                        : await responseTask.WaitAsync(effectiveResponseTimeout);
                 }
                 catch (TimeoutException)
                 {
