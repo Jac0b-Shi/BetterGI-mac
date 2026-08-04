@@ -31,6 +31,13 @@ internal sealed class MacHtmlMask : IDisposable
 
     internal MacHtmlMask(
         string workDir,
+        Func<string, JObject?, JToken?> invoke)
+        : this(workDir, (method, parameters, _) => invoke(method, parameters))
+    {
+    }
+
+    internal MacHtmlMask(
+        string workDir,
         Func<string, JObject?, TimeSpan?, JToken?> invoke)
     {
         _workDir = Path.GetFullPath(workDir);
