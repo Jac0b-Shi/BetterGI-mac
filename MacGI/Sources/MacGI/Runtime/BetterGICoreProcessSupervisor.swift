@@ -1619,6 +1619,8 @@ actor BetterGICoreProcessSupervisor {
             approachStopDistance: pathing["approachStopDistance"] as? Int ?? 25,
             switchToWalkEnabled: pathing["switchToWalkEnabled"] as? Bool ?? false,
             mwkJumpFlyEnabled: pathing["mwkJumpFlyEnabled"] as? Bool ?? true,
+            mwkDisableSprintEnabled:
+                pathing["mwkDisableSprintEnabled"] as? Bool ?? false,
             mwkJumpFlyIntervalSeconds:
                 (pathing["mwkJumpFlyIntervalSeconds"] as? NSNumber)?.doubleValue ?? 1,
             taskCycleEnabled: taskCycle["enable"] as? Bool ?? false,
@@ -1745,6 +1747,7 @@ actor BetterGICoreProcessSupervisor {
                 settings.approachStopDistance, settings.distance),
             "switchToWalkEnabled": settings.switchToWalkEnabled,
             "mwkJumpFlyEnabled": settings.mwkJumpFlyEnabled,
+            "mwkDisableSprintEnabled": settings.mwkDisableSprintEnabled,
             "mwkJumpFlyIntervalSeconds": settings.mwkJumpFlyIntervalSeconds,
             "taskCycleConfig": taskCycleConfig,
             "taskCompletionSkipRuleConfig": completionConfig,

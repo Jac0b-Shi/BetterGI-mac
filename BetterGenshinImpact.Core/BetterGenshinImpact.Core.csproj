@@ -259,6 +259,8 @@
   <!-- Core/Recognition -->
   <ItemGroup>
     <Compile Include="../BetterGenshinImpact/Core/BgiVision/BvImage.cs" Link="Core/BgiVision/BvImage.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/BgiVision/BvFlow.cs" Link="Core/BgiVision/BvFlow.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/BgiVision/BvFlowAction.cs" Link="Core/BgiVision/BvFlowAction.cs" />
     <Compile Include="../BetterGenshinImpact/Core/BgiVision/BvLocator.cs" Link="Core/BgiVision/BvLocator.cs" />
     <Compile Include="../BetterGenshinImpact/Core/BgiVision/BvPage.cs" Link="Core/BgiVision/BvPage.cs" />
     <Compile Include="../BetterGenshinImpact/Core/BgiVision/BvRuntimePlatform.cs" Link="Core/BgiVision/BvRuntimePlatform.cs" />
@@ -431,6 +433,7 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridScreenRuntimePlatform.cs" Link="GameTask/Model/GameUI/GridScreenRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridScroller.cs" Link="GameTask/Model/GameUI/GridScroller.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridParams.cs" Link="GameTask/Model/GameUI/GridParams.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/FixedSizeGridCardDetector.cs" Link="GameTask/Model/GameUI/FixedSizeGridCardDetector.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridCell.cs" Link="GameTask/Model/GameUI/GridCell.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/ArtifactSetFilterScreen.cs" Link="GameTask/Model/GameUI/ArtifactSetFilterScreen.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ItemIconRecognizer.cs" Link="GameTask/Common/Job/ItemIconRecognizer.cs" />

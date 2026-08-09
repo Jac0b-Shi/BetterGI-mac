@@ -21,7 +21,7 @@ public interface IGenshinRuntimePlatform
     Task ChooseTalkOption(string option, int skipTimes, bool isOrange,
         CancellationToken cancellationToken);
     Task SetTime(int hour, int minute, bool skip, CancellationToken cancellationToken);
-    Task<bool> SwitchCharacter(string slot1, string slot2, string slot3, string slot4,
+    Task<bool> SwitchCharacter(string slot1, string slot2, string slot3, string slot4, bool usePhysicalSlots,
         CancellationToken cancellationToken);
 }
 

@@ -39,13 +39,13 @@ public sealed class MacGenshinRuntimePlatform(
             .SingleSelectText(option, cancellationToken, skipTimes, isOrange);
     public Task SetTime(int hour, int minute, bool skip, CancellationToken cancellationToken) =>
         new SetTimeTask().Start(hour, minute, cancellationToken, skip);
-    public Task<bool> SwitchCharacter(string slot1, string slot2, string slot3, string slot4,
+    public Task<bool> SwitchCharacter(string slot1, string slot2, string slot3, string slot4, bool usePhysicalSlots,
         CancellationToken cancellationToken) =>
         new SwitchCharacterStateMachineTask(
             loggerFactory.CreateLogger<SwitchCharacterStateMachineTask>(),
             SystemInfo,
             ocrService.OnnxFactory,
-            ocrService).Start(slot1, slot2, slot3, slot4, cancellationToken);
+            ocrService).Start(slot1, slot2, slot3, slot4, usePhysicalSlots, cancellationToken);
     private static CapabilityUnavailableException Unavailable(string member) => new(
         $"genshin.{member} is not composed on macOS because its shared task still depends on Win32 input.");
 }
