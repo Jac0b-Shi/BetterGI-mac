@@ -1,6 +1,7 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.Music.Model;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -12,9 +13,11 @@ namespace BetterGenshinImpact.GameTask.Music.Service;
 
 public sealed class MusicLibraryService(
     IMusicScoreParser scoreParser,
-    IMusicStateStore stateStore) : IMusicLibraryService
+    IMusicStateStore stateStore,
+    ILogger<MusicLibraryService>? logger = null) : IMusicLibraryService
 {
-    private readonly ILogger<MusicLibraryService> _logger = App.GetLogger<MusicLibraryService>();
+    private readonly ILogger<MusicLibraryService> _logger =
+        logger ?? NullLogger<MusicLibraryService>.Instance;
     private readonly object _watcherSyncRoot = new();
     private FileSystemWatcher? _watcher;
     private Timer? _debounceTimer;

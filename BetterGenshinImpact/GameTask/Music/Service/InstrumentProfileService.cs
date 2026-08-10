@@ -1,6 +1,7 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.Music.Model;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -14,7 +15,7 @@ namespace BetterGenshinImpact.GameTask.Music.Service;
 public sealed class InstrumentProfileService : IInstrumentProfileService
 {
     private static readonly Encoding Utf8WithoutBom = new UTF8Encoding(false);
-    private readonly ILogger<InstrumentProfileService> _logger = App.GetLogger<InstrumentProfileService>();
+    private readonly ILogger<InstrumentProfileService> _logger;
     private readonly string _profilePath = Global.Absolute(@"User\Music\instrument-profiles.json");
 
     private static readonly (char Key, int Note)[] StandardMappings =
@@ -30,8 +31,9 @@ public sealed class InstrumentProfileService : IInstrumentProfileService
         "悠可琴", "晚风圆号", "余音", "绮筵之鼓", "聚聚鼓"
     ];
 
-    public InstrumentProfileService()
+    public InstrumentProfileService(ILogger<InstrumentProfileService>? logger = null)
     {
+        _logger = logger ?? NullLogger<InstrumentProfileService>.Instance;
         Profiles = Load();
         EnsureBuiltInProfiles();
         StandardProfile = Profiles.First(x => x.Name == "风物之诗琴");

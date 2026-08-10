@@ -4,7 +4,9 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+#if WINDOWS
 using System.Windows.Media;
+#endif
 
 namespace BetterGenshinImpact.GameTask.Music.Model;
 
@@ -143,8 +145,10 @@ public partial class PerformanceScore : ObservableObject
     [ObservableProperty]
     private int _mappedNoteCount;
 
+#if WINDOWS
     [ObservableProperty]
     private ImageSource? _artwork;
+#endif
 
     public bool IsValid => string.IsNullOrEmpty(Error);
 

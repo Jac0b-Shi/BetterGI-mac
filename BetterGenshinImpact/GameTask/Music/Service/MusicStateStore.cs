@@ -1,6 +1,7 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.Music.Model;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Newtonsoft.Json;
 using System;
 using System.IO;
@@ -11,12 +12,13 @@ namespace BetterGenshinImpact.GameTask.Music.Service;
 public sealed class MusicStateStore : IMusicStateStore
 {
     private static readonly Encoding Utf8WithoutBom = new UTF8Encoding(false);
-    private readonly ILogger<MusicStateStore> _logger = App.GetLogger<MusicStateStore>();
+    private readonly ILogger<MusicStateStore> _logger;
     private readonly object _syncRoot = new();
     private readonly string _statePath = Global.Absolute(@"User\Music\music-state.json");
 
-    public MusicStateStore()
+    public MusicStateStore(ILogger<MusicStateStore>? logger = null)
     {
+        _logger = logger ?? NullLogger<MusicStateStore>.Instance;
         State = Load();
     }
 

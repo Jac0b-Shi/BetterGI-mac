@@ -1,5 +1,6 @@
 using BetterGenshinImpact.GameTask.Music.Model;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -12,9 +13,11 @@ namespace BetterGenshinImpact.GameTask.Music.Service;
 public sealed class MusicPlaybackService(
     IMusicTimelineBuilder timelineBuilder,
     IInstrumentProfileService profileService,
-    IEnumerable<IKeyInputTransport> transports) : IMusicPlaybackService
+    IEnumerable<IKeyInputTransport> transports,
+    ILogger<MusicPlaybackService>? logger = null) : IMusicPlaybackService
 {
-    private readonly ILogger<MusicPlaybackService> _logger = App.GetLogger<MusicPlaybackService>();
+    private readonly ILogger<MusicPlaybackService> _logger =
+        logger ?? NullLogger<MusicPlaybackService>.Instance;
     private readonly object _syncRoot = new();
     private readonly Dictionary<MusicInputMode, IKeyInputTransport> _transports =
         transports.ToDictionary(x => x.Mode);

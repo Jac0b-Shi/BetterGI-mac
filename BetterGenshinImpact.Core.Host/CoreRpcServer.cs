@@ -11,6 +11,7 @@ using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.GameLoading;
 using BetterGenshinImpact.GameTask.MapMask;
+using BetterGenshinImpact.GameTask.Music.Model;
 
 namespace BetterGenshinImpact.Core.Host;
 
@@ -56,6 +57,7 @@ public sealed class CoreRpcServer(
     private OneShotHotKeyCoordinator? _oneShotHotKeys;
     private IGameScreenshotAction? _gameScreenshotAction;
     private ArtifactSalvagePreviewService? _artifactSalvagePreview;
+    private MusicCoordinator? _music;
     private IPathRecorderAction? _pathRecorder;
     private int _platformAssetsInitialized;
     private readonly SemaphoreSlim _runtimeMutationLock = new(1, 1);
@@ -207,6 +209,13 @@ public sealed class CoreRpcServer(
             throw new InvalidOperationException(
                 "Path recorder has already been attached.");
         }
+    }
+
+    public void AttachMusicCoordinator(MusicCoordinator coordinator)
+    {
+        ArgumentNullException.ThrowIfNull(coordinator);
+        if (Interlocked.CompareExchange(ref _music, coordinator, null) is not null)
+            throw new InvalidOperationException("Music coordinator is already attached.");
     }
 
     public void AttachNotificationSettings(NotificationSettingsCatalog settings)
@@ -395,6 +404,39 @@ public sealed class CoreRpcServer(
                         RequiredString(request.Params, "id"),
                         request.Params?.Value<bool?>("isDown") ?? true,
                         _shutdown.Token));
+            }
+            if (request.Method == "music.scan")
+            {
+                return RpcResponse.Success(
+                    request.Id,
+                    await Music.ScanAsync(RequiredString(request.Params, "rootFolder")));
+            }
+            if (request.Method == "music.play")
+            {
+                if (!RequiredTriggerDispatcher().IsRunning)
+                {
+                    throw new InvalidOperationException(
+                        "自动演奏只能在 macOS 运行时启动后执行。");
+                }
+                return RpcResponse.Success(
+                    request.Id,
+                    await Music.PlayAsync(
+                        RequiredInt(request.Params, "index"),
+                        request.Params?.Value<double?>("speed") ?? 1.0,
+                        RequiredMusicPlaybackMode(request.Params, "playbackMode"),
+                        request.Params?.Value<double?>("startPositionMilliseconds") ?? 0));
+            }
+            if (request.Method == "music.stop")
+                return RpcResponse.Success(request.Id, await Music.StopAsync());
+            if (request.Method == "music.configureTrack")
+            {
+                return RpcResponse.Success(
+                    request.Id,
+                    await Music.ConfigureTrackAsync(
+                        RequiredInt(request.Params, "index"),
+                        request.Params?.Value<string>("outputProfileName"),
+                        request.Params?.Value<int?>("transpose") ?? 0,
+                        RequiredIntArray(request.Params, "disabledTrackIndexes")));
             }
             object? result = request.Method switch
             {
@@ -611,6 +653,19 @@ public sealed class CoreRpcServer(
                 "scheduler.pause" => Scheduler.Pause(RequiredString(request.Params, "taskId")),
                 "scheduler.resume" => Scheduler.Resume(RequiredString(request.Params, "taskId")),
                 "scheduler.stop" => Scheduler.Stop(RequiredString(request.Params, "taskId")),
+                "music.state" => Music.State(),
+                "music.pause" => Music.Pause(),
+                "music.resume" => Music.Resume(),
+                "music.next" => Music.Next(),
+                "music.previous" => Music.Previous(),
+                "music.seek" => Music.Seek(
+                    request.Params?.Value<double?>("positionMilliseconds")
+                    ?? throw new ArgumentException("positionMilliseconds is required.")),
+                "music.setSpeed" => Music.SetSpeed(
+                    request.Params?.Value<double?>("speed")
+                    ?? throw new ArgumentException("speed is required.")),
+                "music.setPlaybackMode" => Music.SetPlaybackMode(
+                    RequiredMusicPlaybackMode(request.Params, "playbackMode")),
                 "core.shutdown" => Shutdown(),
                 _ => throw new MissingMethodException($"Unknown RPC method: {request.Method}")
             };
@@ -676,7 +731,8 @@ public sealed class CoreRpcServer(
                 "macro.turn-around",
                 "macro.quick-serenitea-pot",
                 "macro.one-key-fight",
-                "key-bindings"
+                "key-bindings",
+                "music.playback"
             }
         };
     }
@@ -734,8 +790,30 @@ public sealed class CoreRpcServer(
 
     private object Shutdown()
     {
+        _music?.Dispose();
         _shutdown.Cancel();
         return new { stopping = true };
+    }
+
+    private MusicCoordinator Music => _music
+        ?? throw new CapabilityUnavailableException(
+            "Music coordinator is unavailable until Core composition completes.");
+
+    private static MusicPlaybackMode RequiredMusicPlaybackMode(
+        JObject? parameters,
+        string name)
+    {
+        var value = RequiredString(parameters, name);
+        return Enum.TryParse<MusicPlaybackMode>(value, true, out var mode)
+            ? mode
+            : throw new ArgumentException($"Invalid {name}: {value}");
+    }
+
+    private static int[] RequiredIntArray(JObject? parameters, string name)
+    {
+        var values = parameters?[name] as JArray
+            ?? throw new ArgumentException($"{name} is required.");
+        return values.Select(value => value.Value<int>()).ToArray();
     }
 
     private async Task<object> StartRuntimeAsync(CancellationToken cancellationToken)
@@ -773,6 +851,8 @@ public sealed class CoreRpcServer(
                 await _oneDragon.StopActiveAsync(cancellationToken);
             if (_keyMouseScripts is not null)
                 await _keyMouseScripts.StopAsync();
+            if (_music is not null)
+                await _music.StopAsync();
             if (_auxiliaryControls is not null)
                 await _auxiliaryControls.StopAsync();
             if (_holdHotKeys is not null)

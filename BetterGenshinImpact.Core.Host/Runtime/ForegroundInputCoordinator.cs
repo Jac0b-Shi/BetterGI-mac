@@ -142,9 +142,14 @@ public sealed class ForegroundInputCoordinator(
         }
     }
 
-    public void ReleaseAllWhenFocused(CancellationToken cancellationToken = default)
+    public void ReleaseAllWhenFocused(
+        CancellationToken cancellationToken = default,
+        bool includeOperationCancellation = true)
     {
-        using var linked = CreateLinkedCancellation(cancellationToken);
+        using var linked = includeOperationCancellation
+            ? CreateLinkedCancellation(cancellationToken)
+            : CancellationTokenSource.CreateLinkedTokenSource(
+                hostCancellationToken, cancellationToken);
         if (!IsInputAvailable(linked.Token))
         {
             Interlocked.Exchange(ref _releaseRequired, 1);

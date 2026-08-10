@@ -4,7 +4,9 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Tasks;
+#if WINDOWS
 using System.Windows.Media;
+#endif
 
 namespace BetterGenshinImpact.GameTask.Music.Service;
 
@@ -33,10 +35,12 @@ public sealed class MusicScoreParseFailedEventArgs(string filePath, string error
     public string ErrorMessage { get; } = errorMessage;
 }
 
+#if WINDOWS
 public interface IMusicCoverService
 {
     Task<ImageSource?> GetCoverAsync(string songName, CancellationToken cancellationToken);
 }
+#endif
 
 public interface IInstrumentProfileService
 {

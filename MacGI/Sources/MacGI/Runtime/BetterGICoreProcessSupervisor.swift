@@ -787,7 +787,7 @@ actor BetterGICoreProcessSupervisor {
         }
     }
 
-    private func runningClient() throws -> BetterGICoreRPCClient {
+    func runningClient() throws -> BetterGICoreRPCClient {
         guard case .running = state, let client else {
             throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
         }

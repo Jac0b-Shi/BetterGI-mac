@@ -485,6 +485,7 @@ struct BGINavSidebar: View {
             sidebarButton(.realtime)
             sidebarButton(.soloTask)
             sidebarButton(.oneDragon)
+            sidebarButton(.music)
             automationHeader
             sidebarButton(.scheduler, indent: 28)
             sidebarButton(.jsScript, indent: 28)
