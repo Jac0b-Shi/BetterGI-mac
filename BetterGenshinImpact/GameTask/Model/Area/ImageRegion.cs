@@ -24,6 +24,7 @@ public class ImageRegion : Region
 {
     private Mat? _cacheGreyMat;
     private Image<Rgb24>? _cacheImage;
+    private bool _disposed;
 
     public Mat SrcMat { get; }
 
@@ -599,9 +600,16 @@ public class ImageRegion : Region
 
     public override void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
         _cacheImage?.Dispose();
         _cacheGreyMat?.Dispose();
         SrcMat.Dispose();
+        base.Dispose();
     }
 
     private static string NormalizeOcrText(string text)

@@ -10,6 +10,7 @@ using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.Core.Runtime.Windows;
 using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.GameTask.Music.Service;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Helpers.Extensions;
 using BetterGenshinImpact.Helpers.Win32;
@@ -152,6 +153,7 @@ public partial class App : Application
                 services.AddView<JsListPage, JsListViewModel>();
                 services.AddView<MapPathingPage, MapPathingViewModel>();
                 services.AddView<OneDragonFlowPage, OneDragonFlowViewModel>();
+                services.AddView<MusicPage, MusicPageViewModel>();
                 services.AddSingleton<PathingConfigViewModel>();
                 services.AddSingleton<IBannerImageService, BannerImageService>();
                 services.AddTransient<WebImageInputViewModel>();
@@ -180,6 +182,15 @@ public partial class App : Application
                 services.AddHostedService(sp => sp.GetRequiredService<NotificationService>());
                 services.AddSingleton<NotifierManager>();
                 services.AddSingleton<IScriptService, ScriptService>();
+                services.AddSingleton<IMusicScoreParser, MusicScoreParser>();
+                services.AddSingleton<IMusicStateStore, MusicStateStore>();
+                services.AddSingleton<IInstrumentProfileService, InstrumentProfileService>();
+                services.AddSingleton<IMusicTimelineBuilder, MusicTimelineBuilder>();
+                services.AddSingleton<IMusicLibraryService, MusicLibraryService>();
+                services.AddSingleton<IMusicCoverService, MusicCoverService>();
+                services.AddSingleton<IKeyInputTransport, PostMessageKeyInputTransport>();
+                services.AddSingleton<IKeyInputTransport, SendInputKeyInputTransport>();
+                services.AddSingleton<IMusicPlaybackService, MusicPlaybackService>();
                 services.AddSingleton<BgiOnnxFactory>();
                 services.AddSingleton<OcrFactory>();
                 // Runtime abstractions (Windows providers — dynamic delegation)

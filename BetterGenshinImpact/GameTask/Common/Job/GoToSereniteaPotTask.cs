@@ -88,9 +88,8 @@ public class GoToSereniteaPotTask
         await tpTask.SwitchArea("尘歌壶");
         
         // 若未找到 ElementAssets.Instance.SereniteaPotRo 就是已经在尘歌壶了
-        var  ra = CaptureToRectArea();
         for (int i = 0; i < 5; i++){
-            ra = CaptureToRectArea();
+            using var ra = CaptureToRectArea();
             //确定洞天名称
             var list = ra.FindMulti(new RecognitionObject
             {
@@ -136,7 +135,7 @@ public class GoToSereniteaPotTask
 
         for (int attempt = 0; attempt < 10; attempt++) // 尝试点击传送按钮
         {
-            ra = CaptureToRectArea();
+            using var ra = CaptureToRectArea();
             var teleportBtn = ra.Find(RecognitionAssets.Get("QuickTeleport", "TeleportButton", ra));
             if (teleportBtn.IsExist())
             {
@@ -147,8 +146,8 @@ public class GoToSereniteaPotTask
                 bool isReClickRequired = true;
                 for(int i = 0; i < 10; i++)     
                 {
-                    ra = CaptureToRectArea();
-                    teleportBtn = ra.Find(RecognitionAssets.Get("QuickTeleport", "TeleportButton", ra));
+                    using var buttonCapture = CaptureToRectArea();
+                    teleportBtn = buttonCapture.Find(RecognitionAssets.Get("QuickTeleport", "TeleportButton", buttonCapture));
                     if (!teleportBtn.IsExist())     //传送按钮消失
                     {
                         isReClickRequired = false;
@@ -183,7 +182,11 @@ public class GoToSereniteaPotTask
             await Delay(800, ct);    // 重试间隔
         }
         
-        await NewRetry.WaitForAction(() => Bv.IsInMainUi(CaptureToRectArea()), ct);
+        await NewRetry.WaitForAction(() =>
+        {
+            using var capture = CaptureToRectArea();
+            return Bv.IsInMainUi(capture);
+        }, ct);
         return true;
     }
 
@@ -208,7 +211,7 @@ public class GoToSereniteaPotTask
             await Delay(1000, ct);
             for (int i = 0; i < 5; i++)
             {
-                var ra = CaptureToRectArea();
+                using var ra = CaptureToRectArea();
                 //确定洞天名称
                 var list = ra.FindMulti(new RecognitionObject
                 {
@@ -223,7 +226,8 @@ public class GoToSereniteaPotTask
                     for(int z  = 1; z < 5; z++) { 
                         TaskControlPlatform.Current.SimulateAction(GIActions.OpenMap);
                         await Delay(1000, ct);
-                        if (Bv.IsInMainUi(CaptureToRectArea()))
+                        using var mainUiCapture = CaptureToRectArea();
+                        if (Bv.IsInMainUi(mainUiCapture))
                         {
                             break;
                         }
@@ -291,15 +295,15 @@ public class GoToSereniteaPotTask
             }
         }
         Logger.LogInformation("领取尘歌壶奖励:{text}", "寻找阿圆");
-        CancellationTokenSource treeCts = new();
-        ct.Register(treeCts.Cancel);
+        using CancellationTokenSource treeCts = new();
+        using var cancellationRegistration = ct.Register(treeCts.Cancel);
         // 中键回正视角
         TaskControlPlatform.Current.MiddleButtonClick();
         await Delay(900, ct);
         int continuousCount = 0;
         while (!ct.IsCancellationRequested)
         {
-            var ra = CaptureToRectArea();
+            using var ra = CaptureToRectArea();
             var list = ra.FindMulti(new RecognitionObject
             {
                 RecognitionType = RecognitionTypes.Ocr,
@@ -366,7 +370,8 @@ public class GoToSereniteaPotTask
         {
             while (!treeCts.IsCancellationRequested)
             {
-                if (Bv.FindF(CaptureToRectArea(), text: this.ayuanHeyString))
+                using var capture = CaptureToRectArea();
+                if (Bv.FindF(capture, text: this.ayuanHeyString))
                 {
                     TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                     Logger.LogInformation("领取尘歌壶奖励:{text}", "接近阿圆成功");
@@ -383,7 +388,7 @@ public class GoToSereniteaPotTask
 
     private async Task BuyMaxNumber(CancellationToken ct)
     {
-        var ra = CaptureToRectArea();
+        using var ra = CaptureToRectArea();
         var list = ra.FindMulti(new RecognitionObject
         {
             RecognitionType = RecognitionTypes.Ocr,
@@ -406,7 +411,11 @@ public class GoToSereniteaPotTask
     private async Task GetReward(CancellationToken ct)
     {
         // 保证与阿圆对话
-        await NewRetry.WaitForAction(() => Bv.FindFAndPress(CaptureToRectArea(), text: this.ayuanHeyString), ct);
+        await NewRetry.WaitForAction(() =>
+        {
+            using var capture = CaptureToRectArea();
+            return Bv.FindFAndPress(capture, text: this.ayuanHeyString);
+        }, ct);
         //var ra = CaptureToRectArea();
         //Bv.FindFAndPress(ra,text:this.ayuanHeyString); // 开始对话
         await Delay(500, ct);
@@ -417,13 +426,13 @@ public class GoToSereniteaPotTask
             Logger.LogInformation("领取尘歌壶奖励:{text}", "领取好感和宝钱");
             await Delay(1000, ct);
 
-            var getAare = CaptureToRectArea();
-            var count = ImageRegionOcrPlatform.Current.OcrWithoutDetector(
-                getAare.DeriveCrop(
+            using var getAare = CaptureToRectArea();
+            using var countArea = getAare.DeriveCrop(
                     getAare.Width * 1801 / 1920,
                     getAare.Height * 609 / 1080,
                     getAare.Width * 75 / 1920,
-                    getAare.Width * 46 / 1920).SrcMat);
+                    getAare.Width * 46 / 1920);
+            var count = ImageRegionOcrPlatform.Current.OcrWithoutDetector(countArea.SrcMat);
             
             var match = System.Text.RegularExpressions.Regex.Match(count, @"(\d+)\s*[/17]\s*(8)");
             var shouldClick = true;
@@ -443,7 +452,7 @@ public class GoToSereniteaPotTask
             }
             
             await Delay(500, ct);
-            var ra = CaptureToRectArea();
+            using var ra = CaptureToRectArea();
             var list = ra.FindMulti(new RecognitionObject
             {
                 RecognitionType = RecognitionTypes.Ocr,
@@ -538,7 +547,8 @@ public class GoToSereniteaPotTask
                     {
                         foreach (var item in buy)
                         {
-                            var itemRo = CaptureToRectArea().Find(item);
+                            using var itemCapture = CaptureToRectArea();
+                            var itemRo = itemCapture.Find(item);
                             if (itemRo.IsExist())
                             {
                                 buyCount++;
@@ -599,7 +609,8 @@ public class GoToSereniteaPotTask
         var quitOption = await _chooseTalkOptionTask.SingleSelectText(this.ayuanByeString, ct, skipTimes: 20);
         if (quitOption != TalkOptionRes.FoundAndClick)
         {
-            if (!Bv.IsInMainUi(CaptureToRectArea()))
+            using var mainUiCapture = CaptureToRectArea();
+            if (!Bv.IsInMainUi(mainUiCapture))
             {
                 Logger.LogError("领取尘歌壶奖励:{text}", "阿圆对话框退出出错。");
                 return;
@@ -615,7 +626,7 @@ public class GoToSereniteaPotTask
             await Delay(300, ct);
             await NewRetry.WaitForAction(() =>
             {
-                var ra = CaptureToRectArea();
+                using var ra = CaptureToRectArea();
                 if (!Bv.IsInMainUi(ra))
                 {
                     ra.Click();

@@ -355,7 +355,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
 
     private async Task<bool> SwitchPartyBefore(PathingTask task)
     {
-        var ra = CaptureToRectArea();
+        using var ra = CaptureToRectArea();
 
         // 切换队伍前判断是否全队死亡 // 可能队伍切换失败导致的死亡
         if (Bv.ClickIfInReviveModal(ra))
@@ -718,9 +718,9 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
             _platform.AutoFetchDispatchAdventurersGuildCountry;
         if (!RunnerContext.Instance.isAutoFetchDispatch && adventurersGuildCountry != "无" && !string.IsNullOrEmpty(adventurersGuildCountry))
         {
-            var ra1 = CaptureToRectArea();
+            using var ra1 = CaptureToRectArea();
             var textRect = new Rect(60, 20, 160, 260);
-            var textMat = new Mat(ra1.SrcMat, textRect);
+            using var textMat = new Mat(ra1.SrcMat, textRect);
             string text = _platform.OcrService.Ocr(textMat);
             if (text.Contains("探索派遣奖励"))
             {
@@ -763,8 +763,11 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
 
     public async Task FaceTo(WaypointForTrack waypoint)
     {
-        var screen = CaptureToRectArea();
-        var position = await GetPosition(screen, waypoint);
+        Point2f position;
+        using (var screen = CaptureToRectArea())
+        {
+            position = await GetPosition(screen, waypoint);
+        }
         var targetOrientation = Navigation.GetTargetOrientation(waypoint, position);
         Logger.LogDebug("朝向点，位置({x2},{y2})", $"{waypoint.GameX:F1}", $"{waypoint.GameY:F1}");
         await WaitUntilRotatedTo(targetOrientation, 2);
@@ -780,8 +783,12 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
         // 切人完成时刻：切人后有约1秒CD，期间无法切换到其他角色（用于生存位）
         var switchAvatarTime = DateTime.UtcNow;
 
-        var screen = CaptureToRectArea();
-        var (position, additionalTimeInMs) = await GetPositionAndTime(screen, waypoint);
+        Point2f position;
+        int additionalTimeInMs;
+        using (var initialScreen = CaptureToRectArea())
+        {
+            (position, additionalTimeInMs) = await GetPositionAndTime(initialScreen, waypoint);
+        }
         var targetOrientation = Navigation.GetTargetOrientation(waypoint, position);
         Logger.LogDebug("粗略接近途经点，位置({x2},{y2})", $"{waypoint.GameX:F1}", $"{waypoint.GameY:F1}");
         await WaitUntilRotatedTo(targetOrientation, 5);
@@ -814,7 +821,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
                 throw new RetryException("路径点执行超时，放弃整条路径");
             }
 
-            screen = CaptureToRectArea();
+            using var screen = CaptureToRectArea();
 
             EndJudgment(screen);
 
@@ -1100,7 +1107,6 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
 
     private async Task MoveCloseTo(WaypointForTrack waypoint)
     {
-        ImageRegion screen;
         Point2f position;
         int targetOrientation;
         Logger.LogDebug("精确接近目标点，位置({x2},{y2})", $"{waypoint.GameX:F1}", $"{waypoint.GameY:F1}");
@@ -1115,7 +1121,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
                 break;
             }
 
-            screen = CaptureToRectArea();
+            using var screen = CaptureToRectArea();
 
             EndJudgment(screen);
 
@@ -1156,7 +1162,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
         {
             MiddleButtonClick();
             await Delay(300, ct);
-            var screen = CaptureToRectArea();
+            using var screen = CaptureToRectArea();
             var position = await GetPosition(screen, waypoint);
             var targetOrientation = Navigation.GetTargetOrientation(waypoint, position);
             await WaitUntilRotatedTo(targetOrientation, 10);
@@ -1362,10 +1368,8 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
      */
     private async Task ResolveAnomalies(ImageRegion? imageRegion = null)
     {
-        if (imageRegion == null)
-        {
-            imageRegion = CaptureToRectArea();
-        }
+        using var ownedImageRegion = imageRegion == null ? CaptureToRectArea() : null;
+        imageRegion ??= ownedImageRegion!;
 
         // 一些异常界面处理
         var cookRa = imageRegion.Find(GetAutoSkipRecognitionObject("Cook", imageRegion));
@@ -1397,7 +1401,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
 
     private async Task AutoSkip()
     {
-        var ra = CaptureToRectArea();
+        using var ra = CaptureToRectArea();
         var disabledUiButtonRa = ra.Find(GetAutoSkipRecognitionObject("DisabledUiButton", ra));
         if (disabledUiButtonRa.IsExist())
         {
@@ -1412,11 +1416,12 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
 
             while (true)
             {
-                ra = CaptureToRectArea();
-                disabledUiButtonRa = ra.Find(GetAutoSkipRecognitionObject("DisabledUiButton", ra));
+                using var captureContent = new CaptureContent(CaptureToRectArea());
+                var currentCapture = captureContent.CaptureRectArea;
+                disabledUiButtonRa = currentCapture.Find(GetAutoSkipRecognitionObject("DisabledUiButton", currentCapture));
                 if (disabledUiButtonRa.IsExist())
                 {
-                    _autoSkipSession.OnCapture(new CaptureContent(ra));
+                    _autoSkipSession.OnCapture(captureContent);
                     noDisabledUiButtonTimes = 0;
                 }
                 else

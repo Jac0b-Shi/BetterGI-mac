@@ -28,7 +28,11 @@ public sealed class WindowsKeyMouseMacroPlatform : IKeyMouseMacroPlatform
     public double DpiScale => TaskContext.Instance().DpiScale;
 
     public void ActivateGameWindow() => SystemControl.ActivateWindow();
-    public double GetCameraOrientation() => CameraOrientation.Compute(TaskControl.CaptureToRectArea().SrcMat);
+    public double GetCameraOrientation()
+    {
+        using var region = TaskControl.CaptureToRectArea();
+        return CameraOrientation.Compute(region.SrcMat);
+    }
 
     public void KeyDown(int windowsVirtualKey)
     {

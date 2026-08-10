@@ -1,4 +1,4 @@
-﻿using BetterGenshinImpact.Core.Simulator;
+using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.Common.Map;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
@@ -63,7 +63,7 @@ public class CameraRotateTask(CancellationToken ct)
         int count = 0;
         while (!ct.IsCancellationRequested)
         {
-            var screen = CaptureToRectArea();
+            using var screen = CaptureToRectArea();
             if (Math.Abs(RotateToApproach(targetOrientation, screen)) < maxDiff)
             {
                 isSuccessful = true;
