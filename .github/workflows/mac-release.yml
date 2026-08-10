@@ -6,22 +6,94 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: mac-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
-    runs-on: macos-15
-    env:
-      DIST_DIR: ${{ github.workspace }}/dist/mac
+  verify-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      bundle_short_version: ${{ steps.version.outputs.bundle_short_version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Verify release tag signature
+        env:
+          RELEASE_SIGNING_FINGERPRINT: B801AC543CB5B2BBF9407DB2EDDF1F5FEF954168
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag_ref="refs/tags/$GITHUB_REF_NAME"
+          if [[ "$(git cat-file -t "$tag_ref")" != "tag" ]]; then
+            echo "Release tags must be signed annotated tags; lightweight tags are not accepted." >&2
+            exit 1
+          fi
+
+          export GNUPGHOME="$RUNNER_TEMP/release-tag-gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          key_file="$RUNNER_TEMP/release-signing-keys.gpg"
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --location \
+            "https://github.com/Jac0b-Shi.gpg" \
+            --output "$key_file"
+
+          mapfile -t downloaded_fingerprints < <(
+            gpg --batch --show-keys --with-colons "$key_file" \
+              | awk -F: '$1 == "fpr" { print toupper($10) }'
+          )
+          if ! printf '%s\n' "${downloaded_fingerprints[@]}" \
+            | grep -Fqx "$RELEASE_SIGNING_FINGERPRINT"; then
+            echo "GitHub's published key set does not contain the pinned release signing key." >&2
+            printf 'Expected fingerprint: %s\n' "$RELEASE_SIGNING_FINGERPRINT" >&2
+            exit 1
+          fi
+
+          gpg --batch --import "$key_file" >/dev/null 2>&1
+
+          if ! verification="$(git verify-tag --raw "$GITHUB_REF_NAME" 2>&1)"; then
+            printf '%s\n' "$verification" >&2
+            echo "Release tag signature verification failed." >&2
+            exit 1
+          fi
+
+          validsig="$({ printf '%s\n' "$verification"; } \
+            | awk '$1 == "[GNUPG:]" && $2 == "VALIDSIG" { print toupper($3) " " toupper($NF) }' \
+            | tail -n 1)"
+          if [[ -z "$validsig" ]]; then
+            printf '%s\n' "$verification" >&2
+            echo "GnuPG did not report a VALIDSIG status for the release tag." >&2
+            exit 1
+          fi
+
+          signing_fingerprint="${validsig%% *}"
+          primary_fingerprint="${validsig##* }"
+          if [[ "$signing_fingerprint" != "$RELEASE_SIGNING_FINGERPRINT" \
+            && "$primary_fingerprint" != "$RELEASE_SIGNING_FINGERPRINT" ]]; then
+            echo "Release tag was signed by an unauthorized key." >&2
+            printf 'Signing fingerprint: %s\n' "$signing_fingerprint" >&2
+            printf 'Primary fingerprint: %s\n' "$primary_fingerprint" >&2
+            printf 'Expected fingerprint: %s\n' "$RELEASE_SIGNING_FINGERPRINT" >&2
+            exit 1
+          fi
+
+          {
+            echo "### Release tag signature"
+            echo
+            echo "- Tag: \`$GITHUB_REF_NAME\`"
+            echo "- Authorized primary fingerprint: \`$RELEASE_SIGNING_FINGERPRINT\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Validate release tag
         id: version
@@ -57,6 +129,19 @@ jobs:
           else
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
+
+  release:
+    needs: verify-tag
+    runs-on: macos-15
+    permissions:
+      contents: write
+    env:
+      DIST_DIR: ${{ github.workspace }}/dist/mac
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -172,7 +257,7 @@ jobs:
           CONFIGURATION: Release
           MACGI_APP_OUTPUT_ROOT: ${{ runner.temp }}/bettergi-release
           MACGI_APP_NAME: BetterGI.app
-          MACGI_SHORT_VERSION: ${{ steps.version.outputs.bundle_short_version }}
+          MACGI_SHORT_VERSION: ${{ needs.verify-tag.outputs.bundle_short_version }}
           MACGI_BUNDLE_VERSION: ${{ github.run_number }}
           MACGI_BUNDLE_IDENTIFIER: ${{ steps.release_mode.outputs.bundle_identifier }}
           MACGI_ALLOW_ADHOC_SIGNING: ${{ steps.release_mode.outputs.adhoc }}
@@ -210,7 +295,7 @@ jobs:
           ARTIFACT_SUFFIX: ${{ steps.release_mode.outputs.artifact_suffix }}
           RELEASE_MODE: ${{ steps.release_mode.outputs.mode }}
           SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.verify-tag.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -243,7 +328,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BetterGI-mac-${{ steps.version.outputs.version }}-arm64${{ steps.release_mode.outputs.artifact_suffix }}
+          name: BetterGI-mac-${{ needs.verify-tag.outputs.version }}-arm64${{ steps.release_mode.outputs.artifact_suffix }}
           path: dist/mac/*
           if-no-files-found: error
           retention-days: 14
@@ -251,9 +336,9 @@ jobs:
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+          PRERELEASE: ${{ needs.verify-tag.outputs.prerelease }}
           RELEASE_MODE: ${{ steps.release_mode.outputs.mode }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.verify-tag.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
