@@ -72,6 +72,26 @@ public interface IKeyInputTransport
     void ReleaseAll();
 }
 
+public interface IMusicPlaybackGate
+{
+    bool IsAvailable(CancellationToken cancellationToken);
+
+    Task WaitUntilAvailableAsync(CancellationToken cancellationToken);
+}
+
+public sealed class MusicInputUnavailableException : InvalidOperationException
+{
+    public MusicInputUnavailableException()
+        : base("Music input is temporarily unavailable.")
+    {
+    }
+
+    public MusicInputUnavailableException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}
+
 public interface IMusicPlaybackService
 {
     event EventHandler<PlaybackSnapshot>? SnapshotChanged;

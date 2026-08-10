@@ -2,6 +2,7 @@ using BetterGenshinImpact.Core.Host.Runtime;
 using BetterGenshinImpact.Core.Host.Protocol;
 using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.Core.Script;
+using BetterGenshinImpact.GameTask.Music.Service;
 using BetterGenshinImpact.Verification.Framework;
 using Newtonsoft.Json.Linq;
 using System.Net.Sockets;
@@ -44,6 +45,18 @@ public sealed class RuntimeCancellationSuite : IVerificationSuite
         var coordinator = new ForegroundInputCoordinator(
             new PlatformCallbackChannel(), "verification", CancellationToken.None,
             TimeSpan.FromMilliseconds(5), () => false);
+        var musicDispatchRejected = false;
+        try
+        {
+            coordinator.DispatchOnce(JObject.FromObject(new { action = "keyDown" }));
+        }
+        catch (MusicInputUnavailableException)
+        {
+            musicDispatchRejected = true;
+        }
+        context.Require(
+            musicDispatchRejected,
+            "Music key dispatch waited for focus instead of reporting temporary unavailability.");
         using var operationCancellation = new CancellationTokenSource();
         var wait = Task.Run(() =>
         {

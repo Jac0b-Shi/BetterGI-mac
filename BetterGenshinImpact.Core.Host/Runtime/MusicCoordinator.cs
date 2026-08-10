@@ -1,5 +1,7 @@
 using BetterGenshinImpact.GameTask.Music.Model;
 using BetterGenshinImpact.GameTask.Music.Service;
+using BetterGenshinImpact.Core.Script;
+using BetterGenshinImpact.GameTask;
 using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
@@ -16,10 +18,16 @@ public sealed class MusicCoordinator : IDisposable
     private readonly MusicPlaybackService _playbackService;
     private readonly SemaphoreSlim _mutationLock = new(1, 1);
     private IReadOnlyList<PerformanceScore> _queue = [];
+    private IReadOnlyList<PerformanceScore> _playableQueue = [];
+    private IReadOnlyList<int> _playableCatalogIndexes = [];
     private string _rootFolder = string.Empty;
     private MusicPlaybackMode _playbackMode = MusicPlaybackMode.Sequential;
     private CancellationTokenSource? _playbackCancellation;
     private Task? _playbackTask;
+    private int _startingCatalogIndex = -1;
+    private double _startingSpeed = 1;
+    private int _sessionStarting;
+    private int _sessionGeneration;
     private int _disposed;
 
     public MusicCoordinator(
@@ -44,7 +52,8 @@ public sealed class MusicCoordinator : IDisposable
             _timelineBuilder,
             _profileService,
             [transport],
-            loggerFactory.CreateLogger<MusicPlaybackService>());
+            loggerFactory.CreateLogger<MusicPlaybackService>(),
+            new MacMusicPlaybackGate(input, hostCancellationToken));
         _playbackService.SnapshotChanged += OnSnapshotChanged;
     }
 
@@ -60,12 +69,19 @@ public sealed class MusicCoordinator : IDisposable
         await _mutationLock.WaitAsync(_hostCancellationToken);
         try
         {
-            if (_playbackService.Snapshot.State != MusicPlaybackState.Stopped)
+            if (_playbackService.Snapshot.State != MusicPlaybackState.Stopped ||
+                Volatile.Read(ref _sessionStarting) != 0)
             {
                 throw new InvalidOperationException("播放期间不能切换曲谱目录。");
             }
 
             _queue = await _libraryService.ScanAsync(rootFolder, _hostCancellationToken);
+            _playableCatalogIndexes = _queue
+                .Select((score, index) => (score, index))
+                .Where(entry => entry.score.IsValid)
+                .Select(entry => entry.index)
+                .ToArray();
+            _playableQueue = _playableCatalogIndexes.Select(index => _queue[index]).ToArray();
             foreach (var score in _queue.Where(score => score.IsValid))
             {
                 _timelineBuilder.Build(
@@ -74,7 +90,6 @@ public sealed class MusicCoordinator : IDisposable
                     score.Transpose);
             }
             _rootFolder = rootFolder;
-            _libraryService.Watch(rootFolder);
             var history = _stateStore.State.MusicFolderHistory;
             history.RemoveAll(path => string.Equals(path, rootFolder, StringComparison.Ordinal));
             history.Insert(0, rootFolder);
@@ -106,7 +121,9 @@ public sealed class MusicCoordinator : IDisposable
                 mappingMode = profile.MappingMode.ToString(),
             }).ToArray(),
             tracks = _queue.Select(ToTrack).ToArray(),
-            playback = ToSnapshot(_playbackService.Snapshot),
+            savedTrackFullPath = _stateStore.State.CurrentTrackFullPath,
+            savedPositionMilliseconds = _stateStore.State.CurrentPositionMilliseconds,
+            playback = ToSnapshotForCatalog(_playbackService.Snapshot),
         };
     }
 
@@ -120,9 +137,9 @@ public sealed class MusicCoordinator : IDisposable
         await _mutationLock.WaitAsync(_hostCancellationToken);
         try
         {
-            if (_queue.Count == 0)
+            if (_playableQueue.Count == 0)
             {
-                throw new InvalidOperationException("曲库为空，请先选择并扫描曲谱目录。");
+                throw new InvalidOperationException("曲库中没有可播放的有效曲谱。");
             }
 
             if (index < 0 || index >= _queue.Count)
@@ -130,31 +147,70 @@ public sealed class MusicCoordinator : IDisposable
                 throw new ArgumentOutOfRangeException(nameof(index));
             }
 
-            if (_playbackService.Snapshot.State != MusicPlaybackState.Stopped)
+            if (_playbackService.Snapshot.State != MusicPlaybackState.Stopped ||
+                Volatile.Read(ref _sessionStarting) != 0)
             {
                 throw new InvalidOperationException("已有曲目正在播放。");
+            }
+
+            var playableIndex = FindPlayableIndex(_playableCatalogIndexes, index);
+            if (playableIndex < 0)
+            {
+                throw new InvalidOperationException("所选曲谱解析失败，无法播放。");
             }
 
             _playbackMode = playbackMode;
             _playbackCancellation?.Dispose();
             _playbackCancellation = CancellationTokenSource.CreateLinkedTokenSource(
                 _hostCancellationToken);
-            using (_input.UseCancellationToken(_playbackCancellation.Token))
+            _startingCatalogIndex = index;
+            _startingSpeed = Math.Clamp(speed, 0.5, 2.0);
+            _stateStore.State.CurrentTrackFullPath = _queue[index].FullPath;
+            _stateStore.State.CurrentPositionMilliseconds =
+                Math.Max(0, startPositionMilliseconds);
+            var sessionGeneration = Interlocked.Increment(ref _sessionGeneration);
+            Volatile.Write(ref _sessionStarting, 1);
+            try
             {
-                _playbackTask = _playbackService.RunPlaylistAsync(
-                    _queue,
-                    index,
-                    new MusicPlaybackOptions
+                var sessionCancellation = _playbackCancellation;
+                _playbackTask = new TaskRunner().StartThread(
+                    async () =>
                     {
-                        InputMode = MusicInputMode.ForegroundSendInput,
-                        PlaybackMode = playbackMode,
-                        Speed = speed,
-                        StartPosition = TimeSpan.FromMilliseconds(
-                            Math.Max(0, startPositionMilliseconds)),
+                        if (Volatile.Read(ref _sessionGeneration) == sessionGeneration)
+                        {
+                            Volatile.Write(ref _sessionStarting, 0);
+                        }
+                        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+                            sessionCancellation.Token,
+                            CancellationContext.Instance.Cts.Token);
+                        using (_input.UseCancellationToken(linked.Token))
+                        {
+                            await _playbackService.RunPlaylistAsync(
+                                _playableQueue,
+                                playableIndex,
+                                new MusicPlaybackOptions
+                                {
+                                    InputMode = MusicInputMode.ForegroundSendInput,
+                                    PlaybackMode = playbackMode,
+                                    Speed = speed,
+                                    StartPosition = TimeSpan.FromMilliseconds(
+                                        Math.Max(0, startPositionMilliseconds)),
+                                },
+                                linked.Token);
+                        }
                     },
-                    _playbackCancellation.Token);
+                    sessionCancellation.Token,
+                    waitForInputDuringInitialization: false);
             }
-            _ = ObservePlaybackAsync(_playbackTask);
+            catch
+            {
+                Volatile.Write(ref _sessionStarting, 0);
+                _startingCatalogIndex = -1;
+                _playbackCancellation.Dispose();
+                _playbackCancellation = null;
+                throw;
+            }
+            _ = ObservePlaybackAsync(_playbackTask, sessionGeneration);
             return State();
         }
         finally
@@ -178,8 +234,9 @@ public sealed class MusicCoordinator : IDisposable
 
     public async Task<object> StopAsync()
     {
-        _playbackService.Stop();
         _playbackCancellation?.Cancel();
+        Volatile.Write(ref _sessionStarting, 0);
+        _playbackService.Stop();
         var task = _playbackTask;
         if (task is not null)
         {
@@ -237,7 +294,8 @@ public sealed class MusicCoordinator : IDisposable
         await _mutationLock.WaitAsync(_hostCancellationToken);
         try
         {
-            if (_playbackService.Snapshot.State != MusicPlaybackState.Stopped)
+            if (_playbackService.Snapshot.State != MusicPlaybackState.Stopped ||
+                Volatile.Read(ref _sessionStarting) != 0)
             {
                 throw new InvalidOperationException("播放期间不能修改曲目映射。");
             }
@@ -284,15 +342,16 @@ public sealed class MusicCoordinator : IDisposable
         }
 
         _playbackService.SnapshotChanged -= OnSnapshotChanged;
-        _playbackService.Stop();
         _playbackCancellation?.Cancel();
+        Volatile.Write(ref _sessionStarting, 0);
+        _playbackService.Stop();
         _playbackCancellation?.Dispose();
         _libraryService.Dispose();
         _stateStore.Save();
         _mutationLock.Dispose();
     }
 
-    private async Task ObservePlaybackAsync(Task task)
+    private async Task ObservePlaybackAsync(Task task, int sessionGeneration)
     {
         try
         {
@@ -307,18 +366,23 @@ public sealed class MusicCoordinator : IDisposable
         }
         finally
         {
+            if (Volatile.Read(ref _sessionGeneration) == sessionGeneration)
+            {
+                Volatile.Write(ref _sessionStarting, 0);
+                _startingCatalogIndex = -1;
+            }
             SavePlaybackState();
         }
     }
 
     private void OnSnapshotChanged(object? sender, PlaybackSnapshot snapshot)
     {
-        if (snapshot.QueueIndex >= 0 && snapshot.QueueIndex < _queue.Count)
+        var catalogIndex = ToCatalogIndex(snapshot.QueueIndex);
+        if (catalogIndex >= 0 && catalogIndex < _queue.Count)
         {
-            _stateStore.State.CurrentTrackFullPath = _queue[snapshot.QueueIndex].FullPath;
+            _stateStore.State.CurrentTrackFullPath = _queue[catalogIndex].FullPath;
+            _stateStore.State.CurrentPositionMilliseconds = snapshot.Position.TotalMilliseconds;
         }
-
-        _stateStore.State.CurrentPositionMilliseconds = snapshot.Position.TotalMilliseconds;
     }
 
     private void SavePlaybackState()
@@ -363,8 +427,25 @@ public sealed class MusicCoordinator : IDisposable
         };
     }
 
-    private static object ToSnapshot(PlaybackSnapshot snapshot)
+    private object ToSnapshotForCatalog(PlaybackSnapshot snapshot)
     {
+        if (snapshot.State == MusicPlaybackState.Stopped &&
+            Volatile.Read(ref _sessionStarting) != 0 &&
+            _startingCatalogIndex >= 0 &&
+            _startingCatalogIndex < _queue.Count)
+        {
+            var score = _queue[_startingCatalogIndex];
+            return new
+            {
+                state = MusicPlaybackState.Playing.ToString(),
+                positionMilliseconds = 0d,
+                durationMilliseconds = score.Duration.TotalMilliseconds,
+                speed = _startingSpeed,
+                trackName = score.DisplayTitle,
+                queueIndex = _startingCatalogIndex,
+            };
+        }
+
         return new
         {
             state = snapshot.State.ToString(),
@@ -372,9 +453,34 @@ public sealed class MusicCoordinator : IDisposable
             durationMilliseconds = snapshot.Duration.TotalMilliseconds,
             speed = snapshot.Speed,
             trackName = snapshot.TrackName,
-            queueIndex = snapshot.QueueIndex,
+            queueIndex = MapPlayableIndex(_playableCatalogIndexes, snapshot.QueueIndex),
         };
     }
+
+    internal static int MapPlayableIndex(
+        IReadOnlyList<int> playableCatalogIndexes,
+        int playableIndex) =>
+        playableIndex >= 0 && playableIndex < playableCatalogIndexes.Count
+            ? playableCatalogIndexes[playableIndex]
+            : -1;
+
+    internal static int FindPlayableIndex(
+        IReadOnlyList<int> playableCatalogIndexes,
+        int catalogIndex)
+    {
+        for (var index = 0; index < playableCatalogIndexes.Count; index++)
+        {
+            if (playableCatalogIndexes[index] == catalogIndex)
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private int ToCatalogIndex(int playableIndex) =>
+        MapPlayableIndex(_playableCatalogIndexes, playableIndex);
 
     private void ThrowIfDisposed()
     {

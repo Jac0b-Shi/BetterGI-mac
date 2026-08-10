@@ -12,6 +12,15 @@ public interface ITaskRunnerPlatform
     bool RethrowUnexpectedExceptions => false;
     bool ThrowOnLockFailure => false;
     void InitializeTask();
+    void InitializeTask(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        InitializeTask();
+    }
+    void InitializeTask(CancellationToken cancellationToken, bool waitForInput)
+    {
+        InitializeTask(cancellationToken);
+    }
     void EndTask();
     void NotifyCancellation(string message);
     void NotifyError(string message, Exception exception);

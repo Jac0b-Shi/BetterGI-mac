@@ -28,6 +28,22 @@ public sealed class MacTaskRunnerPlatform(
         inputCoordinator.WaitForGameFocus(hostCancellationToken);
     }
 
+    public void InitializeTask(CancellationToken cancellationToken)
+    {
+        InitializeTask(cancellationToken, waitForInput: true);
+    }
+
+    public void InitializeTask(CancellationToken cancellationToken, bool waitForInput)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+            hostCancellationToken, cancellationToken);
+        _ = Invoke("window.metrics", null, linked.Token);
+        if (waitForInput)
+        {
+            inputCoordinator.WaitForGameFocus(linked.Token);
+        }
+    }
+
     public void EndTask() => inputCoordinator.ReleaseAllWhenFocused(hostCancellationToken);
 
     public void NotifyCancellation(string message) =>
@@ -43,8 +59,17 @@ public sealed class MacTaskRunnerPlatform(
             throw new InvalidDataException($"{method} did not return acknowledged=true.");
     }
 
-    private JToken Invoke(string method, JObject? parameters) =>
-        callbacks.InvokeAsync(method, parameters, sessionToken, hostCancellationToken)
+    private JToken Invoke(
+        string method,
+        JObject? parameters,
+        CancellationToken cancellationToken = default) =>
+        callbacks.InvokeAsync(
+                method,
+                parameters,
+                sessionToken,
+                cancellationToken.CanBeCanceled
+                    ? cancellationToken
+                    : hostCancellationToken)
             .GetAwaiter().GetResult()
         ?? throw new InvalidDataException($"{method} returned an empty response.");
 }

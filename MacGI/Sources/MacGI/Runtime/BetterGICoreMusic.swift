@@ -82,6 +82,8 @@ struct BetterGIMusicPlaybackSnapshot: Equatable, Sendable {
 struct BetterGIMusicState: Equatable, Sendable {
     let rootFolder: String
     let folderHistory: [String]
+    let savedTrackFullPath: String
+    let savedPositionMilliseconds: Double
     let playbackMode: BetterGIMusicPlaybackMode
     let profiles: [BetterGIMusicProfile]
     let tracks: [BetterGIMusicTrack]
@@ -90,6 +92,8 @@ struct BetterGIMusicState: Equatable, Sendable {
     static let empty = BetterGIMusicState(
         rootFolder: "",
         folderHistory: [],
+        savedTrackFullPath: "",
+        savedPositionMilliseconds: 0,
         playbackMode: .sequential,
         profiles: [],
         tracks: [],
@@ -220,6 +224,8 @@ extension BetterGICoreRPCClient {
                 }
                 return value
             },
+            savedTrackFullPath: try string(root, "savedTrackFullPath"),
+            savedPositionMilliseconds: try number(root, "savedPositionMilliseconds"),
             playbackMode: playbackMode,
             profiles: profiles,
             tracks: tracks,
@@ -287,12 +293,14 @@ extension BetterGICoreProcessSupervisor {
     func playMusic(
         index: Int,
         speed: Double,
-        playbackMode: BetterGIMusicPlaybackMode
+        playbackMode: BetterGIMusicPlaybackMode,
+        startPositionMilliseconds: Double = 0
     ) throws -> BetterGIMusicState {
         try runningClient().playMusic(
             index: index,
             speed: speed,
-            playbackMode: playbackMode)
+            playbackMode: playbackMode,
+            startPositionMilliseconds: startPositionMilliseconds)
     }
 
     func musicCommand(_ method: String) throws -> BetterGIMusicState {

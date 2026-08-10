@@ -14,13 +14,16 @@ public sealed class MusicPlaybackService(
     IMusicTimelineBuilder timelineBuilder,
     IInstrumentProfileService profileService,
     IEnumerable<IKeyInputTransport> transports,
-    ILogger<MusicPlaybackService>? logger = null) : IMusicPlaybackService
+    ILogger<MusicPlaybackService>? logger = null,
+    IMusicPlaybackGate? playbackGate = null) : IMusicPlaybackService
 {
     private readonly ILogger<MusicPlaybackService> _logger =
         logger ?? NullLogger<MusicPlaybackService>.Instance;
     private readonly object _syncRoot = new();
     private readonly Dictionary<MusicInputMode, IKeyInputTransport> _transports =
         transports.ToDictionary(x => x.Mode);
+    private readonly IMusicPlaybackGate _playbackGate =
+        playbackGate ?? AlwaysAvailableMusicPlaybackGate.Instance;
 
     private PlaybackSnapshot _snapshot = new();
     private IKeyInputTransport? _transport;
@@ -314,7 +317,20 @@ public sealed class MusicPlaybackService(
 
             if (rebuildHeldKeys)
             {
-                RebuildHeldKeys(position);
+                try
+                {
+                    RebuildHeldKeys(position);
+                }
+                catch (MusicInputUnavailableException)
+                {
+                    using var rebuildCancellation =
+                        CancellationTokenSource.CreateLinkedTokenSource(
+                            controlToken, cancellationToken);
+                    await FreezeUntilInputAvailableAsync(
+                        rebuildCancellation.Token,
+                        forceFreeze: true);
+                    continue;
+                }
             }
 
             var startIndex = FindFirstEventAtOrAfter(position);
@@ -324,13 +340,26 @@ public sealed class MusicPlaybackService(
                 {
                     var item = _timeline.Events[eventIndex];
                     await WaitUntilAsync(item.Time, controlToken, cancellationToken);
-                    if (item.Type == PerformanceEventType.KeyDown)
+                    try
                     {
-                        _transport?.KeyDown(item.Key);
+                        if (item.Type == PerformanceEventType.KeyDown)
+                        {
+                            _transport?.KeyDown(item.Key);
+                        }
+                        else
+                        {
+                            _transport?.KeyUp(item.Key);
+                        }
                     }
-                    else
+                    catch (MusicInputUnavailableException)
                     {
-                        _transport?.KeyUp(item.Key);
+                        using var inputCancellation =
+                            CancellationTokenSource.CreateLinkedTokenSource(
+                                controlToken, cancellationToken);
+                        await FreezeUntilInputAvailableAsync(
+                            inputCancellation.Token,
+                            forceFreeze: true);
+                        throw new OperationCanceledException(controlToken);
                     }
                 }
 
@@ -361,6 +390,11 @@ public sealed class MusicPlaybackService(
             CancellationTokenSource.CreateLinkedTokenSource(controlToken, cancellationToken);
         while (true)
         {
+            if (await FreezeUntilInputAvailableAsync(linkedCancellationTokenSource.Token))
+            {
+                throw new OperationCanceledException(controlToken);
+            }
+
             double speed;
             TimeSpan currentPosition;
             lock (_syncRoot)
@@ -383,6 +417,45 @@ public sealed class MusicPlaybackService(
                 : realDelay;
             await Task.Delay(delay, linkedCancellationTokenSource.Token);
         }
+    }
+
+    private async Task<bool> FreezeUntilInputAvailableAsync(
+        CancellationToken cancellationToken,
+        bool forceFreeze = false)
+    {
+        if (!forceFreeze && _playbackGate.IsAvailable(cancellationToken))
+        {
+            return false;
+        }
+
+        lock (_syncRoot)
+        {
+            if (_state != MusicPlaybackState.Playing)
+            {
+                return false;
+            }
+
+            _anchorPosition = GetCurrentPositionLocked();
+            _anchorTimestamp = 0;
+            _needsHeldKeyRebuild = true;
+            _snapshot = CreateSnapshotLocked();
+        }
+
+        _transport?.ReleaseAll();
+        PublishSnapshot();
+        await _playbackGate.WaitUntilAvailableAsync(cancellationToken);
+
+        lock (_syncRoot)
+        {
+            if (_state == MusicPlaybackState.Playing)
+            {
+                _anchorTimestamp = Stopwatch.GetTimestamp();
+                _snapshot = CreateSnapshotLocked();
+            }
+        }
+
+        PublishSnapshot();
+        return true;
     }
 
     private void PrepareTrack(
@@ -544,5 +617,22 @@ public sealed class MusicPlaybackService(
         Next,
         Previous,
         Stop
+    }
+
+    private sealed class AlwaysAvailableMusicPlaybackGate : IMusicPlaybackGate
+    {
+        public static readonly AlwaysAvailableMusicPlaybackGate Instance = new();
+
+        public bool IsAvailable(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return true;
+        }
+
+        public Task WaitUntilAvailableAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
     }
 }

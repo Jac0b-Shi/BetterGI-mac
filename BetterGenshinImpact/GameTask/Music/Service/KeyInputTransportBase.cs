@@ -8,22 +8,52 @@ namespace BetterGenshinImpact.GameTask.Music.Service;
 public abstract class KeyInputTransportBase : IKeyInputTransport
 {
     private readonly object _syncRoot = new();
-    private readonly HashSet<char> _pressedKeys = [];
+    private readonly Dictionary<char, long> _pressedKeys = [];
+    private long _generation;
 
     public abstract MusicInputMode Mode { get; }
 
     public void KeyDown(char key)
     {
         key = NormalizeKey(key);
+        long generation;
         lock (_syncRoot)
         {
-            if (!_pressedKeys.Add(key))
+            if (_pressedKeys.ContainsKey(key))
             {
                 return;
             }
 
+            generation = ++_generation;
+            _pressedKeys.Add(key, generation);
+        }
+
+        try
+        {
             SendKeyDown(key);
         }
+        catch
+        {
+            lock (_syncRoot)
+            {
+                if (_pressedKeys.TryGetValue(key, out var current) && current == generation)
+                {
+                    _pressedKeys.Remove(key);
+                }
+            }
+            throw;
+        }
+
+        lock (_syncRoot)
+        {
+            if (_pressedKeys.TryGetValue(key, out var current) && current == generation)
+            {
+                return;
+            }
+        }
+
+        // ReleaseAll may have raced with the send. Compensate after the in-flight down.
+        SendKeyUp(key);
     }
 
     public void KeyUp(char key)
@@ -36,8 +66,9 @@ public abstract class KeyInputTransportBase : IKeyInputTransport
                 return;
             }
 
-            SendKeyUp(key);
         }
+
+        SendKeyUp(key);
     }
 
     public void ReleaseAll()
@@ -45,7 +76,7 @@ public abstract class KeyInputTransportBase : IKeyInputTransport
         char[] pressedKeys;
         lock (_syncRoot)
         {
-            pressedKeys = _pressedKeys.ToArray();
+            pressedKeys = _pressedKeys.Keys.ToArray();
             _pressedKeys.Clear();
         }
 

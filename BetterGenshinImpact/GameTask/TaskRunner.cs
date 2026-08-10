@@ -140,6 +140,96 @@ public class TaskRunner
             clearCancellationContextOnCompletion));
     }
 
+    /// <summary>
+    /// Synchronously acquires the independent-task semaphore, then runs on a worker thread.
+    /// This lets RPC callers report lock contention before returning success.
+    /// </summary>
+    public Task StartThread(
+        Func<Task> action,
+        CancellationToken startupCancellationToken = default,
+        bool waitForInputDuringInitialization = true,
+        bool resetCancellationContext = true,
+        bool clearCancellationContextOnLockFailure = false,
+        bool clearCancellationContextOnCompletion = true)
+    {
+        var taskSemaphore = TaskRunnerPlatform.Current.TaskSemaphore;
+        if (!taskSemaphore.Wait(0))
+        {
+            _logger.LogError("任务启动失败：当前存在正在运行中的独立任务，请不要重复执行任务！");
+            if (clearCancellationContextOnLockFailure)
+            {
+                CancellationContext.Instance.Clear();
+            }
+            if (TaskRunnerPlatform.Current.ThrowOnLockFailure)
+            {
+                throw new InvalidOperationException("TaskRunner could not acquire the task semaphore.");
+            }
+            return Task.CompletedTask;
+        }
+
+        return Task.Run(async () =>
+        {
+            try
+            {
+                _logger.LogInformation("→ {Text}", _name + "任务启动！");
+                if (resetCancellationContext)
+                {
+                    CancellationContext.Instance.Set();
+                }
+                RunnerContext.Instance.Clear();
+                TaskRunnerPlatform.Current.InitializeTask(
+                    startupCancellationToken,
+                    waitForInputDuringInitialization);
+                await action();
+            }
+            catch (NormalEndException e)
+            {
+                TaskRunnerPlatform.Current.NotifyCancellation("任务手动取消，或正常结束");
+                _logger.LogInformation("任务中断:{Msg}", e.Message);
+                if (RunnerContext.Instance.IsContinuousRunGroup)
+                {
+                    throw;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                TaskRunnerPlatform.Current.NotifyCancellation("任务被手动取消");
+                _logger.LogInformation("任务中断:{Msg}", "任务被取消");
+                if (RunnerContext.Instance.IsContinuousRunGroup)
+                {
+                    throw;
+                }
+            }
+            catch (Exception e)
+            {
+                TaskRunnerPlatform.Current.NotifyError("任务执行异常", e);
+                _logger.LogError(e.Message);
+                _logger.LogDebug(e.StackTrace);
+                if (TaskRunnerPlatform.Current.RethrowUnexpectedExceptions)
+                {
+                    throw;
+                }
+            }
+            finally
+            {
+                try
+                {
+                    End();
+                    _logger.LogInformation("→ {Text}", _name + "任务结束");
+                }
+                finally
+                {
+                    if (clearCancellationContextOnCompletion)
+                    {
+                        CancellationContext.Instance.Clear();
+                    }
+                    RunnerContext.Instance.Clear();
+                    taskSemaphore.Release();
+                }
+            }
+        });
+    }
+
     public async Task RunSoloTaskAsync(ISoloTask soloTask)
     {
         // 启动等待之前先进行取消操作的初始化，便于在任务开始前终止任务.

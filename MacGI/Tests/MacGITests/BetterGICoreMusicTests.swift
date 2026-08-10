@@ -9,6 +9,8 @@ struct BetterGICoreMusicTests {
         let state = try BetterGICoreRPCClient.decodeMusicState([
             "rootFolder": "/tmp/music",
             "folderHistory": ["/tmp/music"],
+            "savedTrackFullPath": "/tmp/music/demo.json",
+            "savedPositionMilliseconds": 125.0,
             "playbackMode": "Sequential",
             "profiles": [["name": "风物之诗琴", "mappingMode": "MelodicOctaveFold"]],
             "tracks": [[
@@ -47,5 +49,6 @@ struct BetterGICoreMusicTests {
         #expect(state.playback.state == .playing)
         #expect(state.playback.speed == 1.25)
         #expect(state.playback.queueIndex == 0)
+        #expect(state.savedPositionMilliseconds == 125)
     }
 }

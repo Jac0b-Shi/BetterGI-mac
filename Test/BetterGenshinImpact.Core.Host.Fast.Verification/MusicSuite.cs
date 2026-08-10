@@ -1,7 +1,9 @@
 using BetterGenshinImpact.GameTask.Music.Model;
 using BetterGenshinImpact.GameTask.Music.Service;
+using BetterGenshinImpact.Core.Host.Runtime;
 using BetterGenshinImpact.Verification.Framework;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 
 namespace BetterGenshinImpact.Core.Host.Fast.Verification;
 
@@ -67,10 +69,165 @@ public sealed class MusicSuite : IVerificationSuite
                 transport.Events.SequenceEqual(
                     new[] { "down:Q", "up:Q", "down:W", "up:W" }),
                 "Music input transport did not deduplicate key edges or release held keys.");
+            context.Require(
+                MusicCoordinator.FindPlayableIndex([0, 2], 1) == -1 &&
+                MusicCoordinator.FindPlayableIndex([0, 2], 2) == 1 &&
+                MusicCoordinator.MapPlayableIndex([0, 2], 1) == 2,
+                "Music queue did not preserve catalog indexes while excluding invalid scores.");
+
+            await VerifyPlaybackControlsAsync(context, score, profile, cancellationToken);
+            await VerifyFocusFreezeAndStopAsync(context, score, profile, cancellationToken);
+            await VerifyReleaseDoesNotWaitForSendAsync(context, cancellationToken);
         }
         finally
         {
             Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static async Task VerifyPlaybackControlsAsync(
+        VerificationContext context,
+        PerformanceScore score,
+        InstrumentProfile profile,
+        CancellationToken cancellationToken)
+    {
+        var profileService = new FixedProfileService(profile);
+        var service = new MusicPlaybackService(
+            new MusicTimelineBuilder(profileService),
+            profileService,
+            [new RecordingTransport()]);
+        var playback = service.RunPlaylistAsync(
+            [score, score],
+            0,
+            new MusicPlaybackOptions
+            {
+                InputMode = MusicInputMode.ForegroundSendInput,
+                PlaybackMode = MusicPlaybackMode.Sequential,
+            },
+            cancellationToken);
+
+        await Task.Delay(40, cancellationToken);
+        service.Pause();
+        var pausedPosition = service.Snapshot.Position;
+        await Task.Delay(60, cancellationToken);
+        context.Require(
+            service.Snapshot.State == MusicPlaybackState.Paused &&
+            Math.Abs((service.Snapshot.Position - pausedPosition).TotalMilliseconds) < 15,
+            "Music playback clock advanced while paused.");
+
+        service.Seek(TimeSpan.FromMilliseconds(500));
+        context.Require(
+            service.Snapshot.State == MusicPlaybackState.Paused &&
+            Math.Abs(service.Snapshot.Position.TotalMilliseconds - 500) < 15,
+            "Music seek did not update the paused position.");
+        service.Resume();
+        await Task.Delay(30, cancellationToken);
+        context.Require(
+            service.Snapshot.State == MusicPlaybackState.Playing &&
+            service.Snapshot.Position > TimeSpan.FromMilliseconds(500),
+            "Music playback did not resume from the seek position.");
+
+        service.Next();
+        await WaitForAsync(
+            () => service.Snapshot.QueueIndex == 1,
+            TimeSpan.FromSeconds(1),
+            cancellationToken);
+        service.Previous();
+        await WaitForAsync(
+            () => service.Snapshot.QueueIndex == 0,
+            TimeSpan.FromSeconds(1),
+            cancellationToken);
+        service.Stop();
+        await playback.WaitAsync(TimeSpan.FromSeconds(1), cancellationToken);
+        context.Require(
+            service.Snapshot.State == MusicPlaybackState.Stopped,
+            "Music playback did not stop after exercising playback controls.");
+    }
+
+    private static async Task VerifyFocusFreezeAndStopAsync(
+        VerificationContext context,
+        PerformanceScore score,
+        InstrumentProfile profile,
+        CancellationToken cancellationToken)
+    {
+        var profileService = new FixedProfileService(profile);
+        var gate = new ManualPlaybackGate();
+        var service = new MusicPlaybackService(
+            new MusicTimelineBuilder(profileService),
+            profileService,
+            [new RecordingTransport()],
+            playbackGate: gate);
+        var playback = service.RunPlaylistAsync(
+            [score],
+            0,
+            new MusicPlaybackOptions
+            {
+                InputMode = MusicInputMode.ForegroundSendInput,
+                PlaybackMode = MusicPlaybackMode.Sequential,
+            },
+            cancellationToken);
+
+        await Task.Delay(200, cancellationToken);
+        context.Require(
+            service.Snapshot.Position < TimeSpan.FromMilliseconds(50),
+            "Music playback position advanced while input focus was unavailable.");
+        service.Pause();
+        await WaitForAsync(
+            () => service.Snapshot.State == MusicPlaybackState.Paused,
+            TimeSpan.FromMilliseconds(300),
+            cancellationToken);
+        service.Seek(TimeSpan.FromMilliseconds(300));
+        service.Resume();
+        await Task.Delay(80, cancellationToken);
+        context.Require(
+            service.Snapshot.Position < TimeSpan.FromMilliseconds(340),
+            "Pause, seek, or resume failed to interrupt the blocked focus wait.");
+        gate.Open();
+        await Task.Delay(60, cancellationToken);
+        context.Require(
+            service.Snapshot.Position > TimeSpan.FromMilliseconds(300) &&
+            service.Snapshot.Position < TimeSpan.FromMilliseconds(440),
+            "Music playback caught up elapsed wall time after focus returned.");
+
+        gate.Close();
+        await Task.Delay(30, cancellationToken);
+        var started = Stopwatch.GetTimestamp();
+        service.Stop();
+        await playback.WaitAsync(TimeSpan.FromSeconds(1), cancellationToken);
+        context.Require(
+            Stopwatch.GetElapsedTime(started) < TimeSpan.FromMilliseconds(300),
+            "Stopping music did not promptly cancel the focus wait.");
+    }
+
+    private static async Task VerifyReleaseDoesNotWaitForSendAsync(
+        VerificationContext context,
+        CancellationToken cancellationToken)
+    {
+        var transport = new BlockingTransport();
+        var keyDown = Task.Run(() => transport.KeyDown('Q'), cancellationToken);
+        await transport.SendStarted.Task.WaitAsync(TimeSpan.FromSeconds(1), cancellationToken);
+        var release = Task.Run(transport.ReleaseAll, cancellationToken);
+        await release.WaitAsync(TimeSpan.FromMilliseconds(300), cancellationToken);
+        transport.AllowSend.TrySetResult();
+        await keyDown.WaitAsync(TimeSpan.FromSeconds(1), cancellationToken);
+        context.Require(
+            transport.KeyUpCount >= 1,
+            "ReleaseAll waited for an in-flight key send or failed to compensate it.");
+    }
+
+    private static async Task WaitForAsync(
+        Func<bool> condition,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        var started = Stopwatch.GetTimestamp();
+        while (!condition())
+        {
+            if (Stopwatch.GetElapsedTime(started) >= timeout)
+            {
+                throw new TimeoutException("Timed out waiting for music playback state.");
+            }
+            await Task.Delay(10, cancellationToken);
         }
     }
 
@@ -83,6 +240,55 @@ public sealed class MusicSuite : IVerificationSuite
         protected override void SendKeyDown(char key) => Events.Add($"down:{key}");
 
         protected override void SendKeyUp(char key) => Events.Add($"up:{key}");
+    }
+
+    private sealed class BlockingTransport : KeyInputTransportBase
+    {
+        private int _keyUpCount;
+        public TaskCompletionSource SendStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource AllowSend { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int KeyUpCount => Volatile.Read(ref _keyUpCount);
+        public override MusicInputMode Mode => MusicInputMode.ForegroundSendInput;
+
+        protected override void SendKeyDown(char key)
+        {
+            SendStarted.TrySetResult();
+            AllowSend.Task.GetAwaiter().GetResult();
+        }
+
+        protected override void SendKeyUp(char key) => Interlocked.Increment(ref _keyUpCount);
+    }
+
+    private sealed class ManualPlaybackGate : IMusicPlaybackGate
+    {
+        private volatile bool _isOpen;
+        private TaskCompletionSource _available = CreateSource();
+
+        public bool IsAvailable(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return _isOpen;
+        }
+
+        public Task WaitUntilAvailableAsync(CancellationToken cancellationToken) =>
+            _available.Task.WaitAsync(cancellationToken);
+
+        public void Open()
+        {
+            _isOpen = true;
+            _available.TrySetResult();
+        }
+
+        public void Close()
+        {
+            _isOpen = false;
+            _available = CreateSource();
+        }
+
+        private static TaskCompletionSource CreateSource() =>
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     private sealed class FixedProfileService(InstrumentProfile profile)

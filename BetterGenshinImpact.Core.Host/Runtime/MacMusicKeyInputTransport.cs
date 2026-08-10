@@ -32,12 +32,32 @@ public sealed class MacMusicKeyInputTransport(
 
     private void Dispatch(string action, char key)
     {
-        input.Dispatch(
+        input.DispatchOnce(
             JObject.FromObject(new
             {
                 action,
                 windowsVirtualKey = (int)key,
             }),
             hostCancellationToken);
+    }
+}
+
+public sealed class MacMusicPlaybackGate(
+    ForegroundInputCoordinator input,
+    CancellationToken hostCancellationToken) : IMusicPlaybackGate
+{
+    public bool IsAvailable(CancellationToken cancellationToken)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+            hostCancellationToken, cancellationToken);
+        return input.IsInputAvailable(linked.Token);
+    }
+
+    public Task WaitUntilAvailableAsync(CancellationToken cancellationToken)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+            hostCancellationToken, cancellationToken);
+        input.WaitForGameFocus(linked.Token);
+        return Task.CompletedTask;
     }
 }

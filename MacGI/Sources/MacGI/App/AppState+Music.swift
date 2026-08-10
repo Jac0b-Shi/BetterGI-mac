@@ -19,7 +19,14 @@ extension AppState {
             return
         }
         do {
-            applyMusicState(try await supervisor.musicState())
+            let state = try await supervisor.musicState()
+            if state.rootFolder.isEmpty,
+               let recentFolder = state.folderHistory.first,
+               FileManager.default.fileExists(atPath: recentFolder) {
+                applyMusicState(try await supervisor.scanMusic(rootFolder: recentFolder))
+            } else {
+                applyMusicState(state)
+            }
         } catch {
             musicStatus = "读取自动演奏状态失败：\(error.localizedDescription)"
         }
@@ -37,7 +44,6 @@ extension AppState {
             do {
                 let state = try await supervisor.scanMusic(rootFolder: rootFolder)
                 self.applyMusicState(state)
-                self.selectedMusicTrackIndex = state.tracks.first?.index
                 self.addLog(.info, "自动演奏已载入 \(state.tracks.count) 首曲谱。")
             } catch {
                 self.musicStatus = "扫描曲谱失败：\(error.localizedDescription)"
@@ -64,10 +70,15 @@ extension AppState {
         Task { [weak self] in
             guard let self else { return }
             do {
+                let startPosition = self.selectedMusicTrack?.fullPath
+                    == self.musicState.savedTrackFullPath
+                    ? self.musicState.savedPositionMilliseconds
+                    : 0
                 self.applyMusicState(try await supervisor.playMusic(
                     index: index,
                     speed: self.musicSpeed,
-                    playbackMode: self.musicPlaybackMode))
+                    playbackMode: self.musicPlaybackMode,
+                    startPositionMilliseconds: startPosition))
                 self.addLog(.info, "自动演奏已开始。")
             } catch {
                 self.musicStatus = "开始演奏失败：\(error.localizedDescription)"
@@ -170,6 +181,7 @@ extension AppState {
     }
 
     private func applyMusicState(_ state: BetterGIMusicState) {
+        let selectedFullPath = selectedMusicTrack?.fullPath
         musicState = state
         musicPlaybackMode = state.playbackMode
         if state.playback.state != .stopped {
@@ -187,6 +199,15 @@ extension AppState {
             musicStatus = state.rootFolder.isEmpty
                 ? "请选择曲谱目录。"
                 : "已载入 \(state.tracks.count) 首曲谱。"
+            if let selectedFullPath,
+               let track = state.tracks.first(where: { $0.fullPath == selectedFullPath }) {
+                selectedMusicTrackIndex = track.index
+            } else if let track = state.tracks.first(
+                where: { $0.fullPath == state.savedTrackFullPath }) {
+                selectedMusicTrackIndex = track.index
+            } else {
+                selectedMusicTrackIndex = state.tracks.first(where: \.isValid)?.index
+            }
         }
     }
 
