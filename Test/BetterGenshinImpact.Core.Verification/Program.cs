@@ -982,6 +982,8 @@ var requiredRuntimeAssetPaths = new HashSet<string>(StringComparer.Ordinal)
     "Assets/Model/ItemV2/item.csv",
     "Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin",
     "Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png",
+    "Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.kp.bin",
+    "Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.mat.png",
     "Assets/Web/ScriptRepo/index.html"
 };
 var expectedLockedArtifactCount = manifestPhysicalPaths.Count + requiredRuntimeAssetPaths.Count;
@@ -1045,7 +1047,7 @@ var downloaderLock = BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.
     ?? throw new InvalidDataException("Artifact source lock loader returned null.");
 Assert("B11.6.2 Downloader loads source-lock", downloaderLock != null, "null");
 Assert("B11.6.2 Downloader schema version", downloaderLock!.SchemaVersion == 1, $"got {downloaderLock.SchemaVersion}");
-Assert("B11.6.2 Downloader has 2 sources", downloaderLock.Sources.Count == 2, $"got {downloaderLock.Sources.Count}");
+Assert("B11.6.2 Downloader has 3 sources", downloaderLock.Sources.Count == 3, $"got {downloaderLock.Sources.Count}");
 foreach (var dlSource in downloaderLock.Sources)
 {
     Assert("B11.6.2 Downloader source has url", !string.IsNullOrEmpty(dlSource.Url), "");
@@ -1417,6 +1419,35 @@ var lockedRuntimeRoot = Path.Combine(Path.GetTempPath(), "bgi-locked-runtime-" +
         Assert($"B12.2 installed artifact sha256 {artifact.DestinationRelativePath}",
             actualSha256 == artifact.Sha256,
             $"expected={artifact.Sha256}, actual={actualSha256}");
+    }
+
+    var moonCanonPreviousRoot = Global.StartUpPath;
+    Global.StartUpPath = lockedRuntimeRoot;
+    var moonCanonMap = new MoonCanonMap();
+    List<BaseMapLayer>? moonCanonLayers = null;
+    try
+    {
+        moonCanonMap.WarmUp();
+        moonCanonLayers = moonCanonMap.Layers;
+        Assert("B12.2 MoonCanon source-locked map loads exactly one layer",
+            moonCanonLayers.Count == 1 && moonCanonLayers[0].Floor == 0,
+            $"layers={moonCanonLayers.Count}");
+        Assert("B12.2 MoonCanon layer has real keypoints and descriptors",
+            moonCanonLayers.Count == 1 && moonCanonLayers[0].TrainKeyPoints.Length > 0 &&
+            !moonCanonLayers[0].TrainDescriptors.Empty(),
+            moonCanonLayers.Count == 0
+                ? "layer missing"
+                : $"keypoints={moonCanonLayers[0].TrainKeyPoints.Length}, descriptors={moonCanonLayers[0].TrainDescriptors.Rows}x{moonCanonLayers[0].TrainDescriptors.Cols}");
+    }
+    finally
+    {
+        if (moonCanonLayers is not null)
+        {
+            foreach (var layer in moonCanonLayers)
+                layer.TrainDescriptors.Dispose();
+        }
+        moonCanonMap.SiftMatcher.Dispose();
+        Global.StartUpPath = moonCanonPreviousRoot;
     }
 }
 Console.WriteLine();

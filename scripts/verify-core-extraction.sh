@@ -388,6 +388,15 @@ for big_map_asset in Teyvat_0_256_SIFT.kp.bin Teyvat_0_256_SIFT.mat.png; do
     BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json \
     || fail "production source-lock omits ${big_map_asset}"
 done
+for moon_canon_asset in MoonCanon_0_1024_SIFT.kp.bin MoonCanon_0_1024_SIFT.mat.png; do
+  rg -q "Assets/Map/MoonCanon/${moon_canon_asset}" \
+    BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json \
+    || fail "production source-lock omits ${moon_canon_asset}"
+done
+rg -q 'new MoonCanonMap' Test/BetterGenshinImpact.Core.Verification/Program.cs \
+  && rg -q 'MoonCanon layer has real keypoints and descriptors' \
+    Test/BetterGenshinImpact.Core.Verification/Program.cs \
+  || fail "Core verification does not load the source-locked MoonCanon feature layer"
 rg -q 'new GameCaptureRegion' BetterGenshinImpact.Core.Host/Runtime/SharedCaptureRingReader.cs \
   || fail "capture ring frames do not retain the upstream clickable Region graph"
 rg -q 'ColorConversionCodes\.BGRA2BGR' \

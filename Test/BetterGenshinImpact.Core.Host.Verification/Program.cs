@@ -266,7 +266,7 @@ var artifactInitializationCount = 0;
 server.AttachRuntimeArtifactInitializer(() =>
 {
     artifactInitializationCount++;
-    return new RuntimeArtifactStatus(0, 34, "verification-source-lock.json");
+    return new RuntimeArtifactStatus(0, 36, "verification-source-lock.json");
 });
 var scriptHostServices = new MacScriptHostServices(loggerFactory);
 using var notificationSettings = new NotificationSettingsCatalog(
@@ -505,7 +505,7 @@ try
             initializedJson.Value<string>("mapMatchingMethod") == "SIFT" &&
             initializedJson.Value<string>("autoFetchDispatchAdventurersGuildCountry") == "璃月" &&
             initializedJson.Value<bool>("runtimeArtifactsReady") &&
-            initializedJson.Value<int>("runtimeArtifactsVerified") == 34 &&
+            initializedJson.Value<int>("runtimeArtifactsVerified") == 36 &&
             artifactInitializationCount == 1,
         "core.initialize did not apply the ScriptService platform configuration");
     foreach (var (width, height, expectedAssetScale, expectedScaleTo1080) in new[]

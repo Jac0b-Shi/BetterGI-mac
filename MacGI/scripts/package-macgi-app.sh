@@ -33,7 +33,7 @@ if [[ ${MACGI_ALLOW_ADHOC_SIGNING:-0} == 1 && -z ${MACGI_BUNDLE_IDENTIFIER:-} ]]
 fi
 bundle_identifier=${MACGI_BUNDLE_IDENTIFIER:-${default_bundle_identifier}}
 upstream_project=${repository_root}/BetterGenshinImpact/BetterGenshinImpact.csproj
-upstream_version=$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' ${upstream_project} | head -n 1)
+upstream_version=$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' "${upstream_project}" | head -n 1)
 short_version=${MACGI_SHORT_VERSION:-${upstream_version:-0.1.0}}
 bundle_version=${MACGI_BUNDLE_VERSION:-1}
 signing_identity=${MACGI_SIGNING_IDENTITY:-${EXPANDED_CODE_SIGN_IDENTITY:-}}
