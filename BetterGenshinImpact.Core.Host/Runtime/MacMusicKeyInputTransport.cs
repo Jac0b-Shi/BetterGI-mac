@@ -8,7 +8,25 @@ public sealed class MacMusicKeyInputTransport(
     ForegroundInputCoordinator input,
     CancellationToken hostCancellationToken) : KeyInputTransportBase
 {
+    private int _batchDepth;
+
     public override MusicInputMode Mode => MusicInputMode.ForegroundSendInput;
+
+    public override void DispatchBatch(
+        IReadOnlyList<PerformanceEvent> events,
+        int startIndex,
+        int count)
+    {
+        Interlocked.Increment(ref _batchDepth);
+        try
+        {
+            base.DispatchBatch(events, startIndex, count);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _batchDepth);
+        }
+    }
 
     protected override void SendKeyDown(char key)
     {
@@ -38,7 +56,8 @@ public sealed class MacMusicKeyInputTransport(
                 action,
                 windowsVirtualKey = (int)key,
             }),
-            hostCancellationToken);
+            hostCancellationToken,
+            verifyAvailability: Volatile.Read(ref _batchDepth) == 0);
     }
 }
 

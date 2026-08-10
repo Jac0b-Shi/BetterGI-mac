@@ -55,6 +55,7 @@ public sealed class MusicCoordinator : IDisposable
             loggerFactory.CreateLogger<MusicPlaybackService>(),
             new MacMusicPlaybackGate(input, hostCancellationToken));
         _playbackService.SnapshotChanged += OnSnapshotChanged;
+        _playbackService.PlaybackEnded += OnPlaybackEnded;
     }
 
     public async Task<object> ScanAsync(string rootFolder)
@@ -159,16 +160,23 @@ public sealed class MusicCoordinator : IDisposable
                 throw new InvalidOperationException("所选曲谱解析失败，无法播放。");
             }
 
-            _playbackMode = playbackMode;
+            var startPosition = NormalizeStartPosition(
+                startPositionMilliseconds,
+                _queue[index].Duration);
+
             _playbackCancellation?.Dispose();
             _playbackCancellation = CancellationTokenSource.CreateLinkedTokenSource(
                 _hostCancellationToken);
             _startingCatalogIndex = index;
             _startingSpeed = Math.Clamp(speed, 0.5, 2.0);
-            _stateStore.State.CurrentTrackFullPath = _queue[index].FullPath;
-            _stateStore.State.CurrentPositionMilliseconds =
-                Math.Max(0, startPositionMilliseconds);
             var sessionGeneration = Interlocked.Increment(ref _sessionGeneration);
+            var previousPlaybackMode = _playbackMode;
+            var previousTrackFullPath = _stateStore.State.CurrentTrackFullPath;
+            var previousPositionMilliseconds =
+                _stateStore.State.CurrentPositionMilliseconds;
+            _playbackMode = playbackMode;
+            _stateStore.State.CurrentTrackFullPath = _queue[index].FullPath;
+            _stateStore.State.CurrentPositionMilliseconds = startPosition;
             Volatile.Write(ref _sessionStarting, 1);
             try
             {
@@ -193,8 +201,7 @@ public sealed class MusicCoordinator : IDisposable
                                     InputMode = MusicInputMode.ForegroundSendInput,
                                     PlaybackMode = playbackMode,
                                     Speed = speed,
-                                    StartPosition = TimeSpan.FromMilliseconds(
-                                        Math.Max(0, startPositionMilliseconds)),
+                                    StartPosition = TimeSpan.FromMilliseconds(startPosition),
                                 },
                                 linked.Token);
                         }
@@ -206,6 +213,10 @@ public sealed class MusicCoordinator : IDisposable
             {
                 Volatile.Write(ref _sessionStarting, 0);
                 _startingCatalogIndex = -1;
+                _playbackMode = previousPlaybackMode;
+                _stateStore.State.CurrentTrackFullPath = previousTrackFullPath;
+                _stateStore.State.CurrentPositionMilliseconds =
+                    previousPositionMilliseconds;
                 _playbackCancellation.Dispose();
                 _playbackCancellation = null;
                 throw;
@@ -234,6 +245,9 @@ public sealed class MusicCoordinator : IDisposable
 
     public async Task<object> StopAsync()
     {
+        var hadActiveSession =
+            _playbackService.Snapshot.State != MusicPlaybackState.Stopped ||
+            Volatile.Read(ref _sessionStarting) != 0;
         _playbackCancellation?.Cancel();
         Volatile.Write(ref _sessionStarting, 0);
         _playbackService.Stop();
@@ -249,7 +263,11 @@ public sealed class MusicCoordinator : IDisposable
             }
         }
 
-        SavePlaybackState();
+        if (hadActiveSession)
+        {
+            _stateStore.State.CurrentPositionMilliseconds = 0;
+        }
+        _stateStore.Save();
         return State();
     }
 
@@ -342,6 +360,7 @@ public sealed class MusicCoordinator : IDisposable
         }
 
         _playbackService.SnapshotChanged -= OnSnapshotChanged;
+        _playbackService.PlaybackEnded -= OnPlaybackEnded;
         _playbackCancellation?.Cancel();
         Volatile.Write(ref _sessionStarting, 0);
         _playbackService.Stop();
@@ -383,6 +402,53 @@ public sealed class MusicCoordinator : IDisposable
             _stateStore.State.CurrentTrackFullPath = _queue[catalogIndex].FullPath;
             _stateStore.State.CurrentPositionMilliseconds = snapshot.Position.TotalMilliseconds;
         }
+    }
+
+    private void OnPlaybackEnded(object? sender, MusicPlaybackEndedEventArgs args)
+    {
+        if (!ApplyPlaybackCompletion(
+                _stateStore.State,
+                _queue,
+                _playableCatalogIndexes,
+                args))
+        {
+            return;
+        }
+        _stateStore.Save();
+    }
+
+    internal static bool ApplyPlaybackCompletion(
+        MusicLibraryState state,
+        IReadOnlyList<PerformanceScore> queue,
+        IReadOnlyList<int> playableCatalogIndexes,
+        MusicPlaybackEndedEventArgs args)
+    {
+        if (args.Reason == MusicPlaybackCompletionReason.Cancelled)
+        {
+            return false;
+        }
+
+        var catalogIndex = MapPlayableIndex(playableCatalogIndexes, args.QueueIndex);
+        if (catalogIndex >= 0 && catalogIndex < queue.Count)
+        {
+            state.CurrentTrackFullPath = queue[catalogIndex].FullPath;
+        }
+        state.CurrentPositionMilliseconds = 0;
+        return true;
+    }
+
+    internal static double NormalizeStartPosition(
+        double requestedMilliseconds,
+        TimeSpan duration)
+    {
+        var requested = Math.Max(0, requestedMilliseconds);
+        if (duration <= TimeSpan.Zero)
+        {
+            return 0;
+        }
+
+        var restartThreshold = Math.Max(0, duration.TotalMilliseconds - 50);
+        return requested >= restartThreshold ? 0 : requested;
     }
 
     private void SavePlaybackState()

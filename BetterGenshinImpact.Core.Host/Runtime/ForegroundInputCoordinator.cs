@@ -77,10 +77,13 @@ public sealed class ForegroundInputCoordinator(
         }
     }
 
-    public void DispatchOnce(JObject parameters, CancellationToken cancellationToken = default)
+    public void DispatchOnce(
+        JObject parameters,
+        CancellationToken cancellationToken = default,
+        bool verifyAvailability = true)
     {
         using var linked = CreateLinkedCancellation(cancellationToken);
-        if (!IsInputAvailable(linked.Token))
+        if (verifyAvailability && !IsInputAvailable(linked.Token))
         {
             Interlocked.Exchange(ref _releaseRequired, 1);
             throw new MusicInputUnavailableException();

@@ -75,6 +75,7 @@ public sealed class MusicSuite : IVerificationSuite
                 MusicCoordinator.MapPlayableIndex([0, 2], 1) == 2,
                 "Music queue did not preserve catalog indexes while excluding invalid scores.");
 
+            await VerifyZeroTimestampChordAsync(context, profile, cancellationToken);
             await VerifyPlaybackControlsAsync(context, score, profile, cancellationToken);
             await VerifyFocusFreezeAndStopAsync(context, score, profile, cancellationToken);
             await VerifyReleaseDoesNotWaitForSendAsync(context, cancellationToken);
@@ -83,6 +84,100 @@ public sealed class MusicSuite : IVerificationSuite
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+
+    private static async Task VerifyZeroTimestampChordAsync(
+        VerificationContext context,
+        InstrumentProfile profile,
+        CancellationToken cancellationToken)
+    {
+        var score = new PerformanceScore
+        {
+            FullPath = "/tmp/zero-timestamp.json",
+            Name = "zero-timestamp",
+            Instrument = profile.Name,
+            OutputProfileName = profile.Name,
+            Format = MusicScoreFormat.Keyboard,
+            SourceTimeline = new PerformanceTimeline(
+            [
+                new PerformanceEvent(TimeSpan.Zero, 'Q', PerformanceEventType.KeyDown),
+                new PerformanceEvent(TimeSpan.Zero, 'W', PerformanceEventType.KeyDown),
+                new PerformanceEvent(
+                    TimeSpan.FromMilliseconds(30), 'Q', PerformanceEventType.KeyUp),
+                new PerformanceEvent(
+                    TimeSpan.FromMilliseconds(30), 'W', PerformanceEventType.KeyUp),
+            ],
+            TimeSpan.FromMilliseconds(30)),
+        };
+        var profileService = new FixedProfileService(profile);
+        var transport = new RecordingTransport();
+        var gate = new ManualPlaybackGate();
+        MusicPlaybackEndedEventArgs? ended = null;
+        var service = new MusicPlaybackService(
+            new MusicTimelineBuilder(profileService),
+            profileService,
+            [transport],
+            playbackGate: gate);
+        service.PlaybackEnded += (_, args) => ended = args;
+
+        var playback = service.RunPlaylistAsync(
+            [score],
+            0,
+            new MusicPlaybackOptions
+            {
+                InputMode = MusicInputMode.ForegroundSendInput,
+                PlaybackMode = MusicPlaybackMode.Sequential,
+            },
+            cancellationToken);
+        await Task.Delay(30, cancellationToken);
+        context.Require(
+            transport.Events.Count == 0 && service.Snapshot.Position == TimeSpan.Zero,
+            "Music playback advanced past the first chord before input focus became available.");
+        gate.Open();
+        await playback;
+
+        context.Require(
+            transport.Events.SequenceEqual(
+            [
+                "down:Q", "down:W", "up:Q", "up:W",
+            ]),
+            "Music playback skipped or split the first chord at t=0: " +
+            string.Join(" | ", transport.Events));
+        context.Require(
+            transport.BatchSizes.SequenceEqual([2, 2]),
+            "Music playback did not batch events sharing the same timestamp.");
+        context.Require(
+            ended?.Reason == MusicPlaybackCompletionReason.NaturalCompletion &&
+            ended.QueueIndex == 0 &&
+            ended.Position == TimeSpan.FromMilliseconds(30),
+            "Natural music completion did not report the final track and position.");
+
+        var persistentState = new MusicLibraryState
+        {
+            CurrentTrackFullPath = "/tmp/previous.json",
+            CurrentPositionMilliseconds = 12_345,
+        };
+        context.Require(
+            MusicCoordinator.ApplyPlaybackCompletion(
+                persistentState, [score], [0], ended!) &&
+            persistentState.CurrentTrackFullPath == score.FullPath &&
+            persistentState.CurrentPositionMilliseconds == 0,
+            "Natural music completion did not reset the persisted resume point.");
+        var cancelled = new MusicPlaybackEndedEventArgs(
+            MusicPlaybackCompletionReason.Cancelled,
+            0,
+            TimeSpan.FromMilliseconds(10));
+        persistentState.CurrentPositionMilliseconds = 456;
+        context.Require(
+            !MusicCoordinator.ApplyPlaybackCompletion(
+                persistentState, [score], [0], cancelled) &&
+            persistentState.CurrentPositionMilliseconds == 456,
+            "Host cancellation incorrectly cleared the persisted music resume point.");
+        context.Require(
+            MusicCoordinator.NormalizeStartPosition(30_000, TimeSpan.FromSeconds(30)) == 0 &&
+            MusicCoordinator.NormalizeStartPosition(29_975, TimeSpan.FromSeconds(30)) == 0 &&
+            MusicCoordinator.NormalizeStartPosition(29_000, TimeSpan.FromSeconds(30)) == 29_000,
+            "Music resume positions at the natural end were not normalized to replay from zero.");
     }
 
     private static async Task VerifyPlaybackControlsAsync(
@@ -152,11 +247,13 @@ public sealed class MusicSuite : IVerificationSuite
     {
         var profileService = new FixedProfileService(profile);
         var gate = new ManualPlaybackGate();
+        MusicPlaybackEndedEventArgs? ended = null;
         var service = new MusicPlaybackService(
             new MusicTimelineBuilder(profileService),
             profileService,
             [new RecordingTransport()],
             playbackGate: gate);
+        service.PlaybackEnded += (_, args) => ended = args;
         var playback = service.RunPlaylistAsync(
             [score],
             0,
@@ -197,6 +294,9 @@ public sealed class MusicSuite : IVerificationSuite
         context.Require(
             Stopwatch.GetElapsedTime(started) < TimeSpan.FromMilliseconds(300),
             "Stopping music did not promptly cancel the focus wait.");
+        context.Require(
+            ended?.Reason == MusicPlaybackCompletionReason.ExplicitStop,
+            "Explicit music stop was not distinguished from host cancellation.");
     }
 
     private static async Task VerifyReleaseDoesNotWaitForSendAsync(
@@ -213,6 +313,24 @@ public sealed class MusicSuite : IVerificationSuite
         context.Require(
             transport.KeyUpCount >= 1,
             "ReleaseAll waited for an in-flight key send or failed to compensate it.");
+
+        var batchTransport = new BlockingTransport();
+        PerformanceEvent[] batchEvents =
+        [
+            new PerformanceEvent(TimeSpan.Zero, 'Q', PerformanceEventType.KeyDown),
+            new PerformanceEvent(TimeSpan.Zero, 'W', PerformanceEventType.KeyDown),
+        ];
+        var batch = Task.Run(
+            () => batchTransport.DispatchBatch(batchEvents, 0, batchEvents.Length),
+            cancellationToken);
+        await batchTransport.SendStarted.Task.WaitAsync(
+            TimeSpan.FromSeconds(1), cancellationToken);
+        batchTransport.ReleaseAll();
+        batchTransport.AllowSend.TrySetResult();
+        await batch.WaitAsync(TimeSpan.FromSeconds(1), cancellationToken);
+        context.Require(
+            batchTransport.KeyDownCount == 1,
+            "ReleaseAll did not invalidate the remaining events in an in-flight chord batch.");
     }
 
     private static async Task WaitForAsync(
@@ -234,26 +352,39 @@ public sealed class MusicSuite : IVerificationSuite
     private sealed class RecordingTransport : KeyInputTransportBase
     {
         public List<string> Events { get; } = [];
+        public List<int> BatchSizes { get; } = [];
 
         public override MusicInputMode Mode => MusicInputMode.ForegroundSendInput;
 
         protected override void SendKeyDown(char key) => Events.Add($"down:{key}");
 
         protected override void SendKeyUp(char key) => Events.Add($"up:{key}");
+
+        public override void DispatchBatch(
+            IReadOnlyList<PerformanceEvent> events,
+            int startIndex,
+            int count)
+        {
+            BatchSizes.Add(count);
+            base.DispatchBatch(events, startIndex, count);
+        }
     }
 
     private sealed class BlockingTransport : KeyInputTransportBase
     {
+        private int _keyDownCount;
         private int _keyUpCount;
         public TaskCompletionSource SendStarted { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource AllowSend { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int KeyUpCount => Volatile.Read(ref _keyUpCount);
+        public int KeyDownCount => Volatile.Read(ref _keyDownCount);
         public override MusicInputMode Mode => MusicInputMode.ForegroundSendInput;
 
         protected override void SendKeyDown(char key)
         {
+            Interlocked.Increment(ref _keyDownCount);
             SendStarted.TrySetResult();
             AllowSend.Task.GetAwaiter().GetResult();
         }

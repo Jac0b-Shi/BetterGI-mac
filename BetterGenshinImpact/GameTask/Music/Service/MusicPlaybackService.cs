@@ -40,8 +40,11 @@ public sealed class MusicPlaybackService(
     private bool _stopRequested;
     private int _skipDirection;
     private bool _needsHeldKeyRebuild;
+    private bool _restartFromAnchorPosition;
 
     public event EventHandler<PlaybackSnapshot>? SnapshotChanged;
+
+    public event EventHandler<MusicPlaybackEndedEventArgs>? PlaybackEnded;
 
     public PlaybackSnapshot Snapshot
     {
@@ -81,6 +84,7 @@ public sealed class MusicPlaybackService(
 
         var currentIndex = Math.Clamp(startIndex, 0, queue.Count - 1);
         var isFirstTrack = true;
+        var completionReason = MusicPlaybackCompletionReason.Cancelled;
         try
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -94,8 +98,17 @@ public sealed class MusicPlaybackService(
 
                 var result = await PlayTimelineAsync(cancellationToken);
                 _transport?.ReleaseAll();
+                lock (_syncRoot)
+                {
+                    if (_stopRequested)
+                    {
+                        completionReason = MusicPlaybackCompletionReason.ExplicitStop;
+                        break;
+                    }
+                }
                 if (result == TrackResult.Stop)
                 {
+                    completionReason = MusicPlaybackCompletionReason.ExplicitStop;
                     break;
                 }
 
@@ -121,19 +134,32 @@ public sealed class MusicPlaybackService(
                 };
                 if (currentIndex < 0)
                 {
+                    completionReason = MusicPlaybackCompletionReason.NaturalCompletion;
                     break;
                 }
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            lock (_syncRoot)
+            {
+                if (_stopRequested)
+                {
+                    completionReason = MusicPlaybackCompletionReason.ExplicitStop;
+                }
+            }
             // TaskRunner 负责记录任务取消
         }
         finally
         {
             _transport?.ReleaseAll();
+            MusicPlaybackEndedEventArgs ended;
             lock (_syncRoot)
             {
+                ended = new MusicPlaybackEndedEventArgs(
+                    completionReason,
+                    _queueIndex,
+                    GetCurrentPositionLocked());
                 _controlCancellationTokenSource?.Cancel();
                 _controlCancellationTokenSource?.Dispose();
                 _controlCancellationTokenSource = null;
@@ -145,9 +171,11 @@ public sealed class MusicPlaybackService(
                 _timeline = PerformanceTimeline.Empty;
                 _stopRequested = false;
                 _skipDirection = 0;
+                _restartFromAnchorPosition = false;
                 _snapshot = CreateSnapshotLocked();
             }
 
+            PlaybackEnded?.Invoke(this, ended);
             PublishSnapshot();
         }
     }
@@ -184,7 +212,8 @@ public sealed class MusicPlaybackService(
             }
 
             _state = MusicPlaybackState.Playing;
-            _anchorTimestamp = Stopwatch.GetTimestamp();
+            _anchorTimestamp = 0;
+            _restartFromAnchorPosition = true;
             _resumeSource.TrySetResult();
             SignalControlLocked();
             _snapshot = CreateSnapshotLocked();
@@ -230,7 +259,8 @@ public sealed class MusicPlaybackService(
             }
 
             _anchorPosition = Clamp(position, TimeSpan.Zero, _timeline.Duration);
-            _anchorTimestamp = _state == MusicPlaybackState.Playing ? Stopwatch.GetTimestamp() : 0;
+            _anchorTimestamp = 0;
+            _restartFromAnchorPosition = _state == MusicPlaybackState.Playing;
             _needsHeldKeyRebuild = true;
             SignalControlLocked();
             _snapshot = CreateSnapshotLocked();
@@ -252,7 +282,8 @@ public sealed class MusicPlaybackService(
 
             _anchorPosition = GetCurrentPositionLocked();
             _speed = speed;
-            _anchorTimestamp = _state == MusicPlaybackState.Playing ? Stopwatch.GetTimestamp() : 0;
+            _anchorTimestamp = 0;
+            _restartFromAnchorPosition = _state == MusicPlaybackState.Playing;
             SignalControlLocked();
             _snapshot = CreateSnapshotLocked();
         }
@@ -303,7 +334,16 @@ public sealed class MusicPlaybackService(
                     _controlCancellationTokenSource?.Dispose();
                     _controlCancellationTokenSource = new CancellationTokenSource();
                     controlToken = _controlCancellationTokenSource.Token;
-                    position = GetCurrentPositionLocked();
+                    if (_restartFromAnchorPosition)
+                    {
+                        position = _anchorPosition;
+                        _anchorTimestamp = Stopwatch.GetTimestamp();
+                        _restartFromAnchorPosition = false;
+                    }
+                    else
+                    {
+                        position = GetCurrentPositionLocked();
+                    }
                     rebuildHeldKeys = _needsHeldKeyRebuild;
                     _needsHeldKeyRebuild = false;
                 }
@@ -328,7 +368,8 @@ public sealed class MusicPlaybackService(
                             controlToken, cancellationToken);
                     await FreezeUntilInputAvailableAsync(
                         rebuildCancellation.Token,
-                        forceFreeze: true);
+                        forceFreeze: true,
+                        freezeAtOrBefore: position);
                     continue;
                 }
             }
@@ -336,19 +377,32 @@ public sealed class MusicPlaybackService(
             var startIndex = FindFirstEventAtOrAfter(position);
             try
             {
-                for (var eventIndex = startIndex; eventIndex < _timeline.Events.Count; eventIndex++)
+                for (var eventIndex = startIndex; eventIndex < _timeline.Events.Count;)
                 {
                     var item = _timeline.Events[eventIndex];
                     await WaitUntilAsync(item.Time, controlToken, cancellationToken);
+                    var batchStartIndex = eventIndex;
+                    do
+                    {
+                        eventIndex++;
+                    } while (eventIndex < _timeline.Events.Count &&
+                             _timeline.Events[eventIndex].Time == item.Time);
+                    var batchCount = eventIndex - batchStartIndex;
+
                     try
                     {
-                        if (item.Type == PerformanceEventType.KeyDown)
+                        var dispatchStarted = Stopwatch.GetTimestamp();
+                        _transport?.DispatchBatch(
+                            _timeline.Events,
+                            batchStartIndex,
+                            batchCount);
+                        var dispatchElapsed = Stopwatch.GetElapsedTime(dispatchStarted);
+                        if (dispatchElapsed >= TimeSpan.FromMilliseconds(10))
                         {
-                            _transport?.KeyDown(item.Key);
-                        }
-                        else
-                        {
-                            _transport?.KeyUp(item.Key);
+                            _logger.LogDebug(
+                                "自动演奏同刻事件派发耗时 {ElapsedMilliseconds:F1} ms，事件数 {EventCount}",
+                                dispatchElapsed.TotalMilliseconds,
+                                batchCount);
                         }
                     }
                     catch (MusicInputUnavailableException)
@@ -356,9 +410,10 @@ public sealed class MusicPlaybackService(
                         using var inputCancellation =
                             CancellationTokenSource.CreateLinkedTokenSource(
                                 controlToken, cancellationToken);
-                        await FreezeUntilInputAvailableAsync(
-                            inputCancellation.Token,
-                            forceFreeze: true);
+                    await FreezeUntilInputAvailableAsync(
+                        inputCancellation.Token,
+                        forceFreeze: true,
+                        freezeAtOrBefore: item.Time);
                         throw new OperationCanceledException(controlToken);
                     }
                 }
@@ -390,7 +445,9 @@ public sealed class MusicPlaybackService(
             CancellationTokenSource.CreateLinkedTokenSource(controlToken, cancellationToken);
         while (true)
         {
-            if (await FreezeUntilInputAvailableAsync(linkedCancellationTokenSource.Token))
+            if (await FreezeUntilInputAvailableAsync(
+                    linkedCancellationTokenSource.Token,
+                    freezeAtOrBefore: targetPosition))
             {
                 throw new OperationCanceledException(controlToken);
             }
@@ -421,8 +478,20 @@ public sealed class MusicPlaybackService(
 
     private async Task<bool> FreezeUntilInputAvailableAsync(
         CancellationToken cancellationToken,
-        bool forceFreeze = false)
+        bool forceFreeze = false,
+        TimeSpan? freezeAtOrBefore = null)
     {
+        TimeSpan freezePosition;
+        lock (_syncRoot)
+        {
+            freezePosition = GetCurrentPositionLocked();
+            if (freezeAtOrBefore is { } pendingPosition &&
+                pendingPosition < freezePosition)
+            {
+                freezePosition = pendingPosition;
+            }
+        }
+
         if (!forceFreeze && _playbackGate.IsAvailable(cancellationToken))
         {
             return false;
@@ -435,9 +504,10 @@ public sealed class MusicPlaybackService(
                 return false;
             }
 
-            _anchorPosition = GetCurrentPositionLocked();
+            _anchorPosition = freezePosition;
             _anchorTimestamp = 0;
             _needsHeldKeyRebuild = true;
+            _restartFromAnchorPosition = true;
             _snapshot = CreateSnapshotLocked();
         }
 
@@ -449,7 +519,7 @@ public sealed class MusicPlaybackService(
         {
             if (_state == MusicPlaybackState.Playing)
             {
-                _anchorTimestamp = Stopwatch.GetTimestamp();
+                _anchorTimestamp = 0;
                 _snapshot = CreateSnapshotLocked();
             }
         }
@@ -470,10 +540,11 @@ public sealed class MusicPlaybackService(
             _trackName = trackName;
             _queueIndex = queueIndex;
             _anchorPosition = Clamp(startPosition, TimeSpan.Zero, timeline.Duration);
-            _anchorTimestamp = Stopwatch.GetTimestamp();
+            _anchorTimestamp = 0;
             _state = MusicPlaybackState.Playing;
             _skipDirection = 0;
             _needsHeldKeyRebuild = _anchorPosition > TimeSpan.Zero;
+            _restartFromAnchorPosition = true;
             _resumeSource = CreateCompletedSource();
             _snapshot = CreateSnapshotLocked();
         }

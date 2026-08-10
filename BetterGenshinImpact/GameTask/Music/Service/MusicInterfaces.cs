@@ -70,6 +70,11 @@ public interface IKeyInputTransport
     void KeyUp(char key);
 
     void ReleaseAll();
+
+    void DispatchBatch(
+        IReadOnlyList<PerformanceEvent> events,
+        int startIndex,
+        int count);
 }
 
 public interface IMusicPlaybackGate
@@ -92,9 +97,30 @@ public sealed class MusicInputUnavailableException : InvalidOperationException
     }
 }
 
+public enum MusicPlaybackCompletionReason
+{
+    NaturalCompletion,
+    ExplicitStop,
+    Cancelled
+}
+
+public sealed class MusicPlaybackEndedEventArgs(
+    MusicPlaybackCompletionReason reason,
+    int queueIndex,
+    TimeSpan position) : EventArgs
+{
+    public MusicPlaybackCompletionReason Reason { get; } = reason;
+
+    public int QueueIndex { get; } = queueIndex;
+
+    public TimeSpan Position { get; } = position;
+}
+
 public interface IMusicPlaybackService
 {
     event EventHandler<PlaybackSnapshot>? SnapshotChanged;
+
+    event EventHandler<MusicPlaybackEndedEventArgs>? PlaybackEnded;
 
     PlaybackSnapshot Snapshot { get; }
 
