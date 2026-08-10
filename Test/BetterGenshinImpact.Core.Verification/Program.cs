@@ -982,6 +982,8 @@ var requiredRuntimeAssetPaths = new HashSet<string>(StringComparer.Ordinal)
     "Assets/Model/ItemV2/item.csv",
     "Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin",
     "Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png",
+    "Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.kp.bin",
+    "Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.mat.png",
     "Assets/Web/ScriptRepo/index.html"
 };
 var expectedLockedArtifactCount = manifestPhysicalPaths.Count + requiredRuntimeAssetPaths.Count;
@@ -1045,7 +1047,7 @@ var downloaderLock = BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.
     ?? throw new InvalidDataException("Artifact source lock loader returned null.");
 Assert("B11.6.2 Downloader loads source-lock", downloaderLock != null, "null");
 Assert("B11.6.2 Downloader schema version", downloaderLock!.SchemaVersion == 1, $"got {downloaderLock.SchemaVersion}");
-Assert("B11.6.2 Downloader has 2 sources", downloaderLock.Sources.Count == 2, $"got {downloaderLock.Sources.Count}");
+Assert("B11.6.2 Downloader has 3 sources", downloaderLock.Sources.Count == 3, $"got {downloaderLock.Sources.Count}");
 foreach (var dlSource in downloaderLock.Sources)
 {
     Assert("B11.6.2 Downloader source has url", !string.IsNullOrEmpty(dlSource.Url), "");
@@ -1418,6 +1420,35 @@ var lockedRuntimeRoot = Path.Combine(Path.GetTempPath(), "bgi-locked-runtime-" +
             actualSha256 == artifact.Sha256,
             $"expected={artifact.Sha256}, actual={actualSha256}");
     }
+
+    var moonCanonPreviousRoot = Global.StartUpPath;
+    Global.StartUpPath = lockedRuntimeRoot;
+    var moonCanonMap = new MoonCanonMap();
+    List<BaseMapLayer>? moonCanonLayers = null;
+    try
+    {
+        moonCanonMap.WarmUp();
+        moonCanonLayers = moonCanonMap.Layers;
+        Assert("B12.2 MoonCanon source-locked map loads exactly one layer",
+            moonCanonLayers.Count == 1 && moonCanonLayers[0].Floor == 0,
+            $"layers={moonCanonLayers.Count}");
+        Assert("B12.2 MoonCanon layer has real keypoints and descriptors",
+            moonCanonLayers.Count == 1 && moonCanonLayers[0].TrainKeyPoints.Length > 0 &&
+            !moonCanonLayers[0].TrainDescriptors.Empty(),
+            moonCanonLayers.Count == 0
+                ? "layer missing"
+                : $"keypoints={moonCanonLayers[0].TrainKeyPoints.Length}, descriptors={moonCanonLayers[0].TrainDescriptors.Rows}x{moonCanonLayers[0].TrainDescriptors.Cols}");
+    }
+    finally
+    {
+        if (moonCanonLayers is not null)
+        {
+            foreach (var layer in moonCanonLayers)
+                layer.TrainDescriptors.Dispose();
+        }
+        moonCanonMap.SiftMatcher.Dispose();
+        Global.StartUpPath = moonCanonPreviousRoot;
+    }
 }
 Console.WriteLine();
 
@@ -1744,17 +1775,13 @@ var verificationAutoFightConfig = new AutoFightConfig
 AutoFightRuntimePlatform.Configure(new VerificationAutoFightRuntimePlatform(
     b5SystemInfo, verificationAutoFightConfig, verificationOcrService,
     CpuFactory(new ModelRootPathResolver(lockedRuntimeRoot))));
-Console.WriteLine("AutoFight end detection: upstream TXT and JSON task flows");
+Console.WriteLine("AutoFight end detection: shared upstream implementation");
 var autoFightStrategyDirectory = Path.Combine("/tmp", "bgi-auto-fight-end-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(autoFightStrategyDirectory);
 var txtStrategyPath = Path.Combine(autoFightStrategyDirectory, "strategy.txt");
-var jsonStrategyPath = Path.Combine(autoFightStrategyDirectory, "strategy.json");
 File.WriteAllText(txtStrategyPath, "钟离 attack");
-File.WriteAllText(jsonStrategyPath,
-    """{"Info":{"Name":"verification"},"Actions":[{"Name":"attack","Character":"钟离","Action":"attack","Condition":{"Expression":"true"},"Index":1}]}""");
 var finishDetectConfig = new AutoFightConfig();
 var txtFightTask = new AutoFightTask(new AutoFightParam(txtStrategyPath, finishDetectConfig));
-var jsonFightTask = new AutoFightJsonTask(new AutoFightParam(jsonStrategyPath, finishDetectConfig));
 Mat CreateFinishedFightFrame()
 {
     var frame = new Mat(1080, 1920, MatType.CV_8UC3, Scalar.Black);
@@ -1765,8 +1792,7 @@ Mat CreateFinishedFightFrame()
 
 foreach (var (label, checkFightFinish) in new (string Label, Func<Task<bool>> Check)[]
          {
-             ("TXT", () => txtFightTask.CheckFightFinish(0, 0)),
-             ("JSON", () => jsonFightTask.CheckFightFinish(0, 0))
+             ("shared", () => txtFightTask.CheckFightFinish(0, 0))
          })
 {
     recordingTaskControl.RecordCaptures = true;
@@ -1776,7 +1802,7 @@ foreach (var (label, checkFightFinish) in new (string Label, Func<Task<bool>> Ch
     Assert($"AutoFight {label} recognizes shared finished frame", finished, "returned false");
     Assert($"AutoFight {label} preserves finished input/capture order",
         recordingTaskControl.Calls.SequenceEqual([
-            "action:OpenPartySetupScreen:KeyPress", "capture", "action:Drop:KeyPress",
+            "action:OpenPartySetupScreen:KeyPress", "capture", "capture", "action:Drop:KeyPress",
             "action:OpenPartySetupScreen:KeyPress"
         ]), string.Join(",", recordingTaskControl.Calls));
 
@@ -1786,7 +1812,7 @@ foreach (var (label, checkFightFinish) in new (string Label, Func<Task<bool>> Ch
     Assert($"AutoFight {label} rejects non-finished frame", !finished, "returned true");
     Assert($"AutoFight {label} preserves non-finished input/capture order",
         recordingTaskControl.Calls.SequenceEqual([
-            "action:OpenPartySetupScreen:KeyPress", "capture", "action:Drop:KeyPress"
+            "action:OpenPartySetupScreen:KeyPress", "capture", "capture", "action:Drop:KeyPress"
         ]), string.Join(",", recordingTaskControl.Calls));
 }
 recordingTaskControl.RecordCaptures = false;

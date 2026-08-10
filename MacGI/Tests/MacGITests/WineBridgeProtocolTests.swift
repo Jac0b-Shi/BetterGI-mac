@@ -552,6 +552,46 @@ struct WineBridgeProtocolTests {
         #expect(dispatcher.actions == [.keyPress(key: .f)])
         #expect(appState.inputDeliveryCapabilities.supportsBackgroundDelivery)
     }
+
+    @MainActor
+    @Test("Wine click delivery survives foreground and background focus cycles")
+    func wineClickDeliverySurvivesFocusCycles() {
+        let dispatcher = DiagnosticRecordingInputDispatcher(
+            capabilities: InputDeliveryCapabilities(
+                requiresHostForeground: false,
+                supportsBackgroundDelivery: true))
+        var isTargetFrontmost = true
+        let appState = AppState(
+            resourceStore: BGIRuntimeResourceStore(
+                rootURL: FileManager.default.temporaryDirectory
+                    .appendingPathComponent(
+                        "bettergi-wine-focus-cycle-\(UUID().uuidString)",
+                        isDirectory: true)),
+            inputDispatcher: dispatcher,
+            isTargetWindowFrontmost: { _ in isTargetFrontmost },
+            launchArguments: ["betterGI-mac", "--input-backend", "wine-bridge"])
+        appState.selectedWindow = WindowInfo(
+            id: 42,
+            ownerPID: 42,
+            ownerName: "wine",
+            title: "Genshin Impact",
+            frame: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+            layer: 0,
+            isOnScreen: true,
+            scaleFactor: 1)
+        appState.runtimeLifecycle = .running
+        let click = InputAction.mouseClick(button: .left, at: CGPoint(x: 960, y: 540))
+
+        let foreground = appState.dispatchInput(click, source: .runtimeTrigger)
+        isTargetFrontmost = false
+        let background = appState.dispatchInput(click, source: .runtimeTrigger)
+        isTargetFrontmost = true
+        let restored = appState.dispatchInput(click, source: .runtimeTrigger)
+
+        #expect(foreground.allowed && background.allowed && restored.allowed)
+        #expect(dispatcher.actions == [click, click, click])
+        #expect(appState.inputDeliveryMode == .wineBridge)
+    }
 }
 
 private final class DiagnosticRecordingInputDispatcher: InputDispatching {

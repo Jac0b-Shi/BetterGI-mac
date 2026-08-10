@@ -43,12 +43,12 @@ public sealed class WindowsGenshinRuntimePlatform : IGenshinRuntimePlatform
             .SingleSelectText(option, cancellationToken, skipTimes, isOrange);
     public Task SetTime(int hour, int minute, bool skip, CancellationToken cancellationToken) =>
         new SetTimeTask().Start(hour, minute, cancellationToken, skip);
-    public Task<bool> SwitchCharacter(string slot1, string slot2, string slot3, string slot4,
+    public Task<bool> SwitchCharacter(string slot1, string slot2, string slot3, string slot4, bool usePhysicalSlots,
         CancellationToken cancellationToken) =>
         new SwitchCharacterStateMachineTask(
             App.GetLogger<SwitchCharacterStateMachineTask>(),
             SystemInfo,
             App.ServiceProvider.GetRequiredService<BgiOnnxFactory>(),
             App.ServiceProvider.GetRequiredService<OcrFactory>().Service)
-            .Start(slot1, slot2, slot3, slot4, cancellationToken);
+            .Start(slot1, slot2, slot3, slot4, usePhysicalSlots, cancellationToken);
 }

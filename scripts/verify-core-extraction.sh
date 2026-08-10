@@ -350,17 +350,17 @@ rg -q 'ForcedAvatarOcrFallbackCombatScenes' \
 rg -q 'Real Avatar OCR fallback passed' \
   Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
   || fail "Core Host verification does not assert real Avatar OCR fallback completion"
-for combat_end_source in AutoFightTask.cs AutoFightJsonTask.cs AutoFightSeek.cs; do
+for combat_end_source in AutoFightTask.cs AutoFightSeek.cs; do
   rg -q 'AutoFightEndDetector\.IsFightFinished' \
     "BetterGenshinImpact/GameTask/AutoFight/${combat_end_source}" \
     || fail "${combat_end_source} does not use the shared C# combat-end detector"
 done
-rg -q '\("TXT", \(\) => txtFightTask\.CheckFightFinish\(0, 0\)\)' \
+rg -q 'AutoFightTask\.CheckFightFinish' \
+  BetterGenshinImpact/GameTask/AutoFight/AutoFightJsonTask.cs \
+  || fail "AutoFightJsonTask.cs does not use the upstream shared combat-end flow"
+rg -q '\("shared", \(\) => txtFightTask\.CheckFightFinish\(0, 0\)\)' \
   Test/BetterGenshinImpact.Core.Verification/Program.cs \
-  || fail "Core verification does not execute the upstream TXT combat-end flow"
-rg -q '\("JSON", \(\) => jsonFightTask\.CheckFightFinish\(0, 0\)\)' \
-  Test/BetterGenshinImpact.Core.Verification/Program.cs \
-  || fail "Core verification does not execute the upstream JSON combat-end flow"
+  || fail "Core verification does not execute the upstream shared combat-end flow"
 rg -q 'Action = ActionEnum\.Fight\.Code' \
   Test/BetterGenshinImpact.Core.Verification/Program.cs \
   || fail "Core PathExecutor verification does not contain a real fight waypoint"
@@ -388,6 +388,15 @@ for big_map_asset in Teyvat_0_256_SIFT.kp.bin Teyvat_0_256_SIFT.mat.png; do
     BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json \
     || fail "production source-lock omits ${big_map_asset}"
 done
+for moon_canon_asset in MoonCanon_0_1024_SIFT.kp.bin MoonCanon_0_1024_SIFT.mat.png; do
+  rg -q "Assets/Map/MoonCanon/${moon_canon_asset}" \
+    BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json \
+    || fail "production source-lock omits ${moon_canon_asset}"
+done
+rg -q 'new MoonCanonMap' Test/BetterGenshinImpact.Core.Verification/Program.cs \
+  && rg -q 'MoonCanon layer has real keypoints and descriptors' \
+    Test/BetterGenshinImpact.Core.Verification/Program.cs \
+  || fail "Core verification does not load the source-locked MoonCanon feature layer"
 rg -q 'new GameCaptureRegion' BetterGenshinImpact.Core.Host/Runtime/SharedCaptureRingReader.cs \
   || fail "capture ring frames do not retain the upstream clickable Region graph"
 rg -q 'ColorConversionCodes\.BGRA2BGR' \
@@ -778,7 +787,7 @@ rg -q 'one failing macOS trigger stopped later triggers from processing the same
   Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
   || fail "macOS trigger dispatcher does not verify per-trigger exception isolation"
 rg -q 'trigger\.SupportsGameUiCategory\(content\.CurrentGameUiCategory\)' \
-  BetterGenshinImpact/GameTask/TaskTriggerDispatcher.cs \
+  BetterGenshinImpact/GameTask/CaptureTriggerScheduler.cs \
   || fail "Windows trigger dispatcher does not honor shared multi-category trigger semantics"
 rg -q 'trigger\.SupportsGameUiCategory\(currentCategory\)' \
   BetterGenshinImpact.Core.Host/Runtime/MacTriggerDispatcher.cs \

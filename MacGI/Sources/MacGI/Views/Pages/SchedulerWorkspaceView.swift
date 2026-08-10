@@ -845,6 +845,7 @@ private struct SchedulerGroupSettingsSheet: View {
         approachStopDistance: 25,
         switchToWalkEnabled: false,
         mwkJumpFlyEnabled: true,
+        mwkDisableSprintEnabled: false,
         mwkJumpFlyIntervalSeconds: 1,
         taskCycleEnabled: false,
         taskCycleBoundaryTime: 0,
@@ -1103,6 +1104,9 @@ private struct SchedulerGroupSettingsSheet: View {
                     in: 0...max(values.distance, 0))
                 Toggle("接近时切人步行", isOn: $values.switchToWalkEnabled)
                 Toggle("启用跳飞赶路", isOn: $values.mwkJumpFlyEnabled)
+                Toggle(
+                    "玛薇卡在车上禁用冲刺",
+                    isOn: $values.mwkDisableSprintEnabled)
                 HStack {
                     Text("跳飞/跳跃间隔（秒）")
                     Spacer()

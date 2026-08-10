@@ -266,7 +266,7 @@ var artifactInitializationCount = 0;
 server.AttachRuntimeArtifactInitializer(() =>
 {
     artifactInitializationCount++;
-    return new RuntimeArtifactStatus(0, 34, "verification-source-lock.json");
+    return new RuntimeArtifactStatus(0, 36, "verification-source-lock.json");
 });
 var scriptHostServices = new MacScriptHostServices(loggerFactory);
 using var notificationSettings = new NotificationSettingsCatalog(
@@ -505,7 +505,7 @@ try
             initializedJson.Value<string>("mapMatchingMethod") == "SIFT" &&
             initializedJson.Value<string>("autoFetchDispatchAdventurersGuildCountry") == "璃月" &&
             initializedJson.Value<bool>("runtimeArtifactsReady") &&
-            initializedJson.Value<int>("runtimeArtifactsVerified") == 34 &&
+            initializedJson.Value<int>("runtimeArtifactsVerified") == 36 &&
             artifactInitializationCount == 1,
         "core.initialize did not apply the ScriptService platform configuration");
     foreach (var (width, height, expectedAssetScale, expectedScaleTo1080) in new[]
@@ -1870,6 +1870,8 @@ try
     using (var teleportFrame = bigMapFrame.Clone())
     using (var mainUiFrame = new OpenCvSharp.Mat(
                schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black))
+    using (var teleportLoadingFrame = new OpenCvSharp.Mat(
+               schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black))
     using (var forceTeleportPartyFrame = OpenCvSharp.Cv2.ImRead(
                Path.Combine(AppContext.BaseDirectory, "Fixtures", "AutoFight", "别人进我世界_2人.png"),
                OpenCvSharp.ImreadModes.Color))
@@ -1902,11 +1904,17 @@ try
         var teleportMetricsCount = 0;
         var teleportActivationCount = 0;
         var teleportInputActions = new List<string>();
+        var teleportConfirmed = false;
+        var teleportCompletionCaptureCount = 0;
+        using var teleportResponderCancellation =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
         var teleportResponder = Task.Run(async () =>
         {
-            while (teleportCaptureCount < 8)
+            try
             {
-                var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
+                while (true)
+                {
+                var callback = await callbackConnection.ReadRequestAsync(teleportResponderCancellation.Token)
                     ?? throw new EndOfStreamException("genshin.tp callback channel ended unexpectedly.");
                 if (callback.Method == "window.metrics")
                 {
@@ -1929,13 +1937,18 @@ try
                 if (callback.Method == "capture.request")
                 {
                     teleportCaptureCount++;
-                    var frame = teleportCaptureCount switch
+                    OpenCvSharp.Mat frame;
+                    if (teleportConfirmed)
                     {
-                        <= 6 => bigMapFrame,
-                        7 => teleportFrame,
-                        8 => mainUiFrame,
-                        _ => throw new InvalidOperationException()
-                    };
+                        teleportCompletionCaptureCount++;
+                        frame = teleportCompletionCaptureCount <= 2
+                            ? teleportLoadingFrame
+                            : mainUiFrame;
+                    }
+                    else
+                    {
+                        frame = teleportCaptureCount <= 7 ? bigMapFrame : teleportFrame;
+                    }
                     await WriteCaptureRingFrameAsync(captureRingPath, frame, (ulong)(10 + teleportCaptureCount));
                     await callbackConnection.WriteResponseAsync(RpcResponse.Success(callback.Id, new
                     {
@@ -1948,16 +1961,21 @@ try
 
                 Require(callback.Method == "input.dispatch",
                     $"genshin.tp emitted unexpected callback {callback.Method}.");
-                teleportInputActions.Add(callback.Params?.Value<string>("action") ?? "");
+                var action = callback.Params?.Value<string>("action") ?? "";
+                teleportInputActions.Add(action);
+                teleportConfirmed |= action == "keyPress";
                 await callbackConnection.WriteResponseAsync(
                     RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+                }
             }
+            catch (OperationCanceledException) when (teleportResponderCancellation.IsCancellationRequested) { }
         }, cancellation.Token);
         await new ScriptProject("GenshinTeleport").ExecuteAsync();
+        teleportResponderCancellation.Cancel();
         await teleportResponder;
-        Require(teleportCaptureCount == 8,
+        Require(teleportCaptureCount >= 13,
             $"genshin.tp capture sequence changed: {teleportCaptureCount}.");
-        Require(teleportMetricsCount == 3 && teleportActivationCount == 0,
+        Require(teleportMetricsCount == 5 && teleportActivationCount == 0,
             $"genshin.tp platform sequence changed: metrics={teleportMetricsCount}, " +
             $"activations={teleportActivationCount}.");
         Require(teleportInputActions.SequenceEqual([
@@ -1973,6 +1991,8 @@ try
         var forceTeleportActivationCount = 0;
         var forceTeleportInputDetails = new List<string>();
         var forceTeleportCurrentPathing = false;
+        var forceTeleportConfirmed = false;
+        var forceTeleportCompletionCaptureCount = 0;
         using var forceTeleportResponderCancellation =
             CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
         var forceTeleportResponder = Task.Run(async () =>
@@ -2027,13 +2047,17 @@ try
                         else
                         {
                             forceTeleportCaptureCount++;
-                            frame = forceTeleportCaptureCount switch
+                            if (forceTeleportConfirmed)
                             {
-                                <= 6 => bigMapFrame,
-                                7 => teleportFrame,
-                                8 => mainUiFrame,
-                                _ => throw new InvalidOperationException()
-                            };
+                                forceTeleportCompletionCaptureCount++;
+                                frame = forceTeleportCompletionCaptureCount <= 2
+                                    ? teleportLoadingFrame
+                                    : mainUiFrame;
+                            }
+                            else
+                            {
+                                frame = forceTeleportCaptureCount <= 7 ? bigMapFrame : teleportFrame;
+                            }
                             frameId = (ulong)(30 + forceTeleportCaptureCount);
                         }
                         await WriteCaptureRingFrameAsync(captureRingPath, frame, frameId);
@@ -2054,6 +2078,7 @@ try
                     forceTeleportInputDetails.Add(gameAction is null
                         ? action
                         : $"{action}:{gameAction}:{keyType}");
+                    forceTeleportConfirmed |= action == "keyPress";
                     mapOpened |= callback.Params?.Value<string>("gameAction") == "openMap";
                     await callbackConnection.WriteResponseAsync(
                         RpcResponse.Success(callback.Id, new { acknowledged = true }),
@@ -2114,8 +2139,8 @@ try
                 new OpenCvSharp.Point2f((float)teleportX, (float)teleportY));
         Require(forceTeleportExecutor.SuccessEnd && forceTeleportCurrentPathing,
             "PathExecutor did not complete and publish the real force_tp route.");
-        Require(forceTeleportSetupCaptureCount == 6 && forceTeleportCaptureCount == 8 &&
-                forceTeleportMetricsCount == 9 &&
+        Require(forceTeleportSetupCaptureCount == 6 && forceTeleportCaptureCount >= 13 &&
+                forceTeleportMetricsCount == 11 &&
                 forceTeleportActivationCount == 0,
             $"force_tp platform sequence changed: setupCaptures={forceTeleportSetupCaptureCount}, " +
             $"teleportCaptures={forceTeleportCaptureCount}, " +
@@ -2124,7 +2149,8 @@ try
                 "releaseAll", "gameAction:openMap:keyPress",
                 "mouseClick",
                 "keyPress",
-                "gameAction:moveForward:keyUp", "mouseUp"
+                "gameAction:moveForward:keyUp", "mouseUp",
+                "gameAction:normalAttack:keyUp"
             ]),
             $"force_tp input sequence changed: {string.Join(",", forceTeleportInputDetails)}.");
         Require(Math.Abs(previousX - expectedPreviousPosition.X) < 0.01f &&
@@ -2140,6 +2166,8 @@ try
                layout.RootPath, sourceRoot, statueX, statueY))
     using (var statueTeleportFrame = statueMapFrame.Clone())
     using (var statueMainUiFrame = new OpenCvSharp.Mat(
+               schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black))
+    using (var statueLoadingFrame = new OpenCvSharp.Mat(
                schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black))
     using (var teleportButton = OpenCvSharp.Cv2.ImRead(
                Path.Combine(sourceRoot, "QuickTeleport/Assets/1920x1080/GoTeleport.png"),
@@ -2167,11 +2195,17 @@ try
         var statueMetricsCount = 0;
         var statueActivationCount = 0;
         var statueInputActions = new List<string>();
+        var statueConfirmed = false;
+        var statueCompletionCaptureCount = 0;
+        using var statueResponderCancellation =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
         var statueResponder = Task.Run(async () =>
         {
-            while (statueCaptureCount < 9)
+            try
             {
-                var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
+                while (true)
+                {
+                var callback = await callbackConnection.ReadRequestAsync(statueResponderCancellation.Token)
                     ?? throw new EndOfStreamException("genshin.tpToStatueOfTheSeven callback channel ended unexpectedly.");
                 if (callback.Method == "window.metrics")
                 {
@@ -2194,13 +2228,18 @@ try
                 if (callback.Method == "capture.request")
                 {
                     statueCaptureCount++;
-                    var frame = statueCaptureCount switch
+                    OpenCvSharp.Mat frame;
+                    if (statueConfirmed)
                     {
-                        <= 7 => statueMapFrame,
-                        8 => statueTeleportFrame,
-                        9 => statueMainUiFrame,
-                        _ => throw new InvalidOperationException()
-                    };
+                        statueCompletionCaptureCount++;
+                        frame = statueCompletionCaptureCount <= 2
+                            ? statueLoadingFrame
+                            : statueMainUiFrame;
+                    }
+                    else
+                    {
+                        frame = statueCaptureCount <= 7 ? statueMapFrame : statueTeleportFrame;
+                    }
                     await WriteCaptureRingFrameAsync(captureRingPath, frame, (ulong)(30 + statueCaptureCount));
                     await callbackConnection.WriteResponseAsync(RpcResponse.Success(callback.Id, new
                     {
@@ -2213,16 +2252,21 @@ try
 
                 Require(callback.Method == "input.dispatch",
                     $"genshin.tpToStatueOfTheSeven emitted unexpected callback {callback.Method}.");
-                statueInputActions.Add(callback.Params?.Value<string>("action") ?? "");
+                var action = callback.Params?.Value<string>("action") ?? "";
+                statueInputActions.Add(action);
+                statueConfirmed |= action == "keyPress";
                 await callbackConnection.WriteResponseAsync(
                     RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+                }
             }
+            catch (OperationCanceledException) when (statueResponderCancellation.IsCancellationRequested) { }
         }, cancellation.Token);
         var statueStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
         await new ScriptProject("GenshinStatueTeleport").ExecuteAsync();
         var statueElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(statueStartedAt);
+        statueResponderCancellation.Cancel();
         await statueResponder;
-        Require(statueCaptureCount == 9 && statueMetricsCount == 3 && statueActivationCount == 0,
+        Require(statueCaptureCount >= 13 && statueMetricsCount == 5 && statueActivationCount == 0,
             $"genshin.tpToStatueOfTheSeven platform sequence changed: captures={statueCaptureCount}, " +
             $"metrics={statueMetricsCount}, activations={statueActivationCount}.");
         Require(statueInputActions.SequenceEqual([
@@ -2298,6 +2342,8 @@ try
         using var movementTeleportFrame = movementMapFrame.Clone();
         using var movementMainUiFrame = new OpenCvSharp.Mat(
             schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black);
+        using var movementLoadingFrame = new OpenCvSharp.Mat(
+            schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black);
         using var movementTargetFrame = BuildGroundTruthNavigationFrame(
             layout.RootPath, MapAssets.Get(1920, 1080).MimiMapRect, movementTargetGroundTruth);
         using var movementTeleportButton = OpenCvSharp.Cv2.ImRead(
@@ -2327,14 +2373,26 @@ try
         var movementPositionCount = 0;
         var movementStateQueryCount = 0;
         var movementInputs = new List<string>();
-        OpenCvSharp.Mat? movementOrientationAlignedFrame = null;
+        var movementTeleportConfirmed = false;
+        var movementTeleportCompletionCaptureCount = 0;
+        var movementNavigationCaptureCount = 0;
+        var movementInitialTargetOrientation = BetterGenshinImpact.GameTask.AutoPathing.Navigation
+            .GetTargetOrientation(
+                new Waypoint { X = movementTargetImage.X, Y = movementTargetImage.Y },
+                movementRecognizedImagePosition);
+        OpenCvSharp.Mat? movementOrientationAlignedFrame = BuildOrientationAlignedFrame(
+            movementStartFrame, MapAssets.Get(1920, 1080).MimiMapRect,
+            movementInitialTargetOrientation);
+        using var movementResponderCancellation =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
         var movementResponder = Task.Run(async () =>
         {
-            var dropObserved = false;
             var moveForwardPressed = false;
-            while (!dropObserved)
+            try
             {
-                var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
+                while (true)
+                {
+                var callback = await callbackConnection.ReadRequestAsync(movementResponderCancellation.Token)
                     ?? throw new EndOfStreamException("genshin statue ShouldMove callback channel ended unexpectedly.");
                 switch (callback.Method)
                 {
@@ -2355,17 +2413,33 @@ try
                     case "capture.request":
                     {
                         movementCaptureCount++;
-                        var frame = movementCaptureCount switch
+                        OpenCvSharp.Mat frame;
+                        if (!movementTeleportConfirmed)
                         {
-                            <= 7 => movementMapFrame,
-                            8 => movementTeleportFrame,
-                            9 => movementMainUiFrame,
-                            10 => movementStartFrame,
-                            _ when !moveForwardPressed => movementOrientationAlignedFrame
-                                ?? throw new InvalidOperationException(
-                                    "ShouldMove requested rotation before publishing its localized position."),
-                            _ => movementTargetFrame
-                        };
+                            frame = movementCaptureCount <= 7
+                                ? movementMapFrame
+                                : movementTeleportFrame;
+                        }
+                        else if (++movementTeleportCompletionCaptureCount <= 2)
+                        {
+                            frame = movementLoadingFrame;
+                        }
+                        else if (movementTeleportCompletionCaptureCount <= 10)
+                        {
+                            frame = movementMainUiFrame;
+                        }
+                        else
+                        {
+                            movementNavigationCaptureCount++;
+                            frame = movementNavigationCaptureCount switch
+                            {
+                                1 => movementStartFrame,
+                                _ when !moveForwardPressed => movementOrientationAlignedFrame
+                                    ?? throw new InvalidOperationException(
+                                        "ShouldMove requested rotation before publishing its localized position."),
+                                _ => movementTargetFrame
+                            };
+                        }
                         await WriteCaptureRingFrameAsync(
                             captureRingPath, frame, (ulong)(50 + movementCaptureCount));
                         await callbackConnection.WriteResponseAsync(RpcResponse.Success(callback.Id, new
@@ -2379,7 +2453,7 @@ try
                     case "pathing.position":
                         movementPositionCount++;
                         int? targetOrientationForFrame = null;
-                        if (movementCaptureCount >= 10 && !moveForwardPressed &&
+                        if (movementNavigationCaptureCount >= 1 && !moveForwardPressed &&
                             movementOrientationAlignedFrame is null)
                         {
                             var actualPosition = new OpenCvSharp.Point2f(
@@ -2412,9 +2486,9 @@ try
                         var gameAction = callback.Params?.Value<string>("gameAction");
                         var keyType = callback.Params?.Value<string>("keyType");
                         movementInputs.Add(gameAction is null ? action : $"{action}:{gameAction}:{keyType}");
+                        movementTeleportConfirmed |= action == "keyPress";
                         moveForwardPressed = moveForwardPressed ||
                                              gameAction == "moveForward" && keyType == "keyDown";
-                        dropObserved = gameAction == "drop" && keyType == "keyPress";
                         await callbackConnection.WriteResponseAsync(
                             RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
                         break;
@@ -2423,7 +2497,9 @@ try
                         throw new InvalidOperationException(
                             $"genshin statue ShouldMove emitted unexpected callback {callback.Method}.");
                 }
+                }
             }
+            catch (OperationCanceledException) when (movementResponderCancellation.IsCancellationRequested) { }
         }, cancellation.Token);
 
         var movementStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -2434,9 +2510,10 @@ try
             "genshin statue ShouldMove did not complete within 30 seconds.");
         await movementScriptTask;
         var movementElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(movementStartedAt);
+        movementResponderCancellation.Cancel();
         await movementResponder;
         movementOrientationAlignedFrame?.Dispose();
-        Require(movementMetricsCount == 5 && movementActivationCount == 0,
+        Require(movementMetricsCount == 7 && movementActivationCount == 0,
             $"ShouldMove platform sequence changed: metrics={movementMetricsCount}, " +
             $"activations={movementActivationCount}.");
         Require(movementCaptureCount >= 12 && movementPositionCount >= 2,
@@ -2444,9 +2521,11 @@ try
             $"positions={movementPositionCount}.");
         Require(movementStateQueryCount >= 1,
             "ShouldMove did not query the real MoveForward platform state.");
-        Require(movementInputs.Contains("gameAction:moveForward:keyDown") &&
-                movementInputs.Contains("gameAction:moveForward:keyUp") &&
-                movementInputs.Last() == "gameAction:drop:keyPress",
+        var moveForwardDownIndex = movementInputs.IndexOf("gameAction:moveForward:keyDown");
+        var moveForwardUpIndex = movementInputs.IndexOf("gameAction:moveForward:keyUp");
+        var finalDropIndex = movementInputs.LastIndexOf("gameAction:drop:keyPress");
+        Require(moveForwardDownIndex >= 0 && moveForwardUpIndex > moveForwardDownIndex &&
+                finalDropIndex > moveForwardUpIndex,
             "ShouldMove did not execute forward down/up followed by Drop: " + string.Join(",", movementInputs));
         Require(movementElapsed >= TimeSpan.FromMilliseconds(900),
             $"ShouldMove skipped the configured restore wait: {movementElapsed}.");
@@ -2473,6 +2552,8 @@ try
     using (var nearestCenterFrame = BuildGroundTruthBigMapFrame(
                layout.RootPath, sourceRoot, nearestCenterX, nearestCenterY))
     using (var nearestTeleportFrame = nearestCenterFrame.Clone())
+    using (var nearestLoadingFrame = new OpenCvSharp.Mat(
+               schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black))
     using (var nearestMainUiFrame = new OpenCvSharp.Mat(
                schedulerHeight, schedulerWidth, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black))
     using (var nearestMovementStartFrame = BuildGroundTruthNavigationFrame(
@@ -2512,15 +2593,35 @@ try
         var nearestStateQueryCount = 0;
         var nearestInputs = new List<string>();
         var nearestClicks = new List<OpenCvSharp.Point>();
-        OpenCvSharp.Mat? nearestOrientationFrame = null;
+        var nearestTeleportConfirmed = false;
+        var nearestTeleportCompletionCaptureCount = 0;
+        var nearestNavigationCaptureCount = 0;
+        var nearestMovementStartImagePosition = nearestMap.ConvertGenshinMapCoordinatesToImageCoordinates(
+            new OpenCvSharp.Point2f((float)nearestGoddess.TranX, (float)nearestGoddess.TranY));
+        var nearestInitialTargetOrientation = BetterGenshinImpact.GameTask.AutoPathing.Navigation
+            .GetTargetOrientation(
+                new Waypoint { X = nearestTargetImage.X, Y = nearestTargetImage.Y },
+                nearestMovementStartImagePosition);
+        OpenCvSharp.Mat? nearestOrientationFrame = BuildOrientationAlignedFrame(
+            nearestMovementStartFrame, MapAssets.Get(1920, 1080).MimiMapRect,
+            nearestInitialTargetOrientation);
+        using var nearestResponderCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
         var nearestResponder = Task.Run(async () =>
         {
-            var dropObserved = false;
             var moveForwardPressed = false;
-            while (!dropObserved)
+            while (!nearestResponderCancellation.IsCancellationRequested)
             {
-                var callback = await callbackConnection.ReadRequestAsync(cancellation.Token)
-                    ?? throw new EndOfStreamException("nearest-statue callback channel ended unexpectedly.");
+                RpcRequest? callback;
+                try
+                {
+                    callback = await callbackConnection.ReadRequestAsync(nearestResponderCancellation.Token);
+                }
+                catch (OperationCanceledException) when (nearestResponderCancellation.IsCancellationRequested)
+                {
+                    break;
+                }
+                if (callback is null)
+                    throw new EndOfStreamException("nearest-statue callback channel ended unexpectedly.");
                 switch (callback.Method)
                 {
                     case "window.metrics":
@@ -2540,17 +2641,31 @@ try
                     case "capture.request":
                     {
                         nearestCaptureCount++;
-                        var frame = nearestCaptureCount switch
+                        OpenCvSharp.Mat frame;
+                        if (!nearestTeleportConfirmed)
                         {
-                            <= 8 => nearestCenterFrame,
-                            9 => nearestTeleportFrame,
-                            10 => nearestMainUiFrame,
-                            11 => nearestMovementStartFrame,
-                            _ when !moveForwardPressed => nearestOrientationFrame
-                                ?? throw new InvalidOperationException(
-                                    "nearest-statue movement requested rotation before position publication."),
-                            _ => nearestMovementTargetFrame
-                        };
+                            frame = nearestCaptureCount <= 8 ? nearestCenterFrame : nearestTeleportFrame;
+                        }
+                        else if (++nearestTeleportCompletionCaptureCount <= 2)
+                        {
+                            frame = nearestLoadingFrame;
+                        }
+                        else if (nearestTeleportCompletionCaptureCount <= 10)
+                        {
+                            frame = nearestMainUiFrame;
+                        }
+                        else
+                        {
+                            nearestNavigationCaptureCount++;
+                            frame = nearestNavigationCaptureCount switch
+                            {
+                                1 => nearestMovementStartFrame,
+                                _ when !moveForwardPressed => nearestOrientationFrame
+                                    ?? throw new InvalidOperationException(
+                                        "nearest-statue movement requested rotation before position publication."),
+                                _ => nearestMovementTargetFrame
+                            };
+                        }
                         await WriteCaptureRingFrameAsync(
                             captureRingPath, frame, (ulong)(80 + nearestCaptureCount));
                         await callbackConnection.WriteResponseAsync(RpcResponse.Success(callback.Id, new
@@ -2565,7 +2680,8 @@ try
                     {
                         nearestPositionCount++;
                         int? targetOrientationForFrame = null;
-                        if (nearestCaptureCount >= 11 && !moveForwardPressed && nearestOrientationFrame is null)
+                        if (nearestNavigationCaptureCount >= 1 && !moveForwardPressed &&
+                            nearestOrientationFrame is null)
                         {
                             var actualPosition = new OpenCvSharp.Point2f(
                                 callback.Params?.Value<float>("x") ?? 0f,
@@ -2600,11 +2716,12 @@ try
                             nearestClicks.Add(new OpenCvSharp.Point(
                                 callback.Params?.Value<int>("x") ?? -1,
                                 callback.Params?.Value<int>("y") ?? -1));
+                        nearestTeleportConfirmed |= action == "keyPress";
                         moveForwardPressed = moveForwardPressed ||
                                              gameAction == "moveForward" && keyType == "keyDown";
-                        dropObserved = gameAction == "drop" && keyType == "keyPress";
                         await callbackConnection.WriteResponseAsync(
-                            RpcResponse.Success(callback.Id, new { acknowledged = true }), cancellation.Token);
+                            RpcResponse.Success(callback.Id, new { acknowledged = true }),
+                            nearestResponderCancellation.Token);
                         break;
                     }
                     default:
@@ -2622,9 +2739,10 @@ try
             "nearest-statue script did not complete within 30 seconds.");
         await nearestScriptTask;
         var nearestElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(nearestStartedAt);
+        nearestResponderCancellation.Cancel();
         await nearestResponder;
         nearestOrientationFrame?.Dispose();
-        Require(nearestCaptureCount >= 13 && nearestMetricsCount == 5 && nearestActivationCount == 0,
+        Require(nearestCaptureCount >= 12 && nearestMetricsCount == 7 && nearestActivationCount == 0,
             $"nearest-statue platform sequence changed: captures={nearestCaptureCount}, " +
             $"metrics={nearestMetricsCount}, activations={nearestActivationCount}.");
         Require(nearestPositionCount >= 2 && nearestStateQueryCount >= 1,
@@ -2635,9 +2753,12 @@ try
                 nearestInputs.Contains("keyPress"),
             "nearest-statue selected unexpected target/confirmation input: " +
             string.Join(",", nearestClicks.Select(point => $"({point.X},{point.Y})")));
-        Require(nearestInputs.Contains("gameAction:moveForward:keyDown") &&
-                nearestInputs.Contains("gameAction:moveForward:keyUp") &&
-                nearestInputs.Last() == "gameAction:drop:keyPress",
+        var nearestMoveForwardDownIndex = nearestInputs.IndexOf("gameAction:moveForward:keyDown");
+        var nearestMoveForwardUpIndex = nearestInputs.IndexOf("gameAction:moveForward:keyUp");
+        var nearestDropIndex = nearestInputs.LastIndexOf("gameAction:drop:keyPress");
+        Require(nearestMoveForwardDownIndex >= 0 &&
+                nearestMoveForwardUpIndex > nearestMoveForwardDownIndex &&
+                nearestDropIndex > nearestMoveForwardUpIndex,
             "nearest-statue branch did not finish MoveTo and Drop: " + string.Join(",", nearestInputs));
         Require(nearestElapsed >= TimeSpan.FromMilliseconds(900),
             $"nearest-statue branch skipped restore wait: {nearestElapsed}.");
