@@ -1,5 +1,6 @@
 using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Verification.Framework;
 using CsTrees;
@@ -57,6 +58,107 @@ public sealed class AutoFishingSuite : IVerificationSuite
         context.Require(
             setSleep.Sleep.Exists() && ReferenceEquals(setSleep.Sleep.Get(), sleep),
             "Auto-fishing did not restore the sleep callback after clearing the blackboard for a second time period.");
+
+        var sessionBlackboard = new Blackboard();
+        var sessionScreenshot = new TakeScreenshot(
+            "session screenshot",
+            NullLogger.Instance,
+            sessionBlackboard);
+        var trackingInput = new TrackingAutoFishingInput();
+        BlockingInputBehaviour? blockingBehaviour = null;
+        using var trigger = new AutoFishingTrigger(
+            runtime: null!,
+            NullLogger<AutoFishingTrigger>.Instance,
+            trackingInput,
+            guardedInput => blockingBehaviour = new BlockingInputBehaviour(guardedInput),
+            sessionScreenshot);
+        trigger.IsEnabled = true;
+        trigger.IsExclusive = true;
+        using var triggerFrame = new ImageRegion(
+            new Mat(8, 8, MatType.CV_8UC4, Scalar.Black),
+            0,
+            0,
+            drawContent: new NoopOverlayDrawPlatform());
+        trigger.OnCapture(new CaptureContent(triggerFrame));
+
+        await blockingBehaviour!.Entered.Task.WaitAsync(cancellationToken);
+        context.Require(
+            trackingInput.IsDown && trackingInput.LeftButtonDownCount == 1,
+            "Auto-fishing verification did not enter the held-input state.");
+
+        trigger.Dispose();
+        context.Require(
+            !trigger.IsEnabled && !trigger.IsExclusive &&
+            !trackingInput.IsDown && trackingInput.ReleaseAllCount >= 1,
+            "Disposing auto-fishing did not cancel the session and release held input.");
+
+        blockingBehaviour.Continue.TrySetResult();
+        await blockingBehaviour.Completed.Task.WaitAsync(cancellationToken);
+        context.Require(
+            trackingInput.LeftButtonDownCount == 1,
+            "An in-flight auto-fishing tick emitted new input after disposal.");
+
+        trigger.OnCapture(new CaptureContent(triggerFrame));
+        await Task.Delay(25, cancellationToken);
+        context.Require(
+            blockingBehaviour.UpdateCount == 1,
+            "Disposed auto-fishing started another behaviour-tree tick.");
+    }
+
+    private sealed class BlockingInputBehaviour(IAutoFishingInput input)
+        : Behaviour("blocking input")
+    {
+        public TaskCompletionSource Entered { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Continue { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Completed { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        public int UpdateCount { get; private set; }
+
+        protected override async Task<Status> Update()
+        {
+            UpdateCount++;
+            input.LeftButtonDown();
+            Entered.TrySetResult();
+            try
+            {
+                await Continue.Task;
+                input.LeftButtonDown();
+                return Status.Running;
+            }
+            finally
+            {
+                Completed.TrySetResult();
+            }
+        }
+    }
+
+    private sealed class TrackingAutoFishingInput : IAutoFishingInput
+    {
+        public bool IsDown { get; private set; }
+        public int LeftButtonDownCount { get; private set; }
+        public int ReleaseAllCount { get; private set; }
+
+        public void MoveMouseBy(int x, int y) { }
+        public void LeftButtonDown()
+        {
+            LeftButtonDownCount++;
+            IsDown = true;
+        }
+        public void LeftButtonUp() => IsDown = false;
+        public void LeftButtonClick() { }
+        public void RightButtonClick() { }
+        public bool IsLeftButtonDown() => IsDown;
+        public void PressEscape() { }
+        public void PressInteraction() { }
+        public void SetMoveForward(bool isDown) { }
+        public void SetMoveBackward(bool isDown) { }
+        public void ReleaseAll()
+        {
+            ReleaseAllCount++;
+            IsDown = false;
+        }
     }
 
     private sealed class NoopOverlayDrawPlatform : IOverlayDrawPlatform

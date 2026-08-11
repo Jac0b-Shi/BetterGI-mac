@@ -42,6 +42,13 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoFishingTests
         {
             if (isDown) Keyboard.KeyDown(User32.VK.VK_S); else Keyboard.KeyUp(User32.VK.VK_S);
         }
+
+        public void ReleaseAll()
+        {
+            Mouse.LeftButtonUp();
+            Keyboard.KeyUp(User32.VK.VK_W);
+            Keyboard.KeyUp(User32.VK.VK_S);
+        }
     }
 
     internal class FakeKeyboardSimulator : IKeyboardSimulator

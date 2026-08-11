@@ -23,12 +23,33 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 {
     public class AutoFishingTrigger : ITaskTrigger, IDisposable
     {
-        private readonly IAutoFishingRuntimePlatform runtime = AutoFishingRuntimePlatform.Current;
+        private readonly IAutoFishingRuntimePlatform runtime;
         private readonly ILogger<AutoFishingTrigger> _logger;
-        private readonly IAutoFishingInput input = new TaskControlAutoFishingInput();
+        private readonly SessionBoundAutoFishingInput input;
 
         public string Name => "自动钓鱼";
-        public bool IsEnabled { get; set; }
+        public bool IsEnabled
+        {
+            get => Volatile.Read(ref _isEnabled) != 0;
+            set
+            {
+                if (value && Volatile.Read(ref _disposed) != 0)
+                {
+                    return;
+                }
+
+                var wasEnabled = Interlocked.Exchange(ref _isEnabled, value ? 1 : 0) != 0;
+                if (value && Volatile.Read(ref _disposed) != 0)
+                {
+                    Interlocked.Exchange(ref _isEnabled, 0);
+                    return;
+                }
+                if (!value && (wasEnabled || IsExclusive))
+                {
+                    StopSession(releaseIfInactive: true);
+                }
+            }
+        }
         public int Priority => 15;
 
         /// <summary>
@@ -36,7 +57,26 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
         /// 在钓鱼的时候，不应该有其他任务在执行
         /// 在触发器发现正在钓鱼的时候，启用独占模式
         /// </summary>
-        public bool IsExclusive { get; set; }
+        public bool IsExclusive
+        {
+            get => Volatile.Read(ref _isExclusive) != 0;
+            set
+            {
+                if (value && (!IsEnabled || Volatile.Read(ref _disposed) != 0))
+                {
+                    return;
+                }
+
+                if (value)
+                {
+                    StartSession();
+                }
+                else
+                {
+                    StopSession(releaseIfInactive: false);
+                }
+            }
+        }
 
         private CsTrees.Blackboard.Blackboard blackboard;
 
@@ -46,12 +86,18 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
         private Behaviour BehaviourTreeLaTiao { get; set; }
 
         private readonly TakeScreenshot _takeScreenshot;
+        private readonly object _sessionLock = new();
+        private CancellationTokenSource? _sessionCancellation;
+        private int _isEnabled;
+        private int _isExclusive;
         private int _tickRunning;
         private int _disposed;
 
         public AutoFishingTrigger()
         {
+            runtime = AutoFishingRuntimePlatform.Current;
             _logger = runtime.GetLogger<AutoFishingTrigger>();
+            input = new SessionBoundAutoFishingInput(new TaskControlAutoFishingInput());
             AutoFishingTaskParam autoFishingTaskParam =
                 AutoFishingTaskParam.BuildFromConfig(runtime.Config);
             IOcrService ocrService = runtime.OcrService;
@@ -76,6 +122,21 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                     .End()
                 .End()
                 .Build();
+        }
+
+        internal AutoFishingTrigger(
+            IAutoFishingRuntimePlatform runtime,
+            ILogger<AutoFishingTrigger> logger,
+            IAutoFishingInput input,
+            Func<IAutoFishingInput, Behaviour> behaviourFactory,
+            TakeScreenshot takeScreenshot)
+        {
+            this.runtime = runtime;
+            _logger = logger;
+            this.input = new SessionBoundAutoFishingInput(input);
+            blackboard = new CsTrees.Blackboard.Blackboard();
+            BehaviourTreeLaTiao = behaviourFactory(this.input);
+            _takeScreenshot = takeScreenshot;
         }
 
         public void Init()
@@ -119,9 +180,16 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
         private async Task RunTickAsync()
         {
+            var cancellationToken = GetSessionCancellationToken();
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                using var session = input.UseSession(cancellationToken);
                 await BehaviourTreeLaTiao.TickOnce();
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogDebug("自动钓鱼行为树 Tick 已取消");
             }
             catch (Exception ex)
             {
@@ -131,6 +199,62 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             {
                 Volatile.Write(ref _tickRunning, 0);
                 ReleaseScreenshotIfIdle();
+            }
+        }
+
+        private void StartSession()
+        {
+            CancellationTokenSource? previous;
+            lock (_sessionLock)
+            {
+                if (_isExclusive != 0 || _isEnabled == 0 || _disposed != 0)
+                {
+                    return;
+                }
+
+                previous = _sessionCancellation;
+                _sessionCancellation = new CancellationTokenSource();
+                Volatile.Write(ref _isExclusive, 1);
+            }
+
+            previous?.Cancel();
+            previous?.Dispose();
+        }
+
+        private CancellationToken GetSessionCancellationToken()
+        {
+            lock (_sessionLock)
+            {
+                return _sessionCancellation?.Token ?? new CancellationToken(canceled: true);
+            }
+        }
+
+        private void StopSession(bool releaseIfInactive)
+        {
+            CancellationTokenSource? cancellation;
+            bool wasExclusive;
+            lock (_sessionLock)
+            {
+                wasExclusive = _isExclusive != 0;
+                Volatile.Write(ref _isExclusive, 0);
+                cancellation = _sessionCancellation;
+                _sessionCancellation = null;
+            }
+
+            if (!releaseIfInactive && !wasExclusive && cancellation is null)
+            {
+                return;
+            }
+
+            cancellation?.Cancel();
+            cancellation?.Dispose();
+            try
+            {
+                input.ReleaseAll();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "释放自动钓鱼输入失败");
             }
         }
 
