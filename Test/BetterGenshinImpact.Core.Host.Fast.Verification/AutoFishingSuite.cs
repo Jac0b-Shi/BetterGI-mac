@@ -103,6 +103,55 @@ public sealed class AutoFishingSuite : IVerificationSuite
         context.Require(
             blockingBehaviour.UpdateCount == 1,
             "Disposed auto-fishing started another behaviour-tree tick.");
+
+        var idleBlackboard = new Blackboard();
+        var idleScreenshot = new TakeScreenshot(
+            "idle screenshot",
+            NullLogger.Instance,
+            idleBlackboard);
+        var idleInput = new TrackingAutoFishingInput();
+        using var idleTrigger = new AutoFishingTrigger(
+            runtime: null!,
+            NullLogger<AutoFishingTrigger>.Instance,
+            idleInput,
+            guardedInput => new BlockingInputBehaviour(guardedInput),
+            idleScreenshot);
+        idleTrigger.IsEnabled = true;
+        idleTrigger.IsEnabled = false;
+        context.Require(
+            idleInput.ReleaseAllCount == 0,
+            "Disabling idle auto-fishing released inputs it does not own.");
+
+        var activeBlackboard = new Blackboard();
+        var activeScreenshot = new TakeScreenshot(
+            "active screenshot",
+            NullLogger.Instance,
+            activeBlackboard);
+        var activeInput = new TrackingAutoFishingInput();
+        BlockingInputBehaviour? activeBehaviour = null;
+        using var activeTrigger = new AutoFishingTrigger(
+            runtime: null!,
+            NullLogger<AutoFishingTrigger>.Instance,
+            activeInput,
+            guardedInput => activeBehaviour = new BlockingInputBehaviour(guardedInput),
+            activeScreenshot);
+        activeTrigger.IsEnabled = true;
+        activeTrigger.IsExclusive = true;
+        using var activeFrame = new ImageRegion(
+            new Mat(8, 8, MatType.CV_8UC4, Scalar.Black),
+            0,
+            0,
+            drawContent: new NoopOverlayDrawPlatform());
+        activeTrigger.OnCapture(new CaptureContent(activeFrame));
+
+        await activeBehaviour!.Entered.Task.WaitAsync(cancellationToken);
+        activeTrigger.IsEnabled = false;
+        context.Require(
+            !activeTrigger.IsExclusive && activeInput.ReleaseAllCount >= 1,
+            "Disabling an active auto-fishing session did not cancel it and release held input.");
+
+        activeBehaviour.Continue.TrySetResult();
+        await activeBehaviour.Completed.Task.WaitAsync(cancellationToken);
     }
 
     private sealed class BlockingInputBehaviour(IAutoFishingInput input)

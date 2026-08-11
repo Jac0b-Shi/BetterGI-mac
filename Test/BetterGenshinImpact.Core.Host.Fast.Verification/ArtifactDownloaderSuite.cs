@@ -139,6 +139,87 @@ public sealed class ArtifactDownloaderSuite : IVerificationSuite
             context.Require(!Directory.EnumerateFiles(
                     Path.Combine(resumeRoot, "cache"), "*.part").Any(),
                 "A completed resumed download left a partial cache behind.");
+
+            // Hash-mismatch retry: a .part that already reached the locked size is
+            // skipped by DownloadFileAsync, so it can carry stale/corrupt content.
+            var mismatchRoot = Path.Combine(root, "hash-mismatch-retry");
+            Directory.CreateDirectory(mismatchRoot);
+            var correctBytes = await File.ReadAllBytesAsync(second.Path, cancellationToken);
+            var mismatchSource = new ArtifactDownloader.SourceEntry
+            {
+                Id = second.Source.Id,
+                Type = second.Source.Type,
+                Url = "https://verification.invalid/archive.zip",
+                Sha256 = second.Source.Sha256,
+                Format = second.Source.Format,
+                SizeBytes = second.Source.SizeBytes,
+                Provenance = second.Source.Provenance,
+            };
+            var mismatchLock = new ArtifactDownloader.SourceLock
+            {
+                SchemaVersion = 1,
+                ArtifactSetVersion = "hash-mismatch-retry",
+                Sources = [mismatchSource],
+                Artifacts = [lockDocument.Artifacts[1]],
+            };
+            var mismatchLockPath = Path.Combine(mismatchRoot, "lock.json");
+            await File.WriteAllTextAsync(mismatchLockPath, JsonSerializer.Serialize(
+                mismatchLock,
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }),
+                cancellationToken);
+
+            // Scenario 1: first response delivers full-size but corrupt bytes, second
+            // response delivers the correct bytes -> the fresh retry succeeds, the
+            // archive hash verifies, and no .part file is left behind.
+            var corruptFirstBytes = new byte[correctBytes.Length];
+            Array.Fill(corruptFirstBytes, (byte)0xA5);
+            var retryHandler = new SequencedContentHandler(
+                (HttpStatusCode.OK, corruptFirstBytes),
+                (HttpStatusCode.OK, correctBytes));
+            using (var retryDownloader = new ArtifactDownloader(new HttpClient(retryHandler)))
+            {
+                var retryResult = await retryDownloader.EnsureInstalledAsync(
+                    mismatchLockPath,
+                    Path.Combine(mismatchRoot, "output"),
+                    cancellationToken,
+                    Path.Combine(mismatchRoot, "cache"));
+                context.Require(retryResult.Success, string.Join("; ", retryResult.Errors));
+                context.Require(File.ReadAllBytes(Path.Combine(mismatchRoot, "output", "Assets/B/data.csv"))
+                        .SequenceEqual(new byte[] { 4, 5, 6, 7 }),
+                    "A corrupt first download was not recovered by the fresh retry.");
+                context.Require(retryHandler.RequestCount == 2 && !retryHandler.UsedRange,
+                    "A hash-mismatch retry must re-download from scratch without a Range request.");
+                context.Require(File.Exists(Path.Combine(mismatchRoot, "cache",
+                        $"bettergi-{mismatchSource.Sha256}.zip")),
+                    "A successful hash-mismatch retry did not retain the verified archive.");
+                context.Require(!Directory.EnumerateFiles(
+                        Path.Combine(mismatchRoot, "cache"), "*.part").Any(),
+                    "A successful hash-mismatch retry left a partial cache behind.");
+            }
+
+            // Scenario 2: both responses deliver full-size but corrupt bytes -> the
+            // run fails with a SHA-256 mismatch error and no .part file is left behind.
+            var corruptRetryBytes = new byte[correctBytes.Length];
+            Array.Fill(corruptRetryBytes, (byte)0x5C);
+            var failingHandler = new SequencedContentHandler(
+                (HttpStatusCode.OK, corruptFirstBytes),
+                (HttpStatusCode.OK, corruptRetryBytes));
+            using (var failingDownloader = new ArtifactDownloader(new HttpClient(failingHandler)))
+            {
+                var failResult = await failingDownloader.EnsureInstalledAsync(
+                    mismatchLockPath,
+                    Path.Combine(mismatchRoot, "fail-output"),
+                    cancellationToken,
+                    Path.Combine(mismatchRoot, "fail-cache"));
+                context.Require(!failResult.Success,
+                    "A twice-corrupt download must fail.");
+                context.Require(failResult.Errors.Any(e =>
+                        e.Contains("SHA-256 mismatch", StringComparison.OrdinalIgnoreCase)),
+                    $"Expected a SHA-256 mismatch error, got: {string.Join("; ", failResult.Errors)}");
+                context.Require(!Directory.EnumerateFiles(
+                        Path.Combine(mismatchRoot, "fail-cache"), "*.part").Any(),
+                    "A failed hash-mismatch run left a partial cache behind.");
+            }
         }
         finally
         {
@@ -229,6 +310,39 @@ public sealed class ArtifactDownloaderSuite : IVerificationSuite
                 content.Length - 1,
                 content.Length);
             return Task.FromResult(response);
+        }
+    }
+
+    /// <summary>
+    /// Serves the configured (status, body) pairs in order, repeating the last one
+    /// for any further requests. Used to drive the hash-mismatch retry path where
+    /// successive downloads must return different content.
+    /// </summary>
+    private sealed class SequencedContentHandler : HttpMessageHandler
+    {
+        private readonly (HttpStatusCode Status, byte[] Content)[] _responses;
+        private int _index;
+
+        public SequencedContentHandler(params (HttpStatusCode Status, byte[] Content)[] responses)
+        {
+            _responses = responses;
+        }
+
+        public int RequestCount => _index;
+        public bool UsedRange { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            if (request.Headers.Range is not null) UsedRange = true;
+            var responseIndex = Math.Min(_index, _responses.Length - 1);
+            _index++;
+            var (status, content) = _responses[responseIndex];
+            return Task.FromResult(new HttpResponseMessage(status)
+            {
+                Content = new ByteArrayContent(content),
+            });
         }
     }
 }

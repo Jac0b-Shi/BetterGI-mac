@@ -282,11 +282,16 @@ public sealed class MusicSuite : IVerificationSuite
         context.Require(
             service.Snapshot.Position < TimeSpan.FromMilliseconds(340),
             "Pause, seek, or resume failed to interrupt the blocked focus wait.");
+        var resumedAt = Stopwatch.GetTimestamp();
         gate.Open();
-        await Task.Delay(60, cancellationToken);
+        await WaitForAsync(
+            () => service.Snapshot.Position > TimeSpan.FromMilliseconds(300),
+            TimeSpan.FromSeconds(1),
+            cancellationToken);
+        var elapsedSinceResume = Stopwatch.GetElapsedTime(resumedAt);
         context.Require(
-            service.Snapshot.Position > TimeSpan.FromMilliseconds(300) &&
-            service.Snapshot.Position < TimeSpan.FromMilliseconds(440),
+            service.Snapshot.Position <
+                TimeSpan.FromMilliseconds(300) + elapsedSinceResume + TimeSpan.FromMilliseconds(100),
             "Music playback caught up elapsed wall time after focus returned.");
 
         gate.Close();

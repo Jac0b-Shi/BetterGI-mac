@@ -46,7 +46,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                 }
                 if (!value && (wasEnabled || IsExclusive))
                 {
-                    StopSession(releaseIfInactive: true);
+                    StopSession();
                 }
             }
         }
@@ -73,7 +73,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                 }
                 else
                 {
-                    StopSession(releaseIfInactive: false);
+                    StopSession();
                 }
             }
         }
@@ -229,7 +229,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             }
         }
 
-        private void StopSession(bool releaseIfInactive)
+        private void StopSession()
         {
             CancellationTokenSource? cancellation;
             bool wasExclusive;
@@ -241,7 +241,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                 _sessionCancellation = null;
             }
 
-            if (!releaseIfInactive && !wasExclusive && cancellation is null)
+            if (!wasExclusive && cancellation is null)
             {
                 return;
             }

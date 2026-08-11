@@ -325,16 +325,31 @@ public sealed class ArtifactDownloader : IDisposable
                     {
                         Console.WriteLine($"Downloading {source.Url}");
                         var partialPath = cachedPath + ".part";
-                        await DownloadFileAsync(
-                            source.Url,
-                            partialPath,
-                            source.SizeBytes,
-                            ct,
-                            downloaded => progress?.Invoke(new ArtifactProgress(
-                                "downloading", source.Id, displayName, downloaded, source.SizeBytes,
-                                sourceOrdinal, selectedSources.Length)));
-                        Console.WriteLine($"Downloaded {new FileInfo(partialPath).Length:N0} bytes");
-                        var downloadedHash = await ComputeSha256Async(partialPath);
+
+                        async Task<string> DownloadFreshAsync()
+                        {
+                            await DownloadFileAsync(
+                                source.Url,
+                                partialPath,
+                                source.SizeBytes,
+                                ct,
+                                downloaded => progress?.Invoke(new ArtifactProgress(
+                                    "downloading", source.Id, displayName, downloaded, source.SizeBytes,
+                                    sourceOrdinal, selectedSources.Length)));
+                            Console.WriteLine($"Downloaded {new FileInfo(partialPath).Length:N0} bytes");
+                            return await ComputeSha256Async(partialPath);
+                        }
+
+                        var downloadedHash = await DownloadFreshAsync();
+                        if (downloadedHash != expectedHash)
+                        {
+                            // A .part that already reached the locked size is skipped by
+                            // DownloadFileAsync without re-downloading, so it can carry
+                            // stale or corrupt content. Discard it and retry once with a
+                            // fresh full download; only a second mismatch is a real failure.
+                            File.Delete(partialPath);
+                            downloadedHash = await DownloadFreshAsync();
+                        }
                         if (downloadedHash != expectedHash)
                         {
                             File.Delete(partialPath);
