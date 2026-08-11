@@ -32,6 +32,8 @@ struct BetterGICoreMusicTests {
                 "error": NSNull(),
                 "outputProfileName": "风物之诗琴",
                 "transpose": 0,
+                "mappingModeOverride": NSNull(),
+                "mappingMode": "MelodicOctaveFold",
                 "midiTracks": [],
             ]],
             "playback": [
@@ -46,6 +48,8 @@ struct BetterGICoreMusicTests {
 
         #expect(state.tracks.count == 1)
         #expect(state.tracks[0].format == "Keyboard")
+        #expect(state.tracks[0].mappingMode == "MelodicOctaveFold")
+        #expect(state.tracks[0].mappingModeOverride == nil)
         #expect(state.playback.state == .playing)
         #expect(state.playback.speed == 1.25)
         #expect(state.playback.queueIndex == 0)
