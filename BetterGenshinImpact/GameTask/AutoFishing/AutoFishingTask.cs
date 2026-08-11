@@ -43,15 +43,14 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             using InferenceSession session = GridIconClassifier.LoadModel(out Dictionary<string, float[]> prototypes);
 
             CsTrees.Blackboard.Blackboard blackboard = new CsTrees.Blackboard.Blackboard();
+            var takeScreenshot = new TakeScreenshot("截图", _logger, blackboard);
 
             // @formatter:off
             var root = TreeBuilder.Create()
                 .WithBlackboard(blackboard)
                     .Sequence("钓鱼并确保完成后退出钓鱼模式")
-                        .OneShot(@"\")
-                            .SetSleep("设置sleep方法", Sleep)
-                        .End()
-                        .TakeScreenshot("截图", _logger)
+                        .SetSleep("设置sleep方法", Sleep)
+                        .Leaf(() => takeScreenshot)
                         .Parallel("在整体超时时间内钓鱼", policy: new ParallelPolicy.SuccessOnOne())
                             .SequenceWithMemory("调整视角并钓鱼")
                                 .MoveViewpointDown("调整视角至俯视", _logger, input)
@@ -222,26 +221,38 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                 }
             }
 
-            using var ra = runtime.CaptureFrame()
-                ?? throw new InvalidOperationException("截图失败，无法判断联机状态。");
-            if (ra.FindMulti(RecognitionAssets.Get("AutoFight", "P", ra)).Count != 0)
+            bool isInCoop;
+            using (var ra = runtime.CaptureFrame()
+                   ?? throw new InvalidOperationException("截图失败，无法判断联机状态。"))
             {
-                _logger.LogInformation("当前处于联机状态，不使用昼夜设置");
-                await tickARound();
+                isInCoop = ra.FindMulti(RecognitionAssets.Get("AutoFight", "P", ra)).Count != 0;
             }
-            else if (param.FishingTimePolicy == FishingTimePolicy.DontChange)
+
+            try
             {
-                await tickARound();
-            }
-            else
-            {
-                foreach (int hour in param.FishingTimePolicy == FishingTimePolicy.Daytime
-                             ? [7]
-                             : (param.FishingTimePolicy == FishingTimePolicy.Nighttime ? [19] : new int[] { 7, 19 }))
+                if (isInCoop)
                 {
-                    await runtime.SetTimeAsync(hour, 0, ct);
+                    _logger.LogInformation("当前处于联机状态，不使用昼夜设置");
                     await tickARound();
                 }
+                else if (param.FishingTimePolicy == FishingTimePolicy.DontChange)
+                {
+                    await tickARound();
+                }
+                else
+                {
+                    foreach (int hour in param.FishingTimePolicy == FishingTimePolicy.Daytime
+                                 ? [7]
+                                 : (param.FishingTimePolicy == FishingTimePolicy.Nighttime ? [19] : new int[] { 7, 19 }))
+                    {
+                        await runtime.SetTimeAsync(hour, 0, ct);
+                        await tickARound();
+                    }
+                }
+            }
+            finally
+            {
+                takeScreenshot.ReleaseFrame();
             }
 
             _logger.LogInformation("→ 钓鱼任务结束");

@@ -28,6 +28,7 @@ using System.Threading.Tasks;
 
 namespace BetterGenshinImpact.GameTask.AutoFishing
 {
+#pragma warning disable CS1998 // CsTrees requires asynchronous behaviour overrides.
     /// <summary>
     /// 检测鱼群
     /// </summary>
@@ -314,7 +315,9 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
         private static readonly FrozenSet<string> availableBaitNames = Enum.GetValues(typeof(BaitType)).Cast<BaitType>().Select(bt => bt.GetDescription()).ToFrozenSet();
     }
 
+#if BGI_FULL_WINDOWS
     [Obsolete]
+#endif
     /// <summary>
     /// 《How to Cast a Fly Rod: Step-by-Step Guide for Beginners》：https://hookedonfly.fishing/2024/10/how-to-cast-a-fly-rod/
     /// 《How to Catch Fish》：https://game8.co/games/Genshin-Impact/archives/340798
@@ -1338,3 +1341,5 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
         }
     }
 }
+
+#pragma warning restore CS1998

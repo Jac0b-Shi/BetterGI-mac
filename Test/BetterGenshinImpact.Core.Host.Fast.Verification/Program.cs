@@ -27,4 +27,5 @@ return await VerificationRunner.RunAsync(args,
     new TemplateMatchingSuite(),
     new ArtifactDownloaderSuite(),
     new MusicSuite(),
+    new AutoFishingSuite(),
 ]);

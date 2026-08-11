@@ -6,8 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <!-- CsTrees 1.0.1 requires async overrides and generates accessors for obsolete behaviours. -->
-    <NoWarn>$(NoWarn);CS0612;CS1998;CS9057</NoWarn>
+    <!-- CsTrees.SourceGenerator currently targets a newer compiler than this project. -->
+    <NoWarn>$(NoWarn);CS9057</NoWarn>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>12.0</LangVersion>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>

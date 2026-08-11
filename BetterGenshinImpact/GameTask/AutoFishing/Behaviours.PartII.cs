@@ -23,12 +23,14 @@ using System.Threading.Tasks;
 
 namespace BetterGenshinImpact.GameTask.AutoFishing
 {
+#pragma warning disable CS1998 // CsTrees requires asynchronous behaviour overrides.
     /// <summary>
     /// 如果未超时返回运行中，超时返回成功
     /// </summary>
     public partial class WholeProcessTimeout : Behaviour
     {
         private readonly ILogger _logger;
+
         private readonly TimeProvider _timeProvider;
         private DateTimeOffset? _timeout;
         private readonly int _seconds;
@@ -416,6 +418,9 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
     {
         private readonly ILogger _logger;
 
+        internal Func<ImageRegion?> CaptureFrame { get; set; } =
+            () => AutoFishingRuntimePlatform.Current.CaptureFrame();
+
         [BlackboardKey(Access = Access.ExclusiveWrite)]
         public BehaviourKeyAccess<ImageRegion> Screenshot { get; private set; } = null!;
 
@@ -428,17 +433,27 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
         protected async override Task<Status> Update()
         {
-            _imageRegion?.Dispose();
-            _imageRegion = AutoFishingRuntimePlatform.Current.CaptureFrame();
+            ReleaseFrame();
+            _imageRegion = CaptureFrame();
             if (_imageRegion == null)
             {
-                _logger.LogWarning("截图失败");
-                return Status.Failure;
+                _logger.LogWarning("截图失败，本轮稍后重试");
+                return Status.Running;
             }
 
             Screenshot.Set(_imageRegion);
 
             return Status.Success;
+        }
+
+        public void ReleaseFrame()
+        {
+            if (Screenshot.Exists())
+            {
+                Screenshot.Unset();
+            }
+
+            Interlocked.Exchange(ref _imageRegion, null)?.Dispose();
         }
     }
 
@@ -466,3 +481,5 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
         }
     }
 }
+
+#pragma warning restore CS1998

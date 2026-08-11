@@ -17,9 +17,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Point = OpenCvSharp.Point;
 
+#pragma warning disable CS1998 // CsTrees requires asynchronous behaviour overrides.
+
 namespace BetterGenshinImpact.GameTask.AutoFishing
 {
-    public class AutoFishingTrigger : ITaskTrigger
+    public class AutoFishingTrigger : ITaskTrigger, IDisposable
     {
         private readonly IAutoFishingRuntimePlatform runtime = AutoFishingRuntimePlatform.Current;
         private readonly ILogger<AutoFishingTrigger> _logger;
@@ -43,6 +45,10 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
         /// </summary>
         private Behaviour BehaviourTreeLaTiao { get; set; }
 
+        private readonly TakeScreenshot _takeScreenshot;
+        private int _tickRunning;
+        private int _disposed;
+
         public AutoFishingTrigger()
         {
             _logger = runtime.GetLogger<AutoFishingTrigger>();
@@ -52,10 +58,11 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
             this.blackboard = new CsTrees.Blackboard.Blackboard();
 
+            _takeScreenshot = new TakeScreenshot("截图", _logger, blackboard);
             BehaviourTreeLaTiao = TreeBuilder.Create()
                 .WithBlackboard(blackboard)
                     .Sequence("出现退出钓鱼按钮就开始钓鱼")
-                        .TakeScreenshot("截图", _logger)
+                        .Leaf(() => _takeScreenshot)
                         .Parallel("root", policy: new ParallelPolicy.SuccessOnOne())
                             .CheckFishingUserInterfaceBehaviour("检查是否在钓鱼界面", this)
                             .FailureIsSuccess("拉条循环")
@@ -73,14 +80,21 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
         public void Init()
         {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
             IsEnabled = runtime.Config.Enabled;
             IsExclusive = false;
+            ReleaseScreenshotIfIdle();
         }
 
         private DateTime _prevExecute = DateTime.MinValue;
 
         public void OnCapture(CaptureContent content)
         {
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                return;
+            }
+
             if ((DateTime.Now - _prevExecute).TotalMilliseconds <= 67)
             {
                 return;
@@ -96,8 +110,55 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             }
             else
             {
-                BehaviourTreeLaTiao.TickOnce();
+                if (Interlocked.CompareExchange(ref _tickRunning, 1, 0) == 0)
+                {
+                    _ = RunTickAsync();
+                }
             }
+        }
+
+        private async Task RunTickAsync()
+        {
+            try
+            {
+                await BehaviourTreeLaTiao.TickOnce();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "自动钓鱼行为树 Tick 失败");
+            }
+            finally
+            {
+                Volatile.Write(ref _tickRunning, 0);
+                ReleaseScreenshotIfIdle();
+            }
+        }
+
+        private void ReleaseScreenshotIfIdle()
+        {
+            if (!IsExclusive && Volatile.Read(ref _tickRunning) == 0)
+            {
+                try
+                {
+                    _takeScreenshot.ReleaseFrame();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "释放自动钓鱼截图失败");
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+
+            IsEnabled = false;
+            IsExclusive = false;
+            ReleaseScreenshotIfIdle();
         }
 
         // /// <summary>
@@ -369,3 +430,5 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
         }
     }
 }
+
+#pragma warning restore CS1998

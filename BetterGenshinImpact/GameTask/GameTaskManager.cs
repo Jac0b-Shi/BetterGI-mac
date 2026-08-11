@@ -43,7 +43,20 @@ public static class GameTaskManager
         return [.. loadedTriggers.OrderByDescending(trigger => trigger.Priority)];
     }
 
-    public static void ClearTriggers() => TriggerDictionary?.Clear();
+    public static void ClearTriggers()
+    {
+        if (TriggerDictionary is not { } triggers)
+        {
+            return;
+        }
+
+        var removed = triggers.Values.ToArray();
+        triggers.Clear();
+        foreach (var disposable in removed.OfType<IDisposable>())
+        {
+            disposable.Dispose();
+        }
+    }
 
     public static bool AddTrigger(
         string name, object? externalConfig, IAutoPickRuntimeState runtimeState,
