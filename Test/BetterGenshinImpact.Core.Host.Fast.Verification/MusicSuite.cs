@@ -78,7 +78,10 @@ public sealed class MusicSuite : IVerificationSuite
             await VerifyZeroTimestampChordAsync(context, profile, cancellationToken);
             await VerifyPlaybackControlsAsync(context, score, profile, cancellationToken);
             await VerifyFocusFreezeAndStopAsync(context, score, profile, cancellationToken);
+            await VerifySeekWinsFocusProbeRaceAsync(
+                context, score, profile, cancellationToken);
             await VerifyReleaseDoesNotWaitForSendAsync(context, cancellationToken);
+            VerifyEffectiveMidiDuration(context, profile);
         }
         finally
         {
@@ -333,6 +336,90 @@ public sealed class MusicSuite : IVerificationSuite
             "ReleaseAll did not invalidate the remaining events in an in-flight chord batch.");
     }
 
+    private static async Task VerifySeekWinsFocusProbeRaceAsync(
+        VerificationContext context,
+        PerformanceScore score,
+        InstrumentProfile profile,
+        CancellationToken cancellationToken)
+    {
+        var profileService = new FixedProfileService(profile);
+        var gate = new BlockingProbePlaybackGate();
+        var service = new MusicPlaybackService(
+            new MusicTimelineBuilder(profileService),
+            profileService,
+            [new RecordingTransport()],
+            playbackGate: gate);
+        var playback = Task.Run(
+            () => service.RunPlaylistAsync(
+                [score],
+                0,
+                new MusicPlaybackOptions
+                {
+                    InputMode = MusicInputMode.ForegroundSendInput,
+                    PlaybackMode = MusicPlaybackMode.Sequential,
+                },
+                cancellationToken),
+            cancellationToken);
+
+        await gate.ProbeStarted.Task.WaitAsync(TimeSpan.FromSeconds(1), cancellationToken);
+        service.Seek(TimeSpan.FromMilliseconds(300));
+        gate.CompleteUnavailableProbe();
+        await WaitForAsync(
+            () => service.Snapshot.Position >= TimeSpan.FromMilliseconds(300),
+            TimeSpan.FromSeconds(1),
+            cancellationToken);
+        context.Require(
+            service.Snapshot.Position < TimeSpan.FromMilliseconds(500),
+            "A stale focus probe overwrote the newer music seek position.");
+
+        service.Stop();
+        await playback.WaitAsync(TimeSpan.FromSeconds(1), cancellationToken);
+    }
+
+    private static void VerifyEffectiveMidiDuration(
+        VerificationContext context,
+        InstrumentProfile profile)
+    {
+        var enabledTrack = new MusicTrackInfo
+        {
+            Index = 1,
+            Name = "enabled",
+            IsEnabled = true,
+            NoteCount = 1,
+        };
+        var disabledTrack = new MusicTrackInfo
+        {
+            Index = 2,
+            Name = "disabled",
+            IsEnabled = false,
+            NoteCount = 1,
+        };
+        var score = new PerformanceScore
+        {
+            FullPath = "/tmp/effective-duration.mid",
+            Name = "effective-duration",
+            Instrument = profile.Name,
+            OutputProfileName = profile.Name,
+            Format = MusicScoreFormat.MidiFile,
+            Tracks = [enabledTrack, disabledTrack],
+            MidiNotes =
+            [
+                new MidiNoteData(1, 60, TimeSpan.Zero, TimeSpan.FromSeconds(30)),
+                new MidiNoteData(2, 62, TimeSpan.Zero, TimeSpan.FromSeconds(60)),
+            ],
+        };
+        var timeline = new MusicTimelineBuilder(
+            new FixedProfileService(profile)).Build(score, profile, 0);
+
+        context.Require(
+            score.Duration == TimeSpan.FromSeconds(60) &&
+            timeline.Duration == TimeSpan.FromSeconds(30) &&
+            MusicCoordinator.NormalizeStartPosition(
+                29_975,
+                timeline.Duration) == 0,
+            "Music resume normalization did not use the enabled MIDI tracks' effective duration.");
+    }
+
     private static async Task WaitForAsync(
         Func<bool> condition,
         TimeSpan timeout,
@@ -420,6 +507,33 @@ public sealed class MusicSuite : IVerificationSuite
 
         private static TaskCompletionSource CreateSource() =>
             new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private sealed class BlockingProbePlaybackGate : IMusicPlaybackGate
+    {
+        private readonly TaskCompletionSource _completeProbe =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _probeCount;
+
+        public TaskCompletionSource ProbeStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool IsAvailable(CancellationToken cancellationToken)
+        {
+            if (Interlocked.Increment(ref _probeCount) != 1)
+            {
+                return true;
+            }
+
+            ProbeStarted.TrySetResult();
+            _completeProbe.Task.GetAwaiter().GetResult();
+            return false;
+        }
+
+        public Task WaitUntilAvailableAsync(CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public void CompleteUnavailableProbe() => _completeProbe.TrySetResult();
     }
 
     private sealed class FixedProfileService(InstrumentProfile profile)

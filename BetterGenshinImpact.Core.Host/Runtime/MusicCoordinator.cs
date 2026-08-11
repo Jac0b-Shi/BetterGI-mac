@@ -160,9 +160,15 @@ public sealed class MusicCoordinator : IDisposable
                 throw new InvalidOperationException("所选曲谱解析失败，无法播放。");
             }
 
+            var score = _queue[index];
+            var profile = _profileService.Find(score.OutputProfileName);
+            var effectiveTimeline = _timelineBuilder.Build(
+                score,
+                profile,
+                score.Transpose);
             var startPosition = NormalizeStartPosition(
                 startPositionMilliseconds,
-                _queue[index].Duration);
+                effectiveTimeline.Duration);
 
             _playbackCancellation?.Dispose();
             _playbackCancellation = CancellationTokenSource.CreateLinkedTokenSource(
@@ -184,16 +190,12 @@ public sealed class MusicCoordinator : IDisposable
                 _playbackTask = new TaskRunner().StartThread(
                     async () =>
                     {
-                        if (Volatile.Read(ref _sessionGeneration) == sessionGeneration)
-                        {
-                            Volatile.Write(ref _sessionStarting, 0);
-                        }
                         using var linked = CancellationTokenSource.CreateLinkedTokenSource(
                             sessionCancellation.Token,
                             CancellationContext.Instance.Cts.Token);
                         using (_input.UseCancellationToken(linked.Token))
                         {
-                            await _playbackService.RunPlaylistAsync(
+                            var playback = _playbackService.RunPlaylistAsync(
                                 _playableQueue,
                                 playableIndex,
                                 new MusicPlaybackOptions
@@ -204,6 +206,11 @@ public sealed class MusicCoordinator : IDisposable
                                     StartPosition = TimeSpan.FromMilliseconds(startPosition),
                                 },
                                 linked.Token);
+                            if (Volatile.Read(ref _sessionGeneration) == sessionGeneration)
+                            {
+                                Volatile.Write(ref _sessionStarting, 0);
+                            }
+                            await playback;
                         }
                     },
                     sessionCancellation.Token,

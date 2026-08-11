@@ -497,8 +497,10 @@ public sealed class MusicPlaybackService(
             return false;
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         lock (_syncRoot)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (_state != MusicPlaybackState.Playing)
             {
                 return false;
