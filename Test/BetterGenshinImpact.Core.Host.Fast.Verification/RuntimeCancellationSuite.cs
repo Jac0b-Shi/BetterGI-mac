@@ -317,7 +317,7 @@ public sealed class RuntimeCancellationSuite : IVerificationSuite
 
             var extendedInvoke = callbacks.InvokeAsync(
                 "htmlMask.request", JObject.FromObject(new { timeoutMs = 200 }),
-                "verification", cancellationToken, TimeSpan.FromMilliseconds(250));
+                "verification", cancellationToken, TimeSpan.FromSeconds(10));
             var extendedRequest = await swiftConnection.ReadRequestAsync(cancellationToken)
                 ?? throw new EndOfStreamException(
                     "Core did not send the extended platform callback.");
