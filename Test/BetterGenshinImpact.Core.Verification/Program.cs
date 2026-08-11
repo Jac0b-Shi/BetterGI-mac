@@ -1165,7 +1165,9 @@ Console.WriteLine("B11.6.2: Hardening — fake local archive end-to-end");
     File.WriteAllBytes(Path.Combine(fakeOutput, fakeFiles.Keys.First()), [0]);
     var repaired = await dl.EnsureInstalledAsync(fakeLockPath, fakeOutput, CancellationToken.None, fakeCache);
     Assert("B11.6.2 Ensure repairs a corrupt installed artifact",
-        repaired.Success && repaired.ArtifactsExtracted == fakeFiles.Count,
+        repaired.Success && repaired.ArtifactsExtracted == 1 &&
+        repaired.ArtifactsSkipped == fakeFiles.Count - 1,
+        $"extracted={repaired.ArtifactsExtracted}, skipped={repaired.ArtifactsSkipped}, " +
         $"errors={string.Join("; ", repaired.Errors)}");
 
     // Cleanup

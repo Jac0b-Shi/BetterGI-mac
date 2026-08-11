@@ -316,6 +316,7 @@ final class AppState: ObservableObject {
     @Published var captureStatus: RuntimeStatus = .missing
     @Published var inputStatus: RuntimeStatus = .missing
     @Published var coreStatus: RuntimeStatus = .starting
+    @Published private(set) var coreArtifactProgress: BetterGICoreArtifactProgress?
     @Published private(set) var screenCapturePermissionGranted = false
     @Published private(set) var screenCaptureAuthorizationState: ScreenCaptureAuthorizationState = .checking
     @Published private(set) var accessibilityPermissionGranted = false
@@ -1997,6 +1998,7 @@ final class AppState: ObservableObject {
         NSLog("BetterGI Core startup entered")
         coreStartupInFlight = true
         coreStatus = .starting
+        coreArtifactProgress = nil
         defer { coreStartupInFlight = false }
         do {
             NSLog("BetterGI Core supervisor resolving packaged executable")
@@ -2049,10 +2051,15 @@ final class AppState: ObservableObject {
             coreStatus = .starting
         case .provisioning:
             coreStatus = .provisioning
+        case .artifactProgress(let progress):
+            coreStatus = .provisioning
+            coreArtifactProgress = progress.phase == "completed" ? nil : progress
         case .ready:
             coreStatus = .ok
+            coreArtifactProgress = nil
         case .failed(let message):
             coreStatus = .error
+            coreArtifactProgress = nil
             addLog(.error, message)
         }
     }

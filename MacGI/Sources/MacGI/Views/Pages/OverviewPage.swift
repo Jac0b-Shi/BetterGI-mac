@@ -63,6 +63,30 @@ struct OverviewPage: View {
                     Text(appState.runtimeLifecycle.rawValue.capitalized)
                         .foregroundStyle(appState.runtimeLifecycle == .failed ? .red : .secondary)
                 }
+                if let progress = appState.coreArtifactProgress {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Text(progress.statusText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            Spacer(minLength: 8)
+                            if let detail = progress.byteDetailText {
+                                Text(detail)
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        if let fraction = progress.fractionCompleted {
+                            ProgressView(value: fraction)
+                                .progressViewStyle(.linear)
+                        } else {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
                 BGISettingLine(title: "截图后端", subtitle: "macOS 平台回调使用 ScreenCaptureKit 捕获目标窗口。") {
                     Text("ScreenCaptureKit")
                         .foregroundStyle(.secondary)
