@@ -59,7 +59,7 @@ public class KeyMouseMacroPlayer
             var timeToWait = e.Time - (Environment.TickCount64 - startTime);
             if (timeToWait < -1)
                 platform.Logger.LogDebug("无法原速重放事件{Event}，落后{TimeToWait}ms", e.Type, (-timeToWait).ToString("F0"));
-            else
+            else if (timeToWait > 0)
                 await Task.Delay((int)timeToWait, ct);
 
             switch (e.Type)
