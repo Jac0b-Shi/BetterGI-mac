@@ -143,6 +143,9 @@ public partial class PerformanceScore : ObservableObject
     private int _transpose;
 
     [ObservableProperty]
+    private InstrumentMappingMode? _mappingModeOverride;
+
+    [ObservableProperty]
     private int _mappedNoteCount;
 
 #if WINDOWS
@@ -262,7 +265,10 @@ public partial class InstrumentProfile : ObservableObject
         return true;
     }
 
-    public bool TryGetKey(int midiNote, out char key)
+    public bool TryGetKey(int midiNote, out char key) =>
+        TryGetKey(midiNote, MappingMode, out key);
+
+    public bool TryGetKey(int midiNote, InstrumentMappingMode mappingMode, out char key)
     {
         if (Mappings.Count == 0)
         {
@@ -271,7 +277,7 @@ public partial class InstrumentProfile : ObservableObject
         }
 
         var targetNote = midiNote;
-        if (MappingMode == InstrumentMappingMode.MelodicOctaveFold)
+        if (mappingMode == InstrumentMappingMode.MelodicOctaveFold)
         {
             var min = Mappings.Min(x => x.MidiNote);
             var max = Mappings.Max(x => x.MidiNote);

@@ -1,7 +1,10 @@
+using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.Music.Model;
 using BetterGenshinImpact.GameTask.Music.Service;
 using BetterGenshinImpact.Core.Host.Runtime;
+using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.Verification.Framework;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 
@@ -82,6 +85,8 @@ public sealed class MusicSuite : IVerificationSuite
                 context, score, profile, cancellationToken);
             await VerifyReleaseDoesNotWaitForSendAsync(context, cancellationToken);
             VerifyEffectiveMidiDuration(context, profile);
+            VerifyMappingModeOverride(context);
+            await VerifyConfigureTrackMappingModeAsync(context, root, cancellationToken);
         }
         finally
         {
@@ -423,6 +428,160 @@ public sealed class MusicSuite : IVerificationSuite
                 29_975,
                 timeline.Duration) == 0,
             "Music resume normalization did not use the enabled MIDI tracks' effective duration.");
+    }
+
+    private static void VerifyMappingModeOverride(VerificationContext context)
+    {
+        var rangeProfile = new InstrumentProfile
+        {
+            Name = "test-range",
+            MappingMode = InstrumentMappingMode.MelodicOctaveFold,
+            Mappings = new ObservableCollection<InstrumentKeyMapping>
+            {
+                new('C', 60),
+                new('D', 62),
+                new('E', 64),
+                new('F', 65),
+                new('G', 67),
+                new('A', 69),
+                new('B', 71),
+            },
+        };
+        var score = new PerformanceScore
+        {
+            FullPath = "/tmp/mapping-mode-override.mid",
+            Name = "mapping-mode-override",
+            Instrument = rangeProfile.Name,
+            OutputProfileName = rangeProfile.Name,
+            Format = MusicScoreFormat.MidiFile,
+            Tracks =
+            [
+                new MusicTrackInfo
+                {
+                    Index = 0,
+                    Name = "track",
+                    IsEnabled = true,
+                    NoteCount = 3,
+                },
+            ],
+            MidiNotes =
+            [
+                new MidiNoteData(0, 60, TimeSpan.Zero, TimeSpan.FromSeconds(1)),
+                new MidiNoteData(0, 72, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)),
+                new MidiNoteData(0, 84, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(3)),
+            ],
+        };
+        var builder = new MusicTimelineBuilder(new FixedProfileService(rangeProfile));
+
+        var timeline = builder.Build(score, rangeProfile, 0);
+        context.Require(
+            score.MappedNoteCount == 3 && timeline.Events.Count == 6,
+            "Without a track override the timeline did not fall back to the profile's fold mode.");
+
+        score.MappingModeOverride = InstrumentMappingMode.Exact;
+        timeline = builder.Build(score, rangeProfile, 0);
+        context.Require(
+            score.MappedNoteCount == 1 && timeline.Events.Count == 2,
+            "A track-level Exact override did not drop notes outside the profile range.");
+
+        rangeProfile.MappingMode = InstrumentMappingMode.Exact;
+        score.MappingModeOverride = InstrumentMappingMode.MelodicOctaveFold;
+        timeline = builder.Build(score, rangeProfile, 0);
+        context.Require(
+            score.MappedNoteCount == 3,
+            "A track-level fold override did not take precedence over an exact profile default.");
+
+        score.MappingModeOverride = null;
+        timeline = builder.Build(score, rangeProfile, 0);
+        context.Require(
+            score.MappedNoteCount == 1,
+            "Clearing the track override did not restore the profile default mapping mode.");
+    }
+
+    private static async Task VerifyConfigureTrackMappingModeAsync(
+        VerificationContext context,
+        string rootFolder,
+        CancellationToken cancellationToken)
+    {
+        var statePath = Global.Absolute(@"User\Music\music-state.json");
+        if (File.Exists(statePath))
+        {
+            File.Delete(statePath);
+        }
+
+        using var coordinator = new MusicCoordinator(
+            new ForegroundInputCoordinator(
+                new PlatformCallbackChannel(),
+                "verification",
+                cancellationToken,
+                focusProbe: () => true),
+            cancellationToken,
+            NullLoggerFactory.Instance);
+        var state = await coordinator.ScanAsync(rootFolder);
+        var track = FirstTrack(state);
+        context.Require(
+            TrackString(track, "mappingMode") == "MelodicOctaveFold" &&
+            TrackString(track, "mappingModeOverride") == null,
+            "A freshly scanned track did not expose the profile default mapping mode.");
+
+        state = await coordinator.ConfigureTrackAsync(
+            0,
+            "风物之诗琴",
+            0,
+            [],
+            InstrumentMappingMode.Exact);
+        track = FirstTrack(state);
+        context.Require(
+            TrackString(track, "mappingMode") == "Exact" &&
+            TrackString(track, "mappingModeOverride") == "Exact",
+            "ConfigureTrackAsync did not publish the track-level mapping mode override.");
+
+        var persisted = LoadPersistedMusicState();
+        context.Require(
+            persisted.Items.TryGetValue("keyboard.json", out var preference) &&
+            preference.MappingModeOverride == InstrumentMappingMode.Exact,
+            "ConfigureTrackAsync did not persist the mapping mode override preference.");
+
+        state = await coordinator.ScanAsync(rootFolder);
+        track = FirstTrack(state);
+        context.Require(
+            TrackString(track, "mappingMode") == "Exact" &&
+            TrackString(track, "mappingModeOverride") == "Exact",
+            "Rescanning the library did not restore the persisted mapping mode override.");
+
+        state = await coordinator.ConfigureTrackAsync(
+            0,
+            "风物之诗琴",
+            0,
+            [],
+            null);
+        track = FirstTrack(state);
+        context.Require(
+            TrackString(track, "mappingMode") == "MelodicOctaveFold" &&
+            TrackString(track, "mappingModeOverride") == null,
+            "Clearing the mapping mode override did not fall back to the profile default.");
+        var cleared = LoadPersistedMusicState();
+        context.Require(
+            cleared.Items.TryGetValue("keyboard.json", out var clearedPreference) &&
+            clearedPreference.MappingModeOverride == null,
+            "Clearing the mapping mode override was not persisted.");
+    }
+
+    private static object FirstTrack(object state)
+    {
+        var tracks = state.GetType().GetProperty("tracks")?.GetValue(state) as object[]
+            ?? throw new InvalidOperationException("Music state missing tracks.");
+        return tracks[0];
+    }
+
+    private static string? TrackString(object track, string propertyName) =>
+        track.GetType().GetProperty(propertyName)?.GetValue(track) as string;
+
+    private static MusicLibraryState LoadPersistedMusicState()
+    {
+        var path = Global.Absolute(@"User\Music\music-state.json");
+        return Newtonsoft.Json.JsonConvert.DeserializeObject<MusicLibraryState>(
+            File.ReadAllText(path)) ?? new MusicLibraryState();
     }
 
     private static async Task WaitForAsync(

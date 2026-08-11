@@ -1,11 +1,28 @@
 import AppKit
 import SwiftUI
 
+private enum MusicMappingModeOption: String, CaseIterable, Identifiable {
+    case followDefault
+    case melodicOctaveFold = "MelodicOctaveFold"
+    case exact = "Exact"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .followDefault: "跟随乐器默认"
+        case .melodicOctaveFold: "八度折叠"
+        case .exact: "超出音域丢弃"
+        }
+    }
+}
+
 struct MusicPage: View {
     @EnvironmentObject private var appState: AppState
     @State private var searchText = ""
     @State private var selectedProfileName = ""
     @State private var transpose = 0
+    @State private var mappingModeOption: MusicMappingModeOption = .followDefault
     @State private var disabledMidiTrackIndexes: Set<Int> = []
     @State private var seekPosition = 0.0
     @State private var isSeeking = false
@@ -180,6 +197,11 @@ struct MusicPage: View {
                             Text(profile.name).tag(profile.name)
                         }
                     }
+                    Picker("音域处理", selection: $mappingModeOption) {
+                        ForEach(MusicMappingModeOption.allCases) { option in
+                            Text(option.title).tag(option)
+                        }
+                    }
                     Stepper("移调：\(transpose)", value: $transpose, in: -36...36)
 
                     if !track.midiTracks.isEmpty {
@@ -205,7 +227,9 @@ struct MusicPage: View {
                             index: track.index,
                             outputProfileName: selectedProfileName,
                             transpose: transpose,
-                            disabledTrackIndexes: disabledMidiTrackIndexes.sorted())
+                            disabledTrackIndexes: disabledMidiTrackIndexes.sorted(),
+                            mappingModeOverride: mappingModeOption == .followDefault
+                                ? nil : mappingModeOption.rawValue)
                     } label: {
                         Label("保存映射", systemImage: "checkmark")
                     }
@@ -394,6 +418,7 @@ struct MusicPage: View {
         guard let track = appState.selectedMusicTrack else {
             selectedProfileName = ""
             transpose = 0
+            mappingModeOption = .followDefault
             disabledMidiTrackIndexes = []
             return
         }
@@ -401,6 +426,8 @@ struct MusicPage: View {
             ? appState.musicState.profiles.first?.name ?? ""
             : track.outputProfileName
         transpose = track.transpose
+        mappingModeOption = track.mappingModeOverride
+            .flatMap(MusicMappingModeOption.init(rawValue:)) ?? .followDefault
         disabledMidiTrackIndexes = Set(
             track.midiTracks.filter { !$0.isEnabled }.map(\.index))
     }

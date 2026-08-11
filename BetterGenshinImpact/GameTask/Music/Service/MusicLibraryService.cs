@@ -61,6 +61,7 @@ public sealed class MusicLibraryService(
             {
                 OutputProfileName = x.Value.OutputProfileName,
                 Transpose = x.Value.Transpose,
+                MappingModeOverride = x.Value.MappingModeOverride,
                 DisabledTrackIndexes = [.. x.Value.DisabledTrackIndexes ?? []]
             },
             StringComparer.OrdinalIgnoreCase);
@@ -113,6 +114,7 @@ public sealed class MusicLibraryService(
 
                 score.OutputProfileName = preference.OutputProfileName;
                 score.Transpose = preference.Transpose;
+                score.MappingModeOverride = preference.MappingModeOverride;
                 foreach (var track in score.Tracks)
                 {
                     track.IsEnabled = !preference.DisabledTrackIndexes.Contains(track.Index);

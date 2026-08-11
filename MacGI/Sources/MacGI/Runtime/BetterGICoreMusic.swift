@@ -58,6 +58,8 @@ struct BetterGIMusicTrack: Equatable, Sendable, Identifiable {
     let error: String?
     let outputProfileName: String
     let transpose: Int
+    let mappingModeOverride: String?
+    let mappingMode: String
     let midiTracks: [BetterGIMusicMidiTrack]
     var id: String { fullPath }
 }
@@ -151,7 +153,8 @@ extension BetterGICoreRPCClient {
         index: Int,
         outputProfileName: String,
         transpose: Int,
-        disabledTrackIndexes: [Int]
+        disabledTrackIndexes: [Int],
+        mappingModeOverride: String?
     ) throws -> BetterGIMusicState {
         try Self.decodeMusicState(request(
             method: "music.configureTrack",
@@ -160,6 +163,7 @@ extension BetterGICoreRPCClient {
                 "outputProfileName": outputProfileName,
                 "transpose": transpose,
                 "disabledTrackIndexes": disabledTrackIndexes,
+                "mappingMode": mappingModeOverride ?? NSNull(),
             ]))
     }
 
@@ -212,6 +216,8 @@ extension BetterGICoreRPCClient {
                 error: value["error"] as? String,
                 outputProfileName: try string(value, "outputProfileName"),
                 transpose: try integer(value, "transpose"),
+                mappingModeOverride: value["mappingModeOverride"] as? String,
+                mappingMode: try string(value, "mappingMode"),
                 midiTracks: midiTracks)
         }
 
@@ -323,12 +329,14 @@ extension BetterGICoreProcessSupervisor {
         index: Int,
         outputProfileName: String,
         transpose: Int,
-        disabledTrackIndexes: [Int]
+        disabledTrackIndexes: [Int],
+        mappingModeOverride: String?
     ) throws -> BetterGIMusicState {
         try runningClient().configureMusicTrack(
             index: index,
             outputProfileName: outputProfileName,
             transpose: transpose,
-            disabledTrackIndexes: disabledTrackIndexes)
+            disabledTrackIndexes: disabledTrackIndexes,
+            mappingModeOverride: mappingModeOverride)
     }
 }

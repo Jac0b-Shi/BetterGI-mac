@@ -150,7 +150,8 @@ extension AppState {
         index: Int,
         outputProfileName: String,
         transpose: Int,
-        disabledTrackIndexes: [Int]
+        disabledTrackIndexes: [Int],
+        mappingModeOverride: String?
     ) {
         guard let supervisor = betterGICoreSupervisor else { return }
         Task { [weak self] in
@@ -160,7 +161,8 @@ extension AppState {
                     index: index,
                     outputProfileName: outputProfileName,
                     transpose: transpose,
-                    disabledTrackIndexes: disabledTrackIndexes))
+                    disabledTrackIndexes: disabledTrackIndexes,
+                    mappingModeOverride: mappingModeOverride))
             } catch {
                 self.musicStatus = "保存曲目映射失败：\(error.localizedDescription)"
             }

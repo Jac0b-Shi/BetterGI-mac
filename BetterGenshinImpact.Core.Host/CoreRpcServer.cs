@@ -436,7 +436,8 @@ public sealed class CoreRpcServer(
                         RequiredInt(request.Params, "index"),
                         request.Params?.Value<string>("outputProfileName"),
                         request.Params?.Value<int?>("transpose") ?? 0,
-                        RequiredIntArray(request.Params, "disabledTrackIndexes")));
+                        RequiredIntArray(request.Params, "disabledTrackIndexes"),
+                        OptionalMappingMode(request.Params, "mappingMode")));
             }
             object? result = request.Method switch
             {
@@ -805,6 +806,22 @@ public sealed class CoreRpcServer(
     {
         var value = RequiredString(parameters, name);
         return Enum.TryParse<MusicPlaybackMode>(value, true, out var mode)
+            ? mode
+            : throw new ArgumentException($"Invalid {name}: {value}");
+    }
+
+    private static InstrumentMappingMode? OptionalMappingMode(
+        JObject? parameters,
+        string name)
+    {
+        var value = parameters?[name]?.Value<string>();
+        if (string.IsNullOrWhiteSpace(value)
+            || string.Equals(value, "default", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return Enum.TryParse<InstrumentMappingMode>(value, true, out var mode)
             ? mode
             : throw new ArgumentException($"Invalid {name}: {value}");
     }

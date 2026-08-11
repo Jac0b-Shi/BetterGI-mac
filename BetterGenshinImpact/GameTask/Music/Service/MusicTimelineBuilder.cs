@@ -12,15 +12,17 @@ public sealed class MusicTimelineBuilder(IInstrumentProfileService profileServic
         InstrumentProfile outputProfile,
         int transpose)
     {
+        var mappingMode = score.MappingModeOverride ?? outputProfile.MappingMode;
         return score.IsMidi
-            ? BuildMidiTimeline(score, outputProfile, transpose)
-            : BuildKeyTimeline(score, outputProfile, transpose);
+            ? BuildMidiTimeline(score, outputProfile, transpose, mappingMode)
+            : BuildKeyTimeline(score, outputProfile, transpose, mappingMode);
     }
 
     private static PerformanceTimeline BuildMidiTimeline(
         PerformanceScore score,
         InstrumentProfile outputProfile,
-        int transpose)
+        int transpose,
+        InstrumentMappingMode mappingMode)
     {
         var enabledTracks = score.Tracks.Where(x => x.IsEnabled).Select(x => x.Index).ToHashSet();
         var selectedNotes = score.MidiNotes
@@ -36,7 +38,7 @@ public sealed class MusicTimelineBuilder(IInstrumentProfileService profileServic
 
         foreach (var note in selectedNotes)
         {
-            if (!outputProfile.TryGetKey(note.NoteNumber + transpose, out var key))
+            if (!outputProfile.TryGetKey(note.NoteNumber + transpose, mappingMode, out var key))
             {
                 continue;
             }
@@ -61,7 +63,8 @@ public sealed class MusicTimelineBuilder(IInstrumentProfileService profileServic
     private PerformanceTimeline BuildKeyTimeline(
         PerformanceScore score,
         InstrumentProfile outputProfile,
-        int transpose)
+        int transpose,
+        InstrumentMappingMode mappingMode)
     {
         var sourceProfile = profileService.Find(score.Instrument);
         var isRawPassThrough = ReferenceEquals(sourceProfile, outputProfile) && transpose == 0;
@@ -76,7 +79,7 @@ public sealed class MusicTimelineBuilder(IInstrumentProfileService profileServic
                 targetKey = item.Key;
             }
             else if (sourceProfile.TryGetNote(item.Key, out var midiNote)
-                     && outputProfile.TryGetKey(midiNote + transpose, out targetKey))
+                     && outputProfile.TryGetKey(midiNote + transpose, mappingMode, out targetKey))
             {
                 // 已映射到目标乐器
             }

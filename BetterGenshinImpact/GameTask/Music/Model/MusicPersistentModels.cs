@@ -20,5 +20,7 @@ public sealed class MusicItemPreference
 
     public int Transpose { get; set; }
 
+    public InstrumentMappingMode? MappingModeOverride { get; set; }
+
     public List<int> DisabledTrackIndexes { get; set; } = [];
 }

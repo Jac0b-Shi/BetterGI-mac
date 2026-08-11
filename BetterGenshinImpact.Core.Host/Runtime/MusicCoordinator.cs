@@ -314,7 +314,8 @@ public sealed class MusicCoordinator : IDisposable
         int index,
         string? outputProfileName,
         int transpose,
-        IReadOnlyCollection<int> disabledTrackIndexes)
+        IReadOnlyCollection<int> disabledTrackIndexes,
+        InstrumentMappingMode? mappingModeOverride)
     {
         await _mutationLock.WaitAsync(_hostCancellationToken);
         try
@@ -334,6 +335,7 @@ public sealed class MusicCoordinator : IDisposable
             var profile = _profileService.Find(outputProfileName);
             score.OutputProfileName = profile.Name;
             score.Transpose = Math.Clamp(transpose, -36, 36);
+            score.MappingModeOverride = mappingModeOverride;
             foreach (var track in score.Tracks)
             {
                 track.IsEnabled = !disabledTrackIndexes.Contains(track.Index);
@@ -345,6 +347,7 @@ public sealed class MusicCoordinator : IDisposable
             {
                 OutputProfileName = score.OutputProfileName,
                 Transpose = score.Transpose,
+                MappingModeOverride = mappingModeOverride,
                 DisabledTrackIndexes = score.Tracks
                     .Where(track => !track.IsEnabled)
                     .Select(track => track.Index)
@@ -465,8 +468,9 @@ public sealed class MusicCoordinator : IDisposable
         _stateStore.Save();
     }
 
-    private static object ToTrack(PerformanceScore score, int index)
+    private object ToTrack(PerformanceScore score, int index)
     {
+        var profile = _profileService.Find(score.OutputProfileName);
         return new
         {
             index,
@@ -487,6 +491,8 @@ public sealed class MusicCoordinator : IDisposable
             error = score.Error,
             outputProfileName = score.OutputProfileName,
             transpose = score.Transpose,
+            mappingModeOverride = score.MappingModeOverride?.ToString(),
+            mappingMode = (score.MappingModeOverride ?? profile.MappingMode).ToString(),
             midiTracks = score.Tracks.Select(track => new
             {
                 index = track.Index,
