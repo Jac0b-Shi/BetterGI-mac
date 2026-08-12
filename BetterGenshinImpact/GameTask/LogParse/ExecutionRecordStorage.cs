@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using BetterGenshinImpact.Core.Config;
@@ -158,21 +158,22 @@ public class ExecutionRecordStorage
             ? ScriptHostServices.ServerTimeNow
             : DateTimeOffset.Now;
 
-        // 计算今天的开始时间（根据分界时间）
-        DateTime todayStart;
+        // 计算今天的开始时间（根据分界时间），锚定参考时间的时区，
+        // 避免服务器时间与机器本地时区不一致时比较基准发生偏移
+        DateTimeOffset todayStart;
         if (now.Hour >= boundaryHour)
         {
             // 今天已经过了分界时间，今天的开始是今天的分界时间
-            todayStart = new DateTime(now.Year, now.Month, now.Day, boundaryHour, 0, 0);
+            todayStart = new DateTimeOffset(now.Year, now.Month, now.Day, boundaryHour, 0, 0, now.Offset);
         }
         else
         {
             // 今天还没过分界时间，今天的开始是昨天的分界时间
-            todayStart = new DateTime(now.Year, now.Month, now.Day, boundaryHour, 0, 0).AddDays(-1);
+            todayStart = new DateTimeOffset(now.Year, now.Month, now.Day, boundaryHour, 0, 0, now.Offset).AddDays(-1);
         }
 
         // 计算今天的结束时间（明天的开始时间）
-        DateTime todayEnd = todayStart.AddDays(1);
+        DateTimeOffset todayEnd = todayStart.AddDays(1);
 
         // 判断目标日期是否在今天的范围内
         return targetDate >= todayStart && targetDate < todayEnd;
