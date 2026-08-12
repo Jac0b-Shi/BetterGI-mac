@@ -330,6 +330,7 @@ struct BetterGIGroupConfigSettings: Equatable, Sendable {
     var switchToWalkEnabled: Bool
     var mwkJumpFlyEnabled: Bool
     var mwkDisableSprintEnabled: Bool
+    var mwkJumpFlySprintCount: Int
     var mwkJumpFlyIntervalSeconds: Double
     var taskCycleEnabled: Bool
     var taskCycleBoundaryTime: Int

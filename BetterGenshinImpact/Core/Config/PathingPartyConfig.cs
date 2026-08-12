@@ -254,6 +254,13 @@ public partial class PathingPartyConfig : ObservableObject
     [ObservableProperty]
     private bool _mwkDisableSprintEnabled = false;
 
+    /// <summary>
+    /// 跳飞前额外冲刺次数。6命玛薇卡可选，每次上车后前若干次跳飞改为冲刺跳飞，速度更快，夜魂值消耗更高，推荐3次。
+    /// 0 表示不使用冲刺跳飞。
+    /// </summary>
+    [ObservableProperty]
+    private int _mwkJumpFlySprintCount = 0;
+
 #if BGI_FULL_WINDOWS
     public static PathingPartyConfig BuildDefault()
     {

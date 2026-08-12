@@ -846,6 +846,7 @@ private struct SchedulerGroupSettingsSheet: View {
         switchToWalkEnabled: false,
         mwkJumpFlyEnabled: true,
         mwkDisableSprintEnabled: false,
+        mwkJumpFlySprintCount: 0,
         mwkJumpFlyIntervalSeconds: 1,
         taskCycleEnabled: false,
         taskCycleBoundaryTime: 0,
@@ -1104,6 +1105,10 @@ private struct SchedulerGroupSettingsSheet: View {
                     in: 0...max(values.distance, 0))
                 Toggle("接近时切人步行", isOn: $values.switchToWalkEnabled)
                 Toggle("启用跳飞赶路", isOn: $values.mwkJumpFlyEnabled)
+                Stepper(
+                    "跳飞前额外冲刺次数：\(values.mwkJumpFlySprintCount)",
+                    value: $values.mwkJumpFlySprintCount,
+                    in: 0...10)
                 Toggle(
                     "玛薇卡在车上禁用冲刺",
                     isOn: $values.mwkDisableSprintEnabled)
