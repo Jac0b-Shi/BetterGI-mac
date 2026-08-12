@@ -32,8 +32,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          tag_ref="refs/tags/$GITHUB_REF_NAME"
-          if [[ "$(git cat-file -t "$tag_ref")" != "tag" ]]; then
+          # actions/checkout 会把本地 tag 引用强写成提交 SHA，
+          # 必须通过 FETCH_HEAD 重新取回真正的 tag 对象再校验
+          git fetch --no-tags origin "refs/tags/$GITHUB_REF_NAME"
+          tag_object="$(git rev-parse FETCH_HEAD)"
+          if [[ "$(git cat-file -t "$tag_object")" != "tag" ]]; then
             echo "Release tags must be signed annotated tags; lightweight tags are not accepted." >&2
             exit 1
           fi
@@ -62,7 +65,7 @@ jobs:
 
           gpg --batch --import "$key_file" >/dev/null 2>&1
 
-          if ! verification="$(git verify-tag --raw "$GITHUB_REF_NAME" 2>&1)"; then
+          if ! verification="$(git verify-tag --raw "$tag_object" 2>&1)"; then
             printf '%s\n' "$verification" >&2
             echo "Release tag signature verification failed." >&2
             exit 1
