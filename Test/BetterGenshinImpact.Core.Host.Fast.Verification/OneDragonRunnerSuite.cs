@@ -142,6 +142,27 @@ public sealed class OneDragonRunnerSuite : IVerificationSuite
             disabledConfig.NextTaskId.Length == 0 &&
             disabledPlatform.Events.SequenceEqual(["resume:"]),
             "OneDragon disabled plan did not consume its resume marker without starting tasks.");
+
+        await TaskRunnerPlatform.Current.TaskSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var rejected = false;
+            try
+            {
+                _ = new TaskRunner().StartThread(() => Task.CompletedTask);
+            }
+            catch (InvalidOperationException)
+            {
+                rejected = true;
+            }
+            context.Require(
+                rejected,
+                "TaskRunner.StartThread did not synchronously reject an occupied task semaphore.");
+        }
+        finally
+        {
+            TaskRunnerPlatform.Current.TaskSemaphore.Release();
+        }
     }
 
     private sealed class RecordingOneDragonPlatform : IOneDragonExecutionPlatform
@@ -209,6 +230,7 @@ public sealed class OneDragonRunnerSuite : IVerificationSuite
         public ILogger Logger => NullLogger.Instance;
         public ILogger RunnerLogger => NullLogger.Instance;
         public SemaphoreSlim TaskSemaphore { get; } = new(1, 1);
+        public bool ThrowOnLockFailure => true;
         public void InitializeTask() { }
         public void EndTask() { }
         public void NotifyCancellation(string message) { }

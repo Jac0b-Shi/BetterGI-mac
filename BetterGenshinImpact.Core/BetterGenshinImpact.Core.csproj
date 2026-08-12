@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- CsTrees.SourceGenerator currently targets a newer compiler than this project. -->
     <NoWarn>$(NoWarn);CS9057</NoWarn>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>12.0</LangVersion>
@@ -35,10 +36,11 @@
     <PackageReference Include="MimeKit" Version="4.16.0" />
     <PackageReference Include="Semver" Version="3.0.0" />
     <PackageReference Include="YoloSharp" Version="6.0.3" />
-    <PackageReference Include="BehaviourTree" Version="1.0.73" />
+    <PackageReference Include="CsTrees" Version="1.0.1" />
     <PackageReference Include="NCalc" Version="6.2.0" />
     <PackageReference Include="HungarianAlgorithm" Version="2.3.5" />
     <PackageReference Include="LazyCache" Version="2.4.0" />
+    <PackageReference Include="Melanchall.DryWetMidi" Version="8.0.3" />
   </ItemGroup>
 
   <ItemGroup>
@@ -108,6 +110,15 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoMusicGame/AutoAlbumTask.cs" Link="GameTask/AutoMusicGame/AutoAlbumTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoMusicGame/AutoMusicGameRuntimePlatform.cs" Link="GameTask/AutoMusicGame/AutoMusicGameRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoMusicGame/AutoMusicGameTask.cs" Link="GameTask/AutoMusicGame/AutoMusicGameTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Music/Model/*.cs" Link="GameTask/Music/Model/%(Filename)%(Extension)" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicInterfaces.cs" Link="GameTask/Music/Service/MusicInterfaces.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicScoreParser.cs" Link="GameTask/Music/Service/MusicScoreParser.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicTimelineBuilder.cs" Link="GameTask/Music/Service/MusicTimelineBuilder.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicPlaybackService.cs" Link="GameTask/Music/Service/MusicPlaybackService.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicLibraryService.cs" Link="GameTask/Music/Service/MusicLibraryService.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicStateStore.cs" Link="GameTask/Music/Service/MusicStateStore.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/InstrumentProfileService.cs" Link="GameTask/Music/Service/InstrumentProfileService.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/KeyInputTransportBase.cs" Link="GameTask/Music/Service/KeyInputTransportBase.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/UseRedeemCode/UseRedemptionCodeRuntimePlatform.cs" Link="GameTask/UseRedeemCode/UseRedemptionCodeRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/UseRedeemCode/UseRedemptionCodeTask.cs" Link="GameTask/UseRedeemCode/UseRedemptionCodeTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/UseRedeemCode/AutoRedeemCodeConfig.cs" Link="GameTask/UseRedeemCode/AutoRedeemCodeConfig.cs" />
@@ -406,9 +417,10 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/Model/*.cs" Link="GameTask/AutoFishing/Model/%(Filename)%(Extension)" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingConfig.cs" Link="GameTask/AutoFishing/AutoFishingConfig.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingImageRecognition.cs" Link="GameTask/AutoFishing/AutoFishingImageRecognition.cs" />
-    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/BehaviourTreeExtensions.cs" Link="GameTask/AutoFishing/BehaviourTreeExtensions.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/Behaviours.cs" Link="GameTask/AutoFishing/Behaviours.cs" />
-    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/Blackboard.cs" Link="GameTask/AutoFishing/Blackboard.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/Behaviours.PartII.cs" Link="GameTask/AutoFishing/Behaviours.PartII.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/IScreenshotBehaviour.cs" Link="GameTask/AutoFishing/IScreenshotBehaviour.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/ScreenshotVisitor.cs" Link="GameTask/AutoFishing/ScreenshotVisitor.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/FishingTimePolicy.cs" Link="GameTask/AutoFishing/FishingTimePolicy.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/RodInput.cs" Link="GameTask/AutoFishing/RodInput.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/RodNet.cs" Link="GameTask/AutoFishing/RodNet.cs" />

@@ -1,4 +1,4 @@
-﻿using System.Threading;
+using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
@@ -12,7 +12,8 @@ public class ReturnMainUiTask
 
     public async Task Start(CancellationToken ct)
     {
-        if (Bv.IsInMainUi(CaptureToRectArea()))
+        using var initialCapture = CaptureToRectArea();
+        if (Bv.IsInMainUi(initialCapture))
         {
             return;
         }
@@ -24,20 +25,23 @@ public class ReturnMainUiTask
 
             var region = CaptureToRectArea();
 
-            var exitDoor = region.Find(ElementRecognition.Get("BtnExitDoor", region));
-            if (exitDoor.IsExist())
+            try
             {
-                exitDoor.Click();
-                await Delay(5000, ct);
-                region = CaptureToRectArea();
+                var exitDoor = region.Find(ElementRecognition.Get("BtnExitDoor", region));
+                if (exitDoor.IsExist())
+                {
+                    exitDoor.Click();
+                    await Delay(5000, ct);
+                    region.Dispose();
+                    region = CaptureToRectArea();
+                }
+
+                if (Bv.IsInMainUi(region))
+                {
+                    return;
+                }
             }
-            
-            if (Bv.IsInMainUi(region))
-            {
-                region.Dispose();
-                return;
-            }
-            else
+            finally
             {
                 region.Dispose();
             }

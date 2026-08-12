@@ -53,6 +53,8 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using System.Threading;
 using System.Globalization;
+using CsTrees;
+using CsTrees.FluentBuilder;
 using BetterGenshinImpact.Service;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
@@ -211,19 +213,21 @@ Assert("AutoFishing input preserves upstream action order",
     ]), string.Join(" | ", recordingTaskControl.Calls));
 
 recordingTaskControl.Calls.Clear();
-var fishingBlackboard = new Blackboard(sleep: milliseconds =>
-    recordingTaskControl.Calls.Add($"sleep:{milliseconds}"));
-using (var frame = new ImageRegion(new Mat(1080, 1920, MatType.CV_8UC3), 0, 0))
-{
-    var moveViewpoint = new MoveViewpointDown(
-        "real-viewpoint", fishingBlackboard, NullLogger.Instance, false, fishingInput);
-    var firstTick = moveViewpoint.Tick(frame);
-    var secondTick = moveViewpoint.Tick(frame);
-    Assert("AutoFishing real MoveViewpointDown first tick runs",
-        firstTick == BehaviourTree.BehaviourStatus.Running, firstTick.ToString());
-    Assert("AutoFishing real MoveViewpointDown second tick succeeds",
-        secondTick == BehaviourTree.BehaviourStatus.Succeeded, secondTick.ToString());
-}
+var fishingTree = TreeBuilder.Create()
+    .WithBlackboard(new CsTrees.Blackboard.Blackboard())
+        .SequenceWithMemory("real-viewpoint-sequence")
+            .SetSleep("record-sleep", milliseconds =>
+                recordingTaskControl.Calls.Add($"sleep:{milliseconds}"))
+            .MoveViewpointDown("real-viewpoint", NullLogger.Instance, fishingInput)
+        .End()
+    .End()
+    .Build();
+var firstTick = await fishingTree.TickOnce();
+var secondTick = await fishingTree.TickOnce();
+Assert("AutoFishing real MoveViewpointDown first tick runs",
+    firstTick == Status.Running, firstTick.ToString());
+Assert("AutoFishing real MoveViewpointDown second tick succeeds",
+    secondTick == Status.Success, secondTick.ToString());
 Assert("AutoFishing real MoveViewpointDown preserves movement/sleep order",
     recordingTaskControl.Calls.SequenceEqual(["move:0,500", "sleep:100"]),
     string.Join(" | ", recordingTaskControl.Calls));
@@ -1161,7 +1165,9 @@ Console.WriteLine("B11.6.2: Hardening — fake local archive end-to-end");
     File.WriteAllBytes(Path.Combine(fakeOutput, fakeFiles.Keys.First()), [0]);
     var repaired = await dl.EnsureInstalledAsync(fakeLockPath, fakeOutput, CancellationToken.None, fakeCache);
     Assert("B11.6.2 Ensure repairs a corrupt installed artifact",
-        repaired.Success && repaired.ArtifactsExtracted == fakeFiles.Count,
+        repaired.Success && repaired.ArtifactsExtracted == 1 &&
+        repaired.ArtifactsSkipped == fakeFiles.Count - 1,
+        $"extracted={repaired.ArtifactsExtracted}, skipped={repaired.ArtifactsSkipped}, " +
         $"errors={string.Join("; ", repaired.Errors)}");
 
     // Cleanup

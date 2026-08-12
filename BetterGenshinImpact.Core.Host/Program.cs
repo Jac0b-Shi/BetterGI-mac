@@ -27,6 +27,7 @@ using BetterGenshinImpact.GameTask.QuickTeleport;
 using BetterGenshinImpact.GameTask.AutoEat;
 using BetterGenshinImpact.GameTask.GameLoading;
 using BetterGenshinImpact.GameTask.MapMask;
+using BetterGenshinImpact.GameTask.Music.Service;
 using BetterGenshinImpact.GameTask.SkillCd;
 using BetterGenshinImpact.GameTask.UseRedeemCode;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
@@ -121,6 +122,9 @@ server.AttachGameScreenshotAction(new MacGameScreenshotAction(
         BetterGenshinImpact.GameTask.Screenshot.GameScreenshotTask>()));
 var foregroundInputCoordinator = new ForegroundInputCoordinator(
     server.PlatformCallbacks, sessionToken, shutdown.Token);
+using var musicCoordinator = new MusicCoordinator(
+    foregroundInputCoordinator, shutdown.Token, loggerFactory);
+server.AttachMusicCoordinator(musicCoordinator);
 var externalKeyMappingResolver = new ExternalKeyMappingResolver(layout);
 var globalMethodRuntime = new MacGlobalMethodRuntime(
     server.PlatformCallbacks, sessionToken, captureRing,

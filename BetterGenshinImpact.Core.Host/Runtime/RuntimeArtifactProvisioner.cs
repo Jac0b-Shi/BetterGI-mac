@@ -1,10 +1,16 @@
 using BetterGenshinImpact.Core.Infrastructure;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
 public sealed class RuntimeArtifactProvisioner(RuntimeLayout layout, ILogger logger)
 {
+    private static readonly JsonSerializerOptions ProgressJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
+
     private readonly object _gate = new();
     private RuntimeArtifactStatus? _completed;
 
@@ -21,7 +27,13 @@ public sealed class RuntimeArtifactProvisioner(RuntimeLayout layout, ILogger log
             using var downloader = new ArtifactDownloader();
             logger.LogInformation("Verifying locked BetterGI runtime artifacts under {Root}", layout.RootPath);
             var result = downloader.EnsureInstalledAsync(
-                    sourceLockPath, layout.RootPath, cancellationToken, layout.DownloadCachePath)
+                    sourceLockPath,
+                    layout.RootPath,
+                    cancellationToken,
+                    layout.DownloadCachePath,
+                    progress => Console.WriteLine(
+                        ArtifactDownloader.ProgressOutputPrefix +
+                        JsonSerializer.Serialize(progress, ProgressJsonOptions)))
                 .GetAwaiter().GetResult();
             if (!result.Success)
                 throw new InvalidDataException(

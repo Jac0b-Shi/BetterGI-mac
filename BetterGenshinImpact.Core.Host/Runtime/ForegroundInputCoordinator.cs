@@ -1,5 +1,6 @@
 using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.Core.Script;
+using BetterGenshinImpact.GameTask.Music.Service;
 using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 
@@ -76,6 +77,38 @@ public sealed class ForegroundInputCoordinator(
         }
     }
 
+    public void DispatchOnce(
+        JObject parameters,
+        CancellationToken cancellationToken = default,
+        bool verifyAvailability = true)
+    {
+        using var linked = CreateLinkedCancellation(cancellationToken);
+        if (verifyAvailability && !IsInputAvailable(linked.Token))
+        {
+            Interlocked.Exchange(ref _releaseRequired, 1);
+            throw new MusicInputUnavailableException();
+        }
+
+        try
+        {
+            if (Interlocked.Exchange(ref _releaseRequired, 0) != 0)
+            {
+                RequireAcknowledgement(
+                    "input.dispatch",
+                    JObject.FromObject(new { action = "releaseAll" }),
+                    linked.Token);
+            }
+            RequireAcknowledgement("input.dispatch", parameters, linked.Token);
+        }
+        catch (PlatformCallbackException exception)
+            when (string.Equals(exception.Code, "input_not_frontmost", StringComparison.Ordinal))
+        {
+            Interlocked.Exchange(ref _releaseRequired, 1);
+            throw new MusicInputUnavailableException(
+                "The game lost input focus while dispatching a music key.", exception);
+        }
+    }
+
     private void WaitForHostForegroundForText(CancellationToken cancellationToken)
     {
         if (focusProbe is not null)
@@ -142,9 +175,14 @@ public sealed class ForegroundInputCoordinator(
         }
     }
 
-    public void ReleaseAllWhenFocused(CancellationToken cancellationToken = default)
+    public void ReleaseAllWhenFocused(
+        CancellationToken cancellationToken = default,
+        bool includeOperationCancellation = true)
     {
-        using var linked = CreateLinkedCancellation(cancellationToken);
+        using var linked = includeOperationCancellation
+            ? CreateLinkedCancellation(cancellationToken)
+            : CancellationTokenSource.CreateLinkedTokenSource(
+                hostCancellationToken, cancellationToken);
         if (!IsInputAvailable(linked.Token))
         {
             Interlocked.Exchange(ref _releaseRequired, 1);

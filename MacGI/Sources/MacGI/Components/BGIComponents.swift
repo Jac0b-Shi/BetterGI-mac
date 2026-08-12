@@ -491,6 +491,7 @@ struct BGINavSidebar: View {
             sidebarButton(.mapTracking, indent: 28)
             sidebarButton(.recordReplay, indent: 28)
             sidebarButton(.macro)
+            sidebarButton(.music)
             sidebarButton(.hotkey)
             sidebarButton(.notification)
 

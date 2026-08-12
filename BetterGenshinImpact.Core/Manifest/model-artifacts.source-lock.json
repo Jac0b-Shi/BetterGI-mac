@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "artifactSetVersion": "0.63.0-model-1.0.29-map-1.0.20",
+  "artifactSetVersion": "0.63.0-model-1.0.29-map-1.0.21",
   "sources": [
     {
       "id": "bettergi-release-0.62.0-portable-7z",
@@ -33,18 +33,18 @@
       }
     },
     {
-      "id": "bettergi-assets-map-1.0.20-nupkg",
+      "id": "bettergi-assets-map-1.0.21-nupkg",
       "type": "archive",
-      "url": "https://api.nuget.org/v3-flatcontainer/bettergi.assets.map/1.0.20/bettergi.assets.map.1.0.20.nupkg",
-      "sha256": "5e3e3b5fa5f628d647c645addac581f84d60f772a5e9b76d0fe9f0b9c3ada8fb",
+      "url": "https://api.nuget.org/v3-flatcontainer/bettergi.assets.map/1.0.21/bettergi.assets.map.1.0.21.nupkg",
+      "sha256": "4821e185c73019d58fccb56b6c6a93e7c88e245c25b1f351dac5ef622bae7b90",
       "format": "nupkg",
-      "sizeBytes": 198328533,
+      "sizeBytes": 217286170,
       "memberCount": 623,
       "provenance": {
         "project": "babalae/bettergi-libraries",
-        "releaseTag": "BetterGI.Assets.Map/1.0.20",
-        "commitSha": "05d0a27dfc7fd478d3316e0973bc370d02371783",
-        "publishedAt": "2026-07-24T09:13:32.413Z"
+        "releaseTag": "BetterGI.Assets.Map/1.0.21",
+        "commitSha": "2d69476dfb640fefb5314bca97c5db7b972b3074",
+        "publishedAt": "2026-08-10T15:15:03.037Z"
       }
     }
   ],
@@ -480,14 +480,14 @@
     },
     {
       "destinationRelativePath": "Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin",
-      "sourceId": "bettergi-release-0.62.0-portable-7z",
-      "memberPath": "BetterGI/Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin",
-      "sizeBytes": 856128,
-      "sha256": "6a0f18b74adfa4c00a21c95f0a7ff4f32087b0495b19f75972723367ac85dc73",
+      "sourceId": "bettergi-assets-map-1.0.21-nupkg",
+      "memberPath": "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin",
+      "sizeBytes": 1069152,
+      "sha256": "7f5d7dc59b4b2ae3cf46fb8cf243e741790175bd7be0f4652457073fe993331f",
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI release Teyvat big-map SIFT data; bettergi repository root LICENSE GPLv3",
+        "source": "BetterGI.Assets.Map 1.0.21 signed NuGet package and bettergi-libraries repository",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },
@@ -519,40 +519,40 @@
     },
     {
       "destinationRelativePath": "Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png",
-      "sourceId": "bettergi-release-0.62.0-portable-7z",
-      "memberPath": "BetterGI/Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png",
-      "sizeBytes": 3451880,
-      "sha256": "70e10ebb9f2ace54dd878037742651be38e2d40af473dc7625202e3318f97221",
+      "sourceId": "bettergi-assets-map-1.0.21-nupkg",
+      "memberPath": "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png",
+      "sizeBytes": 4304815,
+      "sha256": "e070b8d3239ac5213d6a50efe491afd75b5784dce49d3a6725cc781f374595ed",
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI release Teyvat big-map SIFT data; bettergi repository root LICENSE GPLv3",
+        "source": "BetterGI.Assets.Map 1.0.21 signed NuGet package and bettergi-libraries repository",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },
     {
       "destinationRelativePath": "Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.kp.bin",
-      "sourceId": "bettergi-assets-map-1.0.20-nupkg",
+      "sourceId": "bettergi-assets-map-1.0.21-nupkg",
       "memberPath": "contentFiles/any/any/Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.kp.bin",
       "sizeBytes": 1846992,
       "sha256": "078f2a6bbb2190b4ba5028b6bd871cc233128f64a12d937baf6a7e58df477a8c",
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI.Assets.Map 1.0.20 signed NuGet package and bettergi-libraries repository",
+        "source": "BetterGI.Assets.Map 1.0.21 signed NuGet package and bettergi-libraries repository",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },
     {
       "destinationRelativePath": "Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.mat.png",
-      "sourceId": "bettergi-assets-map-1.0.20-nupkg",
+      "sourceId": "bettergi-assets-map-1.0.21-nupkg",
       "memberPath": "contentFiles/any/any/Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.mat.png",
       "sizeBytes": 7139609,
       "sha256": "13cfde6dd903576800aedd01e84837caf5ebfcdf389e451be9e49589b0b0bce7",
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI.Assets.Map 1.0.20 signed NuGet package and bettergi-libraries repository",
+        "source": "BetterGI.Assets.Map 1.0.21 signed NuGet package and bettergi-libraries repository",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     }

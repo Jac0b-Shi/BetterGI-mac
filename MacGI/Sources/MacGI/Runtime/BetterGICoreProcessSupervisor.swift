@@ -568,12 +568,56 @@ struct BetterGIOneDragonStatus: Sendable, Equatable {
     let error: String?
 }
 
+struct BetterGICoreArtifactProgress: Codable, Sendable, Equatable {
+    static let outputPrefix = "@@bettergi-artifact-progress@@"
+
+    let phase: String
+    let sourceId: String
+    let displayName: String
+    let bytesCompleted: Int64
+    let bytesTotal: Int64
+    let sourceIndex: Int
+    let sourceCount: Int
+
+    var fractionCompleted: Double? {
+        guard bytesTotal > 0 else { return nil }
+        return min(1, max(0, Double(bytesCompleted) / Double(bytesTotal)))
+    }
+
+    var statusText: String {
+        switch phase {
+        case "verifying": return "正在校验运行资源"
+        case "cached": return "正在读取本地缓存"
+        case "downloading": return "正在下载 \(displayName)"
+        case "extracting": return "正在安装 \(displayName)"
+        case "completed": return "运行资源已就绪"
+        default: return displayName.isEmpty ? "正在准备运行资源" : displayName
+        }
+    }
+
+    var byteDetailText: String? {
+        guard bytesTotal > 0 else { return nil }
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return "\(formatter.string(fromByteCount: bytesCompleted)) / "
+            + formatter.string(fromByteCount: bytesTotal)
+    }
+
+    static func parse(outputLine: String) -> BetterGICoreArtifactProgress? {
+        guard outputLine.hasPrefix(outputPrefix) else { return nil }
+        let payload = outputLine.dropFirst(outputPrefix.count)
+        guard let data = String(payload).data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(BetterGICoreArtifactProgress.self, from: data)
+    }
+}
+
 actor BetterGICoreProcessSupervisor {
     private static let startupPollLimit = 4_800
     enum StartupPhase: Sendable {
         case starting
         case waitingForSocket
         case provisioning
+        case artifactProgress(BetterGICoreArtifactProgress)
         case ready
         case failed(String)
     }
@@ -643,7 +687,9 @@ actor BetterGICoreProcessSupervisor {
             "--parent-pid", String(ProcessInfo.processInfo.processIdentifier)
         ]
         let outputPipe = Pipe()
-        let outputForwarder = CoreOutputForwarder(handler: logHandler)
+        let outputForwarder = CoreOutputForwarder(
+            handler: logHandler,
+            artifactProgressHandler: { progressHandler(.artifactProgress($0)) })
         outputPipe.fileHandleForReading.readabilityHandler = { handle in
             guard let data = readAvailableProcessOutput(from: handle) else { return }
             outputForwarder.consume(data)
@@ -787,7 +833,7 @@ actor BetterGICoreProcessSupervisor {
         }
     }
 
-    private func runningClient() throws -> BetterGICoreRPCClient {
+    func runningClient() throws -> BetterGICoreRPCClient {
         guard case .running = state, let client else {
             throw BetterGICoreRPCError.socket("BetterGI Core is not running.")
         }
@@ -1621,6 +1667,8 @@ actor BetterGICoreProcessSupervisor {
             mwkJumpFlyEnabled: pathing["mwkJumpFlyEnabled"] as? Bool ?? true,
             mwkDisableSprintEnabled:
                 pathing["mwkDisableSprintEnabled"] as? Bool ?? false,
+            mwkJumpFlySprintCount:
+                pathing["mwkJumpFlySprintCount"] as? Int ?? 0,
             mwkJumpFlyIntervalSeconds:
                 (pathing["mwkJumpFlyIntervalSeconds"] as? NSNumber)?.doubleValue ?? 1,
             taskCycleEnabled: taskCycle["enable"] as? Bool ?? false,
@@ -1748,6 +1796,7 @@ actor BetterGICoreProcessSupervisor {
             "switchToWalkEnabled": settings.switchToWalkEnabled,
             "mwkJumpFlyEnabled": settings.mwkJumpFlyEnabled,
             "mwkDisableSprintEnabled": settings.mwkDisableSprintEnabled,
+            "mwkJumpFlySprintCount": settings.mwkJumpFlySprintCount,
             "mwkJumpFlyIntervalSeconds": settings.mwkJumpFlyIntervalSeconds,
             "taskCycleConfig": taskCycleConfig,
             "taskCompletionSkipRuleConfig": completionConfig,
@@ -3515,9 +3564,14 @@ private final class CoreOutputForwarder: @unchecked Sendable {
     private let lock = NSLock()
     private var pending = ""
     private let handler: @Sendable (String) -> Void
+    private let artifactProgressHandler: @Sendable (BetterGICoreArtifactProgress) -> Void
 
-    init(handler: @escaping @Sendable (String) -> Void) {
+    init(
+        handler: @escaping @Sendable (String) -> Void,
+        artifactProgressHandler: @escaping @Sendable (BetterGICoreArtifactProgress) -> Void
+    ) {
         self.handler = handler
+        self.artifactProgressHandler = artifactProgressHandler
     }
 
     func consume(_ data: Data) {
@@ -3529,7 +3583,11 @@ private final class CoreOutputForwarder: @unchecked Sendable {
             return parts
         }
         for line in lines where !line.isEmpty {
-            handler(line)
+            if let progress = BetterGICoreArtifactProgress.parse(outputLine: line) {
+                artifactProgressHandler(progress)
+            } else {
+                handler(line)
+            }
         }
     }
 }

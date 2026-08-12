@@ -1270,7 +1270,10 @@ try
     var macroFileName = "verification.json";
     await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "KeyMouseScript", macroFileName), macroJson);
     var macroProject = ScriptGroupProject.BuildKeyMouseProject(macroFileName);
-    await macroProject.Run();
+    var macroRun = macroProject.Run();
+    if (await Task.WhenAny(macroRun, macroCallbackResponder) == macroCallbackResponder)
+        await macroCallbackResponder;
+    await macroRun;
     await macroCallbackResponder;
     Console.WriteLine("Real BetterGI KeyMouse playback passed: timing/parser/adaptation and acknowledged input order.");
 
@@ -3911,9 +3914,11 @@ static async Task StageMapBack3Async(string runtimeRoot, CancellationToken cance
 {
     var sourceLockPath = Path.Combine(
         Directory.GetCurrentDirectory(), "BetterGenshinImpact.Core", "Manifest", "model-artifacts.source-lock.json");
-    var source = BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader
-        .LoadSourceLock(sourceLockPath).Sources.Single(source =>
-            source.Id == "bettergi-release-0.62.0-portable-7z");
+    var completeLock = BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.LoadSourceLock(sourceLockPath);
+    var source = completeLock.Sources.Single(source =>
+        source.Id == "bettergi-release-0.62.0-portable-7z");
+    var mapSource = completeLock.Sources.Single(source =>
+        source.Id.StartsWith("bettergi-assets-map-", StringComparison.Ordinal));
     var localArchive = Path.Combine(
         Directory.GetCurrentDirectory(), "artifacts", "provenance-audit", "release-0.62.0",
         "downloads", "BetterGI_v0.62.0.7z");
@@ -3925,40 +3930,52 @@ static async Task StageMapBack3Async(string runtimeRoot, CancellationToken cance
         Source = "BetterGI release 0.62.0 map layer data",
         RedistributionStatus = "allowed"
     };
+    var mapLicense = new BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.LicenseEvidenceEntry
+    {
+        SpdxId = "GPL-3.0",
+        Source = "BetterGI.Assets.Map signed NuGet package and bettergi-libraries repository",
+        RedistributionStatus = "allowed-under-GPLv3"
+    };
     BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.ArtifactEntry Artifact(
-        string destination, string member, long size, string sha256) => new()
+        string sourceId, string destination, string member, long size, string sha256,
+        BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.LicenseEvidenceEntry licenseEvidence) => new()
     {
         DestinationRelativePath = destination,
-        SourceId = source.Id,
+        SourceId = sourceId,
         MemberPath = member,
         SizeBytes = size,
         Sha256 = sha256,
         Transformation = "relocate",
-        LicenseEvidence = license
+        LicenseEvidence = licenseEvidence
     };
     var mapLock = new BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.SourceLock
     {
         SchemaVersion = 1,
-        ArtifactSetVersion = "0.62.0",
-        Sources = [source],
+        ArtifactSetVersion = completeLock.ArtifactSetVersion,
+        Sources = completeLock.Sources,
         Artifacts =
         [
-            Artifact("Assets/Map/Teyvat/mapback_info.json", "BetterGI/Assets/Map/Teyvat/mapback_info.json", 705,
-                "7adf428edd494f8c6445a3e6f66a889f579b6ba0578a148d4cbf0bc1ddb135ea"),
-            Artifact("Assets/Map/Teyvat/MapBack_3_color.webp", "BetterGI/Assets/Map/Teyvat/MapBack_3_color.webp", 149064,
-                "e64715356c3e6e84646d4022533c4c7a709c57cfc93b92213a4cfc8d52b90fc4"),
-            Artifact("Assets/Map/Teyvat/MapBack_3_gray.webp", "BetterGI/Assets/Map/Teyvat/MapBack_3_gray.webp", 1302572,
-                "1bfafc57afbda3d0dd4a89a301d2ae645f47df3ad456eb63c856adc0193d1379"),
-            Artifact("Assets/Map/Teyvat/Teyvat_0_256.png", "BetterGI/Assets/Map/Teyvat/Teyvat_0_256.png", 3671250,
-                "3fcce29d0951117e7a0ff8c707537255f8aa980f1227718b27f84ed9b209ca7c"),
-            Artifact("Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin", "BetterGI/Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin", 856128,
-                "6a0f18b74adfa4c00a21c95f0a7ff4f32087b0495b19f75972723367ac85dc73"),
-            Artifact("Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png", "BetterGI/Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png", 3451880,
-                "70e10ebb9f2ace54dd878037742651be38e2d40af473dc7625202e3318f97221"),
-            Artifact("Assets/Map/Teyvat/Teyvat_0_2048_SIFT.kp.bin", "BetterGI/Assets/Map/Teyvat/Teyvat_0_2048_SIFT.kp.bin", 15226624,
-                "84ba9507bd6b4d98597f4fda593993b46488d49fea7d333d9667d86405381f22"),
-            Artifact("Assets/Map/Teyvat/Teyvat_0_2048_SIFT.mat.png", "BetterGI/Assets/Map/Teyvat/Teyvat_0_2048_SIFT.mat.png", 60112921,
-                "a2440e2ea54fa3c52b248c26f0f9d9904aeaac12aa93cf83b1e183206166aeff")
+            Artifact(source.Id, "Assets/Map/Teyvat/mapback_info.json", "BetterGI/Assets/Map/Teyvat/mapback_info.json", 705,
+                "7adf428edd494f8c6445a3e6f66a889f579b6ba0578a148d4cbf0bc1ddb135ea", license),
+            Artifact(source.Id, "Assets/Map/Teyvat/MapBack_3_color.webp", "BetterGI/Assets/Map/Teyvat/MapBack_3_color.webp", 149064,
+                "e64715356c3e6e84646d4022533c4c7a709c57cfc93b92213a4cfc8d52b90fc4", license),
+            Artifact(source.Id, "Assets/Map/Teyvat/MapBack_3_gray.webp", "BetterGI/Assets/Map/Teyvat/MapBack_3_gray.webp", 1302572,
+                "1bfafc57afbda3d0dd4a89a301d2ae645f47df3ad456eb63c856adc0193d1379", license),
+            Artifact(mapSource.Id, "Assets/Map/Teyvat/Teyvat_0_256.png",
+                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256.png", 4319098,
+                "6e111f4f5096b8c7448037c380053e5d2ef7e8b96be7305bdcdb177e40eb5cd8", mapLicense),
+            Artifact(mapSource.Id, "Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin",
+                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin", 1069152,
+                "7f5d7dc59b4b2ae3cf46fb8cf243e741790175bd7be0f4652457073fe993331f", mapLicense),
+            Artifact(mapSource.Id, "Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png",
+                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png", 4304815,
+                "e070b8d3239ac5213d6a50efe491afd75b5784dce49d3a6725cc781f374595ed", mapLicense),
+            Artifact(mapSource.Id, "Assets/Map/Teyvat/Teyvat_0_2048_SIFT.kp.bin",
+                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_2048_SIFT.kp.bin", 19027540,
+                "391f87d61da255fe25d39d738ace1c15be2e38ab312158b61f7c170600625704", mapLicense),
+            Artifact(mapSource.Id, "Assets/Map/Teyvat/Teyvat_0_2048_SIFT.mat.png",
+                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_2048_SIFT.mat.png", 74848915,
+                "3c5f339cdcb8d212ed3ad9dbd18e1e2084d8c284cb70b4aa126d454937a88c12", mapLicense)
         ]
     };
     var temporaryLockPath = Path.Combine(Path.GetTempPath(), $"bgi-host-map-{Guid.NewGuid():N}.json");
@@ -4094,8 +4111,10 @@ static OpenCvSharp.Mat BuildGroundTruthBigMapFrame(
         Path.Combine(runtimeRoot, "Assets", "Map", "Teyvat", "Teyvat_0_256.png"),
         OpenCvSharp.ImreadModes.Color);
     Require(!fullMap.Empty(), "Teyvat_0_256 big-map fixture image did not decode.");
-    var centerX = (int)Math.Round(4096 - genshinX / 4);
-    var centerY = (int)Math.Round(2048 - genshinY / 4);
+    var imageCenter2048 = new TeyvatMap().ConvertGenshinMapCoordinatesToImageCoordinates(
+        new OpenCvSharp.Point2f((float)genshinX, (float)genshinY));
+    var centerX = (int)Math.Round(imageCenter2048.X / TeyvatMap.BigMap256ScaleTo2048);
+    var centerY = (int)Math.Round(imageCenter2048.Y / TeyvatMap.BigMap256ScaleTo2048);
     var cropRect = new OpenCvSharp.Rect(centerX - 240, centerY - 135, 480, 270);
     Require(cropRect.X >= 0 && cropRect.Y >= 0 && cropRect.Right <= fullMap.Width &&
             cropRect.Bottom <= fullMap.Height,

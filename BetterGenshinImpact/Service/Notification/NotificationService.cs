@@ -416,8 +416,16 @@ public class NotificationService
             }
 
             var testData = CreateTestNotificationData();
-            await notifier.SendAsync(testData);
-            return NotificationTestResult.Success();
+            try
+            {
+                await notifier.SendAsync(testData);
+                return NotificationTestResult.Success();
+            }
+            finally
+            {
+                testData.Screenshot?.Dispose();
+                testData.Screenshot = null;
+            }
         }
         catch (NotifierException ex)
         {
@@ -451,14 +459,27 @@ public class NotificationService
 
         if (!ShouldSendNotification(notificationData.Event)) return;
 
+        Image<Rgb24>? ownedScreenshot = null;
         try
         {
-            await AddScreenshotIfNeededAsync(notificationData);
+            ownedScreenshot = AddScreenshotIfNeeded(notificationData);
             await _notifierManager.SendNotificationToAllAsync(notificationData);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "发送通知时发生错误");
+        }
+        finally
+        {
+            if (ownedScreenshot != null)
+            {
+                if (ReferenceEquals(notificationData.Screenshot, ownedScreenshot))
+                {
+                    notificationData.Screenshot = null;
+                }
+
+                ownedScreenshot.Dispose();
+            }
         }
     }
 
@@ -475,23 +496,25 @@ public class NotificationService
     /// <summary>
     ///     如果需要，为通知添加截图
     /// </summary>
-    private async Task AddScreenshotIfNeededAsync(BaseNotificationData notificationData)
+    private Image<Rgb24>? AddScreenshotIfNeeded(BaseNotificationData notificationData)
     {
-        if (_notificationConfig?.IncludeScreenShot != true)
+        if (_notificationConfig?.IncludeScreenShot != true || notificationData.Screenshot != null)
         {
-            return;
+            return null;
         }
 
         try
         {
-            notificationData.Screenshot = _screenshotProvider();
+            var screenshot = _screenshotProvider();
+            notificationData.Screenshot = screenshot;
+            return screenshot;
         }
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "补充通知截图失败");
         }
 
-        await Task.CompletedTask;
+        return null;
     }
 
     /// <summary>

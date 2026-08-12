@@ -117,7 +117,7 @@ public partial class ChooseTalkOptionTask
 
     public async Task SelectLastOptionOnce(CancellationToken ct)
     {
-        var region = CaptureToRectArea();
+        using var region = CaptureToRectArea();
         if (Bv.IsInTalkUi(region))
         {
             var chatOptionResultList = region.FindMulti(GetOptionIconRecognitionObject(region));
@@ -134,7 +134,7 @@ public partial class ChooseTalkOptionTask
     {
         for (var i = 0; i < retry; i++)
         {
-            var region = CaptureToRectArea();
+            using var region = CaptureToRectArea();
             if (Bv.IsInTalkUi(region))
             {
                 var chatOptionResultList = region.FindMulti(GetOptionIconRecognitionObject(region));

@@ -34,12 +34,7 @@ public sealed class WindowsAutoFishingRuntimePlatform : IAutoFishingRuntimePlatf
         activeProcessName = SystemControl.GetActiveByProcess();
         return SystemControl.IsGenshinImpactActiveByProcess();
     }
-    public ImageRegion? CaptureFrame()
-    {
-        var bitmap = TaskControl.CaptureGameImageNoRetry(TaskTriggerDispatcher.Instance().GameCapture);
-        if (bitmap is null) return null;
-        return new CaptureContent(bitmap, 0, 0).CaptureRectArea;
-    }
+    public ImageRegion? CaptureFrame() => TaskControl.CaptureToRectArea(forceNew: true);
     public void DisableRealtimeFishing() => Config.Enabled = false;
     public Task SetTimeAsync(int hour, int minute, CancellationToken cancellationToken) =>
         new SetTimeTask().Start(hour, minute, cancellationToken);
@@ -47,20 +42,17 @@ public sealed class WindowsAutoFishingRuntimePlatform : IAutoFishingRuntimePlatf
     public void SaveBehaviourScreenshot(ImageRegion imageRegion, string fileName)
     {
         var savePath = Global.Absolute(@$"log\screenshot\{fileName}");
-        var mat = imageRegion.SrcMat;
-        if (TaskContext.Instance().Config.CommonConfig.ScreenshotUidCoverEnabled)
+        var copy = imageRegion.SrcMat.Clone();
+        var coverUid = TaskContext.Instance().Config.CommonConfig.ScreenshotUidCoverEnabled;
+        var assetScale = TaskContext.Instance().SystemInfo.ScaleTo1080PRatio;
+        _ = Task.Run(() =>
         {
-            _ = Task.Run(() =>
+            using (copy)
             {
-                using var copy = mat.Clone();
-                var assetScale = TaskContext.Instance().SystemInfo.ScaleTo1080PRatio;
-                ScreenshotPrivacy.ApplyUidCover(copy, assetScale);
+                if (coverUid)
+                    ScreenshotPrivacy.ApplyUidCover(copy, assetScale);
                 Cv2.ImWrite(savePath, copy);
-            });
-        }
-        else
-        {
-            _ = Task.Run(() => Cv2.ImWrite(savePath, mat));
-        }
+            }
+        });
     }
 }

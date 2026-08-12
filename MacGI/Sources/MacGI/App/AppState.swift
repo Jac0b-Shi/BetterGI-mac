@@ -152,6 +152,7 @@ enum NavigationPage: String, CaseIterable, Identifiable {
     case realtime
     case soloTask
     case oneDragon
+    case music
     case scheduler
     case jsScript
     case mapTracking
@@ -170,6 +171,7 @@ enum NavigationPage: String, CaseIterable, Identifiable {
         case .realtime: "实时触发"
         case .soloTask: "独立任务"
         case .oneDragon: "一条龙"
+        case .music: "自动演奏"
         case .scheduler: "调度器"
         case .jsScript: "JS 脚本"
         case .mapTracking: "地图追踪"
@@ -188,6 +190,7 @@ enum NavigationPage: String, CaseIterable, Identifiable {
         case .realtime: "自动化任务"
         case .soloTask: "独立运行"
         case .oneDragon: "无人值守"
+        case .music: "曲谱播放"
         case .scheduler: "全自动"
         case .jsScript: "脚本仓库"
         case .mapTracking: "路径追踪"
@@ -206,6 +209,7 @@ enum NavigationPage: String, CaseIterable, Identifiable {
         case .realtime: "timer"
         case .soloTask: "checklist"
         case .oneDragon: "tray.full"
+        case .music: "music.note.list"
         case .scheduler: "cpu"
         case .jsScript: "doc.text"
         case .mapTracking: "map"
@@ -312,6 +316,7 @@ final class AppState: ObservableObject {
     @Published var captureStatus: RuntimeStatus = .missing
     @Published var inputStatus: RuntimeStatus = .missing
     @Published var coreStatus: RuntimeStatus = .starting
+    @Published private(set) var coreArtifactProgress: BetterGICoreArtifactProgress?
     @Published private(set) var screenCapturePermissionGranted = false
     @Published private(set) var screenCaptureAuthorizationState: ScreenCaptureAuthorizationState = .checking
     @Published private(set) var accessibilityPermissionGranted = false
@@ -395,6 +400,12 @@ final class AppState: ObservableObject {
     @Published var oneDragonCatalogStatus = "Core unavailable"
     @Published private(set) var pathingEntries: [BetterGIPathingEntry] = []
     @Published private(set) var pathingCatalogStatus = "Core unavailable"
+    @Published var musicState = BetterGIMusicState.empty
+    @Published var musicStatus = "Core unavailable"
+    @Published var musicLoading = false
+    @Published var selectedMusicTrackIndex: Int?
+    @Published var musicSpeed = 1.0
+    @Published var musicPlaybackMode = BetterGIMusicPlaybackMode.sequential
 
     // MARK: Window & capture (typed — not strings)
 
@@ -444,7 +455,7 @@ final class AppState: ObservableObject {
     private var runtimeFrameIndex: UInt64 = 0
     private var schedulerExecutionTask: Task<Void, Never>?
     private var oneDragonExecutionTask: Task<Void, Never>?
-    private var betterGICoreSupervisor: BetterGICoreProcessSupervisor?
+    var betterGICoreSupervisor: BetterGICoreProcessSupervisor?
     private var coreStartupTask: Task<Void, Never>?
     private let systemMetricsSampler = MacSystemMetricsSampler()
     private var systemMetricsSamplingTask: Task<Void, Never>?
@@ -467,6 +478,7 @@ final class AppState: ObservableObject {
     private let keyMouseEventRecorder = MacKeyMouseEventRecorder()
     private var keyMouseRecordingStartTask: Task<Void, Never>?
     private var keyMousePlaybackPollTask: Task<Void, Never>?
+    var musicPlaybackPollTask: Task<Void, Never>?
     private var notificationSettingsSaveRevision = 0
     private var notificationSettingsSaveTask: Task<Void, Never>?
     private var commonSettingsSaveRevision = 0
@@ -1986,6 +1998,7 @@ final class AppState: ObservableObject {
         NSLog("BetterGI Core startup entered")
         coreStartupInFlight = true
         coreStatus = .starting
+        coreArtifactProgress = nil
         defer { coreStartupInFlight = false }
         do {
             NSLog("BetterGI Core supervisor resolving packaged executable")
@@ -2016,6 +2029,7 @@ final class AppState: ObservableObject {
             await synchronizeOneDragonStatusFromCore()
             await loadScriptProjectsFromCore()
             await loadPathingEntriesFromCore()
+            await loadMusicStateFromCore()
             await loadKeyMouseScriptsFromCore()
             await loadNotificationSettingsFromCore()
             await loadMacroSettingsFromCore()
@@ -2037,10 +2051,15 @@ final class AppState: ObservableObject {
             coreStatus = .starting
         case .provisioning:
             coreStatus = .provisioning
+        case .artifactProgress(let progress):
+            coreStatus = .provisioning
+            coreArtifactProgress = progress.phase == "completed" ? nil : progress
         case .ready:
             coreStatus = .ok
+            coreArtifactProgress = nil
         case .failed(let message):
             coreStatus = .error
+            coreArtifactProgress = nil
             addLog(.error, message)
         }
     }

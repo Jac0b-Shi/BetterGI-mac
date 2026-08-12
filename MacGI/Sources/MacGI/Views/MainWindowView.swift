@@ -48,6 +48,8 @@ struct MainWindowView: View {
             SoloTasksPage()
         case .oneDragon:
             OneDragonWorkspaceView()
+        case .music:
+            MusicPage()
         case .scheduler:
             SchedulerPage()
         case .jsScript:

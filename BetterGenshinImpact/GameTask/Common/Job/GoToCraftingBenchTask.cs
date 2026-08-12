@@ -73,7 +73,7 @@ public class GoToCraftingBenchTask
 
         // 判断浓缩树脂是否存在
         // TODO 满的情况是怎么样子的
-        var ra = CaptureToRectArea();
+        using var ra = CaptureToRectArea();
         var resin = ra.Find(ElementRecognition.Get("CraftCondensedResin", ra));
         
         if (resin.IsExist())
@@ -87,7 +87,7 @@ public class GoToCraftingBenchTask
                 if (!fragileResinCountRa.IsEmpty())
                 {
                     // 图像下方就是脆弱树脂数量
-                    var countArea = ra.DeriveCrop(fragileResinCountRa.X, fragileResinCountRa.Y + fragileResinCountRa.Height,
+                    using var countArea = ra.DeriveCrop(fragileResinCountRa.X, fragileResinCountRa.Y + fragileResinCountRa.Height,
                         fragileResinCountRa.Width, fragileResinCountRa.Height);
                     var count = GoToCraftingBenchRuntimePlatform.Current.OcrService
                         .OcrWithoutDetector(countArea.SrcMat);
@@ -108,7 +108,7 @@ public class GoToCraftingBenchTask
                     if (!condensedResinCountRa.IsEmpty())
                     {
                         // 图像右侧就是浓缩树脂数量
-                        var countArea = ra.DeriveCrop(condensedResinCountRa.X + condensedResinCountRa.Width,
+                        using var countArea = ra.DeriveCrop(condensedResinCountRa.X + condensedResinCountRa.Width,
                             condensedResinCountRa.Y, condensedResinCountRa.Width*5/3, condensedResinCountRa.Height);
                         var count = GoToCraftingBenchRuntimePlatform.Current.OcrService
                             .OcrWithoutDetector(countArea.CacheGreyMat);
@@ -160,7 +160,8 @@ public class GoToCraftingBenchTask
                     Bv.ClickWhiteConfirmButton(ra);
                     Logger.LogInformation("合成{Text}", "浓缩树脂");
                     await Delay(300, ct);
-                    Bv.ClickBlackConfirmButton(CaptureToRectArea());
+                    using var confirmCapture = CaptureToRectArea();
+                    Bv.ClickBlackConfirmButton(confirmCapture);
                 }
                 else
                 {
@@ -173,7 +174,8 @@ public class GoToCraftingBenchTask
                 Bv.ClickWhiteConfirmButton(ra);
                 Logger.LogInformation("合成{Text}", "浓缩树脂");
                 await Delay(300, ct);
-                Bv.ClickBlackConfirmButton(CaptureToRectArea());
+                using var confirmCapture = CaptureToRectArea();
+                Bv.ClickBlackConfirmButton(confirmCapture);
             }
             await Delay(1300, ct);
             // 直接ESC退出即可

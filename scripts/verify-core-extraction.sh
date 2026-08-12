@@ -383,15 +383,23 @@ fi
 rg -q 'JsonConvert\.DeserializeObject<GiTpPosition>' \
   BetterGenshinImpact.Core.Host/Runtime/MacTpTaskRuntimePlatform.cs \
   || fail "macOS TpTask composition does not restore the upstream runtime-only statue object"
-for big_map_asset in Teyvat_0_256_SIFT.kp.bin Teyvat_0_256_SIFT.mat.png; do
-  rg -q "Assets/Map/Teyvat/${big_map_asset}" \
-    BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json \
-    || fail "production source-lock omits ${big_map_asset}"
-done
-for moon_canon_asset in MoonCanon_0_1024_SIFT.kp.bin MoonCanon_0_1024_SIFT.mat.png; do
-  rg -q "Assets/Map/MoonCanon/${moon_canon_asset}" \
-    BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json \
-    || fail "production source-lock omits ${moon_canon_asset}"
+map_package_version=$(sed -n \
+  's/.*PackageReference Include="BetterGI.Assets.Map" Version="\([^"]*\)".*/\1/p' \
+  BetterGenshinImpact/BetterGenshinImpact.csproj | head -1)
+map_source_id="bettergi-assets-map-${map_package_version}-nupkg"
+jq -e --arg source_id "${map_source_id}" \
+  '.sources[] | select(.id == $source_id)' \
+  BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json >/dev/null \
+  || fail "production source-lock does not match BetterGI.Assets.Map ${map_package_version}"
+for map_asset in \
+  Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin \
+  Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png \
+  Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.kp.bin \
+  Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.mat.png; do
+  jq -e --arg destination "${map_asset}" --arg source_id "${map_source_id}" \
+    '.artifacts[] | select(.destinationRelativePath == $destination and .sourceId == $source_id)' \
+    BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json >/dev/null \
+    || fail "production source-lock omits ${map_asset} from ${map_source_id}"
 done
 rg -q 'new MoonCanonMap' Test/BetterGenshinImpact.Core.Verification/Program.cs \
   && rg -q 'MoonCanon layer has real keypoints and descriptors' \
