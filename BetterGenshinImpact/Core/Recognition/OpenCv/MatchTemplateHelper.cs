@@ -216,6 +216,22 @@ public class MatchTemplateHelper
             Cv2.Compare(result, new Scalar(scoreThreshold), candidateMask,
                 isLowerBetter ? CmpTypes.LE : CmpTypes.GE);
 
+            // 搜索区域与模板完全相同时，响应矩阵只有一个元素。
+            // 部分 OpenCV 版本对 1x1 掩码执行带 mask 的 MinMaxLoc 会发生原生异常，因此直接读取唯一分数。
+            if (result.Width == 1 && result.Height == 1)
+            {
+                var rawScore = result.At<float>(0, 0);
+                var passed = !float.IsNaN(rawScore)
+                             && (isLowerBetter ? rawScore <= scoreThreshold : rawScore >= scoreThreshold);
+                if (passed)
+                {
+                    var score = isLowerBetter ? 1 - rawScore : rawScore;
+                    matches.Add(new TemplateMatchResult(new Point(0, 0), score));
+                }
+
+                return matches;
+            }
+
             while (matches.Count < maxCount)
             {
                 // 仅在候选掩码非零的位置中，提取当前分数最优的匹配点。
