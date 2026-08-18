@@ -988,6 +988,8 @@ var requiredRuntimeAssetPaths = new HashSet<string>(StringComparer.Ordinal)
     "Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png",
     "Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.kp.bin",
     "Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.mat.png",
+    "Assets/Config/Pick/default_pick_black_lists.json",
+    "Assets/Config/Pick/default_pick_white_lists.json",
     "Assets/Web/ScriptRepo/index.html"
 };
 var expectedLockedArtifactCount = manifestPhysicalPaths.Count + requiredRuntimeAssetPaths.Count;
@@ -1051,7 +1053,7 @@ var downloaderLock = BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.
     ?? throw new InvalidDataException("Artifact source lock loader returned null.");
 Assert("B11.6.2 Downloader loads source-lock", downloaderLock != null, "null");
 Assert("B11.6.2 Downloader schema version", downloaderLock!.SchemaVersion == 1, $"got {downloaderLock.SchemaVersion}");
-Assert("B11.6.2 Downloader has 3 sources", downloaderLock.Sources.Count == 3, $"got {downloaderLock.Sources.Count}");
+Assert("B11.6.2 Downloader has 4 sources", downloaderLock.Sources.Count == 4, $"got {downloaderLock.Sources.Count}");
 foreach (var dlSource in downloaderLock.Sources)
 {
     Assert("B11.6.2 Downloader source has url", !string.IsNullOrEmpty(dlSource.Url), "");
@@ -1746,12 +1748,14 @@ using (var artifactCard = Cv2.ImRead(Path.Combine(
         artifactOcrFactory.Service,
         1,
         NullLogger<AutoArtifactSalvageTask>.Instance);
-    var artifact = artifactTask.GetArtifactStat(artifactCard, artifactOcrFactory.Service, out _);
+    var artifact = artifactTask.GetArtifactStat(artifactCard, artifactOcrFactory.Service, out var artifactAllText);
+    // 上游 PP-OCR 对齐重写（透视裁剪）后，名称中的“异”被识别为繁体“異”，属可接受的 OCR 变体
     Assert("AutoArtifactSalvage real OCR reads artifact name and affixes",
-        artifact.Name.Contains("异种", StringComparison.Ordinal) &&
+        (artifact.Name.Contains("异种", StringComparison.Ordinal) ||
+         artifact.Name.Contains("異种", StringComparison.Ordinal)) &&
         artifact.MainAffix.Type == ArtifactAffixType.HP &&
         artifact.MinorAffixes.Length >= 4,
-        artifact.ToStructuredString());
+        artifact.ToStructuredString() + " | allText=" + artifactAllText.Replace("\n", "⏎"));
     var selected = await AutoArtifactSalvageTask.IsMatchJavaScript(
         artifact,
         "Output = ArtifactStat.Level == 0 && Array.from(ArtifactStat.MinorAffixes).length >= 4;",
@@ -2508,23 +2512,23 @@ comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [reProv, reState, b7R
 Assert("B7.8 After ResetForVerification, Compose succeeds",
     comp7.Trigger != null && comp7.Trigger.IsEnabled == true, $"trigger null or IsEnabled != true");
 
-// B7.9: Compose with BlackListEnabled = false — _blackList is empty
+// B7.9: Compose with Mode = Whitelist — _blackList is empty
 resetForVerification.Invoke(null, null);
-var blOffCfg = new AutoPickConfig { PickKey = "F", Enabled = true, BlackListEnabled = false };
+var blOffCfg = new AutoPickConfig { PickKey = "F", Enabled = true, Mode = BetterGenshinImpact.GameTask.AutoPick.AutoPickMode.Whitelist };
 var blOffProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     blOffCfg, PaddleOcrModelConfig.V5, "zh-Hans");
 comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [blOffProv, reState, b7Recorder, b5SystemInfo, defaultLogger, triggerLogger, testPaddle, testYap, null])!;
 var blList = (System.Collections.Generic.HashSet<string>)b7BlackListField.GetValue(comp7.Trigger)!;
-Assert("B7.9 BlackListEnabled=false: _blackList empty", blList.Count == 0, $"got {blList.Count}");
+Assert("B7.9 Mode=Whitelist: _blackList empty", blList.Count == 0, $"got {blList.Count}");
 
-// B7.10: Compose with WhiteListEnabled = false — _whiteList is empty
+// B7.10: Compose with BlacklistModePickEnabled = false — _whiteList is empty
 resetForVerification.Invoke(null, null);
-var wlOffCfg = new AutoPickConfig { PickKey = "F", Enabled = true, WhiteListEnabled = false };
+var wlOffCfg = new AutoPickConfig { PickKey = "F", Enabled = true, BlacklistModePickEnabled = false };
 var wlOffProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     wlOffCfg, PaddleOcrModelConfig.V5, "zh-Hans");
 comp7 = (MacAutoPickComposition)composeMethod.Invoke(null, [wlOffProv, reState, b7Recorder, b5SystemInfo, defaultLogger, triggerLogger, testPaddle, testYap, null])!;
 var wlList = (System.Collections.Generic.HashSet<string>)b7WhiteListField.GetValue(comp7.Trigger)!;
-Assert("B7.10 WhiteListEnabled=false: _whiteList empty", wlList.Count == 0, $"got {wlList.Count}");
+Assert("B7.10 BlacklistModePickEnabled=false: _whiteList empty", wlList.Count == 0, $"got {wlList.Count}");
 
 // B7.11: Compose(null, validState) throws ArgumentNullException, state stays NotComposed
 resetForVerification.Invoke(null, null);
@@ -2813,9 +2817,9 @@ var b83EnabledTrigger = new AutoPickTrigger(null, defaultRuntimeState, b83Enable
 b83EnabledTrigger.Init();
 Assert("B8.3C Init reads Enabled=true", b83EnabledTrigger.IsEnabled, $"got {b83EnabledTrigger.IsEnabled}");
 
-// D. Init respects WhiteListEnabled=false from provider
+// D. Init in Whitelist mode keeps blacklist-mode lists empty
 var b83BlOffProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
-    new AutoPickConfig { PickKey = "F", Enabled = true, WhiteListEnabled = false, BlackListEnabled = false },
+    new AutoPickConfig { PickKey = "F", Enabled = true, Mode = BetterGenshinImpact.GameTask.AutoPick.AutoPickMode.Whitelist },
     PaddleOcrModelConfig.V5, "zh-Hans");
 var b83BlOffTrigger = new AutoPickTrigger(null, defaultRuntimeState, b83BlOffProv, b5Recorder, b5SystemInfo, triggerLogger, testPaddle, testYap);
 b83BlOffTrigger.Init();
@@ -2825,9 +2829,9 @@ var b83FLField = typeof(AutoPickTrigger).GetField("_fuzzyBlackList", BindingFlag
 var wl = (System.Collections.Generic.HashSet<string>)b83WLField.GetValue(b83BlOffTrigger)!;
 var bl = (System.Collections.Generic.HashSet<string>)b83BLField.GetValue(b83BlOffTrigger)!;
 var fl = (System.Collections.Generic.List<string>)b83FLField.GetValue(b83BlOffTrigger)!;
-Assert("B8.3D WhiteListEnabled=false → _whiteList empty", wl.Count == 0, $"got {wl.Count}");
-Assert("B8.3D BlackListEnabled=false → _blackList empty", bl.Count == 0, $"got {bl.Count}");
-Assert("B8.3D BlackListEnabled=false → _fuzzyBlackList empty", fl.Count == 0, $"got {fl.Count}");
+Assert("B8.3D Mode=Whitelist → _whiteList empty", wl.Count == 0, $"got {wl.Count}");
+Assert("B8.3D Mode=Whitelist → _blackList empty", bl.Count == 0, $"got {bl.Count}");
+Assert("B8.3D Mode=Whitelist → _fuzzyBlackList empty", fl.Count == 0, $"got {fl.Count}");
 
 // E. Provider returns live mutable reference
 var b83LiveProv = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(

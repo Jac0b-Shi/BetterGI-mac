@@ -62,10 +62,18 @@ struct FeaturesPage: View {
     @ViewBuilder
     private var autoPickSettings: some View {
         if let settings = appState.autoPickTriggerSettings {
-            BGISettingLine(
-                title: "选择自动拾取文字识别引擎",
-                subtitle: "Paddle可识别所有文字,速度慢,消耗少;Yap可识别部分文字,快且准,消耗大"
-            ) {
+            BGISettingLine(title: "拾取模式", subtitle: "黑名单模式排除不想要的物品，白名单模式只拾取名单中的内容") {
+                Picker("", selection: Binding(
+                    get: { settings.mode },
+                    set: { appState.saveAutoPickTriggerConfiguration(mode: $0) })) {
+                    ForEach(settings.modeOptions, id: \.self) { option in
+                        Text(option == "Blacklist" ? "黑名单模式" : "白名单模式").tag(option)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden().frame(width: 220)
+            }
+            BGISettingLine(title: "选择自动拾取文字识别引擎", subtitle: "Paddle可识别所有文字,速度慢,消耗少;Yap可识别部分文字,快且准,消耗大") {
                 Picker("", selection: Binding(
                     get: { settings.ocrEngine },
                     set: { appState.saveAutoPickTriggerConfiguration(ocrEngine: $0) })) {
@@ -73,37 +81,57 @@ struct FeaturesPage: View {
                 }
                 .labelsHidden().frame(width: 100)
             }
-            BGISettingLine(title: "黑名单", subtitle: "排除 NPC 对话、各类交互选项、不需要拾取的物品等") {
-                Toggle("", isOn: Binding(
-                    get: { settings.blackListEnabled },
-                    set: { appState.saveAutoPickTriggerConfiguration(blackListEnabled: $0) }))
-                    .toggleStyle(.switch).labelsHidden()
-            }
-            BGISettingLine(title: "精确匹配黑名单", subtitle: "每行一条记录") {
-                TextEditor(text: $appState.autoPickExactBlackListDraft)
-                    .font(.body.monospaced()).frame(width: 360, height: 100)
-                    .overlay(Rectangle().stroke(BGIColors.border, lineWidth: 1))
-            }
-            BGISettingLine(title: "模糊匹配黑名单", subtitle: "每行一条记录") {
-                VStack(alignment: .trailing, spacing: 8) {
-                    TextEditor(text: $appState.autoPickFuzzyBlackListDraft)
+            if settings.mode == "Blacklist" {
+                BGISettingLine(title: "精确匹配黑名单", subtitle: "每行一条记录") {
+                    TextEditor(text: $appState.autoPickExactBlackListDraft)
                         .font(.body.monospaced()).frame(width: 360, height: 100)
                         .overlay(Rectangle().stroke(BGIColors.border, lineWidth: 1))
-                    Button("保存黑名单") { appState.saveAutoPickBlackLists() }
                 }
-            }
-            BGISettingLine(title: "白名单", subtitle: "需要主动按下 F 交互的内容，请配合黑名单使用") {
-                Toggle("", isOn: Binding(
-                    get: { settings.whiteListEnabled },
-                    set: { appState.saveAutoPickTriggerConfiguration(whiteListEnabled: $0) }))
-                    .toggleStyle(.switch).labelsHidden()
-            }
-            BGISettingLine(title: "白名单配置", subtitle: "每行一条记录") {
-                VStack(alignment: .trailing, spacing: 8) {
-                    TextEditor(text: $appState.autoPickWhiteListDraft)
+                BGISettingLine(title: "模糊匹配黑名单", subtitle: "每行一条记录") {
+                    VStack(alignment: .trailing, spacing: 8) {
+                        TextEditor(text: $appState.autoPickFuzzyBlackListDraft)
+                            .font(.body.monospaced()).frame(width: 360, height: 100)
+                            .overlay(Rectangle().stroke(BGIColors.border, lineWidth: 1))
+                        Button("保存黑名单") { appState.saveAutoPickBlackLists() }
+                    }
+                }
+                BGISettingLine(title: "拾取名单", subtitle: "需要主动按下 F 交互的内容，请配合黑名单使用") {
+                    Toggle("", isOn: Binding(
+                        get: { settings.blacklistModePickEnabled },
+                        set: { appState.saveAutoPickTriggerConfiguration(blacklistModePickEnabled: $0) }))
+                        .toggleStyle(.switch).labelsHidden()
+                }
+                if settings.blacklistModePickEnabled {
+                    BGISettingLine(title: "白名单配置", subtitle: "每行一条记录") {
+                        VStack(alignment: .trailing, spacing: 8) {
+                            TextEditor(text: $appState.autoPickWhiteListDraft)
+                                .font(.body.monospaced()).frame(width: 360, height: 100)
+                                .overlay(Rectangle().stroke(BGIColors.border, lineWidth: 1))
+                            Button("保存白名单") { appState.saveAutoPickWhiteList() }
+                        }
+                    }
+                }
+            } else {
+                BGISettingLine(title: "白名单拾取清单", subtitle: "每行一条记录，只拾取名单中的内容") {
+                    TextEditor(text: $appState.autoPickWhitelistModePickListDraft)
                         .font(.body.monospaced()).frame(width: 360, height: 100)
                         .overlay(Rectangle().stroke(BGIColors.border, lineWidth: 1))
-                    Button("保存白名单") { appState.saveAutoPickWhiteList() }
+                }
+                BGISettingLine(title: "不拾取名单", subtitle: "名单中的内容将不会被自动拾取") {
+                    Toggle("", isOn: Binding(
+                        get: { settings.whitelistModeDoNotPickEnabled },
+                        set: { appState.saveAutoPickTriggerConfiguration(whitelistModeDoNotPickEnabled: $0) }))
+                        .toggleStyle(.switch).labelsHidden()
+                }
+                if settings.whitelistModeDoNotPickEnabled {
+                    BGISettingLine(title: "不拾取名单配置", subtitle: "每行一条记录") {
+                        VStack(alignment: .trailing, spacing: 8) {
+                            TextEditor(text: $appState.autoPickWhitelistModeDoNotPickListDraft)
+                                .font(.body.monospaced()).frame(width: 360, height: 100)
+                                .overlay(Rectangle().stroke(BGIColors.border, lineWidth: 1))
+                            Button("保存白名单模式名单") { appState.saveAutoPickWhitelistModeLists() }
+                        }
+                    }
                 }
             }
             BGISettingLine(title: "自定义拾取按键", subtitle: "默认为 F，自带了 E 和 G 按键，需要改成其他键的请阅读文档") {

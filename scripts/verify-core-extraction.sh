@@ -102,7 +102,7 @@ rg -q 'GameTask/CharacterDevelopment/\*\.cs' \
   || fail "CharacterDevelopment is not linked and composed through the macOS Core script host"
 rg -q 'Assets/Model/AvatarGridIcon/avatar.onnx' \
   BetterGenshinImpact.Core/Manifest/model-artifacts.manifest.json \
-  && rg -q 'bettergi-assets-model-1.0.29-nupkg' \
+  && rg -q 'bettergi-assets-model-1.0.30-nupkg' \
     BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json \
   && rg -q 'class ArtifactDownloaderSuite' \
     Test/BetterGenshinImpact.Core.Host.Fast.Verification/ArtifactDownloaderSuite.cs \
@@ -795,7 +795,7 @@ rg -q 'one failing macOS trigger stopped later triggers from processing the same
   Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
   || fail "macOS trigger dispatcher does not verify per-trigger exception isolation"
 rg -q 'trigger\.SupportsGameUiCategory\(content\.CurrentGameUiCategory\)' \
-  BetterGenshinImpact/GameTask/CaptureTriggerScheduler.cs \
+  BetterGenshinImpact/GameTask/TaskTriggerDispatcher.cs \
   || fail "Windows trigger dispatcher does not honor shared multi-category trigger semantics"
 rg -q 'trigger\.SupportsGameUiCategory\(currentCategory\)' \
   BetterGenshinImpact.Core.Host/Runtime/MacTriggerDispatcher.cs \

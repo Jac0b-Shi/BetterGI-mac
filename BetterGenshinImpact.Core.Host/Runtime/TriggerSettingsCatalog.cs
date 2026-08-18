@@ -193,30 +193,39 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
     {
         var ocrEngine = RequiredOption(settings, "ocrEngine",
             nameof(PickOcrEngineEnum.Paddle), nameof(PickOcrEngineEnum.Yap));
+        var modeText = RequiredString(settings, "mode");
+        if (!Enum.TryParse<AutoPickMode>(modeText, ignoreCase: true, out var mode)
+            || !Enum.IsDefined(mode))
+            throw new ArgumentException($"mode has an unsupported value '{modeText}'.");
         var pickKey = settings.Value<string>("pickKey")?.Trim().ToUpperInvariant()
             ?? throw new ArgumentException("pickKey is required.");
         if (pickKey.Length != 1 || pickKey[0] is < 'A' or > 'Z')
             throw new ArgumentException("pickKey must be one uppercase Latin letter.");
-        var blackListEnabled = RequiredBoolean(settings, "blackListEnabled");
-        var whiteListEnabled = RequiredBoolean(settings, "whiteListEnabled");
         var fastModeEnabled = RequiredBoolean(settings, "fastModeEnabled");
+        var blacklistModePickEnabled = RequiredBoolean(settings, "blacklistModePickEnabled");
+        var whitelistModeDoNotPickEnabled = RequiredBoolean(settings, "whitelistModeDoNotPickEnabled");
         var exactBlackList = RequiredString(settings, "exactBlackList");
         var fuzzyBlackList = RequiredString(settings, "fuzzyBlackList");
         var whiteList = RequiredString(settings, "whiteList");
+        var whitelistModePickList = RequiredString(settings, "whitelistModePickList");
+        var whitelistModeDoNotPickList = RequiredString(settings, "whitelistModeDoNotPickList");
 
         lock (_lock)
         {
             var root = LoadRoot();
             var config = LoadConfig<AutoPickConfig>(root, "autoPickConfig");
             config.OcrEngine = ocrEngine;
+            config.Mode = mode;
             config.PickKey = pickKey;
-            config.BlackListEnabled = blackListEnabled;
-            config.WhiteListEnabled = whiteListEnabled;
             config.FastModeEnabled = fastModeEnabled;
+            config.BlacklistModePickEnabled = blacklistModePickEnabled;
+            config.WhitelistModeDoNotPickEnabled = whitelistModeDoNotPickEnabled;
             SaveConfig(root, "autoPickConfig", config);
             WriteUserText("pick_black_lists.txt", exactBlackList);
             WriteUserText("pick_fuzzy_black_lists.txt", fuzzyBlackList);
             WriteUserText("pick_white_lists.txt", whiteList);
+            WriteUserText("pick_whitelist_mode_pick_lists.txt", whitelistModePickList);
+            WriteUserText("pick_whitelist_mode_do_not_pick_lists.txt", whitelistModeDoNotPickList);
             _autoPickUpdated?.Invoke(config);
             _autoPickListsUpdated?.Invoke();
             return Describe(config);
@@ -357,12 +366,16 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
         {
             ocrEngine = config.OcrEngine,
             ocrEngineOptions = new[] { nameof(PickOcrEngineEnum.Paddle), nameof(PickOcrEngineEnum.Yap) },
-            blackListEnabled = config.BlackListEnabled,
+            mode = config.Mode.ToString(),
+            modeOptions = new[] { nameof(AutoPickMode.Blacklist), nameof(AutoPickMode.Whitelist) },
             fastModeEnabled = config.FastModeEnabled,
+            blacklistModePickEnabled = config.BlacklistModePickEnabled,
             exactBlackList = ReadUserText("pick_black_lists.txt"),
             fuzzyBlackList = ReadUserText("pick_fuzzy_black_lists.txt"),
-            whiteListEnabled = config.WhiteListEnabled,
+            whitelistModeDoNotPickEnabled = config.WhitelistModeDoNotPickEnabled,
             whiteList = ReadUserText("pick_white_lists.txt"),
+            whitelistModePickList = ReadUserText("pick_whitelist_mode_pick_lists.txt"),
+            whitelistModeDoNotPickList = ReadUserText("pick_whitelist_mode_do_not_pick_lists.txt"),
             pickKey = config.PickKey,
             pickKeyOptions,
         };

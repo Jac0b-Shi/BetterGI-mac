@@ -63,23 +63,16 @@ internal static class ImageRegionReferenceSearchHelper
 
     private static void LogReferenceSearchNotAllowed(RecognitionObject ro)
     {
-        // 测试和离线识别可能没有 WPF App；此时不为一条诊断日志初始化完整应用宿主。
-        if (System.Windows.Application.Current is App)
-        {
-            TaskControl.Logger.LogWarning(
-                "RecognitionObject {Name} 配置了 ReferenceImageSize/ReferenceBoundingBox，但当前 ImageRegion 不是 GameCaptureRegion 或 DeriveTo1080P 直接派生区域，禁止自动适配匹配。请重新新建一个 RecognitionObject 用于当前区域的识别。",
-                ro.Name);
-        }
+        TaskControl.Logger.LogWarning(
+            "RecognitionObject {Name} 配置了 ReferenceImageSize/ReferenceBoundingBox，但当前 ImageRegion 不是 GameCaptureRegion 或 DeriveTo1080P 直接派生区域，禁止自动适配匹配。请重新新建一个 RecognitionObject 用于当前区域的识别。",
+            ro.Name);
     }
 
     private static void LogReferenceSearchInvalid(RecognitionObject ro)
     {
-        if (System.Windows.Application.Current is App)
-        {
-            TaskControl.Logger.LogWarning(
-                "RecognitionObject {Name} 的 ReferenceImageSize/ReferenceBoundingBox/SearchOptions 配置不完整，禁止自动适配匹配。",
-                ro.Name);
-        }
+        TaskControl.Logger.LogWarning(
+            "RecognitionObject {Name} 的 ReferenceImageSize/ReferenceBoundingBox/SearchOptions 配置不完整，禁止自动适配匹配。",
+            ro.Name);
     }
 
     /// <summary>

@@ -25,7 +25,7 @@ internal sealed class DbPostProcessor(
     public PaddleOcrDetectionBox[] Run(Mat pred, Size sourceSize)
     {
         using var bitmap = new Mat();
-        Cv2.Compare(pred, threshold, bitmap, CmpType.GT);
+        Cv2.Compare(pred, threshold, bitmap, CmpTypes.GT);
 
         using var contourSource = new Mat();
         if (useDilation)

@@ -1,7 +1,6 @@
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Core.Script.Dependence;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.AutoPathing;
@@ -19,7 +18,6 @@ using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.QuickTeleport.Assets;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Helpers.Extensions;
-using Fischless.GameCapture;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
@@ -30,7 +28,6 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.AutoTrackPath;
@@ -41,10 +38,10 @@ namespace BetterGenshinImpact.GameTask.AutoTrackPath;
 public class TpTask
 {
     private readonly QuickTeleportAssets _assets;
-    private readonly Rect _captureRect = TaskContext.Instance().SystemInfo.ScaleMax1080PCaptureRect;
-    private readonly double _zoomOutMax1080PRatio = TaskContext.Instance().SystemInfo.ZoomOutMax1080PRatio;
-    private readonly TpConfig _tpConfig = TaskContext.Instance().Config.TpConfig;
-    private readonly string _mapMatchingMethod = TaskContext.Instance().Config.PathingConditionConfig.MapMatchingMethod;
+    private readonly Rect _captureRect = TpTaskRuntimePlatform.Current.SystemInfo.ScaleMax1080PCaptureRect;
+    private readonly double _zoomOutMax1080PRatio = TpTaskRuntimePlatform.Current.SystemInfo.ZoomOutMax1080PRatio;
+    private readonly TpConfig _tpConfig = TpTaskRuntimePlatform.Current.TpConfig;
+    private readonly string _mapMatchingMethod = TpTaskRuntimePlatform.Current.MapMatchingMethod;
     private readonly BlessingOfTheWelkinMoonTask _blessingOfTheWelkinMoonTask = new();
 
     private readonly CancellationToken ct;
@@ -296,8 +293,10 @@ public class TpTask
                 MoveMode = MoveModeEnum.Walk.Code
             };
             var waypointForTrack = new WaypointForTrack(waypoint, nameof(MapTypes.Teyvat), _mapMatchingMethod);
-            await new PathExecutor(ct).MoveTo(waypointForTrack);
-            Simulation.SendInput.SimulateAction(GIActions.Drop);
+            await new PathExecutor(
+                ct, PathExecutorPlatform.Current, PathExecutorAutoSkipPlatform.Current,
+                ScriptGroupExecutionServices.Current).MoveTo(waypointForTrack);
+            TaskControlPlatform.Current.SimulateAction(GIActions.Drop, KeyType.KeyPress);
         }
 
         await Delay((int)(_tpConfig.HpRestoreDuration * 1000), ct);
@@ -365,7 +364,7 @@ public class TpTask
             try
             {
                 // 打开地图前释放所有按键
-                Simulation.ReleaseAllKey();
+                TaskControlPlatform.Current.ReleasePressedInputs();
                 await Delay(GetTeleportOperationDelay(20), ct);
                 await CheckInBigMapUi(mapName);
                 return;
@@ -991,7 +990,7 @@ public class TpTask
 
     private static int GetTeleportPanelTimeoutMilliseconds()
     {
-        var delay = TaskContext.Instance().Config.QuickTeleportConfig.WaitTeleportPanelDelay;
+        var delay = TpTaskRuntimePlatform.Current.QuickTeleportConfig.WaitTeleportPanelDelay;
         var configuredWait = Math.Clamp(delay <= 0 ? 50 : delay, 50, 300);
         return Math.Max(TeleportPanelMinimumTimeoutMs, configuredWait * 18);
     }
@@ -1160,7 +1159,7 @@ public class TpTask
             return true;
         }
 
-        Simulation.SendInput.SimulateAction(GIActions.OpenMap);
+        TaskControlPlatform.Current.SimulateAction(GIActions.OpenMap, KeyType.KeyPress);
         return await WaitForBigMapUiAppear(GetBigMapOpenTimeoutMilliseconds(mapName));
     }
 
@@ -1213,7 +1212,7 @@ public class TpTask
             {
                 // 未激活点位的详情面板会遮挡后续地图操作，重试前先关闭。
                 // 最后一次失败也需要执行清理，避免影响脚本组中的下一个任务。
-                Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                TaskControlPlatform.Current.PressEscape();
                 await Delay(300, ct);
                 // throw; // 不抛出异常，继续重试
                 Logger.LogWarning(e.Message + "  重试");
@@ -1600,17 +1599,20 @@ public class TpTask
     /// <param name="y2">鼠标移动后位置y</param>
     public async Task MouseClickAndMove(int x1, int y1, int x2, int y2)
     {
-        // GlobalMethod.MoveMouseTo(x1, y1);
-        GameCaptureRegion.GameRegionMove((rect, scale) => (x1 * scale, y1 * scale));
+        using var capture = CaptureToRectArea();
+        capture.MoveTo(
+            (int)Math.Round(x1 * _zoomOutMax1080PRatio),
+            (int)Math.Round(y1 * _zoomOutMax1080PRatio));
         await Delay(GetTeleportOperationDelay(50), ct);
-        GlobalMethod.LeftButtonDown();
+        TaskControlPlatform.Current.LeftButtonDown();
         await Delay(GetTeleportOperationDelay(50), ct);
-        // GlobalMethod.MoveMouseTo(x2, y2);
-        GameCaptureRegion.GameRegionMove((rect, scale) => (x2 * scale, y2 * scale));
+        capture.MoveTo(
+            (int)Math.Round(x2 * _zoomOutMax1080PRatio),
+            (int)Math.Round(y2 * _zoomOutMax1080PRatio));
         await Delay(GetTeleportOperationDelay(50), ct);
-        GlobalMethod.LeftButtonUp();
+        TaskControlPlatform.Current.LeftButtonUp();
         await Delay(GetTeleportOperationDelay(50), ct);
-        GameCaptureRegion.GameRegionMove((rect, scale) => (rect.Width / 2d, rect.Height / 2d));
+        capture.MoveTo(capture.Width / 2, capture.Height / 2);
     }
 
     /// <summary>
@@ -1681,12 +1683,16 @@ public class TpTask
 
     private async Task<double> ScrollMapZoomAndMeasure(int wheelNotches)
     {
-        GameCaptureRegion.GameRegionMove((rect, scale) => (rect.Width / 2d, rect.Height / 2d));
+        using (var capture = CaptureToRectArea())
+        {
+            capture.MoveTo(capture.Width / 2, capture.Height / 2);
+        }
+
         await Delay(GetTeleportOperationDelay(20), ct);
         var singleWheelNotch = Math.Sign(wheelNotches);
         for (var i = 0; i < Math.Abs(wheelNotches); i++)
         {
-            Simulation.SendInput.Mouse.VerticalScroll(singleWheelNotch);
+            TaskControlPlatform.Current.VerticalScroll(singleWheelNotch);
             if (i + 1 < Math.Abs(wheelNotches))
             {
                 await Delay(GetTeleportOperationDelay(MapZoomWheelBurstIntervalMs), ct);
@@ -1738,15 +1744,8 @@ public class TpTask
 
     private static int GetDisplayScaleAdjustedMouseDelta(int pixelDelta)
     {
-        double displayScale = TaskContext.Instance().DpiScale;
+        double displayScale = TpTaskRuntimePlatform.Current.DpiScale;
         return (int)(pixelDelta / displayScale);
-    }
-
-    private static (double X, double Y) GetCursorPositionInCapture()
-    {
-        User32.GetCursorPos(out var cursor);
-        var captureRect = TaskContext.Instance().SystemInfo.CaptureAreaRect;
-        return (cursor.X - captureRect.X, cursor.Y - captureRect.Y);
     }
 
     private static bool TryPickSafeMapDragStart(
@@ -1845,7 +1844,10 @@ public class TpTask
         double endY = 0;
         int sentDeltaX = 0;
         int sentDeltaY = 0;
-        GameCaptureRegion.GameRegionMove((rect, scale) =>
+        using var capture = CaptureToRectArea();
+        var rect = new Rect(0, 0, capture.Width, capture.Height);
+        var scale = _zoomOutMax1080PRatio;
+        var foundSafeStart = false;
         {
             double expectedDeltaX = pixelDeltaX * scale;
             double expectedDeltaY = pixelDeltaY * scale;
@@ -1904,27 +1906,31 @@ public class TpTask
                 {
                     endX = startX + sentActualDeltaX;
                     endY = startY + sentActualDeltaY;
-                    return (startX, startY);
+                    foundSafeStart = true;
+                    break;
                 }
 
                 dragRatio *= 0.85d;
             }
 
-            sentDeltaX = 0;
-            sentDeltaY = 0;
-            startX = Math.Clamp(rect.Width / 2d, minX, maxX);
-            startY = Math.Clamp(rect.Height / 2d, minY, maxY);
-            endX = startX;
-            endY = startY;
-            return (startX, startY);
-        });
+            if (!foundSafeStart)
+            {
+                sentDeltaX = 0;
+                sentDeltaY = 0;
+                startX = Math.Clamp(rect.Width / 2d, minX, maxX);
+                startY = Math.Clamp(rect.Height / 2d, minY, maxY);
+                endX = startX;
+                endY = startY;
+            }
+        }
+
+        capture.MoveTo((int)Math.Round(startX), (int)Math.Round(startY));
 
         double moveMouseLength = Math.Sqrt(sentDeltaX * sentDeltaX + sentDeltaY * sentDeltaY);
         int steps = GetMapDragStepCount(moveMouseLength);
         int[] stepX = GenerateSteps(sentDeltaX, steps);
         int[] stepY = GenerateSteps(sentDeltaY, steps);
-        var startCursor = GetCursorPositionInCapture();
-        Simulation.SendInput.Mouse.LeftButtonDown();
+        TaskControlPlatform.Current.LeftButtonDown();
         int movedX = 0;
         int movedY = 0;
         for (var i = 0; i < steps; i++)
@@ -1935,17 +1941,20 @@ public class TpTask
             movedY += stepY[i1];
             if (_tpConfig.MapDragUseRelativeMove)
             {
-                GameCaptureRegion.GameRegionMoveBy((_, scale) => (stepX[i1] * scale, stepY[i1] * scale));
+                TaskControlPlatform.Current.MoveMouseBy(
+                    GetDisplayScaleAdjustedMouseDelta(stepX[i1]),
+                    GetDisplayScaleAdjustedMouseDelta(stepY[i1]));
             }
             else
             {
-                GameCaptureRegion.GameRegionMove((_, scale) => (startX + movedX * scale, startY + movedY * scale));
+                capture.MoveTo(
+                    (int)Math.Round(startX + movedX * scale),
+                    (int)Math.Round(startY + movedY * scale));
             }
         }
 
-        Simulation.SendInput.Mouse.LeftButtonUp();
-        var endCursor = GetCursorPositionInCapture();
-        return (sentDeltaX, sentDeltaY, steps, startX, startY, endX, endY, endCursor.X - startCursor.X, endCursor.Y - startCursor.Y);
+        TaskControlPlatform.Current.LeftButtonUp();
+        return (sentDeltaX, sentDeltaY, steps, startX, startY, endX, endY, sentDeltaX, sentDeltaY);
     }
 
     private static int GetMapDragStepCount(double moveMouseLength)
@@ -2344,7 +2353,13 @@ public class TpTask
 
     private async Task<bool> TrySwitchArea(string areaName)
     {
-        GameCaptureRegion.GameRegionClick((rect, scale) => (rect.Width - 160 * scale, rect.Height - 60 * scale));
+        using (var capture = CaptureToRectArea())
+        {
+            capture.ClickTo(
+                capture.Width - (int)Math.Round(160 * _zoomOutMax1080PRatio),
+                capture.Height - (int)Math.Round(60 * _zoomOutMax1080PRatio));
+        }
+
         var minCountryLocalized = this.stringLocalizer.WithCultureGet(this.cultureInfo, areaName);
         var candidatesText = "";
         var stopwatch = Stopwatch.StartNew();
@@ -2666,7 +2681,7 @@ public class TpTask
 
     private void PressTeleportConfirmKey()
     {
-        Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_F);
+        TaskControlPlatform.Current.PressKey(0x46);
     }
 
     private List<NearbyMapIcon> GetMapIconsInRect(

@@ -94,8 +94,9 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
                     "ocrEngine": "Paddle",
                     "fastModeEnabled": true,
                     "pickKey": "F",
-                    "blackListEnabled": true,
-                    "whiteListEnabled": false
+                    "mode": "Blacklist",
+                    "blacklistModePickEnabled": true,
+                    "whitelistModeDoNotPickEnabled": false
                   },
                   "autoSkipConfig": {
                     "enabled": true,
@@ -123,6 +124,10 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
                 "凯瑟琳\n", cancellationToken);
             await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "pick_white_lists.txt"),
                 "调查\n", cancellationToken);
+            await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "pick_whitelist_mode_pick_lists.txt"),
+                "晶核\n", cancellationToken);
+            await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "pick_whitelist_mode_do_not_pick_lists.txt"),
+                "低品质圣遗物\n", cancellationToken);
 
             var trigger = new RecordingTrigger();
             var platform = new RecordingGameTaskManagerPlatform();
@@ -143,20 +148,28 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
             var initial = JObject.FromObject(catalog.Get("AutoPick"));
             context.Require(initial.Value<string>("ocrEngine") == "Paddle" &&
                             initial.Value<bool>("fastModeEnabled") &&
+                            initial.Value<string>("mode") == "Blacklist" &&
+                            initial.Value<bool>("blacklistModePickEnabled") &&
+                            !initial.Value<bool>("whitelistModeDoNotPickEnabled") &&
                             initial.Value<string>("exactBlackList") == "精致的宝箱\n" &&
                             initial.Value<string>("fuzzyBlackList") == "凯瑟琳\n" &&
-                            initial.Value<string>("whiteList") == "调查\n",
+                            initial.Value<string>("whiteList") == "调查\n" &&
+                            initial.Value<string>("whitelistModePickList") == "晶核\n" &&
+                            initial.Value<string>("whitelistModeDoNotPickList") == "低品质圣遗物\n",
                 "AutoPick settings did not read the runtime User tree.");
 
             _ = catalog.Save("AutoPick", JObject.FromObject(new
             {
                 ocrEngine = "Yap",
                 fastModeEnabled = false,
-                blackListEnabled = false,
+                mode = "Whitelist",
+                blacklistModePickEnabled = false,
                 exactBlackList = "史莱姆凝液\n",
                 fuzzyBlackList = "对话\n",
-                whiteListEnabled = true,
+                whitelistModeDoNotPickEnabled = false,
                 whiteList = "合成\n启动\n",
+                whitelistModePickList = "晶核\n",
+                whitelistModeDoNotPickList = "低品质圣遗物\n",
                 pickKey = "G",
             }));
 
@@ -164,6 +177,9 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
                 Path.Combine(layout.UserPath, "config.json"), cancellationToken));
             context.Require(liveConfig.OcrEngine == "Yap" && liveConfig.PickKey == "G" &&
                             !liveConfig.FastModeEnabled &&
+                            liveConfig.Mode == AutoPickMode.Whitelist &&
+                            !liveConfig.BlacklistModePickEnabled &&
+                            !liveConfig.WhitelistModeDoNotPickEnabled &&
                             persisted["autoPickConfig"]?["itemIconLeftOffset"]?.Value<int>() == 61 &&
                             persisted["autoPickConfig"]?["fastModeEnabled"]?.Value<bool>() == false,
                 "AutoPick save did not persist fast mode or update the live adapter.");
@@ -174,8 +190,12 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
                             await File.ReadAllTextAsync(
                                 Path.Combine(layout.UserPath, "pick_fuzzy_black_lists.txt"), cancellationToken) == "对话\n" &&
                             await File.ReadAllTextAsync(
-                                Path.Combine(layout.UserPath, "pick_white_lists.txt"), cancellationToken) == "合成\n启动\n",
-                "AutoPick save did not persist the three upstream text lists.");
+                                Path.Combine(layout.UserPath, "pick_white_lists.txt"), cancellationToken) == "合成\n启动\n" &&
+                            await File.ReadAllTextAsync(
+                                Path.Combine(layout.UserPath, "pick_whitelist_mode_pick_lists.txt"), cancellationToken) == "晶核\n" &&
+                            await File.ReadAllTextAsync(
+                                Path.Combine(layout.UserPath, "pick_whitelist_mode_do_not_pick_lists.txt"), cancellationToken) == "低品质圣遗物\n",
+                "AutoPick save did not persist the five upstream text lists.");
 
             var initialAutoSkip = JObject.FromObject(catalog.Get("AutoSkip"));
             var hangoutOptions = initialAutoSkip["autoHangoutEndChooseOptions"]?.Values<string>().ToArray();

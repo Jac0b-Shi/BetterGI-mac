@@ -1,5 +1,7 @@
 using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Runtime.Windows;
 using BetterGenshinImpact.GameTask.Common;
+using BetterGenshinImpact.GameTask.Screenshot;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.View;
 using Fischless.GameCapture;
@@ -423,7 +425,7 @@ namespace BetterGenshinImpact.GameTask
                         foreach (var trigger in needRunTriggers)
                         {
                             if ((PrevGameUiCategory != content.CurrentGameUiCategory || (DateTime.Now - PrevGameUiChangeTime).TotalSeconds <= 30) // UI变化了后的30s内则所有触发器执行一遍
-                                || trigger.SupportedGameUiCategory == content.CurrentGameUiCategory)
+                                || trigger.SupportsGameUiCategory(content.CurrentGameUiCategory))
                             {
                                 // 触发器耗时只累计触发器执行本体，便于和截图耗时、总处理耗时拆开观察。
                                 var triggerStart = Stopwatch.GetTimestamp();
@@ -530,43 +532,12 @@ namespace BetterGenshinImpact.GameTask
         {
             try
             {
-                var path = Global.Absolute($@"log\screenshot\");
-                if (!Directory.Exists(path))
-                {
-                    Directory.CreateDirectory(path);
-                }
-
-                Mat mat;
-                try
-                {
-                    mat = TaskControl.CaptureGameImage(GameCapture);
-                }
-                catch (Exception)
-                {
-                    _logger.LogInformation("截图失败，未获取到图像");
-                    return;
-                }
-
-                var name = $@"{DateTime.Now:yyyyMMddHHmmssffff}.png";
-                var savePath = Global.Absolute($@"log\screenshot\{name}");
-                if (TaskContext.Instance().Config.CommonConfig.ScreenshotUidCoverEnabled)
-                {
-                    var assetScale = TaskContext.Instance().SystemInfo.ScaleTo1080PRatio;
-                    var rect = new Rect((int)(mat.Width - MaskWindowConfig.UidCoverRightBottomRect.X * assetScale),
-                        (int)(mat.Height - MaskWindowConfig.UidCoverRightBottomRect.Y * assetScale),
-                        (int)(MaskWindowConfig.UidCoverRightBottomRect.Width * assetScale),
-                        (int)(MaskWindowConfig.UidCoverRightBottomRect.Height * assetScale));
-                    mat.Rectangle(rect, Scalar.White, -1);
-                    Cv2.ImWrite(savePath, mat);
-                }
-                else
-                {
-                    Cv2.ImWrite(savePath, mat);
-                }
-
-                mat.Dispose();
-
-                _logger.LogInformation("截图已保存: {Name}", name);
+                var gameCapture = GameCapture
+                    ?? throw new InvalidOperationException("截图器未初始化!");
+                new GameScreenshotTask(
+                        new WindowsGameScreenshotRuntimePlatform(gameCapture),
+                        _logger)
+                    .TakeScreenshot();
             }
             catch (Exception e)
             {

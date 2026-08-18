@@ -2427,7 +2427,7 @@ try
                         {
                             frame = movementLoadingFrame;
                         }
-                        else if (movementTeleportCompletionCaptureCount <= 10)
+                        else if (movementTeleportCompletionCaptureCount <= 20)
                         {
                             frame = movementMainUiFrame;
                         }
@@ -2510,7 +2510,11 @@ try
             () => new ScriptProject("GenshinStatueShouldMove").ExecuteAsync(), cancellation.Token);
         Require(await Task.WhenAny(movementScriptTask, Task.Delay(TimeSpan.FromSeconds(30), cancellation.Token)) ==
                 movementScriptTask,
-            "genshin statue ShouldMove did not complete within 30 seconds.");
+            $"genshin statue ShouldMove did not complete within 30 seconds. " +
+            $"captures={movementCaptureCount} teleportConfirmed={movementTeleportConfirmed} " +
+            $"completionCaptures={movementTeleportCompletionCaptureCount} navCaptures={movementNavigationCaptureCount} " +
+            $"positions={movementPositionCount} stateQueries={movementStateQueryCount} " +
+            $"inputs=[{string.Join(",", movementInputs)}]");
         await movementScriptTask;
         var movementElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(movementStartedAt);
         movementResponderCancellation.Cancel();
@@ -2653,7 +2657,7 @@ try
                         {
                             frame = nearestLoadingFrame;
                         }
-                        else if (nearestTeleportCompletionCaptureCount <= 10)
+                        else if (nearestTeleportCompletionCaptureCount <= 20)
                         {
                             frame = nearestMainUiFrame;
                         }

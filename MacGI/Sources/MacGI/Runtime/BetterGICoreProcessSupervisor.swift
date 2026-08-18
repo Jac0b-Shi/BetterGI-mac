@@ -174,11 +174,15 @@ struct BetterGICoreAutoPickTriggerSettings: Sendable, Equatable {
     let ocrEngine: String
     let ocrEngineOptions: [String]
     let fastModeEnabled: Bool
-    let blackListEnabled: Bool
+    let mode: String
+    let modeOptions: [String]
+    let blacklistModePickEnabled: Bool
     let exactBlackList: String
     let fuzzyBlackList: String
-    let whiteListEnabled: Bool
+    let whitelistModeDoNotPickEnabled: Bool
     let whiteList: String
+    let whitelistModePickList: String
+    let whitelistModeDoNotPickList: String
     let pickKey: String
     let pickKeyOptions: [String]
 }
@@ -2304,11 +2308,14 @@ actor BetterGICoreProcessSupervisor {
             method: "trigger.settings.save", name: "AutoPick", settings: [
                 "ocrEngine": settings.ocrEngine,
                 "fastModeEnabled": settings.fastModeEnabled,
-                "blackListEnabled": settings.blackListEnabled,
+                "mode": settings.mode,
+                "blacklistModePickEnabled": settings.blacklistModePickEnabled,
                 "exactBlackList": settings.exactBlackList,
                 "fuzzyBlackList": settings.fuzzyBlackList,
-                "whiteListEnabled": settings.whiteListEnabled,
+                "whitelistModeDoNotPickEnabled": settings.whitelistModeDoNotPickEnabled,
                 "whiteList": settings.whiteList,
+                "whitelistModePickList": settings.whitelistModePickList,
+                "whitelistModeDoNotPickList": settings.whitelistModeDoNotPickList,
                 "pickKey": settings.pickKey,
             ]))
     }
@@ -2512,11 +2519,15 @@ actor BetterGICoreProcessSupervisor {
         guard let ocrEngine = value["ocrEngine"] as? String,
               let ocrEngineOptions = value["ocrEngineOptions"] as? [String],
               let fastModeEnabled = value["fastModeEnabled"] as? Bool,
-              let blackListEnabled = value["blackListEnabled"] as? Bool,
+              let mode = value["mode"] as? String,
+              let modeOptions = value["modeOptions"] as? [String],
+              let blacklistModePickEnabled = value["blacklistModePickEnabled"] as? Bool,
               let exactBlackList = value["exactBlackList"] as? String,
               let fuzzyBlackList = value["fuzzyBlackList"] as? String,
-              let whiteListEnabled = value["whiteListEnabled"] as? Bool,
+              let whitelistModeDoNotPickEnabled = value["whitelistModeDoNotPickEnabled"] as? Bool,
               let whiteList = value["whiteList"] as? String,
+              let whitelistModePickList = value["whitelistModePickList"] as? String,
+              let whitelistModeDoNotPickList = value["whitelistModeDoNotPickList"] as? String,
               let pickKey = value["pickKey"] as? String,
               let pickKeyOptions = value["pickKeyOptions"] as? [String] else {
             throw BetterGICoreRPCError.protocolViolation("Invalid AutoPick trigger settings.")
@@ -2524,9 +2535,15 @@ actor BetterGICoreProcessSupervisor {
         return .init(
             ocrEngine: ocrEngine, ocrEngineOptions: ocrEngineOptions,
             fastModeEnabled: fastModeEnabled,
-            blackListEnabled: blackListEnabled, exactBlackList: exactBlackList,
-            fuzzyBlackList: fuzzyBlackList, whiteListEnabled: whiteListEnabled,
-            whiteList: whiteList, pickKey: pickKey, pickKeyOptions: pickKeyOptions)
+            mode: mode, modeOptions: modeOptions,
+            blacklistModePickEnabled: blacklistModePickEnabled,
+            exactBlackList: exactBlackList,
+            fuzzyBlackList: fuzzyBlackList,
+            whitelistModeDoNotPickEnabled: whitelistModeDoNotPickEnabled,
+            whiteList: whiteList,
+            whitelistModePickList: whitelistModePickList,
+            whitelistModeDoNotPickList: whitelistModeDoNotPickList,
+            pickKey: pickKey, pickKeyOptions: pickKeyOptions)
     }
 
     private func decodeAutoSkipTriggerSettings(_ value: [String: Any]) throws
