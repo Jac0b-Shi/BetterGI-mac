@@ -1,7 +1,11 @@
+using BetterGenshinImpact.Core.Abstractions.Recognition;
+using BetterGenshinImpact.Core.Abstractions.Runtime;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Runtime.Windows;
 using BetterGenshinImpact.GameTask.Common;
+using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.Screenshot;
+using BetterGenshinImpact.Platform.Abstractions;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.View;
 using Fischless.GameCapture;
@@ -30,6 +34,13 @@ namespace BetterGenshinImpact.GameTask
         private readonly ILogger<TaskTriggerDispatcher> _logger = App.GetLogger<TaskTriggerDispatcher>();
         private readonly OverlayMetricsService? _metricsService = App.GetService<OverlayMetricsService>();
         private readonly CustomHtmlMaskService? _customHtmlMaskService = App.GetService<CustomHtmlMaskService>();
+
+        private readonly IAutoPickConfigProvider _autoPickConfigProvider;
+        private readonly IAutoPickRuntimeState _runtimeState;
+        private readonly IInputBackend _inputBackend;
+        private readonly IPaddleAutoPickTextRecognizer _paddleRecognizer;
+        private readonly IYapAutoPickTextRecognizer _yapRecognizer;
+        private ISystemInfo? _systemInfo;
 
         private static TaskTriggerDispatcher? _instance;
 
@@ -65,12 +76,31 @@ namespace BetterGenshinImpact.GameTask
         private DateTime PrevGameUiChangeTime = DateTime.Now; // 上一次UI变化时间
         
 
-        public TaskTriggerDispatcher()
+        public TaskTriggerDispatcher(
+            IAutoPickConfigProvider autoPickConfigProvider,
+            IAutoPickRuntimeState runtimeState,
+            IInputBackend inputBackend,
+            IPaddleAutoPickTextRecognizer paddleRecognizer,
+            IYapAutoPickTextRecognizer yapRecognizer)
         {
+            ArgumentNullException.ThrowIfNull(autoPickConfigProvider);
+            ArgumentNullException.ThrowIfNull(runtimeState);
+            ArgumentNullException.ThrowIfNull(inputBackend);
+            ArgumentNullException.ThrowIfNull(paddleRecognizer);
+            ArgumentNullException.ThrowIfNull(yapRecognizer);
+            _autoPickConfigProvider = autoPickConfigProvider;
+            _runtimeState = runtimeState;
+            _inputBackend = inputBackend;
+            _paddleRecognizer = paddleRecognizer;
+            _yapRecognizer = yapRecognizer;
             _instance = this;
             _timer.Elapsed += Tick;
             //_timer.Tick += Tick;
         }
+
+        private ISystemInfo RequireSystemInfo() =>
+            _systemInfo ?? throw new InvalidOperationException(
+                "TaskTriggerDispatcher has not been started; SystemInfo is unavailable.");
 
         public static TaskTriggerDispatcher Instance()
         {
@@ -118,7 +148,8 @@ namespace BetterGenshinImpact.GameTask
         {
             lock (_triggerListLocker)
             {
-                if (GameTaskManager.AddTrigger(name, externalConfig))
+                if (GameTaskManager.AddTrigger(name, externalConfig, _runtimeState, _inputBackend,
+                        RequireSystemInfo(), _autoPickConfigProvider, _paddleRecognizer, _yapRecognizer))
                 {
                     SetTriggers(GameTaskManager.ConvertToTriggerList(true));
                     return true;
@@ -126,6 +157,20 @@ namespace BetterGenshinImpact.GameTask
 
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Reload initial triggers via GameTaskManager, forwarding the composed runtime dependencies.
+        /// </summary>
+        public void ReloadInitialTriggers()
+        {
+            SetTriggers(GameTaskManager.LoadInitialTriggers(
+                _inputBackend,
+                RequireSystemInfo(),
+                _runtimeState,
+                _autoPickConfigProvider,
+                _paddleRecognizer,
+                _yapRecognizer));
         }
 
         public void Start(IntPtr hWnd, CaptureModes mode, int interval = 50)
@@ -138,9 +183,16 @@ namespace BetterGenshinImpact.GameTask
 
             // 初始化任务上下文(一定要在初始化触发器前完成)
             TaskContext.Instance().Init(hWnd);
+            _systemInfo = TaskContext.Instance().SystemInfo;
 
             // 初始化触发器(一定要在任务上下文初始化完毕后使用)
-            _triggers = GameTaskManager.LoadInitialTriggers();
+            _triggers = GameTaskManager.LoadInitialTriggers(
+                _inputBackend,
+                RequireSystemInfo(),
+                _runtimeState,
+                _autoPickConfigProvider,
+                _paddleRecognizer,
+                _yapRecognizer);
             GameLoadingTrigger.GlobalEnabled = TaskContext.Instance().Config.GenshinStartConfig.AutoEnterGameEnabled;
 
             // if (GraphicsCapture.IsHdrEnabled(hWnd))
@@ -494,7 +546,11 @@ namespace BetterGenshinImpact.GameTask
                 }
 
                 _gameRect = new RECT(currentRect);
-                TaskContext.Instance().SystemInfo.CaptureAreaRect = currentRect;
+                TaskContext.Instance().SystemInfo.CaptureAreaRect = new(
+                    currentRect.X,
+                    currentRect.Y,
+                    currentRect.Width,
+                    currentRect.Height);
                 MaskWindow.Instance().RefreshPosition();
                 HtmlMaskWindow.UpdateAllPositions();
                 return true;

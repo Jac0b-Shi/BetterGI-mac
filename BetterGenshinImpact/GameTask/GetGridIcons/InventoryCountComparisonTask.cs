@@ -5,7 +5,6 @@ using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Model.GameUI;
-using Fischless.WindowsInput;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using OpenCvSharp.Extensions;
@@ -54,7 +53,6 @@ internal sealed class InventoryCountComparisonTask : ISoloTask
     private const int MaxPages = 100;
     private readonly InventoryCountComparisonTarget target;
     private readonly ILogger logger = App.GetLogger<InventoryCountComparisonTask>();
-    private readonly InputSimulator input = Simulation.SendInput;
 
     /// <summary>
     /// 创建指定目标的数量 OCR 对比任务。
@@ -107,7 +105,7 @@ internal sealed class InventoryCountComparisonTask : ISoloTask
         {
             // 分类目标才打开背包；GridScreen 后续每次翻页事件只保存一张对比截图。
             await new ReturnMainUiTask().Start(ct);
-            await AutoArtifactSalvageTask.OpenInventory(category, input, logger, ct);
+            await AutoArtifactSalvageTask.OpenInventory(category, logger, ct);
 
             int pageNumber = 0;
             GridScreen gridScreen = new(GridParams.Templates[category], logger, ct);

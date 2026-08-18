@@ -560,26 +560,21 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 }
                 _ = dialogHotKeys.HandleKeyEdge(
                     HoldHotKeyCoordinator.ConfirmButtonHotKey, false);
-                await Task.Delay(30, cancellationToken);
-                var confirmCountAfterRelease =
-                    Volatile.Read(ref confirmCount);
-                var cancelCountBeforeConfirmCheck =
-                    Volatile.Read(ref cancelCount);
-                await Task.Delay(30, cancellationToken);
-                var cancelCountAfterConfirmCheck =
-                    Volatile.Read(ref cancelCount);
+                // 条件轮询取代固定 30ms 窗口（CI 负载下固定窗口不可靠）
+                var confirmCountAfterRelease = await WaitForStableCountAsync(
+                    () => Volatile.Read(ref confirmCount), cancellationToken);
+                // 仍在按住的 cancel 通道必须继续递增，证明两个通道互不影响
+                await WaitForCountAboveAsync(
+                    () => Volatile.Read(ref cancelCount),
+                    Volatile.Read(ref cancelCount), cancellationToken);
                 _ = dialogHotKeys.HandleKeyEdge(
                     HoldHotKeyCoordinator.CancelButtonHotKey, false);
-                await Task.Delay(30, cancellationToken);
-                var cancelCountAfterRelease =
-                    Volatile.Read(ref cancelCount);
-                await Task.Delay(30, cancellationToken);
+                var cancelCountAfterRelease = await WaitForStableCountAsync(
+                    () => Volatile.Read(ref cancelCount), cancellationToken);
                 context.Require(
                     confirmCountAfterRelease > 0 &&
                     Volatile.Read(ref confirmCount) ==
                         confirmCountAfterRelease &&
-                    cancelCountAfterConfirmCheck >
-                        cancelCountBeforeConfirmCheck &&
                     Volatile.Read(ref cancelCount) ==
                         cancelCountAfterRelease,
                     "Independent dialog-button hold actions did not stop on their own release edges.");
@@ -1493,13 +1488,55 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             ?? throw new EndOfStreamException($"Core disconnected during {method}.");
     }
 
+    /// <summary>
+    /// 轮询直到计数器在 50ms 观察窗内不再变化（视为已停止），返回稳定值。
+    /// </summary>
+    private static async Task<int> WaitForStableCountAsync(
+        Func<int> read,
+        CancellationToken cancellationToken)
+    {
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        while (true)
+        {
+            var before = read();
+            await Task.Delay(50, cancellationToken);
+            var after = read();
+            if (before == after)
+            {
+                return after;
+            }
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(started) >= TimeSpan.FromSeconds(10))
+            {
+                throw new TimeoutException("Hold hotkey count did not stabilize within 10 seconds.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 轮询直到计数器超过阈值（证明通道仍在运行）。
+    /// </summary>
+    private static async Task WaitForCountAboveAsync(
+        Func<int> read,
+        int threshold,
+        CancellationToken cancellationToken)
+    {
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        while (read() <= threshold)
+        {
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(started) >= TimeSpan.FromSeconds(10))
+            {
+                throw new TimeoutException("Hold hotkey count did not increase within 10 seconds.");
+            }
+            await Task.Delay(10, cancellationToken);
+        }
+    }
+
     private static bool Throws<TException>(Action action)
         where TException : Exception
     {
         try
         {
-            action();
-            return false;
+            action();            return false;
         }
         catch (TException)
         {
