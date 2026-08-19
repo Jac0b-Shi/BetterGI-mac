@@ -54,7 +54,7 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
             var root = LoadRoot();
             return name switch
             {
-                "AutoPick" => Describe(LoadConfig<AutoPickConfig>(root, "autoPickConfig")),
+                "AutoPick" => Describe(MacBvSimpleOperationPlatform.LoadAutoPickConfig(root)),
                 "AutoSkip" => Describe(LoadConfig<AutoSkipConfig>(root, "autoSkipConfig")),
                 "AutoFish" => new { },
                 "AutoEat" => Describe(LoadConfig<AutoEatConfig>(root, "autoEatConfig")),
@@ -213,14 +213,14 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
         lock (_lock)
         {
             var root = LoadRoot();
-            var config = LoadConfig<AutoPickConfig>(root, "autoPickConfig");
+            var config = MacBvSimpleOperationPlatform.LoadAutoPickConfig(root);
             config.OcrEngine = ocrEngine;
             config.Mode = mode;
             config.PickKey = pickKey;
             config.FastModeEnabled = fastModeEnabled;
             config.BlacklistModePickEnabled = blacklistModePickEnabled;
             config.WhitelistModeDoNotPickEnabled = whitelistModeDoNotPickEnabled;
-            SaveConfig(root, "autoPickConfig", config);
+            SaveConfig(root, "autoPickConfig", config, removeKeys: ["whiteListEnabled"]);
             WriteUserText("pick_black_lists.txt", exactBlackList);
             WriteUserText("pick_fuzzy_black_lists.txt", fuzzyBlackList);
             WriteUserText("pick_white_lists.txt", whiteList);
@@ -518,13 +518,17 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
     private static T LoadConfig<T>(JsonObject root, string propertyName) where T : class, new() =>
         root[propertyName]?.Deserialize<T>(ConfigJson.Options) ?? new T();
 
-    private void SaveConfig<T>(JsonObject root, string propertyName, T config)
+    private void SaveConfig<T>(JsonObject root, string propertyName, T config,
+        IReadOnlyList<string>? removeKeys = null)
     {
         var serialized = JsonSerializer.SerializeToNode(config, ConfigJson.Options) as JsonObject
             ?? throw new InvalidDataException($"{propertyName} did not serialize to an object.");
         var destination = root[propertyName] as JsonObject ?? [];
         foreach (var property in serialized)
             destination[property.Key] = property.Value?.DeepClone();
+        if (removeKeys is not null)
+            foreach (var key in removeKeys)
+                destination.Remove(key);
         root[propertyName] = destination;
         SaveRoot(root);
     }

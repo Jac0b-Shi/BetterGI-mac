@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json.Nodes;
 using BetterGenshinImpact.Core.Abstractions.Recognition;
 using BetterGenshinImpact.Core.Abstractions.Runtime;
 using BetterGenshinImpact.Core.Adapters;
@@ -268,6 +269,79 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
         finally
         {
             Global.StartUpPath = previousStartupPath;
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+
+        await VerifyAutoPickLegacyMigrationAsync(context, cancellationToken);
+    }
+
+    /// <summary>
+    /// 旧版 whiteListEnabled 配置必须在 Mac 读取链完成迁移，
+    /// 保存后清理旧 key，重读不得复活旧语义。
+    /// </summary>
+    private static async Task VerifyAutoPickLegacyMigrationAsync(
+        VerificationContext context, CancellationToken cancellationToken)
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"bettergi-fast-{Guid.NewGuid():N}");
+        try
+        {
+            var layout = new RuntimeLayout(root);
+            layout.EnsureCreated();
+            await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "config.json"), """
+                {
+                  "autoPickConfig": {
+                    "enabled": true,
+                    "whiteListEnabled": true
+                  }
+                }
+                """, cancellationToken);
+
+            var catalog = new TriggerSettingsCatalog(layout);
+            var migrated = JObject.FromObject(catalog.Get("AutoPick"));
+            context.Require(
+                migrated.Value<string>("mode") == "Blacklist" &&
+                migrated.Value<bool>("blacklistModePickEnabled"),
+                "Legacy whiteListEnabled=true was not migrated to blacklistModePickEnabled on read.");
+
+            var runtimeConfig = MacBvSimpleOperationPlatform.LoadAutoPickConfig(
+                JsonNode.Parse(await File.ReadAllTextAsync(
+                    Path.Combine(layout.UserPath, "config.json"), cancellationToken)) as JsonObject
+                ?? throw new InvalidDataException("config.json root must be an object."));
+            context.Require(
+                runtimeConfig.Mode == AutoPickMode.Blacklist &&
+                runtimeConfig.BlacklistModePickEnabled &&
+                runtimeConfig.LegacyWhiteListEnabled is null,
+                "The runtime AutoPick load path did not apply the legacy migration.");
+
+            _ = catalog.Save("AutoPick", JObject.FromObject(new
+            {
+                ocrEngine = "Paddle",
+                fastModeEnabled = false,
+                mode = "Blacklist",
+                blacklistModePickEnabled = false,
+                whitelistModeDoNotPickEnabled = false,
+                exactBlackList = "",
+                fuzzyBlackList = "",
+                whiteList = "",
+                whitelistModePickList = "",
+                whitelistModeDoNotPickList = "",
+                pickKey = "F",
+            }));
+
+            var persisted = JObject.Parse(await File.ReadAllTextAsync(
+                Path.Combine(layout.UserPath, "config.json"), cancellationToken));
+            context.Require(
+                persisted["autoPickConfig"]?["whiteListEnabled"] is null &&
+                persisted["autoPickConfig"]?["blacklistModePickEnabled"]?.Value<bool>() == false,
+                "AutoPick save did not purge the legacy whiteListEnabled key.");
+
+            var reloaded = JObject.FromObject(catalog.Get("AutoPick"));
+            context.Require(
+                reloaded.Value<bool>("blacklistModePickEnabled") == false,
+                "The purged legacy key resurrected on reload and overrode the saved value.");
+        }
+        finally
+        {
             if (Directory.Exists(root)) Directory.Delete(root, true);
         }
     }

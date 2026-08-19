@@ -33,7 +33,14 @@ public sealed class MacBvSimpleOperationPlatform : IBvSimpleOperationPlatform
             AllowTrailingCommas = true,
             CommentHandling = JsonCommentHandling.Skip,
         }) as JsonObject ?? throw new InvalidDataException("User/config.json root must be an object.");
-        return root["autoPickConfig"]?.Deserialize<AutoPickConfig>(ConfigJson.Options)
+        return LoadAutoPickConfig(root);
+    }
+
+    internal static AutoPickConfig LoadAutoPickConfig(JsonObject root)
+    {
+        var config = root["autoPickConfig"]?.Deserialize<AutoPickConfig>(ConfigJson.Options)
             ?? new AutoPickConfig();
+        config.MigrateLegacyConfig();
+        return config;
     }
 }
