@@ -424,7 +424,9 @@ public sealed class CoreRpcServer(
                         RequiredInt(request.Params, "index"),
                         request.Params?.Value<double?>("speed") ?? 1.0,
                         RequiredMusicPlaybackMode(request.Params, "playbackMode"),
-                        request.Params?.Value<double?>("startPositionMilliseconds") ?? 0));
+                        request.Params?.Value<double?>("startPositionMilliseconds") ?? 0,
+                        request.Params?.Value<double?>("customBpm"),
+                        request.Params?.Value<bool?>("autoSwitchInstrument") ?? false));
             }
             if (request.Method == "music.stop")
                 return RpcResponse.Success(request.Id, await Music.StopAsync());

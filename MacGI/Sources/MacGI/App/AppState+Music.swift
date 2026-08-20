@@ -78,7 +78,9 @@ extension AppState {
                     index: index,
                     speed: self.musicSpeed,
                     playbackMode: self.musicPlaybackMode,
-                    startPositionMilliseconds: startPosition))
+                    startPositionMilliseconds: startPosition,
+                    customBpm: self.musicUseCustomBpm ? self.musicCustomBpm : nil,
+                    autoSwitchInstrument: self.musicAutoSwitchInstrument))
                 self.addLog(.info, "自动演奏已开始。")
             } catch {
                 self.musicStatus = "开始演奏失败：\(error.localizedDescription)"
@@ -120,7 +122,7 @@ extension AppState {
     }
 
     func setMusicSpeed(_ speed: Double) {
-        musicSpeed = min(max(speed, 0.5), 2)
+        musicSpeed = min(max(speed, 0.1), 10)
         guard let supervisor = betterGICoreSupervisor,
               musicState.playback.state != .stopped else { return }
         Task { [weak self] in

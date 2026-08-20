@@ -1,10 +1,11 @@
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
+using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Job;
+using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.Model.GameUI;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
@@ -19,7 +20,20 @@ namespace BetterGenshinImpact.GameTask.Music.Service;
 
 public sealed class MusicInstrumentSwitcher : IMusicInstrumentSwitcher
 {
-    private readonly ILogger<MusicInstrumentSwitcher> _logger = App.GetLogger<MusicInstrumentSwitcher>();
+    private readonly ILogger<MusicInstrumentSwitcher> _logger;
+    private readonly IOcrService _ocrService;
+    private readonly Func<ISystemInfo> _systemInfoProvider;
+
+    public MusicInstrumentSwitcher(
+        ILogger<MusicInstrumentSwitcher> logger,
+        IOcrService ocrService,
+        Func<ISystemInfo> systemInfoProvider)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _ocrService = ocrService ?? throw new ArgumentNullException(nameof(ocrService));
+        _systemInfoProvider = systemInfoProvider
+            ?? throw new ArgumentNullException(nameof(systemInfoProvider));
+    }
 
     public async Task<bool> SwitchToAsync(string instrumentName, CancellationToken cancellationToken)
     {
@@ -76,7 +90,7 @@ public sealed class MusicInstrumentSwitcher : IMusicInstrumentSwitcher
             await new ReturnMainUiTask().Start(cancellationToken);
             _logger.LogInformation("乐器已就绪：{InstrumentName}，即将开始演奏", instrumentName);
             await Delay(1000, cancellationToken);
-            Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget);
+            TaskControlPlatform.Current.SimulateAction(GIActions.QuickUseGadget);
             await Delay(2000, cancellationToken);
             keepInstrumentUiOpen = true;
             return true;
@@ -122,14 +136,14 @@ public sealed class MusicInstrumentSwitcher : IMusicInstrumentSwitcher
         return false;
     }
 
-    private static async Task<string> WaitForEquipButtonTextAsync(CancellationToken cancellationToken)
+    private async Task<string> WaitForEquipButtonTextAsync(CancellationToken cancellationToken)
     {
         var result = string.Empty;
         for (var i = 0; i < 6; i++)
         {
             using var capture = CaptureToRectArea(forceNew: true);
             using var buttonRegion = capture.DeriveCrop(GetEquipButtonRect());
-            result = OcrFactory.Paddle.Ocr(buttonRegion.SrcMat);
+            result = _ocrService.Ocr(buttonRegion.SrcMat);
             if (result.Contains("替换", StringComparison.Ordinal)
                 || result.Contains("卸下", StringComparison.Ordinal))
             {
@@ -142,17 +156,21 @@ public sealed class MusicInstrumentSwitcher : IMusicInstrumentSwitcher
         return result;
     }
 
-    private static void ClickEquipButton()
+    private void ClickEquipButton()
     {
         using var capture = CaptureToRectArea(forceNew: true);
         using var buttonRegion = capture.DeriveCrop(GetEquipButtonRect());
         buttonRegion.Click();
     }
 
-    private static Rect GetEquipButtonRect()
+    private Rect GetEquipButtonRect()
     {
-        var scale = TaskContext.Instance().SystemInfo.AssetScale;
-        return new Rect(1600, 965, 260, 90).Multiply(scale);
+        var scale = _systemInfoProvider().AssetScale;
+        return new Rect(
+            (int)(1600 * scale),
+            (int)(965 * scale),
+            (int)(260 * scale),
+            (int)(90 * scale));
     }
 
     private static string NormalizeInstrumentName(string instrumentName)

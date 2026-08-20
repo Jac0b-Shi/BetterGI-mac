@@ -406,6 +406,9 @@ final class AppState: ObservableObject {
     @Published var selectedMusicTrackIndex: Int?
     @Published var musicSpeed = 1.0
     @Published var musicPlaybackMode = BetterGIMusicPlaybackMode.sequential
+    @Published var musicUseCustomBpm = false
+    @Published var musicCustomBpm = 120.0
+    @Published var musicAutoSwitchInstrument = false
 
     // MARK: Window & capture (typed — not strings)
 
