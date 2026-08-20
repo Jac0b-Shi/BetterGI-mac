@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json.Nodes;
 using BetterGenshinImpact.Core.Abstractions.Recognition;
 using BetterGenshinImpact.Core.Abstractions.Runtime;
 using BetterGenshinImpact.Core.Adapters;
@@ -94,8 +95,9 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
                     "ocrEngine": "Paddle",
                     "fastModeEnabled": true,
                     "pickKey": "F",
-                    "blackListEnabled": true,
-                    "whiteListEnabled": false
+                    "mode": "Blacklist",
+                    "blacklistModePickEnabled": true,
+                    "whitelistModeDoNotPickEnabled": false
                   },
                   "autoSkipConfig": {
                     "enabled": true,
@@ -123,6 +125,10 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
                 "凯瑟琳\n", cancellationToken);
             await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "pick_white_lists.txt"),
                 "调查\n", cancellationToken);
+            await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "pick_whitelist_mode_pick_lists.txt"),
+                "晶核\n", cancellationToken);
+            await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "pick_whitelist_mode_do_not_pick_lists.txt"),
+                "低品质圣遗物\n", cancellationToken);
 
             var trigger = new RecordingTrigger();
             var platform = new RecordingGameTaskManagerPlatform();
@@ -143,20 +149,28 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
             var initial = JObject.FromObject(catalog.Get("AutoPick"));
             context.Require(initial.Value<string>("ocrEngine") == "Paddle" &&
                             initial.Value<bool>("fastModeEnabled") &&
+                            initial.Value<string>("mode") == "Blacklist" &&
+                            initial.Value<bool>("blacklistModePickEnabled") &&
+                            !initial.Value<bool>("whitelistModeDoNotPickEnabled") &&
                             initial.Value<string>("exactBlackList") == "精致的宝箱\n" &&
                             initial.Value<string>("fuzzyBlackList") == "凯瑟琳\n" &&
-                            initial.Value<string>("whiteList") == "调查\n",
+                            initial.Value<string>("whiteList") == "调查\n" &&
+                            initial.Value<string>("whitelistModePickList") == "晶核\n" &&
+                            initial.Value<string>("whitelistModeDoNotPickList") == "低品质圣遗物\n",
                 "AutoPick settings did not read the runtime User tree.");
 
             _ = catalog.Save("AutoPick", JObject.FromObject(new
             {
                 ocrEngine = "Yap",
                 fastModeEnabled = false,
-                blackListEnabled = false,
+                mode = "Whitelist",
+                blacklistModePickEnabled = false,
                 exactBlackList = "史莱姆凝液\n",
                 fuzzyBlackList = "对话\n",
-                whiteListEnabled = true,
+                whitelistModeDoNotPickEnabled = false,
                 whiteList = "合成\n启动\n",
+                whitelistModePickList = "晶核\n",
+                whitelistModeDoNotPickList = "低品质圣遗物\n",
                 pickKey = "G",
             }));
 
@@ -164,6 +178,9 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
                 Path.Combine(layout.UserPath, "config.json"), cancellationToken));
             context.Require(liveConfig.OcrEngine == "Yap" && liveConfig.PickKey == "G" &&
                             !liveConfig.FastModeEnabled &&
+                            liveConfig.Mode == AutoPickMode.Whitelist &&
+                            !liveConfig.BlacklistModePickEnabled &&
+                            !liveConfig.WhitelistModeDoNotPickEnabled &&
                             persisted["autoPickConfig"]?["itemIconLeftOffset"]?.Value<int>() == 61 &&
                             persisted["autoPickConfig"]?["fastModeEnabled"]?.Value<bool>() == false,
                 "AutoPick save did not persist fast mode or update the live adapter.");
@@ -174,8 +191,12 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
                             await File.ReadAllTextAsync(
                                 Path.Combine(layout.UserPath, "pick_fuzzy_black_lists.txt"), cancellationToken) == "对话\n" &&
                             await File.ReadAllTextAsync(
-                                Path.Combine(layout.UserPath, "pick_white_lists.txt"), cancellationToken) == "合成\n启动\n",
-                "AutoPick save did not persist the three upstream text lists.");
+                                Path.Combine(layout.UserPath, "pick_white_lists.txt"), cancellationToken) == "合成\n启动\n" &&
+                            await File.ReadAllTextAsync(
+                                Path.Combine(layout.UserPath, "pick_whitelist_mode_pick_lists.txt"), cancellationToken) == "晶核\n" &&
+                            await File.ReadAllTextAsync(
+                                Path.Combine(layout.UserPath, "pick_whitelist_mode_do_not_pick_lists.txt"), cancellationToken) == "低品质圣遗物\n",
+                "AutoPick save did not persist the five upstream text lists.");
 
             var initialAutoSkip = JObject.FromObject(catalog.Get("AutoSkip"));
             var hangoutOptions = initialAutoSkip["autoHangoutEndChooseOptions"]?.Values<string>().ToArray();
@@ -248,6 +269,79 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
         finally
         {
             Global.StartUpPath = previousStartupPath;
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+
+        await VerifyAutoPickLegacyMigrationAsync(context, cancellationToken);
+    }
+
+    /// <summary>
+    /// 旧版 whiteListEnabled 配置必须在 Mac 读取链完成迁移，
+    /// 保存后清理旧 key，重读不得复活旧语义。
+    /// </summary>
+    private static async Task VerifyAutoPickLegacyMigrationAsync(
+        VerificationContext context, CancellationToken cancellationToken)
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"bettergi-fast-{Guid.NewGuid():N}");
+        try
+        {
+            var layout = new RuntimeLayout(root);
+            layout.EnsureCreated();
+            await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "config.json"), """
+                {
+                  "autoPickConfig": {
+                    "enabled": true,
+                    "whiteListEnabled": true
+                  }
+                }
+                """, cancellationToken);
+
+            var catalog = new TriggerSettingsCatalog(layout);
+            var migrated = JObject.FromObject(catalog.Get("AutoPick"));
+            context.Require(
+                migrated.Value<string>("mode") == "Blacklist" &&
+                migrated.Value<bool>("blacklistModePickEnabled"),
+                "Legacy whiteListEnabled=true was not migrated to blacklistModePickEnabled on read.");
+
+            var runtimeConfig = MacBvSimpleOperationPlatform.LoadAutoPickConfig(
+                JsonNode.Parse(await File.ReadAllTextAsync(
+                    Path.Combine(layout.UserPath, "config.json"), cancellationToken)) as JsonObject
+                ?? throw new InvalidDataException("config.json root must be an object."));
+            context.Require(
+                runtimeConfig.Mode == AutoPickMode.Blacklist &&
+                runtimeConfig.BlacklistModePickEnabled &&
+                runtimeConfig.LegacyWhiteListEnabled is null,
+                "The runtime AutoPick load path did not apply the legacy migration.");
+
+            _ = catalog.Save("AutoPick", JObject.FromObject(new
+            {
+                ocrEngine = "Paddle",
+                fastModeEnabled = false,
+                mode = "Blacklist",
+                blacklistModePickEnabled = false,
+                whitelistModeDoNotPickEnabled = false,
+                exactBlackList = "",
+                fuzzyBlackList = "",
+                whiteList = "",
+                whitelistModePickList = "",
+                whitelistModeDoNotPickList = "",
+                pickKey = "F",
+            }));
+
+            var persisted = JObject.Parse(await File.ReadAllTextAsync(
+                Path.Combine(layout.UserPath, "config.json"), cancellationToken));
+            context.Require(
+                persisted["autoPickConfig"]?["whiteListEnabled"] is null &&
+                persisted["autoPickConfig"]?["blacklistModePickEnabled"]?.Value<bool>() == false,
+                "AutoPick save did not purge the legacy whiteListEnabled key.");
+
+            var reloaded = JObject.FromObject(catalog.Get("AutoPick"));
+            context.Require(
+                reloaded.Value<bool>("blacklistModePickEnabled") == false,
+                "The purged legacy key resurrected on reload and overrode the saved value.");
+        }
+        finally
+        {
             if (Directory.Exists(root)) Directory.Delete(root, true);
         }
     }

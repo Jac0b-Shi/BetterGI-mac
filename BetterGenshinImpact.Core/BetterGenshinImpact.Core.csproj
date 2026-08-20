@@ -27,6 +27,7 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="SharpCompress" Version="0.50.0" />
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
+    <PackageReference Include="Clipper2" Version="2.0.0" />
     <PackageReference Include="Microsoft.ClearScript.V8" Version="7.4.5" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.9" />
     <PackageReference Include="System.Collections.Immutable" Version="10.0.7" />
@@ -303,6 +304,7 @@
     <Compile Include="../BetterGenshinImpact/Core/Recognition/OCR/Paddle/PaddleOcrService.cs" Link="Core/Recognition/OCR/Paddle/PaddleOcrService.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recognition/OCR/Paddle/Rec.cs" Link="Core/Recognition/OCR/Paddle/Rec.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recognition/OCR/Paddle/Det.cs" Link="Core/Recognition/OCR/Paddle/Det.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Recognition/OCR/Paddle/DbPostProcessor.cs" Link="Core/Recognition/OCR/Paddle/DbPostProcessor.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recognition/OCR/Engine/OcrUtils.cs" Link="Core/Recognition/OCR/Engine/OcrUtils.cs" />
   </ItemGroup>
 
@@ -447,6 +449,7 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridParams.cs" Link="GameTask/Model/GameUI/GridParams.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/FixedSizeGridCardDetector.cs" Link="GameTask/Model/GameUI/FixedSizeGridCardDetector.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridCell.cs" Link="GameTask/Model/GameUI/GridCell.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/GridItemCountRecognizer.cs" Link="GameTask/Model/GameUI/GridItemCountRecognizer.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Model/GameUI/ArtifactSetFilterScreen.cs" Link="GameTask/Model/GameUI/ArtifactSetFilterScreen.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ItemIconRecognizer.cs" Link="GameTask/Common/Job/ItemIconRecognizer.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/CountInventoryItem.cs" Link="GameTask/Common/Job/CountInventoryItem.cs" />

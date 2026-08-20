@@ -338,5 +338,9 @@ public sealed class MusicPlaybackOptions
 
     public double Speed { get; init; } = 1.0;
 
+    public double? CustomBpm { get; init; }
+
+    public bool AutoSwitchInstrument { get; init; }
+
     public TimeSpan StartPosition { get; init; }
 }

@@ -567,6 +567,8 @@ final class AppState: ObservableObject {
     @Published var autoPickExactBlackListDraft = ""
     @Published var autoPickFuzzyBlackListDraft = ""
     @Published var autoPickWhiteListDraft = ""
+    @Published var autoPickWhitelistModePickListDraft = ""
+    @Published var autoPickWhitelistModeDoNotPickListDraft = ""
     @Published var autoSkipCustomPriorityOptionsDraft = ""
     @Published private(set) var quickTeleportTriggerSettings: BetterGICoreQuickTeleportTriggerSettings?
     @Published private(set) var mapMaskTriggerSettings: BetterGICoreMapMaskTriggerSettings?
@@ -3738,6 +3740,8 @@ final class AppState: ObservableObject {
             autoPickExactBlackListDraft = autoPickSettings.exactBlackList
             autoPickFuzzyBlackListDraft = autoPickSettings.fuzzyBlackList
             autoPickWhiteListDraft = autoPickSettings.whiteList
+            autoPickWhitelistModePickListDraft = autoPickSettings.whitelistModePickList
+            autoPickWhitelistModeDoNotPickListDraft = autoPickSettings.whitelistModeDoNotPickList
             let autoSkipSettings = try await supervisor.autoSkipTriggerSettings()
             autoSkipTriggerSettings = autoSkipSettings
             autoSkipCustomPriorityOptionsDraft = autoSkipSettings.customPriorityOptions
@@ -3766,8 +3770,9 @@ final class AppState: ObservableObject {
     func saveAutoPickTriggerConfiguration(
         ocrEngine: String? = nil,
         fastModeEnabled: Bool? = nil,
-        blackListEnabled: Bool? = nil,
-        whiteListEnabled: Bool? = nil,
+        mode: String? = nil,
+        blacklistModePickEnabled: Bool? = nil,
+        whitelistModeDoNotPickEnabled: Bool? = nil,
         pickKey: String? = nil
     ) {
         guard let current = autoPickTriggerSettings else { return }
@@ -3775,11 +3780,15 @@ final class AppState: ObservableObject {
             ocrEngine: ocrEngine ?? current.ocrEngine,
             ocrEngineOptions: current.ocrEngineOptions,
             fastModeEnabled: fastModeEnabled ?? current.fastModeEnabled,
-            blackListEnabled: blackListEnabled ?? current.blackListEnabled,
+            mode: mode ?? current.mode,
+            modeOptions: current.modeOptions,
+            blacklistModePickEnabled: blacklistModePickEnabled ?? current.blacklistModePickEnabled,
             exactBlackList: current.exactBlackList,
             fuzzyBlackList: current.fuzzyBlackList,
-            whiteListEnabled: whiteListEnabled ?? current.whiteListEnabled,
+            whitelistModeDoNotPickEnabled: whitelistModeDoNotPickEnabled ?? current.whitelistModeDoNotPickEnabled,
             whiteList: current.whiteList,
+            whitelistModePickList: current.whitelistModePickList,
+            whitelistModeDoNotPickList: current.whitelistModeDoNotPickList,
             pickKey: pickKey ?? current.pickKey,
             pickKeyOptions: current.pickKeyOptions))
     }
@@ -3791,9 +3800,13 @@ final class AppState: ObservableObject {
         saveAutoPickTriggerSettings(.init(
             ocrEngine: current.ocrEngine, ocrEngineOptions: current.ocrEngineOptions,
             fastModeEnabled: current.fastModeEnabled,
-            blackListEnabled: current.blackListEnabled,
+            mode: current.mode, modeOptions: current.modeOptions,
+            blacklistModePickEnabled: current.blacklistModePickEnabled,
             exactBlackList: exactDraft, fuzzyBlackList: fuzzyDraft,
-            whiteListEnabled: current.whiteListEnabled, whiteList: current.whiteList,
+            whitelistModeDoNotPickEnabled: current.whitelistModeDoNotPickEnabled,
+            whiteList: current.whiteList,
+            whitelistModePickList: current.whitelistModePickList,
+            whitelistModeDoNotPickList: current.whitelistModeDoNotPickList,
             pickKey: current.pickKey, pickKeyOptions: current.pickKeyOptions)) { [weak self] saved in
                 self?.autoPickExactBlackListDraft = saved.exactBlackList
                 self?.autoPickFuzzyBlackListDraft = saved.fuzzyBlackList
@@ -3806,11 +3819,35 @@ final class AppState: ObservableObject {
         saveAutoPickTriggerSettings(.init(
             ocrEngine: current.ocrEngine, ocrEngineOptions: current.ocrEngineOptions,
             fastModeEnabled: current.fastModeEnabled,
-            blackListEnabled: current.blackListEnabled,
+            mode: current.mode, modeOptions: current.modeOptions,
+            blacklistModePickEnabled: current.blacklistModePickEnabled,
             exactBlackList: current.exactBlackList, fuzzyBlackList: current.fuzzyBlackList,
-            whiteListEnabled: current.whiteListEnabled, whiteList: whiteDraft,
+            whitelistModeDoNotPickEnabled: current.whitelistModeDoNotPickEnabled,
+            whiteList: whiteDraft,
+            whitelistModePickList: current.whitelistModePickList,
+            whitelistModeDoNotPickList: current.whitelistModeDoNotPickList,
             pickKey: current.pickKey, pickKeyOptions: current.pickKeyOptions)) { [weak self] saved in
                 self?.autoPickWhiteListDraft = saved.whiteList
+            }
+    }
+
+    func saveAutoPickWhitelistModeLists() {
+        guard let current = autoPickTriggerSettings else { return }
+        let pickDraft = autoPickWhitelistModePickListDraft
+        let doNotPickDraft = autoPickWhitelistModeDoNotPickListDraft
+        saveAutoPickTriggerSettings(.init(
+            ocrEngine: current.ocrEngine, ocrEngineOptions: current.ocrEngineOptions,
+            fastModeEnabled: current.fastModeEnabled,
+            mode: current.mode, modeOptions: current.modeOptions,
+            blacklistModePickEnabled: current.blacklistModePickEnabled,
+            exactBlackList: current.exactBlackList, fuzzyBlackList: current.fuzzyBlackList,
+            whitelistModeDoNotPickEnabled: current.whitelistModeDoNotPickEnabled,
+            whiteList: current.whiteList,
+            whitelistModePickList: pickDraft,
+            whitelistModeDoNotPickList: doNotPickDraft,
+            pickKey: current.pickKey, pickKeyOptions: current.pickKeyOptions)) { [weak self] saved in
+                self?.autoPickWhitelistModePickListDraft = saved.whitelistModePickList
+                self?.autoPickWhitelistModeDoNotPickListDraft = saved.whitelistModeDoNotPickList
             }
     }
 

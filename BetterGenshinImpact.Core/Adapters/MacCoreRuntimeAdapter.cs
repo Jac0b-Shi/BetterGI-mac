@@ -43,8 +43,9 @@ public sealed class MacCoreRuntimeAdapter : IAutoPickConfigProvider, IOcrRuntime
         _autoPickConfig.OcrEngine = config.OcrEngine;
         _autoPickConfig.FastModeEnabled = config.FastModeEnabled;
         _autoPickConfig.PickKey = config.PickKey;
-        _autoPickConfig.BlackListEnabled = config.BlackListEnabled;
-        _autoPickConfig.WhiteListEnabled = config.WhiteListEnabled;
+        _autoPickConfig.Mode = config.Mode;
+        _autoPickConfig.BlacklistModePickEnabled = config.BlacklistModePickEnabled;
+        _autoPickConfig.WhitelistModeDoNotPickEnabled = config.WhitelistModeDoNotPickEnabled;
     }
 
     // IOcrRuntimeConfigProvider

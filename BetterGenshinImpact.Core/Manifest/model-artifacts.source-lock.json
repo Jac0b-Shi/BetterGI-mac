@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "artifactSetVersion": "0.63.0-model-1.0.29-map-1.0.21",
+  "artifactSetVersion": "0.63.2-model-1.0.30-map-1.0.21",
   "sources": [
     {
       "id": "bettergi-release-0.62.0-portable-7z",
@@ -18,18 +18,33 @@
       }
     },
     {
-      "id": "bettergi-assets-model-1.0.29-nupkg",
+      "id": "bettergi-assets-model-1.0.30-nupkg",
       "type": "archive",
-      "url": "https://api.nuget.org/v3-flatcontainer/bettergi.assets.model/1.0.29/bettergi.assets.model.1.0.29.nupkg",
-      "sha256": "a203be429d99c70d4a43048ba935cde3506317e969e9852d79ceef95128a160a",
+      "url": "https://api.nuget.org/v3-flatcontainer/bettergi.assets.model/1.0.30/bettergi.assets.model.1.0.30.nupkg",
+      "sha256": "5b245f3338851d31b8c32bf4fde9fe1bf51e17bf32a43804e3c4cd70695e3eb7",
       "format": "nupkg",
-      "sizeBytes": 167866513,
+      "sizeBytes": 168109330,
       "memberCount": 50,
       "provenance": {
         "project": "babalae/bettergi-libraries",
-        "releaseTag": "BetterGI.Assets.Model/1.0.29",
-        "commitSha": "7cf7fbb65a6e70ba9ce631e0138fbe2c063d0e74",
-        "publishedAt": "2026-07-05T07:06:26.23Z"
+        "releaseTag": "BetterGI.Assets.Model/1.0.30",
+        "commitSha": "2435dd896fffc2b044e7d78e2f6414210759dd42",
+        "publishedAt": "2026-08-14T13:54:44.303Z"
+      }
+    },
+    {
+      "id": "bettergi-assets-other-1.0.20-nupkg",
+      "type": "archive",
+      "url": "https://api.nuget.org/v3-flatcontainer/bettergi.assets.other/1.0.20/bettergi.assets.other.1.0.20.nupkg",
+      "sha256": "a10709c0e26701a1cc3ca4b923f2f47e2c6bf126343f7caf8f1940a8c6b3a9fb",
+      "format": "nupkg",
+      "sizeBytes": 246547,
+      "memberCount": 16,
+      "provenance": {
+        "project": "babalae/bettergi-libraries",
+        "releaseTag": "BetterGI.Assets.Other/1.0.20",
+        "commitSha": "b4004448b9d4bdf322b9b8c0f2b942509fcc4052",
+        "publishedAt": "2026-08-16T12:10:02.55Z"
       }
     },
     {
@@ -493,27 +508,53 @@
     },
     {
       "destinationRelativePath": "Assets/Model/AvatarGridIcon/avatar.onnx",
-      "sourceId": "bettergi-assets-model-1.0.29-nupkg",
+      "sourceId": "bettergi-assets-model-1.0.30-nupkg",
       "memberPath": "contentFiles/any/any/Assets/Model/AvatarGridIcon/avatar.onnx",
-      "sizeBytes": 7006294,
-      "sha256": "f5d99b4302f181c81703cd157badd26c7c5d13ce27a0d6d661c7811d6240eed1",
+      "sizeBytes": 7006356,
+      "sha256": "25f0f3f1ccdfaad5c3d9bf7e5679f4ad57fd93dbaa0210a8d344016ffa762314",
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI.Assets.Model 1.0.29 Assets/Model/LICENSE and signed NuGet package",
+        "source": "BetterGI.Assets.Model 1.0.30 Assets/Model/LICENSE and signed NuGet package",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },
     {
       "destinationRelativePath": "Assets/Model/AvatarGridIcon/avatar.csv",
-      "sourceId": "bettergi-assets-model-1.0.29-nupkg",
+      "sourceId": "bettergi-assets-model-1.0.30-nupkg",
       "memberPath": "contentFiles/any/any/Assets/Model/AvatarGridIcon/avatar.csv",
-      "sizeBytes": 268633,
-      "sha256": "c2f460aba7c91f527b89a88b9eeb08f0df84e556cd7e318252567dcb7ee0f0ae",
+      "sizeBytes": 271526,
+      "sha256": "65dbcbbb436d07ea1029e9ed2ad802d33aa64bd4d35f239decf7b04882bf9d8d",
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI.Assets.Model 1.0.29 Assets/Model/LICENSE and signed NuGet package",
+        "source": "BetterGI.Assets.Model 1.0.30 Assets/Model/LICENSE and signed NuGet package",
+        "redistributionStatus": "allowed-under-GPLv3"
+      }
+    },
+    {
+      "destinationRelativePath": "Assets/Config/Pick/default_pick_white_lists.json",
+      "sourceId": "bettergi-assets-other-1.0.20-nupkg",
+      "memberPath": "contentFiles/any/any/Assets/Config/Pick/default_pick_white_lists.json",
+      "sizeBytes": 12086,
+      "sha256": "8a432044d011b69554130cd1b6765c2215cb9fd0bcea2c958eb44af69da86f28",
+      "transformation": "relocate",
+      "licenseEvidence": {
+        "spdxId": "GPL-3.0",
+        "source": "BetterGI.Assets.Other 1.0.20 signed NuGet package and bettergi-libraries repository",
+        "redistributionStatus": "allowed-under-GPLv3"
+      }
+    },
+    {
+      "destinationRelativePath": "Assets/Config/Pick/default_pick_black_lists.json",
+      "sourceId": "bettergi-assets-other-1.0.20-nupkg",
+      "memberPath": "contentFiles/any/any/Assets/Config/Pick/default_pick_black_lists.json",
+      "sizeBytes": 88164,
+      "sha256": "66b3fddcdd314bad4301260faf0d281488f925098be814802f75a982af8427a5",
+      "transformation": "relocate",
+      "licenseEvidence": {
+        "spdxId": "GPL-3.0",
+        "source": "BetterGI.Assets.Other 1.0.20 signed NuGet package and bettergi-libraries repository",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },
