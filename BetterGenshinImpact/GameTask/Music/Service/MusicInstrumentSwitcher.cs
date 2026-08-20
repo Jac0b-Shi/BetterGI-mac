@@ -40,7 +40,6 @@ public sealed class MusicInstrumentSwitcher : IMusicInstrumentSwitcher
             await new ReturnMainUiTask().Start(cancellationToken);
             await AutoArtifactSalvageTask.OpenInventory(
                 GridScreenName.Gadget,
-                Simulation.SendInput,
                 _logger,
                 cancellationToken);
 
