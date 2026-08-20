@@ -122,8 +122,16 @@ server.AttachGameScreenshotAction(new MacGameScreenshotAction(
         BetterGenshinImpact.GameTask.Screenshot.GameScreenshotTask>()));
 var foregroundInputCoordinator = new ForegroundInputCoordinator(
     server.PlatformCallbacks, sessionToken, shutdown.Token);
+var imageRegionOcrService = new MacImageRegionOcrService(
+    layout, loggerFactory.CreateLogger<BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory>());
 using var musicCoordinator = new MusicCoordinator(
-    foregroundInputCoordinator, shutdown.Token, loggerFactory);
+    foregroundInputCoordinator,
+    shutdown.Token,
+    loggerFactory,
+    instrumentSwitcher: new MusicInstrumentSwitcher(
+        loggerFactory.CreateLogger<MusicInstrumentSwitcher>(),
+        imageRegionOcrService,
+        () => gameTaskManagerPlatform.SystemInfo));
 server.AttachMusicCoordinator(musicCoordinator);
 var externalKeyMappingResolver = new ExternalKeyMappingResolver(layout);
 var globalMethodRuntime = new MacGlobalMethodRuntime(
@@ -133,8 +141,6 @@ BetterGenshinImpact.Core.BgiVision.BvRuntimePlatform.Configure(
     new MacBvRuntimePlatform(() => gameTaskManagerPlatform.SystemInfo));
 var bvSimpleOperationPlatform = new MacBvSimpleOperationPlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo);
-var imageRegionOcrService = new MacImageRegionOcrService(
-    layout, loggerFactory.CreateLogger<BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory>());
 var autoPickConfigProvider = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     bvSimpleOperationPlatform.AutoPickConfig, PaddleOcrModelConfig.V5Auto, "zh-Hans");
 server.TriggerSettings.AttachAutoPickUpdated(autoPickConfigProvider.UpdateAutoPickConfig);

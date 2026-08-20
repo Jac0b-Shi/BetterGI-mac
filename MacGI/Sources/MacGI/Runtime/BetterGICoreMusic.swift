@@ -117,14 +117,40 @@ extension BetterGICoreRPCClient {
         index: Int,
         speed: Double,
         playbackMode: BetterGIMusicPlaybackMode,
-        startPositionMilliseconds: Double = 0
+        startPositionMilliseconds: Double = 0,
+        customBpm: Double? = nil,
+        autoSwitchInstrument: Bool = false
     ) throws -> BetterGIMusicState {
-        try Self.decodeMusicState(request(method: "music.play", parameters: [
+        try Self.decodeMusicState(request(
+            method: "music.play",
+            parameters: Self.playMusicParameters(
+                index: index,
+                speed: speed,
+                playbackMode: playbackMode,
+                startPositionMilliseconds: startPositionMilliseconds,
+                customBpm: customBpm,
+                autoSwitchInstrument: autoSwitchInstrument)))
+    }
+
+    static func playMusicParameters(
+        index: Int,
+        speed: Double,
+        playbackMode: BetterGIMusicPlaybackMode,
+        startPositionMilliseconds: Double,
+        customBpm: Double?,
+        autoSwitchInstrument: Bool
+    ) -> [String: Any] {
+        var parameters: [String: Any] = [
             "index": index,
             "speed": speed,
             "playbackMode": playbackMode.rawValue,
             "startPositionMilliseconds": startPositionMilliseconds,
-        ]))
+            "autoSwitchInstrument": autoSwitchInstrument,
+        ]
+        if let customBpm {
+            parameters["customBpm"] = customBpm
+        }
+        return parameters
     }
 
     func musicCommand(_ method: String) throws -> BetterGIMusicState {
@@ -300,13 +326,17 @@ extension BetterGICoreProcessSupervisor {
         index: Int,
         speed: Double,
         playbackMode: BetterGIMusicPlaybackMode,
-        startPositionMilliseconds: Double = 0
+        startPositionMilliseconds: Double = 0,
+        customBpm: Double? = nil,
+        autoSwitchInstrument: Bool = false
     ) throws -> BetterGIMusicState {
         try runningClient().playMusic(
             index: index,
             speed: speed,
             playbackMode: playbackMode,
-            startPositionMilliseconds: startPositionMilliseconds)
+            startPositionMilliseconds: startPositionMilliseconds,
+            customBpm: customBpm,
+            autoSwitchInstrument: autoSwitchInstrument)
     }
 
     func musicCommand(_ method: String) throws -> BetterGIMusicState {

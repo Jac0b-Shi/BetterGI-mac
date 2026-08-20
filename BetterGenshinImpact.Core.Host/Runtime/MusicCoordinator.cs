@@ -33,7 +33,8 @@ public sealed class MusicCoordinator : IDisposable
     public MusicCoordinator(
         ForegroundInputCoordinator input,
         CancellationToken hostCancellationToken,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        IMusicInstrumentSwitcher? instrumentSwitcher = null)
     {
         _hostCancellationToken = hostCancellationToken;
         _input = input;
@@ -53,7 +54,8 @@ public sealed class MusicCoordinator : IDisposable
             _profileService,
             [transport],
             loggerFactory.CreateLogger<MusicPlaybackService>(),
-            new MacMusicPlaybackGate(input, hostCancellationToken));
+            new MacMusicPlaybackGate(input, hostCancellationToken),
+            instrumentSwitcher);
         _playbackService.SnapshotChanged += OnSnapshotChanged;
         _playbackService.PlaybackEnded += OnPlaybackEnded;
     }
@@ -132,7 +134,9 @@ public sealed class MusicCoordinator : IDisposable
         int index,
         double speed,
         MusicPlaybackMode playbackMode,
-        double startPositionMilliseconds)
+        double startPositionMilliseconds,
+        double? customBpm = null,
+        bool autoSwitchInstrument = false)
     {
         ThrowIfDisposed();
         await _mutationLock.WaitAsync(_hostCancellationToken);
@@ -174,7 +178,7 @@ public sealed class MusicCoordinator : IDisposable
             _playbackCancellation = CancellationTokenSource.CreateLinkedTokenSource(
                 _hostCancellationToken);
             _startingCatalogIndex = index;
-            _startingSpeed = Math.Clamp(speed, 0.5, 2.0);
+            _startingSpeed = Math.Clamp(speed, 0.1, 10.0);
             var sessionGeneration = Interlocked.Increment(ref _sessionGeneration);
             var previousPlaybackMode = _playbackMode;
             var previousTrackFullPath = _stateStore.State.CurrentTrackFullPath;
@@ -203,6 +207,8 @@ public sealed class MusicCoordinator : IDisposable
                                     InputMode = MusicInputMode.ForegroundSendInput,
                                     PlaybackMode = playbackMode,
                                     Speed = speed,
+                                    CustomBpm = customBpm is > 0 ? customBpm : null,
+                                    AutoSwitchInstrument = autoSwitchInstrument,
                                     StartPosition = TimeSpan.FromMilliseconds(startPosition),
                                 },
                                 linked.Token);

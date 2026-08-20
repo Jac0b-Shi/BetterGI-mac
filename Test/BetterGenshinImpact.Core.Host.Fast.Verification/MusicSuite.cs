@@ -80,6 +80,8 @@ public sealed class MusicSuite : IVerificationSuite
 
             await VerifyZeroTimestampChordAsync(context, profile, cancellationToken);
             await VerifyPlaybackControlsAsync(context, score, profile, cancellationToken);
+            await VerifyCustomBpmAndInstrumentSwitchAsync(
+                context, profile, cancellationToken);
             await VerifyFocusFreezeAndStopAsync(context, score, profile, cancellationToken);
             await VerifySeekWinsFocusProbeRaceAsync(
                 context, score, profile, cancellationToken);
@@ -245,6 +247,84 @@ public sealed class MusicSuite : IVerificationSuite
         context.Require(
             service.Snapshot.State == MusicPlaybackState.Stopped,
             "Music playback did not stop after exercising playback controls.");
+    }
+
+    private static async Task VerifyCustomBpmAndInstrumentSwitchAsync(
+        VerificationContext context,
+        InstrumentProfile profile,
+        CancellationToken cancellationToken)
+    {
+        var profileService = new FixedProfileService(profile);
+        var gate = new ManualPlaybackGate();
+        gate.Open();
+        var switcher = new RecordingInstrumentSwitcher();
+        var score = new PerformanceScore
+        {
+            FullPath = "/tmp/custom-bpm.json",
+            Name = "custom-bpm",
+            Instrument = profile.Name,
+            OutputProfileName = profile.Name,
+            Format = MusicScoreFormat.Keyboard,
+            Bpm = 60,
+            SourceTimeline = new PerformanceTimeline(
+            [
+                new PerformanceEvent(TimeSpan.Zero, 'Q', PerformanceEventType.KeyDown),
+                new PerformanceEvent(
+                    TimeSpan.FromMilliseconds(100), 'Q', PerformanceEventType.KeyUp),
+            ],
+            TimeSpan.FromMilliseconds(100)),
+        };
+        var service = new MusicPlaybackService(
+            new MusicTimelineBuilder(profileService),
+            profileService,
+            [new RecordingTransport()],
+            playbackGate: gate,
+            instrumentSwitcher: switcher);
+        await service.RunPlaylistAsync(
+            [score],
+            0,
+            new MusicPlaybackOptions
+            {
+                InputMode = MusicInputMode.ForegroundSendInput,
+                PlaybackMode = MusicPlaybackMode.Sequential,
+                CustomBpm = 120,
+                AutoSwitchInstrument = true,
+            },
+            cancellationToken);
+        context.Require(
+            Math.Abs(service.Snapshot.Speed - 2.0) < 0.001 &&
+            switcher.CallCount == 1 &&
+            switcher.InstrumentNames.SequenceEqual([profile.Name]),
+            "Custom BPM did not drive the track speed, or the auto instrument switcher "
+            + "was not invoked once with the output profile name.");
+
+        var missingSwitcherService = new MusicPlaybackService(
+            new MusicTimelineBuilder(profileService),
+            profileService,
+            [new RecordingTransport()],
+            playbackGate: gate);
+        var threwNotSupported = false;
+        try
+        {
+            await missingSwitcherService.RunPlaylistAsync(
+                [score],
+                0,
+                new MusicPlaybackOptions
+                {
+                    InputMode = MusicInputMode.ForegroundSendInput,
+                    PlaybackMode = MusicPlaybackMode.Sequential,
+                    AutoSwitchInstrument = true,
+                },
+                cancellationToken);
+        }
+        catch (NotSupportedException)
+        {
+            threwNotSupported = true;
+        }
+        context.Require(
+            threwNotSupported,
+            "Auto instrument switch without a platform switcher did not throw "
+            + "NotSupportedException.");
     }
 
     private static async Task VerifyFocusFreezeAndStopAsync(
@@ -618,6 +698,22 @@ public sealed class MusicSuite : IVerificationSuite
         {
             BatchSizes.Add(count);
             base.DispatchBatch(events, startIndex, count);
+        }
+    }
+
+    private sealed class RecordingInstrumentSwitcher : IMusicInstrumentSwitcher
+    {
+        public int CallCount { get; private set; }
+
+        public List<string> InstrumentNames { get; } = [];
+
+        public Task<bool> SwitchToAsync(
+            string instrumentName,
+            CancellationToken cancellationToken)
+        {
+            CallCount++;
+            InstrumentNames.Add(instrumentName);
+            return Task.FromResult(true);
         }
     }
 

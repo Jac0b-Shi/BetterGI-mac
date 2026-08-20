@@ -300,7 +300,7 @@ struct MusicPage: View {
                         value: Binding(
                             get: { appState.musicSpeed },
                             set: { appState.setMusicSpeed($0) }),
-                        in: 0.5...2,
+                        in: 0.1...10,
                         step: 0.05)
                         .frame(width: 150)
 
@@ -322,6 +322,35 @@ struct MusicPage: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!appState.canStartMusicPlayback)
+                }
+
+                HStack(spacing: 12) {
+                    Toggle("自定义 BPM", isOn: Binding(
+                        get: { appState.musicUseCustomBpm },
+                        set: { appState.musicUseCustomBpm = $0 }))
+                        .toggleStyle(.checkbox)
+                    TextField(
+                        "BPM",
+                        value: Binding(
+                            get: { appState.musicCustomBpm },
+                            set: { appState.musicCustomBpm = $0 }),
+                        format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 80)
+                        .disabled(!appState.musicUseCustomBpm)
+                        .help("用自定义 BPM 覆盖曲谱基准速度，仅在开启自定义 BPM 时生效")
+
+                    Divider().frame(height: 18)
+
+                    Toggle("自动换乐器", isOn: Binding(
+                        get: { appState.musicAutoSwitchInstrument },
+                        set: { appState.musicAutoSwitchInstrument = $0 }))
+                        .toggleStyle(.checkbox)
+                    Text("需要 macOS 运行时")
+                        .font(BGIFonts.caption)
+                        .foregroundStyle(BGIColors.mutedText)
+
+                    Spacer()
                 }
             }
         }

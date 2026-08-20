@@ -113,6 +113,7 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoMusicGame/AutoMusicGameTask.cs" Link="GameTask/AutoMusicGame/AutoMusicGameTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Music/Model/*.cs" Link="GameTask/Music/Model/%(Filename)%(Extension)" />
     <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicInterfaces.cs" Link="GameTask/Music/Service/MusicInterfaces.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicInstrumentSwitcher.cs" Link="GameTask/Music/Service/MusicInstrumentSwitcher.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicScoreParser.cs" Link="GameTask/Music/Service/MusicScoreParser.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicTimelineBuilder.cs" Link="GameTask/Music/Service/MusicTimelineBuilder.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicPlaybackService.cs" Link="GameTask/Music/Service/MusicPlaybackService.cs" />
