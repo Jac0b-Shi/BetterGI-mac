@@ -116,6 +116,11 @@ public sealed class MusicPlaybackEndedEventArgs(
     public TimeSpan Position { get; } = position;
 }
 
+public interface IMusicInstrumentSwitcher
+{
+    Task<bool> SwitchToAsync(string instrumentName, CancellationToken cancellationToken);
+}
+
 public interface IMusicPlaybackService
 {
     event EventHandler<PlaybackSnapshot>? SnapshotChanged;
