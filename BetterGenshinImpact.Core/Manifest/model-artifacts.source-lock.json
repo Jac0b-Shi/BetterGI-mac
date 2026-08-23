@@ -437,7 +437,7 @@
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI release ItemV2 model asset; bettergi repository root LICENSE GPLv3 and Assets/Model/LICENSE",
+        "source": "BetterGI.Assets.Model 1.0.31 ItemV2 model asset; signed NuGet package and bettergi-libraries Assets/Model/LICENSE",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },
@@ -450,7 +450,7 @@
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI release ItemV2 prototype data; bettergi repository root LICENSE GPLv3 and Assets/Model/LICENSE",
+        "source": "BetterGI.Assets.Model 1.0.31 ItemV2 prototype data; signed NuGet package and bettergi-libraries Assets/Model/LICENSE",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },
