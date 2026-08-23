@@ -646,7 +646,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                     "js.error,js.custom", "domain.end"),
                 "Notification settings did not preserve the upstream event subscription contract.");
             context.Require(
-                notificationChannels.Count == 13 &&
+                notificationChannels.Count == 14 &&
                 notificationChannels.Any(channel =>
                     channel.Value<string>("id") == "telegram" &&
                     channel.Value<string>("enabledField") ==
@@ -658,6 +658,16 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                     channel.Value<string>("id") == "email" &&
                     ((JArray)channel["fields"]!).Any(field =>
                         field.Value<string>("id") == "smtpPort" &&
+                        field.Value<string>("kind") == "integer")) &&
+                notificationChannels.Any(channel =>
+                    channel.Value<string>("id") == "gotify" &&
+                    channel.Value<string>("enabledField") ==
+                        "gotifyNotificationEnabled" &&
+                    ((JArray)channel["fields"]!).Any(field =>
+                        field.Value<string>("id") == "gotifyAppToken" &&
+                        field.Value<string>("kind") == "secret") &&
+                    ((JArray)channel["fields"]!).Any(field =>
+                        field.Value<string>("id") == "gotifyNotifyLevel" &&
                         field.Value<string>("kind") == "integer")),
                 "Notification settings did not expose the complete Core-owned upstream channel schema.");
             var telegramSettings = JObject.FromObject(

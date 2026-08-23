@@ -57,6 +57,37 @@ public sealed class NotificationRoutingSuite : IVerificationSuite
                 () => null,
                 loggerFactory.CreateLogger<NotificationSettingsCatalog>());
 
+            var gotifyRequest = ReadHttpRequestBodyAsync(
+                listener, cancellationToken);
+            notificationSettings.SaveChannel("gotify", new JObject
+            {
+                ["gotifyNotificationEnabled"] = true,
+                ["gotifyUrl"] = endpoint,
+                ["gotifyAppToken"] = "verification-token",
+                ["gotifyNotifyLevel"] = 7,
+            });
+            try
+            {
+                await notificationSettings.TestAsync("gotify");
+            }
+            catch (Exception ex)
+            {
+                context.Require(
+                    false,
+                    $"Gotify test notification was rejected: {ex.Message}");
+            }
+            var gotifyPayload = JObject.Parse(await gotifyRequest);
+            context.Require(
+                gotifyPayload.Value<int>("priority") == 7 &&
+                gotifyPayload.Value<string>("message")!.Contains(
+                    "测试通知", StringComparison.Ordinal),
+                $"Gotify payload did not round-trip the saved channel config: {gotifyPayload}");
+
+            notificationSettings.SaveChannel("gotify", new JObject
+            {
+                ["gotifyNotificationEnabled"] = false,
+            });
+
             var album = new MacAutoAlbumRuntimePlatform(
                 () => throw new InvalidOperationException(
                     "Notification routing must not read game metrics."),

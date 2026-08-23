@@ -405,6 +405,24 @@ rg -q 'new MoonCanonMap' Test/BetterGenshinImpact.Core.Verification/Program.cs \
   && rg -q 'MoonCanon layer has real keypoints and descriptors' \
     Test/BetterGenshinImpact.Core.Verification/Program.cs \
   || fail "Core verification does not load the source-locked MoonCanon feature layer"
+model_package_version=$(sed -n \
+  's/.*PackageReference Include="BetterGI.Assets.Model" Version="\([^"]*\)".*/\1/p' \
+  BetterGenshinImpact/BetterGenshinImpact.csproj | head -1)
+model_source_id="bettergi-assets-model-${model_package_version}-nupkg"
+jq -e --arg source_id "${model_source_id}" \
+  '.sources[] | select(.id == $source_id)' \
+  BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json >/dev/null \
+  || fail "production source-lock does not match BetterGI.Assets.Model ${model_package_version}"
+for model_asset in \
+  Assets/Model/ItemV2/item.onnx \
+  Assets/Model/ItemV2/item.csv \
+  Assets/Model/AvatarGridIcon/avatar.onnx \
+  Assets/Model/AvatarGridIcon/avatar.csv; do
+  jq -e --arg destination "${model_asset}" --arg source_id "${model_source_id}" \
+    '.artifacts[] | select(.destinationRelativePath == $destination and .sourceId == $source_id)' \
+    BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json >/dev/null \
+    || fail "production source-lock omits ${model_asset} from ${model_source_id}"
+done
 rg -q 'new GameCaptureRegion' BetterGenshinImpact.Core.Host/Runtime/SharedCaptureRingReader.cs \
   || fail "capture ring frames do not retain the upstream clickable Region graph"
 rg -q 'ColorConversionCodes\.BGRA2BGR' \
