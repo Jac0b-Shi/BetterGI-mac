@@ -157,6 +157,16 @@ public sealed class NotificationSettingsCatalog : IDisposable
                 new("meowNickname", "昵称", "string"),
                 new("meowTitle", "标题", "string"),
             ]),
+        new(
+            "gotify",
+            "Gotify",
+            "通过 Gotify 服务发送通知",
+            "gotifyNotificationEnabled",
+            [
+                new("gotifyUrl", "服务地址", "string"),
+                new("gotifyAppToken", "App Token", "secret"),
+                new("gotifyNotifyLevel", "优先级", "integer"),
+            ]),
     ];
 
     private readonly object _lock = new();
@@ -321,6 +331,8 @@ public sealed class NotificationSettingsCatalog : IDisposable
                 .TestNotifierAsync<ServerChanNotifier>(),
             "meow" => await _notificationService
                 .TestNotifierAsync<MeowNotifier>(),
+            "gotify" => await _notificationService
+                .TestNotifierAsync<GotifyNotifier>(),
             "native" => throw new InvalidOperationException(
                 "macOS 通知尚未启用。"),
             _ => throw new ArgumentException(
