@@ -102,7 +102,7 @@ rg -q 'GameTask/CharacterDevelopment/\*\.cs' \
   || fail "CharacterDevelopment is not linked and composed through the macOS Core script host"
 rg -q 'Assets/Model/AvatarGridIcon/avatar.onnx' \
   BetterGenshinImpact.Core/Manifest/model-artifacts.manifest.json \
-  && rg -q 'bettergi-assets-model-1.0.30-nupkg' \
+  && rg -q 'bettergi-assets-model-1.0.31-nupkg' \
     BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json \
   && rg -q 'class ArtifactDownloaderSuite' \
     Test/BetterGenshinImpact.Core.Host.Fast.Verification/ArtifactDownloaderSuite.cs \

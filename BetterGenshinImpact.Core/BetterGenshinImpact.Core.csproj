@@ -543,6 +543,7 @@
     <Compile Include="../BetterGenshinImpact/Service/Notifier/DiscordWebhookNotifier.cs" Link="Service/Notifier/DiscordWebhookNotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/EmailNotifier.cs" Link="Service/Notifier/EmailNotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/FeishuNotifier.cs" Link="Service/Notifier/FeishuNotifier.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Notifier/GotifyNotifier.cs" Link="Service/Notifier/GotifyNotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/MeowNotifier.cs" Link="Service/Notifier/MeowNotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/OneBotNotifier.cs" Link="Service/Notifier/OneBotNotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/ServerChanNotifier.cs" Link="Service/Notifier/ServerChanNotifier.cs" />
