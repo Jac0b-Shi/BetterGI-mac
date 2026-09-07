@@ -386,6 +386,15 @@ public sealed class CoreRpcServer(
                     request.Id,
                     await NotificationSettings.TestAsync(
                         RequiredString(request.Params, "channel")));
+            if (request.Method == "notification.binding.start")
+                return RpcResponse.Success(
+                    request.Id,
+                    NotificationSettings.StartBinding(
+                        RequiredString(request.Params, "channel")));
+            if (request.Method == "notification.binding.status")
+                return RpcResponse.Success(request.Id, NotificationSettings.GetBindingStatus());
+            if (request.Method == "notification.binding.cancel")
+                return RpcResponse.Success(request.Id, NotificationSettings.CancelBinding());
             if (request.Method == "logParse.generate")
             {
                 return RpcResponse.Success(
@@ -546,6 +555,9 @@ public sealed class CoreRpcServer(
                 "common.settings.save" => _commonSettings.Save(
                     request.Params?["settings"] as JObject
                     ?? throw new ArgumentException("settings is required.")),
+                "common.background.import" => _commonSettings.ImportMainBackground(
+                    RequiredString(request.Params, "sourcePath")),
+                "common.background.clear" => _commonSettings.ClearMainBackground(),
                 "trigger.list" => ListTriggers(),
                 "trigger.setEnabled" => SetTriggerEnabled(
                     RequiredString(request.Params, "name"),

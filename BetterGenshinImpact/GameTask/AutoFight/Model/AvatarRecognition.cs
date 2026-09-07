@@ -195,12 +195,9 @@ public static class AvatarRecognition
 
             for (int i = 1; i < numLabels; i++)
             {
-                using Mat row = stats.Row(i);
-                if (row.GetArray(out int[] arr))
-                {
-                    int x = arr[0], y = arr[1], width = arr[2], height = arr[3];
-                    results.Add((x, y, width, height));
-                }
+                int x = stats.At<int>(i, 0), y = stats.At<int>(i, 1),
+                    width = stats.At<int>(i, 2), height = stats.At<int>(i, 3);
+                results.Add((x, y, width, height));
             }
 
             // 自动更新传奇血条动态追踪（排除左侧 UI 区域 x<=200，避免队伍头像等红色元素被误计为传奇血条）

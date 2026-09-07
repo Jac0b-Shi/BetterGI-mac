@@ -26,11 +26,16 @@ public sealed class MacAutoLeyLineOutcropRuntimePlatform(
 
     public void Notify(AutoLeyLineOutcropNotification notification, string message)
     {
-        var notificationData = NotifyService.Event("AutoLeyLineOutcrop");
-        if (notification == AutoLeyLineOutcropNotification.Error)
-            notificationData.Error(message);
-        else
-            notificationData.Send(message);
+        var notificationEvent = notification switch
+        {
+            AutoLeyLineOutcropNotification.Start => Service.Notification.Model.Enum.NotificationEvent.LeyLineStart,
+            AutoLeyLineOutcropNotification.End => Service.Notification.Model.Enum.NotificationEvent.LeyLineEnd,
+            _ => Service.Notification.Model.Enum.NotificationEvent.LeyLineInfo,
+        };
+        var notificationData = NotifyService.Event(notificationEvent);
+        if (notification == AutoLeyLineOutcropNotification.Error) notificationData.Error(message);
+        else if (notification is AutoLeyLineOutcropNotification.Start or AutoLeyLineOutcropNotification.End) notificationData.Success(message);
+        else notificationData.Send(message);
     }
 
     public void EnsureOverlayVisible() { }

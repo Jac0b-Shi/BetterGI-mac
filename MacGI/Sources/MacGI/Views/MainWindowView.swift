@@ -4,22 +4,25 @@ struct MainWindowView: View {
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
-        VStack(spacing: 0) {
-            BGIHeaderBar()
-            HStack(spacing: 0) {
-                BGINavSidebar()
-                ScrollView {
-                    page
-                        .padding(.horizontal, 44)
-                        .padding(.vertical, 20)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
+        ZStack {
+            BGIColors.appBackground
+            mainBackground
+            VStack(spacing: 0) {
+                BGIHeaderBar()
+                HStack(spacing: 0) {
+                    BGINavSidebar()
+                    ScrollView {
+                        page
+                            .padding(.horizontal, 44)
+                            .padding(.vertical, 20)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                    .background(backgroundIsVisible ? Color.clear : BGIColors.appBackground)
+                    .layoutPriority(1)
                 }
-                .background(BGIColors.appBackground)
-                .layoutPriority(1)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(BGIColors.appBackground)
         .preferredColorScheme(.dark)
         .sheet(item: Binding(
             get: { appState.scriptSubscriptionClipboardPrompt },
@@ -34,6 +37,33 @@ struct MainWindowView: View {
         )) {
             RedeemCodeClipboardPromptView()
                 .environmentObject(appState)
+        }
+    }
+
+    private var backgroundIsVisible: Bool {
+        guard let settings = appState.commonSettings else { return false }
+        return settings.mainBackgroundEnabled &&
+            !settings.mainBackgroundImagePath.isEmpty &&
+            FileManager.default.isReadableFile(atPath: settings.mainBackgroundImagePath)
+    }
+
+    @ViewBuilder
+    private var mainBackground: some View {
+        if backgroundIsVisible,
+           let settings = appState.commonSettings,
+           let image = NSImage(contentsOfFile: settings.mainBackgroundImagePath) {
+            switch settings.mainBackgroundStretch {
+            case "Uniform":
+                Image(nsImage: image).resizable().scaledToFit()
+                    .opacity(settings.mainBackgroundOpacity)
+            case "Fill":
+                Image(nsImage: image).resizable()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .opacity(settings.mainBackgroundOpacity)
+            default:
+                Image(nsImage: image).resizable().scaledToFill()
+                    .opacity(settings.mainBackgroundOpacity)
+            }
         }
     }
 

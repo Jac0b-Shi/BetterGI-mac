@@ -130,8 +130,8 @@ public class QuickSereniteaPotTask
                 forceNew: true,
                 cancellationToken);
             using var result = capture.Find(RecognitionAssets.Get(
-                "QuickSereniteaPot",
-                "BagCloseButton",
+                "QuickTeleport",
+                "MapCloseButton",
                 capture));
             if (result.IsEmpty())
                 throw new RetryException("背包未打开");

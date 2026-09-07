@@ -102,7 +102,7 @@ rg -q 'GameTask/CharacterDevelopment/\*\.cs' \
   || fail "CharacterDevelopment is not linked and composed through the macOS Core script host"
 rg -q 'Assets/Model/AvatarGridIcon/avatar.onnx' \
   BetterGenshinImpact.Core/Manifest/model-artifacts.manifest.json \
-  && rg -q 'bettergi-assets-model-1.0.31-nupkg' \
+  && rg -q 'bettergi-assets-model-1.0.33-nupkg' \
     BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json \
   && rg -q 'class ArtifactDownloaderSuite' \
     Test/BetterGenshinImpact.Core.Host.Fast.Verification/ArtifactDownloaderSuite.cs \
@@ -215,7 +215,7 @@ rg -q 'QuickSereniteaPotTask diverged from the upstream enter interaction sequen
   Test/BetterGenshinImpact.Core.Host.Fast.Verification/RuntimeSettingsSuite.cs \
   && rg -q 'One-shot Serenitea Pot hotkey did not deduplicate or cancel with runtime stop' \
     Test/BetterGenshinImpact.Core.Host.Fast.Verification/RuntimeSettingsSuite.cs \
-  && rg -Uq 'RecognitionAssets\.Get\(\s*"QuickSereniteaPot",\s*"BagCloseButton"' \
+  && rg -Uq 'RecognitionAssets\.Get\(\s*"QuickTeleport",\s*"MapCloseButton"' \
     BetterGenshinImpact/GameTask/QuickSereniteaPot/QuickSereniteaPotTask.cs \
   && rg -q '"QuickSereniteaPotHotkey"' \
     BetterGenshinImpact.Core.Host/Runtime/HotKeySettingsCatalog.cs \

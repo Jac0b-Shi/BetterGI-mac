@@ -7,6 +7,7 @@ using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.Service.Notification;
 using BetterGenshinImpact.View;
 using Microsoft.Extensions.Logging;
+using NotificationEvent = BetterGenshinImpact.Service.Notification.Model.Enum.NotificationEvent;
 
 namespace BetterGenshinImpact.Core.Runtime.Windows;
 
@@ -25,8 +26,15 @@ public sealed class WindowsAutoLeyLineOutcropRuntimePlatform : IAutoLeyLineOutcr
 
     public void Notify(AutoLeyLineOutcropNotification notification, string message)
     {
-        var sender = BetterGenshinImpact.Service.Notification.Notify.Event("AutoLeyLineOutcrop");
+        var notificationEvent = notification switch
+        {
+            AutoLeyLineOutcropNotification.Start => NotificationEvent.LeyLineStart,
+            AutoLeyLineOutcropNotification.End => NotificationEvent.LeyLineEnd,
+            _ => NotificationEvent.LeyLineInfo,
+        };
+        var sender = BetterGenshinImpact.Service.Notification.Notify.Event(notificationEvent);
         if (notification == AutoLeyLineOutcropNotification.Error) sender.Error(message);
+        else if (notification is AutoLeyLineOutcropNotification.Start or AutoLeyLineOutcropNotification.End) sender.Success(message);
         else sender.Send(message);
     }
 

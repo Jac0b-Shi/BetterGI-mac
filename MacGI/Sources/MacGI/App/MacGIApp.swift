@@ -49,6 +49,7 @@ struct MacGIApp: App {
             MainWindowView()
                 .environmentObject(appState)
                 .environmentObject(coordinator)
+                .environment(\.locale, selectedLocale)
                 .frame(minWidth: 1080, minHeight: 720)
                 .onAppear {
                     applicationDelegate.terminationHandler = {
@@ -68,8 +69,13 @@ struct MacGIApp: App {
             MenuBarControls()
                 .environmentObject(appState)
                 .environmentObject(coordinator)
+                .environment(\.locale, selectedLocale)
         }
         .menuBarExtraStyle(.menu)
+    }
+
+    private var selectedLocale: Locale {
+        Locale(identifier: appState.commonSettings?.uiCultureInfoName ?? "zh-Hans")
     }
 }
 

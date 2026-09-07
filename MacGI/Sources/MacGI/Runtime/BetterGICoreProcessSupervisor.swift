@@ -38,6 +38,16 @@ struct BetterGINotificationSettings: Sendable, Equatable {
     let channels: [BetterGINotificationChannel]
 }
 
+struct BetterGINotificationBindingStatus: Sendable, Equatable {
+    let channel: String
+    let phase: String
+    let message: String
+    let verificationCode: String
+    let qrCodeURL: String
+    let completed: Bool
+    let succeeded: Bool
+}
+
 struct BetterGINotificationEvent: Sendable, Equatable, Identifiable {
     let code: String
     let displayName: String
@@ -327,6 +337,14 @@ struct BetterGICoreAutoFishingSettings: Sendable, Equatable {
 struct BetterGICoreCommonSettings: Sendable, Equatable {
     let screenshotEnabled: Bool
     let screenshotUidCoverEnabled: Bool
+    let mainBackgroundEnabled: Bool
+    let mainBackgroundImagePath: String
+    let mainBackgroundOpacity: Double
+    let mainBackgroundStretch: String
+    let mainBackgroundStretchOptions: [String]
+    let gameCultureInfoName: String
+    let uiCultureInfoName: String
+    let cultureOptions: [String]
     let mapMatchingMethod: String
     let mapMatchingMethodOptions: [String]
     let autoFetchDispatchCountry: String
@@ -407,8 +425,6 @@ struct BetterGICoreAutoLeyLineOutcropSettings: Sendable, Equatable {
     let team: String
     let friendshipTeam: String
     let timeout: Int
-    let useAdventurerHandbook: Bool
-    let isNotification: Bool
 }
 
 struct BetterGICoreAutoStygianOnslaughtSettings: Sendable, Equatable {
@@ -966,6 +982,12 @@ actor BetterGICoreProcessSupervisor {
                 "settings": [
                     "screenshotEnabled": settings.screenshotEnabled,
                     "screenshotUidCoverEnabled": settings.screenshotUidCoverEnabled,
+                    "mainBackgroundEnabled": settings.mainBackgroundEnabled,
+                    "mainBackgroundImagePath": settings.mainBackgroundImagePath,
+                    "mainBackgroundOpacity": settings.mainBackgroundOpacity,
+                    "mainBackgroundStretch": settings.mainBackgroundStretch,
+                    "gameCultureInfoName": settings.gameCultureInfoName,
+                    "uiCultureInfoName": settings.uiCultureInfoName,
                     "mapMatchingMethod": settings.mapMatchingMethod,
                     "autoFetchDispatchCountry": settings.autoFetchDispatchCountry,
                     "serverTimeZoneOffsetHours": settings.serverTimeZoneOffsetHours,
@@ -992,6 +1014,16 @@ actor BetterGICoreProcessSupervisor {
                         settings.scriptRepositoryCustomURL,
                 ],
             ]))
+    }
+
+    func importMainBackground(sourcePath: String) throws -> BetterGICoreCommonSettings {
+        try parseCommonSettings(runningClient().request(
+            method: "common.background.import",
+            parameters: ["sourcePath": sourcePath]))
+    }
+
+    func clearMainBackground() throws -> BetterGICoreCommonSettings {
+        try parseCommonSettings(runningClient().request(method: "common.background.clear"))
     }
 
     func saveNotificationSettings(
@@ -1032,6 +1064,41 @@ actor BetterGICoreProcessSupervisor {
         else {
             throw BetterGICoreRPCError.protocolViolation("Invalid notification.test result.")
         }
+    }
+
+    func startNotificationBinding(channel: String) throws
+        -> BetterGINotificationBindingStatus {
+        try parseNotificationBindingStatus(runningClient().request(
+            method: "notification.binding.start",
+            parameters: ["channel": channel]))
+    }
+
+    func notificationBindingStatus() throws -> BetterGINotificationBindingStatus {
+        try parseNotificationBindingStatus(runningClient().request(
+            method: "notification.binding.status"))
+    }
+
+    func cancelNotificationBinding() throws -> BetterGINotificationBindingStatus {
+        try parseNotificationBindingStatus(runningClient().request(
+            method: "notification.binding.cancel"))
+    }
+
+    private func parseNotificationBindingStatus(_ value: Any) throws
+        -> BetterGINotificationBindingStatus {
+        guard let result = value as? [String: Any],
+              let channel = result["channel"] as? String,
+              let phase = result["phase"] as? String,
+              let message = result["message"] as? String,
+              let verificationCode = result["verificationCode"] as? String,
+              let qrCodeURL = result["qrCodeUrl"] as? String,
+              let completed = result["completed"] as? Bool,
+              let succeeded = result["succeeded"] as? Bool else {
+            throw BetterGICoreRPCError.protocolViolation(
+                "Invalid notification binding status.")
+        }
+        return .init(channel: channel, phase: phase, message: message,
+            verificationCode: verificationCode, qrCodeURL: qrCodeURL,
+            completed: completed, succeeded: succeeded)
     }
 
     func hotKeyBindings() throws -> [BetterGIHotKeyBinding] {
@@ -1323,6 +1390,15 @@ actor BetterGICoreProcessSupervisor {
               let screenshotEnabled = result["screenshotEnabled"] as? Bool,
               let screenshotUidCoverEnabled =
                 result["screenshotUidCoverEnabled"] as? Bool,
+              let mainBackgroundEnabled = result["mainBackgroundEnabled"] as? Bool,
+              let mainBackgroundImagePath = result["mainBackgroundImagePath"] as? String,
+              let mainBackgroundOpacity = result["mainBackgroundOpacity"] as? Double,
+              let mainBackgroundStretch = result["mainBackgroundStretch"] as? String,
+              let mainBackgroundStretchOptions =
+                result["mainBackgroundStretchOptions"] as? [String],
+              let gameCultureInfoName = result["gameCultureInfoName"] as? String,
+              let uiCultureInfoName = result["uiCultureInfoName"] as? String,
+              let cultureOptions = result["cultureOptions"] as? [String],
               let mapMatchingMethod = result["mapMatchingMethod"] as? String,
               let mapMatchingMethodOptions =
                 result["mapMatchingMethodOptions"] as? [String],
@@ -1372,6 +1448,14 @@ actor BetterGICoreProcessSupervisor {
         return .init(
             screenshotEnabled: screenshotEnabled,
             screenshotUidCoverEnabled: screenshotUidCoverEnabled,
+            mainBackgroundEnabled: mainBackgroundEnabled,
+            mainBackgroundImagePath: mainBackgroundImagePath,
+            mainBackgroundOpacity: mainBackgroundOpacity,
+            mainBackgroundStretch: mainBackgroundStretch,
+            mainBackgroundStretchOptions: mainBackgroundStretchOptions,
+            gameCultureInfoName: gameCultureInfoName,
+            uiCultureInfoName: uiCultureInfoName,
+            cultureOptions: cultureOptions,
             mapMatchingMethod: mapMatchingMethod,
             mapMatchingMethodOptions: mapMatchingMethodOptions,
             autoFetchDispatchCountry: autoFetchDispatchCountry,
@@ -2936,8 +3020,6 @@ actor BetterGICoreProcessSupervisor {
                 "team": settings.team,
                 "friendshipTeam": settings.friendshipTeam,
                 "timeout": settings.timeout,
-                "useAdventurerHandbook": settings.useAdventurerHandbook,
-                "isNotification": settings.isNotification,
             ]]
         ))
     }
@@ -3266,9 +3348,7 @@ actor BetterGICoreProcessSupervisor {
               let useFragileResin = value["useFragileResin"] as? Bool,
               let team = value["team"] as? String,
               let friendshipTeam = value["friendshipTeam"] as? String,
-              let timeout = value["timeout"] as? Int,
-              let useAdventurerHandbook = value["useAdventurerHandbook"] as? Bool,
-              let isNotification = value["isNotification"] as? Bool else {
+              let timeout = value["timeout"] as? Int else {
             throw BetterGICoreRPCError.protocolViolation("Invalid AutoLeyLineOutcrop settings.")
         }
         return .init(
@@ -3287,9 +3367,7 @@ actor BetterGICoreProcessSupervisor {
             isResinExhaustionMode: isResinExhaustionMode,
             openModeCountMin: openModeCountMin, count: count,
             useTransientResin: useTransientResin, useFragileResin: useFragileResin,
-            team: team, friendshipTeam: friendshipTeam, timeout: timeout,
-            useAdventurerHandbook: useAdventurerHandbook,
-            isNotification: isNotification)
+            team: team, friendshipTeam: friendshipTeam, timeout: timeout)
     }
 
     private func decodeAutoStygianOnslaughtSettings(_ value: Any) throws

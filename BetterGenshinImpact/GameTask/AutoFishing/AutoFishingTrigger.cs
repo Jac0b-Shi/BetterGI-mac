@@ -105,15 +105,16 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             this.blackboard = new CsTrees.Blackboard.Blackboard();
 
             _takeScreenshot = new TakeScreenshot("截图", _logger, blackboard);
-            BehaviourTreeLaTiao = TreeBuilder.Create()
+            BehaviourTreeLaTiao = new AutoFishingBuilder()
                 .WithBlackboard(blackboard)
-                    .Sequence("出现退出钓鱼按钮就开始钓鱼")
+                    .Sequence("出现退出钓鱼按钮就开始钓鱼", memory: false)
                         .Leaf(() => _takeScreenshot)
                         .Parallel("root", policy: new ParallelPolicy.SuccessOnOne())
-                            .CheckFishingUserInterfaceBehaviour("检查是否在钓鱼界面", this)
+                            .Leaf(() => new CheckFishingUserInterfaceBehaviour("检查是否在钓鱼界面", this))
                             .FailureIsSuccess("拉条循环")
-                                .SequenceWithMemory("拉条")
-                                    .FishBite("自动提竿", _logger, input, ocrService, cultureInfo: autoFishingTaskParam.GameCultureInfo, stringLocalizer: autoFishingTaskParam.StringLocalizer)
+                                .Sequence("拉条", memory: true)
+                                    .CheckFishBite("检查上钩", _logger, ocrService, cultureInfo: autoFishingTaskParam.GameCultureInfo, stringLocalizer: autoFishingTaskParam.StringLocalizer)
+                                    .RaiseHook("提竿", _logger, input)
                                     .GetFishBoxArea("等待拉条出现", _logger, false)
                                     .Fishing("钓鱼拉条", _logger, false, input)
                                 .End()

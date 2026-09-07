@@ -8,6 +8,71 @@ struct SettingsPage: View {
         VStack(alignment: .leading, spacing: 14) {
             BGIPageTitle(title: "软件设置")
 
+            if let settings = appState.commonSettings {
+                BGISettingGroup(
+                    icon: "globe",
+                    title: "语言",
+                    subtitle: "任务识别文本与界面语言配置；更改后重启生效，缺失资源回退简体中文。"
+                ) { EmptyView() } content: {
+                    BGISettingLine(title: "游戏语言", subtitle: "决定 OCR 与任务提示所使用的本地化资源。") {
+                        Picker("", selection: Binding(
+                            get: { settings.gameCultureInfoName },
+                            set: { appState.saveCommonSettings(gameCultureInfoName: $0) })) {
+                            ForEach(settings.cultureOptions, id: \.self) { Text($0).tag($0) }
+                        }
+                        .labelsHidden()
+                        .frame(width: 130)
+                    }
+                    BGISettingLine(title: "界面语言", subtitle: "与上游语言目录保持一致。") {
+                        Picker("", selection: Binding(
+                            get: { settings.uiCultureInfoName },
+                            set: { appState.saveCommonSettings(uiCultureInfoName: $0) })) {
+                            ForEach(settings.cultureOptions, id: \.self) { Text($0).tag($0) }
+                        }
+                        .labelsHidden()
+                        .frame(width: 130)
+                    }
+                }
+
+                BGISettingGroup(
+                    icon: "photo",
+                    title: "主窗口背景",
+                    subtitle: "背景图片由 Core 复制到运行目录；原文件移动后仍可继续使用。"
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { settings.mainBackgroundEnabled },
+                        set: { appState.saveCommonSettings(mainBackgroundEnabled: $0) }))
+                        .labelsHidden()
+                } content: {
+                    BGISettingLine(title: "背景图片", subtitle: settings.mainBackgroundImagePath.isEmpty
+                        ? "尚未选择图片" : settings.mainBackgroundImagePath) {
+                        Button("选择并导入") { appState.selectMainBackgroundImage() }
+                        Button("清除") { appState.clearMainBackgroundImage() }
+                        .disabled(settings.mainBackgroundImagePath.isEmpty)
+                    }
+                    BGISettingLine(title: "显示方式", subtitle: "填充会裁剪边缘，适应会完整显示图片。") {
+                        Picker("", selection: Binding(
+                            get: { settings.mainBackgroundStretch },
+                            set: { appState.saveCommonSettings(mainBackgroundStretch: $0) })) {
+                            ForEach(settings.mainBackgroundStretchOptions, id: \.self) { option in
+                                Text(option == "UniformToFill" ? "填充裁剪" :
+                                    option == "Uniform" ? "完整适应" : "拉伸").tag(option)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 130)
+                    }
+                    BGISettingLine(title: "背景不透明度", subtitle: "降低数值可提升前景文字可读性。") {
+                        Slider(value: Binding(
+                            get: { settings.mainBackgroundOpacity },
+                            set: { appState.saveCommonSettings(mainBackgroundOpacity: $0) }), in: 0...1)
+                            .frame(width: 180)
+                        Text(String(format: "%.0f%%", settings.mainBackgroundOpacity * 100))
+                            .frame(width: 48)
+                    }
+                }
+            }
+
             BGISettingGroup(icon: "square.on.square", title: "启用遮罩窗口", subtitle: "重启后生效；macOS 版使用 NSPanel 作为游戏上方 HUD。") {
                 Toggle("", isOn: Binding(get: { appState.isHUDVisible }, set: { _ in appState.toggleHUD() }))
                     .labelsHidden()

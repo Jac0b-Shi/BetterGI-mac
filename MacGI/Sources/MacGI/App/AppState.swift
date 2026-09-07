@@ -2,6 +2,7 @@ import AppKit
 import Darwin
 import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 import UserNotifications
 
 struct CoreCatalogIssue: Equatable, Sendable {
@@ -544,6 +545,8 @@ final class AppState: ObservableObject {
     @Published private(set) var notificationSettings: BetterGINotificationSettings?
     @Published private(set) var commonSettings: BetterGICoreCommonSettings?
     @Published private(set) var notificationTestStatus = ""
+    @Published private(set) var notificationBindingStatus: BetterGINotificationBindingStatus?
+    private var notificationBindingTask: Task<Void, Never>?
     @Published private(set) var macroSettings: BetterGIMacroSettings?
     @Published private(set) var hotKeyBindings: [BetterGIHotKeyBinding] = []
     @Published private(set) var keyBindingSettings:
@@ -1491,6 +1494,50 @@ final class AppState: ObservableObject {
             } catch {
                 self?.notificationTestStatus = error.localizedDescription
                 self?.addLog(.error, "测试通知失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    func startNotificationBinding(channel: String) {
+        guard let supervisor = betterGICoreSupervisor else { return }
+        notificationBindingTask?.cancel()
+        notificationBindingTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(350))
+                guard !Task.isCancelled else { return }
+                var status = try await supervisor.startNotificationBinding(channel: channel)
+                self?.notificationBindingStatus = status
+                var openedQRCodeURL = ""
+                while !status.completed && !Task.isCancelled {
+                    if !status.qrCodeURL.isEmpty,
+                       status.qrCodeURL != openedQRCodeURL,
+                       let url = URL(string: status.qrCodeURL) {
+                        openedQRCodeURL = status.qrCodeURL
+                        NSWorkspace.shared.open(url)
+                    }
+                    try await Task.sleep(for: .milliseconds(500))
+                    status = try await supervisor.notificationBindingStatus()
+                    self?.notificationBindingStatus = status
+                }
+                if status.succeeded {
+                    await self?.loadNotificationSettingsFromCore()
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                self?.addLog(.error, "通知绑定失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    func cancelNotificationBinding() {
+        guard let supervisor = betterGICoreSupervisor else { return }
+        Task { [weak self] in
+            do {
+                self?.notificationBindingStatus =
+                    try await supervisor.cancelNotificationBinding()
+            } catch {
+                self?.addLog(.error, "取消通知绑定失败：\(error.localizedDescription)")
             }
         }
     }
@@ -4279,6 +4326,11 @@ final class AppState: ObservableObject {
     func saveCommonSettings(
         screenshotEnabled: Bool? = nil,
         screenshotUidCoverEnabled: Bool? = nil,
+        mainBackgroundEnabled: Bool? = nil,
+        mainBackgroundOpacity: Double? = nil,
+        mainBackgroundStretch: String? = nil,
+        gameCultureInfoName: String? = nil,
+        uiCultureInfoName: String? = nil,
         mapMatchingMethod: String? = nil,
         autoFetchDispatchCountry: String? = nil,
         serverTimeZoneOffsetHours: Int? = nil,
@@ -4306,6 +4358,19 @@ final class AppState: ObservableObject {
             screenshotEnabled: screenshotEnabled ?? current.screenshotEnabled,
             screenshotUidCoverEnabled:
                 screenshotUidCoverEnabled ?? current.screenshotUidCoverEnabled,
+            mainBackgroundEnabled:
+                mainBackgroundEnabled ?? current.mainBackgroundEnabled,
+            mainBackgroundImagePath: current.mainBackgroundImagePath,
+            mainBackgroundOpacity:
+                mainBackgroundOpacity ?? current.mainBackgroundOpacity,
+            mainBackgroundStretch:
+                mainBackgroundStretch ?? current.mainBackgroundStretch,
+            mainBackgroundStretchOptions: current.mainBackgroundStretchOptions,
+            gameCultureInfoName:
+                gameCultureInfoName ?? current.gameCultureInfoName,
+            uiCultureInfoName:
+                uiCultureInfoName ?? current.uiCultureInfoName,
+            cultureOptions: current.cultureOptions,
             mapMatchingMethod:
                 mapMatchingMethod ?? current.mapMatchingMethod,
             mapMatchingMethodOptions: current.mapMatchingMethodOptions,
@@ -4376,6 +4441,37 @@ final class AppState: ObservableObject {
                 self.addLog(.error,
                     "BetterGI Core common settings save failed: \(error.localizedDescription)")
                 await self.loadCommonSettingsFromCore()
+            }
+        }
+    }
+
+    func selectMainBackgroundImage() {
+        guard let supervisor = betterGICoreSupervisor else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .webP, .bmp]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.prompt = "选择背景图"
+        guard panel.runModal() == .OK, let sourceURL = panel.url else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                self.commonSettings = try await supervisor.importMainBackground(
+                    sourcePath: sourceURL.path)
+            } catch {
+                self.addLog(.error, "导入主窗口背景失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    func clearMainBackgroundImage() {
+        guard let supervisor = betterGICoreSupervisor else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                self.commonSettings = try await supervisor.clearMainBackground()
+            } catch {
+                self.addLog(.error, "清除主窗口背景失败：\(error.localizedDescription)")
             }
         }
     }
@@ -4664,8 +4760,7 @@ final class AppState: ObservableObject {
         scanDropsAfterRewardSeconds: Int? = nil, isResinExhaustionMode: Bool? = nil,
         openModeCountMin: Bool? = nil, count: Int? = nil,
         useTransientResin: Bool? = nil, useFragileResin: Bool? = nil,
-        team: String? = nil, friendshipTeam: String? = nil, timeout: Int? = nil,
-        useAdventurerHandbook: Bool? = nil, isNotification: Bool? = nil
+        team: String? = nil, friendshipTeam: String? = nil, timeout: Int? = nil
     ) {
         guard let supervisor = betterGICoreSupervisor,
               let current = autoLeyLineOutcropSettings else { return }
@@ -4695,10 +4790,7 @@ final class AppState: ObservableObject {
             useFragileResin: useFragileResin ?? current.useFragileResin,
             team: team ?? current.team,
             friendshipTeam: friendshipTeam ?? current.friendshipTeam,
-            timeout: timeout ?? current.timeout,
-            useAdventurerHandbook:
-                useAdventurerHandbook ?? current.useAdventurerHandbook,
-            isNotification: isNotification ?? current.isNotification)
+            timeout: timeout ?? current.timeout)
         Task { [weak self] in
             do {
                 self?.autoLeyLineOutcropSettings =

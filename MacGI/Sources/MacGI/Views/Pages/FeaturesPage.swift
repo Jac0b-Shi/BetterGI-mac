@@ -979,12 +979,6 @@ struct SoloTasksPage: View {
                     Text("\(settings.timeout)").frame(minWidth: 48)
                 }
             }
-            leyLineToggle("不使用冒险之证寻路", "勾选后改用内置路线，不通过冒险之证定位地脉花。",
-                value: Binding(get: { settings.useAdventurerHandbook },
-                    set: { appState.saveAutoLeyLineOutcropSettings(useAdventurerHandbook: $0) }))
-            leyLineToggle("发送通知", "任务完成或失败时通过通知系统发送提醒。",
-                value: Binding(get: { settings.isNotification },
-                    set: { appState.saveAutoLeyLineOutcropSettings(isNotification: $0) }))
         } else { settingsLoading }
     }
 

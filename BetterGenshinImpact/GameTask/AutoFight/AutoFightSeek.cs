@@ -262,12 +262,10 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                     {
                         // logger.LogInformation("检测画面内疑似有敌人，继续战斗...");
 
-                        using Mat firstRow = stats.Row(1);
-                        bool success = firstRow.GetArray(out int[] statsArray);
-                        if (success && statsArray.Length >= 4)
+                        if (stats.Cols >= 4)
                         {
-                            int height = statsArray[3];
-                            int x = statsArray[0];
+                            int height = stats.At<int>(1, 3);
+                            int x = stats.At<int>(1, 0);
                             // Logger.LogInformation("敌人位置: ({x}，血量高度: {height}", x, height);
 
                             if (isEndCheck)
@@ -370,11 +368,9 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                     if (numLabels > 1)
                     {
                         // logger.LogInformation("检测敌人第 {retryCount} 次： {numLabels}", retryCount + 1, numLabels - 1);
-                        using Mat firstRow2 = stats.Row(1); // 获取第1行（标签1）的数据
-                        bool success2 = firstRow2.GetArray(out int[] statsArray2); // 使用 out 参数来接收数组数据
-                        if (success2 && statsArray2.Length >= 4)
+                        if (stats.Cols >= 4)
                         {
-                            int height2 = statsArray2[3];
+                            int height2 = stats.At<int>(1, 3);
                             // logger.LogInformation("敌人血量 ：{height2}", height2);
 
                             if (isEndCheck) await Task.Run(() =>

@@ -3526,13 +3526,10 @@ try
     persistedConfig = JObject.Parse(await File.ReadAllTextAsync(
         Path.Combine(layout.UserPath, "config.json"), cancellation.Token));
     persistedConfig["autoFightConfig"]!["teamNames"] = "钟离,那维莱特";
-    persistedConfig["autoFightConfig"]!["skipModel"] = true;
     persistedConfig["autoFightConfig"]!["onlyPickEliteDropsMode"] =
         "DisableAutoPickupForNonElite";
     persistedConfig["autoFightConfig"]!["battleThresholdForLoot"] = 7;
     persistedConfig["autoFightConfig"]!["kazuhaPartyName"] = "拾取队";
-    persistedConfig["autoFightConfig"]!["finishDetectConfig"]!["battleEndProgressBarColor"] =
-        "95,235,255";
     await File.WriteAllTextAsync(Path.Combine(layout.UserPath, "config.json"),
         persistedConfig.ToString(), cancellation.Token);
     var fightSettings = await ExchangeAsync(
@@ -3583,13 +3580,10 @@ try
             !fightSettingsJson.Value<bool>("swimmingEnabled") &&
             persistedConfig.SelectToken("autoFightConfig.teamNames")?.Value<string>() ==
                 "钟离,那维莱特" &&
-            persistedConfig.SelectToken("autoFightConfig.skipModel")?.Value<bool>() == true &&
             persistedConfig.SelectToken("autoFightConfig.onlyPickEliteDropsMode")?.Value<string>() ==
                 "DisableAutoPickupForNonElite" &&
             persistedConfig.SelectToken("autoFightConfig.battleThresholdForLoot")?.Value<int>() == 7 &&
             persistedConfig.SelectToken("autoFightConfig.kazuhaPartyName")?.Value<string>() == "拾取队" &&
-            persistedConfig.SelectToken("autoFightConfig.finishDetectConfig.battleEndProgressBarColor")?
-                .Value<string>() == "95,235,255" &&
             runtimeFightConfig.Timeout == 345 &&
             runtimeFightConfig.FinishDetectConfig.RotaryFactor == 13 &&
             runtimeFightParam.Timeout == 345 &&
@@ -3966,20 +3960,20 @@ static async Task StageMapBack3Async(string runtimeRoot, CancellationToken cance
             Artifact(source.Id, "Assets/Map/Teyvat/MapBack_3_gray.webp", "BetterGI/Assets/Map/Teyvat/MapBack_3_gray.webp", 1302572,
                 "1bfafc57afbda3d0dd4a89a301d2ae645f47df3ad456eb63c856adc0193d1379", license),
             Artifact(mapSource.Id, "Assets/Map/Teyvat/Teyvat_0_256.png",
-                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256.png", 4319098,
-                "6e111f4f5096b8c7448037c380053e5d2ef7e8b96be7305bdcdb177e40eb5cd8", mapLicense),
+                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256.png", 4333300,
+                "b0d24c66d503c24a2957d663ca96b292174b02b3cd28ef4871bdeefec37d677a", mapLicense),
             Artifact(mapSource.Id, "Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin",
-                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin", 1069152,
-                "7f5d7dc59b4b2ae3cf46fb8cf243e741790175bd7be0f4652457073fe993331f", mapLicense),
+                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin", 1073604,
+                "875fbec29e8991564a9908a9ef9dc8bd8b4b618119093069c04697910d9bb35f", mapLicense),
             Artifact(mapSource.Id, "Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png",
-                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png", 4304815,
-                "e070b8d3239ac5213d6a50efe491afd75b5784dce49d3a6725cc781f374595ed", mapLicense),
+                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png", 4321965,
+                "4331d3553f87544e4da2e77b3f1716df372ffbef0c58aaec70c645b137cbcd16", mapLicense),
             Artifact(mapSource.Id, "Assets/Map/Teyvat/Teyvat_0_2048_SIFT.kp.bin",
-                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_2048_SIFT.kp.bin", 19027540,
-                "391f87d61da255fe25d39d738ace1c15be2e38ab312158b61f7c170600625704", mapLicense),
+                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_2048_SIFT.kp.bin", 19071892,
+                "281200aa5ab94e88eb553d2e98a2440843e2ed5b1e63621594f5a0d0c0bea60f", mapLicense),
             Artifact(mapSource.Id, "Assets/Map/Teyvat/Teyvat_0_2048_SIFT.mat.png",
-                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_2048_SIFT.mat.png", 74848915,
-                "3c5f339cdcb8d212ed3ad9dbd18e1e2084d8c284cb70b4aa126d454937a88c12", mapLicense)
+                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_2048_SIFT.mat.png", 75022450,
+                "024a33eab7616ae7d76275a8b4758748d1714a4911bc67015b829b1c8aeee3a0", mapLicense)
         ]
     };
     var temporaryLockPath = Path.Combine(Path.GetTempPath(), $"bgi-host-map-{Guid.NewGuid():N}.json");

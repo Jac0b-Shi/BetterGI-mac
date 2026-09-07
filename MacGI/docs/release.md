@@ -1,5 +1,7 @@
 # macOS Release
 
+当前预发布版本说明：[0.64.2-alpha.1](release-0.64.2-alpha.1.md)。
+
 推送 `v*` SemVer 标签后，`macOS Release` 会在 GitHub 的 Apple Silicon
 `macos-15` runner 上构建 BetterGI macOS，并将 DMG、ZIP 和 SHA256 清单发布到
 GitHub Releases。

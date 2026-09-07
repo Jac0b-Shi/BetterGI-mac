@@ -448,13 +448,8 @@ public class RewardResultRecognizer
         var strips = new List<Rect>();
         for (int i = 1; i < nLabels; i++) // 跳过编号 0（背景）
         {
-            using var rowMat = stats.Row(i);
-            if (!rowMat.GetArray<int>(out var row))
-            {
-                continue;
-            }
-
-            int x = row[0], y = row[1], w = row[2], h = row[3], area = row[4];
+            int x = stats.At<int>(i, 0), y = stats.At<int>(i, 1),
+                w = stats.At<int>(i, 2), h = stats.At<int>(i, 3), area = stats.At<int>(i, 4);
             if (w < minWidth || w > maxWidth)
             {
                 continue;

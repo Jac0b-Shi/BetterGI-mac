@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using BetterGenshinImpact.Core.Config;
 using Newtonsoft.Json.Linq;
+using SixLabors.ImageSharp;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
@@ -12,6 +13,10 @@ public sealed class CommonSettingsCatalog(RuntimeLayout layout)
     private static readonly int[] ServerTimeZoneOffsets = [8, 1, -5];
     private static readonly string[] MapMatchingMethods =
         ["SIFT", "TemplateMatch"];
+    private static readonly string[] MainBackgroundStretchOptions =
+        ["UniformToFill", "Uniform", "Fill"];
+    private static readonly string[] SupportedCultures =
+        ["zh-Hans", "zh-Hant", "en", "fr", "it", "ru", "ja"];
     private static readonly string[] ScriptRepositoryChannels =
         [.. ScriptRepositoryCatalog.RepositoryChannels.Keys, "自定义"];
     private readonly object _lock = new();
@@ -43,12 +48,34 @@ public sealed class CommonSettingsCatalog(RuntimeLayout layout)
             common["screenshotEnabled"] = RequiredBool(settings, "screenshotEnabled");
             common["screenshotUidCoverEnabled"] =
                 RequiredBool(settings, "screenshotUidCoverEnabled");
+            common["mainBackgroundEnabled"] = settings.Value<bool?>("mainBackgroundEnabled")
+                ?? common["mainBackgroundEnabled"]?.GetValue<bool>() ?? false;
+            // The image is imported through ImportMainBackground. Do not trust a UI-provided
+            // path here: macOS background assets must remain inside the Core runtime root.
+            common["mainBackgroundImagePath"] = NormalizeBackgroundPath(
+                common["mainBackgroundImagePath"]?.GetValue<string>() ?? "");
+            var backgroundOpacity = settings.Value<double?>("mainBackgroundOpacity")
+                ?? common["mainBackgroundOpacity"]?.GetValue<double>() ?? 0.35;
+            if (backgroundOpacity is < 0 or > 1)
+                throw new ArgumentOutOfRangeException(
+                    "mainBackgroundOpacity", "Background opacity must be between 0 and 1.");
+            common["mainBackgroundOpacity"] = backgroundOpacity;
+            common["mainBackgroundStretch"] = StretchValue(
+                settings.Value<string>("mainBackgroundStretch") is { } stretch
+                ? ValidateOption(stretch, "mainBackgroundStretch", MainBackgroundStretchOptions)
+                : ReadBackgroundStretch(root));
             root["commonConfig"] = common;
             var pathing = root["pathingConditionConfig"] as JsonObject ?? [];
             pathing["mapMatchingMethod"] = RequiredOption(
                 settings, "mapMatchingMethod", MapMatchingMethods);
             root["pathingConditionConfig"] = pathing;
             var other = root["otherConfig"] as JsonObject ?? [];
+            other["gameCultureInfoName"] = settings.Value<string>("gameCultureInfoName") is { } gameCulture
+                ? ValidateOption(gameCulture, "gameCultureInfoName", SupportedCultures)
+                : NormalizeCulture(other["gameCultureInfoName"]?.GetValue<string>());
+            other["uiCultureInfoName"] = settings.Value<string>("uiCultureInfoName") is { } uiCulture
+                ? ValidateOption(uiCulture, "uiCultureInfoName", SupportedCultures)
+                : NormalizeCulture(other["uiCultureInfoName"]?.GetValue<string>());
             other["autoFetchDispatchAdventurersGuildCountry"] =
                 RequiredOption(settings, "autoFetchDispatchCountry", AdventurersGuildCountries);
             var serverTimeZoneOffsetHours = RequiredInt(settings, "serverTimeZoneOffsetHours");
@@ -115,7 +142,57 @@ public sealed class CommonSettingsCatalog(RuntimeLayout layout)
             return ReadMapMatchingMethod(LoadRoot());
     }
 
-    private static object Describe(JsonObject root)
+    public object ImportMainBackground(string sourcePath)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
+            throw new FileNotFoundException("Background image does not exist.", sourcePath);
+        var destinationDirectory = Path.Combine(layout.UserPath, "Background");
+        Directory.CreateDirectory(destinationDirectory);
+        var destinationPath = Path.Combine(destinationDirectory, "main-background.png");
+        var temporaryPath = $"{destinationPath}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            using (var image = Image.Load(sourcePath))
+                image.SaveAsPng(temporaryPath);
+            File.Move(temporaryPath, destinationPath, true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+                File.Delete(temporaryPath);
+        }
+
+        lock (_lock)
+        {
+            var root = LoadRoot();
+            var common = root["commonConfig"] as JsonObject ?? [];
+            common["mainBackgroundImagePath"] = destinationPath;
+            common["mainBackgroundEnabled"] = true;
+            root["commonConfig"] = common;
+            SaveRoot(root);
+            return Describe(root);
+        }
+    }
+
+    public object ClearMainBackground()
+    {
+        lock (_lock)
+        {
+            var root = LoadRoot();
+            var common = root["commonConfig"] as JsonObject ?? [];
+            var backgroundPath = NormalizeBackgroundPath(
+                common["mainBackgroundImagePath"]?.GetValue<string>() ?? "");
+            common["mainBackgroundEnabled"] = false;
+            common["mainBackgroundImagePath"] = "";
+            root["commonConfig"] = common;
+            SaveRoot(root);
+            if (!string.IsNullOrEmpty(backgroundPath) && File.Exists(backgroundPath))
+                File.Delete(backgroundPath);
+            return Describe(root);
+        }
+    }
+
+    private object Describe(JsonObject root)
     {
         var other = LoadOtherConfig(root);
         var script = root["scriptConfig"];
@@ -128,8 +205,17 @@ public sealed class CommonSettingsCatalog(RuntimeLayout layout)
             screenshotEnabled = ScreenshotEnabled(root),
             screenshotUidCoverEnabled =
                 root["commonConfig"]?["screenshotUidCoverEnabled"]?.GetValue<bool>() ?? true,
+            mainBackgroundEnabled = ReadBackgroundEnabled(root),
+            mainBackgroundImagePath = ReadBackgroundPath(root),
+            mainBackgroundOpacity =
+                root["commonConfig"]?["mainBackgroundOpacity"]?.GetValue<double>() ?? 0.35,
+            mainBackgroundStretch = ReadBackgroundStretch(root),
+            mainBackgroundStretchOptions = MainBackgroundStretchOptions,
             mapMatchingMethod = ReadMapMatchingMethod(root),
             mapMatchingMethodOptions = MapMatchingMethods,
+            gameCultureInfoName = NormalizeCulture(other.GameCultureInfoName),
+            uiCultureInfoName = NormalizeCulture(other.UiCultureInfoName),
+            cultureOptions = SupportedCultures,
             autoFetchDispatchCountry = other.AutoFetchDispatchAdventurersGuildCountry,
             autoFetchDispatchCountryOptions = AdventurersGuildCountries,
             serverTimeZoneOffsetHours = (int)other.ServerTimeZoneOffset.TotalHours,
@@ -170,6 +256,54 @@ public sealed class CommonSettingsCatalog(RuntimeLayout layout)
             ? value
             : "TemplateMatch";
     }
+
+    private static string NormalizeCulture(string? value) =>
+        value is not null && SupportedCultures.Contains(value) ? value : "zh-Hans";
+
+    private static string ValidateOption(string value, string name, string[] options) =>
+        options.Contains(value)
+            ? value
+            : throw new ArgumentException($"Unsupported {name}: {value}.");
+
+    private bool ReadBackgroundEnabled(JsonObject root) =>
+        root["commonConfig"]?["mainBackgroundEnabled"]?.GetValue<bool>() == true &&
+        File.Exists(ReadBackgroundPath(root));
+
+    private string ReadBackgroundPath(JsonObject root)
+    {
+        var value = root["commonConfig"]?["mainBackgroundImagePath"]?.GetValue<string>() ?? "";
+        return NormalizeBackgroundPath(value);
+    }
+
+    private string NormalizeBackgroundPath(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "";
+        try
+        {
+            var fullPath = Path.GetFullPath(value);
+            var backgroundRoot = Path.GetFullPath(Path.Combine(layout.UserPath, "Background"));
+            return fullPath.StartsWith(backgroundRoot + Path.DirectorySeparatorChar,
+                StringComparison.Ordinal) ? fullPath : "";
+        }
+        catch (Exception) when (value.Length > 0)
+        {
+            return "";
+        }
+    }
+
+    private static string ReadBackgroundStretch(JsonObject root)
+    {
+        var node = root["commonConfig"]?["mainBackgroundStretch"];
+        if (node is JsonValue value && value.TryGetValue<string>(out var text) &&
+            MainBackgroundStretchOptions.Contains(text))
+            return text;
+        var numeric = node?.GetValue<int>() ?? 3;
+        return numeric switch { 1 => "Fill", 2 => "Uniform", _ => "UniformToFill" };
+    }
+
+    private static int StretchValue(string value) =>
+        value switch { "Fill" => 1, "Uniform" => 2, _ => 3 };
 
     private static bool RequiredBool(JObject settings, string name) =>
         settings.Value<bool?>(name) ?? throw new ArgumentException($"{name} is required.");
