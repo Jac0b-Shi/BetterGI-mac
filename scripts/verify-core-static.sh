@@ -28,7 +28,8 @@ rg -q '\.mouseEventDeltaY' \
 # capture/input/session cleanup through the Wine + Quartz bridge and must never
 # acquire ChildSession/RDP contracts or native dependencies.
 if rg -n 'ChildSession|RdpActiveXHost|AxMSTSCLib|MSTSCLib' \
-  BetterGenshinImpact.Core BetterGenshinImpact.Core.Host MacGI \
+  BetterGenshinImpact.Core BetterGenshinImpact.Core.Host \
+  MacGI/Package.swift MacGI/Sources MacGI/Tests MacGI/scripts \
   --glob '!**/bin/**' --glob '!**/obj/**'; then
   print -u2 'Desktop Clone/RDP dependency leaked into the macOS product boundary.'
   exit 1
