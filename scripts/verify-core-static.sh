@@ -23,3 +23,18 @@ rg -q '\.mouseEventDeltaX' \
   MacGI/Sources/MacGI/Runtime/CGEventInputDispatcher.swift
 rg -q '\.mouseEventDeltaY' \
   MacGI/Sources/MacGI/Runtime/CGEventInputDispatcher.swift
+
+# Desktop Clone remains a Windows-only WPF feature. macOS owns background
+# capture/input/session cleanup through the Wine + Quartz bridge and must never
+# acquire ChildSession/RDP contracts or native dependencies.
+if rg -n 'ChildSession|RdpActiveXHost|AxMSTSCLib|MSTSCLib' \
+  BetterGenshinImpact.Core BetterGenshinImpact.Core.Host MacGI \
+  --glob '!**/bin/**' --glob '!**/obj/**'; then
+  print -u2 'Desktop Clone/RDP dependency leaked into the macOS product boundary.'
+  exit 1
+fi
+rg -q 'class ChildSessionService' \
+  BetterGenshinImpact/Service/ChildSession/ChildSessionService.cs
+rg -q 'WineBridgeSessionInvalidationMode' \
+  MacGI/Sources/MacGI/Runtime/WineBridgeInputDispatcher.swift
+rg -q 'background' MacGI/Sources/MacGI/Runtime/BetterGICorePlatformAdapter.swift

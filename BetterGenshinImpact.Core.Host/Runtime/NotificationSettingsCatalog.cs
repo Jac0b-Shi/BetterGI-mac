@@ -60,6 +60,28 @@ public sealed class NotificationSettingsCatalog : IDisposable
                 new("oneBotToken", "Token", "secret"),
             ]),
         new(
+            "qq",
+            "QQ 官方机器人",
+            "通过 QQ 开放平台 REST API 向私聊或群聊发送文本与截图",
+            "qqNotificationEnabled",
+            [
+                new("qqAppId", "App ID", "string"),
+                new("qqClientSecret", "App Secret", "secret"),
+                new("qqOpenId", "私聊 OpenID", "secret"),
+                new("qqGroupOpenId", "群聊 OpenID", "secret"),
+            ]),
+        new(
+            "wechatClawbot",
+            "微信 Clawbot",
+            "通过微信 iLink 协议发送文本与截图；凭据由扫码绑定流程写入",
+            "wechatClawbotNotificationEnabled",
+            [
+                new("wechatClawbotBotToken", "Bot Token", "secret"),
+                new("wechatClawbotToUserId", "目标用户 ID", "secret"),
+                new("wechatClawbotBaseUrl", "API 基础地址", "string",
+                    "https://ilinkai.weixin.qq.com"),
+            ]),
+        new(
             "workWeixin",
             "企业微信",
             "通过企业微信群机器人 Webhook 发送通知",
@@ -170,9 +192,13 @@ public sealed class NotificationSettingsCatalog : IDisposable
     ];
 
     private readonly object _lock = new();
+    private readonly object _bindingLock = new();
     private readonly RuntimeLayout _layout;
     private readonly NotificationService _notificationService;
     private MacScriptHostServices? _scriptHostServices;
+    private CancellationTokenSource? _bindingCancellation;
+    private Task? _bindingTask;
+    private BindingState _bindingState = BindingState.Idle;
 
     public NotificationSettingsCatalog(
         RuntimeLayout layout,
@@ -313,6 +339,10 @@ public sealed class NotificationSettingsCatalog : IDisposable
                 .TestNotifierAsync<FeishuNotifier>(),
             "oneBot" => await _notificationService
                 .TestNotifierAsync<OneBotNotifier>(),
+            "qq" => await _notificationService
+                .TestNotifierAsync<QqNotifier>(),
+            "wechatClawbot" => await _notificationService
+                .TestNotifierAsync<WechatClawbotNotifier>(),
             "workWeixin" => await _notificationService
                 .TestNotifierAsync<WorkWeixinNotifier>(),
             "email" => await _notificationService
@@ -343,12 +373,177 @@ public sealed class NotificationSettingsCatalog : IDisposable
         return new { channel, sent = true };
     }
 
+    public object StartBinding(string channel)
+    {
+        lock (_bindingLock)
+        {
+            if (_bindingTask is { IsCompleted: false })
+                throw new InvalidOperationException("已有通知绑定流程正在运行。");
+            _bindingCancellation?.Dispose();
+            _bindingCancellation = new CancellationTokenSource();
+            _bindingState = new BindingState(
+                channel, "starting", "正在准备绑定…", "", "", false, false);
+            var cancellationToken = _bindingCancellation.Token;
+            _bindingTask = Task.Run(
+                () => RunBindingAsync(channel, cancellationToken),
+                CancellationToken.None);
+            return DescribeBindingState(_bindingState);
+        }
+    }
+
+    public object GetBindingStatus()
+    {
+        lock (_bindingLock)
+            return DescribeBindingState(_bindingState);
+    }
+
+    public object CancelBinding()
+    {
+        lock (_bindingLock)
+        {
+            _bindingCancellation?.Cancel();
+            return DescribeBindingState(_bindingState);
+        }
+    }
+
+    private async Task RunBindingAsync(string channel, CancellationToken cancellationToken)
+    {
+        try
+        {
+            switch (channel)
+            {
+                case "qq":
+                case "qqGroup":
+                {
+                    var config = ReadConfig();
+                    if (string.IsNullOrWhiteSpace(config.QqAppId) ||
+                        string.IsNullOrWhiteSpace(config.QqClientSecret))
+                        throw new InvalidOperationException("请先保存 QQ App ID 与 App Secret。");
+                    UpdateBindingState("connecting", "正在连接 QQ 网关…");
+                    Action<string> onCode = code => UpdateBindingState(
+                        "waiting", channel == "qq"
+                            ? $"请私聊机器人发送验证码 [{code}]"
+                            : $"请在群聊中 @机器人发送验证码 [{code}]",
+                        verificationCode: code);
+                    var openId = channel == "qq"
+                        ? await QqWebSocketHelper.BindAsync(
+                            config.QqAppId, config.QqClientSecret, onCode, cancellationToken)
+                        : await QqWebSocketHelper.BindGroupAsync(
+                            config.QqAppId, config.QqClientSecret, onCode,
+                            status => UpdateBindingState("waiting", status), cancellationToken);
+                    SaveBindingCredentials(channel == "qq"
+                        ? new Dictionary<string, string> { ["qqOpenId"] = openId }
+                        : new Dictionary<string, string> { ["qqGroupOpenId"] = openId });
+                    UpdateBindingState("completed", channel == "qq" ? "QQ 私聊绑定成功" : "QQ 群聊绑定成功",
+                        completed: true, succeeded: true);
+                    break;
+                }
+                case "wechatClawbot":
+                {
+                    UpdateBindingState("login", "正在获取微信登录二维码…");
+                    var login = await WechatClawbotHelper.LoginAsync(
+                        qrCodeUrl => UpdateBindingState(
+                            "scan", "请用手机微信扫码登录 Clawbot", qrCodeUrl: qrCodeUrl),
+                        cancellationToken);
+                    UpdateBindingState("binding", "登录成功，正在等待绑定消息…");
+                    var bind = await WechatClawbotHelper.BindAsync(
+                        login.BotToken, login.BaseUrl, login.UserId,
+                        code => UpdateBindingState(
+                            "waiting", $"请给 Clawbot 发送验证码 [{code}] 完成绑定",
+                            verificationCode: code),
+                        cancellationToken);
+                    await WechatClawbotSessionStore.SaveAsync(
+                        login.BotToken, bind.ContextToken, bind.GetUpdatesBuf);
+                    SaveBindingCredentials(new Dictionary<string, string>
+                    {
+                        ["wechatClawbotBotToken"] = login.BotToken,
+                        ["wechatClawbotBaseUrl"] = login.BaseUrl,
+                        ["wechatClawbotToUserId"] = bind.ToUserId,
+                    });
+                    UpdateBindingState("completed", "微信 Clawbot 绑定成功",
+                        completed: true, succeeded: true);
+                    break;
+                }
+                default:
+                    throw new ArgumentException($"Unknown notification binding channel: {channel}");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            UpdateBindingState("cancelled", "绑定已取消", completed: true);
+        }
+        catch (Exception ex)
+        {
+            UpdateBindingState("failed", $"绑定失败：{ex.Message}", completed: true);
+        }
+    }
+
+    private void SaveBindingCredentials(IReadOnlyDictionary<string, string> credentials)
+    {
+        lock (_lock)
+        {
+            var root = LoadRoot();
+            var notification = root["notificationConfig"] as JsonObject ?? [];
+            foreach (var (key, value) in credentials)
+                notification[key] = value;
+            root["notificationConfig"] = notification;
+            SaveRoot(root);
+            _notificationService.RefreshNotifiers();
+        }
+    }
+
+    private void UpdateBindingState(
+        string phase,
+        string message,
+        string? verificationCode = null,
+        string? qrCodeUrl = null,
+        bool completed = false,
+        bool succeeded = false)
+    {
+        lock (_bindingLock)
+            _bindingState = _bindingState with
+            {
+                Phase = phase,
+                Message = message,
+                VerificationCode = verificationCode ?? _bindingState.VerificationCode,
+                QrCodeUrl = qrCodeUrl ?? _bindingState.QrCodeUrl,
+                Completed = completed,
+                Succeeded = succeeded,
+            };
+    }
+
+    private static object DescribeBindingState(BindingState state) => new
+    {
+        channel = state.Channel,
+        phase = state.Phase,
+        message = state.Message,
+        verificationCode = state.VerificationCode,
+        qrCodeUrl = state.QrCodeUrl,
+        completed = state.Completed,
+        succeeded = state.Succeeded,
+    };
+
     public void Dispose()
     {
+        Task? bindingTask;
+        lock (_bindingLock)
+        {
+            _bindingCancellation?.Cancel();
+            bindingTask = _bindingTask;
+        }
+        try
+        {
+            bindingTask?.Wait(TimeSpan.FromSeconds(5));
+        }
+        catch (AggregateException exception) when (
+            exception.InnerExceptions.All(inner => inner is OperationCanceledException))
+        {
+        }
         _notificationService.StopAsync(CancellationToken.None)
             .GetAwaiter()
             .GetResult();
         _notificationService.Dispose();
+        _bindingCancellation?.Dispose();
         GC.SuppressFinalize(this);
     }
 
@@ -519,6 +714,19 @@ public sealed class NotificationSettingsCatalog : IDisposable
         string Kind,
         string? Placeholder = null,
         string[]? Options = null);
+
+    private sealed record BindingState(
+        string Channel,
+        string Phase,
+        string Message,
+        string VerificationCode,
+        string QrCodeUrl,
+        bool Completed,
+        bool Succeeded)
+    {
+        public static BindingState Idle { get; } = new(
+            "", "idle", "", "", "", true, false);
+    }
 
     private sealed class MacNativeNotificationNotifier(
         PlatformCallbackChannel callbacks,

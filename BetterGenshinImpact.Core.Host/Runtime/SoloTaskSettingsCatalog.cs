@@ -582,8 +582,6 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             config.FriendshipTeam = RequiredString(settings, "friendshipTeam");
             config.Timeout = timeout;
             config.FightConfig.Timeout = timeout;
-            config.UseAdventurerHandbook = RequiredBool(settings, "useAdventurerHandbook");
-            config.IsNotification = RequiredBool(settings, "isNotification");
             root["autoLeyLineOutcropConfig"] =
                 JsonSerializer.SerializeToNode(config, ConfigJson.Options);
             SaveRoot(root);
@@ -877,8 +875,6 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             team = config.Team,
             friendshipTeam = config.FriendshipTeam,
             timeout = fightConfig.Timeout > 0 ? fightConfig.Timeout : config.Timeout,
-            useAdventurerHandbook = config.UseAdventurerHandbook,
-            isNotification = config.IsNotification,
         };
     }
 

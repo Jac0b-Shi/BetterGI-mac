@@ -106,9 +106,11 @@ internal sealed class ItemRecognizer : IItemIconRecognizer
 
         using Mat rgb = mat.CvtColor(ColorConversionCodes.BGR2RGB);
         var tensor = new DenseTensor<float>(new[] { 1, 3, InputSize, InputSize });
-        for (int y = 0; y < rgb.Height; y++)
+        var height = rgb.Height;
+        var width = rgb.Width;
+        for (int y = 0; y < height; y++)
         {
-            for (int x = 0; x < rgb.Width; x++)
+            for (int x = 0; x < width; x++)
             {
                 var pixel = rgb.At<Vec3b>(y, x);
                 tensor[0, 0, y, x] = (pixel[0] / 255f - 0.5f) / 0.5f;

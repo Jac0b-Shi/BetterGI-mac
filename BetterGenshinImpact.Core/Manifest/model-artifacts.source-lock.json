@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "artifactSetVersion": "0.64.0-model-1.0.31-map-1.0.21",
+  "artifactSetVersion": "0.64.2-alpha.1-model-1.0.33-map-1.0.22",
   "sources": [
     {
       "id": "bettergi-release-0.62.0-portable-7z",
@@ -18,18 +18,18 @@
       }
     },
     {
-      "id": "bettergi-assets-model-1.0.31-nupkg",
+      "id": "bettergi-assets-model-1.0.33-nupkg",
       "type": "archive",
-      "url": "https://api.nuget.org/v3-flatcontainer/bettergi.assets.model/1.0.31/bettergi.assets.model.1.0.31.nupkg",
-      "sha256": "26063425d180e006c5f51380449c2f2a6549731d0bdb612a1f13a5604ee82a61",
+      "url": "https://api.nuget.org/v3-flatcontainer/bettergi.assets.model/1.0.33/bettergi.assets.model.1.0.33.nupkg",
+      "sha256": "252781bf57c76521b326be44518077781ff37e9be0f663963c0f848acbe97945",
       "format": "nupkg",
-      "sizeBytes": 168340016,
+      "sizeBytes": 168343838,
       "memberCount": 50,
       "provenance": {
         "project": "babalae/bettergi-libraries",
-        "releaseTag": "BetterGI.Assets.Model/1.0.31",
-        "commitSha": "0209a458b6d98d683e8dae8767005eab59d9556d",
-        "publishedAt": "2026-08-20T11:08:41.157Z"
+        "releaseTag": "BetterGI.Assets.Model/1.0.33",
+        "commitSha": "7f4affe130729ac766b12704d35e43170894d50c",
+        "publishedAt": "2026-08-29T13:27:38.777Z"
       }
     },
     {
@@ -48,18 +48,18 @@
       }
     },
     {
-      "id": "bettergi-assets-map-1.0.21-nupkg",
+      "id": "bettergi-assets-map-1.0.22-nupkg",
       "type": "archive",
-      "url": "https://api.nuget.org/v3-flatcontainer/bettergi.assets.map/1.0.21/bettergi.assets.map.1.0.21.nupkg",
-      "sha256": "4821e185c73019d58fccb56b6c6a93e7c88e245c25b1f351dac5ef622bae7b90",
+      "url": "https://api.nuget.org/v3-flatcontainer/bettergi.assets.map/1.0.22/bettergi.assets.map.1.0.22.nupkg",
+      "sha256": "645acf0419bfef433e85db41e892f16b25e75f0d43662506f7a0380676df40f2",
       "format": "nupkg",
-      "sizeBytes": 217286170,
+      "sizeBytes": 217524505,
       "memberCount": 623,
       "provenance": {
         "project": "babalae/bettergi-libraries",
-        "releaseTag": "BetterGI.Assets.Map/1.0.21",
-        "commitSha": "2d69476dfb640fefb5314bca97c5db7b972b3074",
-        "publishedAt": "2026-08-10T15:15:03.037Z"
+        "releaseTag": "BetterGI.Assets.Map/1.0.22",
+        "commitSha": "2ece9631d850312d9f572368d4616a56b7ae7d32",
+        "publishedAt": "2026-08-31T06:21:47.743Z"
       }
     }
   ],
@@ -391,14 +391,14 @@
     },
     {
       "destinationRelativePath": "Assets/Model/Fish/bgi_fish.onnx",
-      "sourceId": "bettergi-release-0.62.0-portable-7z",
-      "memberPath": "BetterGI/Assets/Model/Fish/bgi_fish.onnx",
-      "sizeBytes": 12772718,
-      "sha256": "b1fd2fa1caa98946825aa5c530168c884732f70b7090208cfce2b5895be723cf",
+      "sourceId": "bettergi-assets-model-1.0.33-nupkg",
+      "memberPath": "contentFiles/any/any/Assets/Model/Fish/bgi_fish.onnx",
+      "sizeBytes": 12788666,
+      "sha256": "f8da8779ff0be7d21ed1dd1c8a92807f684701df926174558135e68b4fa545ce",
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI release model asset; bettergi repository root LICENSE GPLv3 and Assets/Model/LICENSE",
+        "source": "BetterGI.Assets.Model 1.0.33 fishing model asset; signed NuGet package and bettergi-libraries Assets/Model/LICENSE",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },
@@ -430,27 +430,27 @@
     },
     {
       "destinationRelativePath": "Assets/Model/ItemV2/item.onnx",
-      "sourceId": "bettergi-assets-model-1.0.31-nupkg",
+      "sourceId": "bettergi-assets-model-1.0.33-nupkg",
       "memberPath": "contentFiles/any/any/Assets/Model/ItemV2/item.onnx",
       "sizeBytes": 6569086,
       "sha256": "42ef738472e81f15f7356ab4f33efc6bb1edeb88da62378bc518d393560d4c16",
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI.Assets.Model 1.0.31 ItemV2 model asset; signed NuGet package and bettergi-libraries Assets/Model/LICENSE",
+        "source": "BetterGI.Assets.Model 1.0.33 ItemV2 model asset; signed NuGet package and bettergi-libraries Assets/Model/LICENSE",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },
     {
       "destinationRelativePath": "Assets/Model/ItemV2/item.csv",
-      "sourceId": "bettergi-assets-model-1.0.31-nupkg",
+      "sourceId": "bettergi-assets-model-1.0.33-nupkg",
       "memberPath": "contentFiles/any/any/Assets/Model/ItemV2/item.csv",
       "sizeBytes": 5124661,
       "sha256": "9161ad85bd4f4c10dc3fc8416be44312bdf7b086ba9fb3e9ee6ed5128c1d9b5e",
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI.Assets.Model 1.0.31 ItemV2 prototype data; signed NuGet package and bettergi-libraries Assets/Model/LICENSE",
+        "source": "BetterGI.Assets.Model 1.0.33 ItemV2 prototype data; signed NuGet package and bettergi-libraries Assets/Model/LICENSE",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },
@@ -495,40 +495,40 @@
     },
     {
       "destinationRelativePath": "Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin",
-      "sourceId": "bettergi-assets-map-1.0.21-nupkg",
+      "sourceId": "bettergi-assets-map-1.0.22-nupkg",
       "memberPath": "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin",
-      "sizeBytes": 1069152,
-      "sha256": "7f5d7dc59b4b2ae3cf46fb8cf243e741790175bd7be0f4652457073fe993331f",
+      "sizeBytes": 1073604,
+      "sha256": "875fbec29e8991564a9908a9ef9dc8bd8b4b618119093069c04697910d9bb35f",
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI.Assets.Map 1.0.21 signed NuGet package and bettergi-libraries repository",
+        "source": "BetterGI.Assets.Map 1.0.22 signed NuGet package and bettergi-libraries repository",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },
     {
       "destinationRelativePath": "Assets/Model/AvatarGridIcon/avatar.onnx",
-      "sourceId": "bettergi-assets-model-1.0.31-nupkg",
+      "sourceId": "bettergi-assets-model-1.0.33-nupkg",
       "memberPath": "contentFiles/any/any/Assets/Model/AvatarGridIcon/avatar.onnx",
       "sizeBytes": 7006356,
       "sha256": "25f0f3f1ccdfaad5c3d9bf7e5679f4ad57fd93dbaa0210a8d344016ffa762314",
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI.Assets.Model 1.0.31 Assets/Model/LICENSE and signed NuGet package",
+        "source": "BetterGI.Assets.Model 1.0.33 Assets/Model/LICENSE and signed NuGet package",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },
     {
       "destinationRelativePath": "Assets/Model/AvatarGridIcon/avatar.csv",
-      "sourceId": "bettergi-assets-model-1.0.31-nupkg",
+      "sourceId": "bettergi-assets-model-1.0.33-nupkg",
       "memberPath": "contentFiles/any/any/Assets/Model/AvatarGridIcon/avatar.csv",
       "sizeBytes": 271526,
       "sha256": "65dbcbbb436d07ea1029e9ed2ad802d33aa64bd4d35f239decf7b04882bf9d8d",
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI.Assets.Model 1.0.31 Assets/Model/LICENSE and signed NuGet package",
+        "source": "BetterGI.Assets.Model 1.0.33 Assets/Model/LICENSE and signed NuGet package",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },
@@ -560,40 +560,40 @@
     },
     {
       "destinationRelativePath": "Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png",
-      "sourceId": "bettergi-assets-map-1.0.21-nupkg",
+      "sourceId": "bettergi-assets-map-1.0.22-nupkg",
       "memberPath": "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png",
-      "sizeBytes": 4304815,
-      "sha256": "e070b8d3239ac5213d6a50efe491afd75b5784dce49d3a6725cc781f374595ed",
+      "sizeBytes": 4321965,
+      "sha256": "4331d3553f87544e4da2e77b3f1716df372ffbef0c58aaec70c645b137cbcd16",
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI.Assets.Map 1.0.21 signed NuGet package and bettergi-libraries repository",
+        "source": "BetterGI.Assets.Map 1.0.22 signed NuGet package and bettergi-libraries repository",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },
     {
       "destinationRelativePath": "Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.kp.bin",
-      "sourceId": "bettergi-assets-map-1.0.21-nupkg",
+      "sourceId": "bettergi-assets-map-1.0.22-nupkg",
       "memberPath": "contentFiles/any/any/Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.kp.bin",
       "sizeBytes": 1846992,
       "sha256": "078f2a6bbb2190b4ba5028b6bd871cc233128f64a12d937baf6a7e58df477a8c",
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI.Assets.Map 1.0.21 signed NuGet package and bettergi-libraries repository",
+        "source": "BetterGI.Assets.Map 1.0.22 signed NuGet package and bettergi-libraries repository",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     },
     {
       "destinationRelativePath": "Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.mat.png",
-      "sourceId": "bettergi-assets-map-1.0.21-nupkg",
+      "sourceId": "bettergi-assets-map-1.0.22-nupkg",
       "memberPath": "contentFiles/any/any/Assets/Map/MoonCanon/MoonCanon_0_1024_SIFT.mat.png",
       "sizeBytes": 7139609,
       "sha256": "13cfde6dd903576800aedd01e84837caf5ebfcdf389e451be9e49589b0b0bce7",
       "transformation": "relocate",
       "licenseEvidence": {
         "spdxId": "GPL-3.0",
-        "source": "BetterGI.Assets.Map 1.0.21 signed NuGet package and bettergi-libraries repository",
+        "source": "BetterGI.Assets.Map 1.0.22 signed NuGet package and bettergi-libraries repository",
         "redistributionStatus": "allowed-under-GPLv3"
       }
     }

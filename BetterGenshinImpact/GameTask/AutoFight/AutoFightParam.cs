@@ -12,9 +12,6 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
 {
     public class FightFinishDetectConfig
     {
-        public string BattleEndProgressBarColor { get; set; } = "";
-
-        public string BattleEndProgressBarColorTolerance { get; set; } = "";
         public bool FastCheckEnabled = false;
         public string FastCheckParams = "";
         public bool CheckAfterSwitchAvatar = false;
@@ -52,10 +49,6 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
         KazuhaPartyName = autoFightConfig.KazuhaPartyName;
         OnlyPickEliteDropsMode = autoFightConfig.OnlyPickEliteDropsMode;
         BattleThresholdForLoot = autoFightConfig.BattleThresholdForLoot ?? BattleThresholdForLoot;
-        //下面参数固定，只取自动战斗里面的
-        FinishDetectConfig.BattleEndProgressBarColor = AutoFightRuntimePlatform.Current.AutoFightConfig.FinishDetectConfig.BattleEndProgressBarColor;
-        FinishDetectConfig.BattleEndProgressBarColorTolerance = AutoFightRuntimePlatform.Current.AutoFightConfig.FinishDetectConfig.BattleEndProgressBarColorTolerance;
-
         GuardianAvatar = autoFightConfig.GuardianAvatar;
         GuardianCombatSkip = autoFightConfig.GuardianCombatSkip;
         GuardianAvatarHold = autoFightConfig.GuardianAvatarHold;
@@ -80,7 +73,7 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
     public string CombatStrategyPath { get; set; } = string.Empty;
 
     public bool FightFinishDetectEnabled { get; set; } = false;
-    public bool PickDropsAfterFightEnabled { get; set; } = false;
+    public bool PickDropsAfterFightEnabled { get; set; } = true;
     public int PickDropsAfterFightSeconds { get; set; } = 15;
     public int BattleThresholdForLoot { get; set; } = -1;
     public int Timeout { get; set; } = 120;
@@ -190,9 +183,6 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
         KazuhaPartyName = autoFightConfig.KazuhaPartyName;
         OnlyPickEliteDropsMode = autoFightConfig.OnlyPickEliteDropsMode;
         BattleThresholdForLoot = autoFightConfig.BattleThresholdForLoot ?? BattleThresholdForLoot;
-        //下面参数固定，只取自动战斗里面的
-        FinishDetectConfig.BattleEndProgressBarColor = autoFightConfig.FinishDetectConfig.BattleEndProgressBarColor;
-        FinishDetectConfig.BattleEndProgressBarColorTolerance = autoFightConfig.FinishDetectConfig.BattleEndProgressBarColorTolerance;
 
         GuardianAvatar = autoFightConfig.GuardianAvatar;
         GuardianCombatSkip = autoFightConfig.GuardianCombatSkip;

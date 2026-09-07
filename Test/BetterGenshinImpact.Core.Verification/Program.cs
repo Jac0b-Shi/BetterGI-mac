@@ -213,9 +213,9 @@ Assert("AutoFishing input preserves upstream action order",
     ]), string.Join(" | ", recordingTaskControl.Calls));
 
 recordingTaskControl.Calls.Clear();
-var fishingTree = TreeBuilder.Create()
+var fishingTree = new AutoFishingBuilder()
     .WithBlackboard(new CsTrees.Blackboard.Blackboard())
-        .SequenceWithMemory("real-viewpoint-sequence")
+        .Sequence("real-viewpoint-sequence", memory: true)
             .SetSleep("record-sleep", milliseconds =>
                 recordingTaskControl.Calls.Add($"sleep:{milliseconds}"))
             .MoveViewpointDown("real-viewpoint", NullLogger.Instance, fishingInput)
@@ -1812,7 +1812,7 @@ foreach (var (label, checkFightFinish) in new (string Label, Func<Task<bool>> Ch
     Assert($"AutoFight {label} recognizes shared finished frame", finished, "returned false");
     Assert($"AutoFight {label} preserves finished input/capture order",
         recordingTaskControl.Calls.SequenceEqual([
-            "action:OpenPartySetupScreen:KeyPress", "capture", "capture", "action:Drop:KeyPress",
+            "action:OpenPartySetupScreen:KeyPress", "capture", "action:Drop:KeyPress",
             "action:OpenPartySetupScreen:KeyPress"
         ]), string.Join(",", recordingTaskControl.Calls));
 
@@ -1822,7 +1822,7 @@ foreach (var (label, checkFightFinish) in new (string Label, Func<Task<bool>> Ch
     Assert($"AutoFight {label} rejects non-finished frame", !finished, "returned true");
     Assert($"AutoFight {label} preserves non-finished input/capture order",
         recordingTaskControl.Calls.SequenceEqual([
-            "action:OpenPartySetupScreen:KeyPress", "capture", "capture", "action:Drop:KeyPress"
+            "action:OpenPartySetupScreen:KeyPress", "capture", "action:Drop:KeyPress"
         ]), string.Join(",", recordingTaskControl.Calls));
 }
 recordingTaskControl.RecordCaptures = false;
@@ -2141,10 +2141,8 @@ finally
 Assert("Pyro ElementalCollectHandler uses the configured real CombatScenes team",
     pyroCollectTeamNames.SequenceEqual(["烟绯", "钟离", "夜兰", "纳西妲"]),
     string.Join(",", pyroCollectTeamNames));
-Assert("Pyro ElementalCollectHandler switches to Yanfei before the normal attack",
+Assert("Pyro ElementalCollectHandler avoids a redundant switch when Yanfei is active",
     recordingTaskControl.Calls.SequenceEqual([
-        "action:Drop:KeyPress",
-        "action:SwitchMember1:KeyPress",
         "action:NormalAttack:KeyPress"
     ]),
     string.Join(" | ", recordingTaskControl.Calls));

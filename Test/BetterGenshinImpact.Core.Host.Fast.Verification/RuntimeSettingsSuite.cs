@@ -646,7 +646,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                     "js.error,js.custom", "domain.end"),
                 "Notification settings did not preserve the upstream event subscription contract.");
             context.Require(
-                notificationChannels.Count == 14 &&
+                notificationChannels.Count == 16 &&
                 notificationChannels.Any(channel =>
                     channel.Value<string>("id") == "telegram" &&
                     channel.Value<string>("enabledField") ==
@@ -668,7 +668,24 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                         field.Value<string>("kind") == "secret") &&
                     ((JArray)channel["fields"]!).Any(field =>
                         field.Value<string>("id") == "gotifyNotifyLevel" &&
-                        field.Value<string>("kind") == "integer")),
+                        field.Value<string>("kind") == "integer")) &&
+                notificationChannels.Any(channel =>
+                    channel.Value<string>("id") == "qq" &&
+                    channel.Value<string>("enabledField") ==
+                        "qqNotificationEnabled" &&
+                    ((JArray)channel["fields"]!).Any(field =>
+                        field.Value<string>("id") == "qqClientSecret" &&
+                        field.Value<string>("kind") == "secret") &&
+                    ((JArray)channel["fields"]!).Any(field =>
+                        field.Value<string>("id") == "qqGroupOpenId" &&
+                        field.Value<string>("kind") == "secret")) &&
+                notificationChannels.Any(channel =>
+                    channel.Value<string>("id") == "wechatClawbot" &&
+                    channel.Value<string>("enabledField") ==
+                        "wechatClawbotNotificationEnabled" &&
+                    ((JArray)channel["fields"]!).Any(field =>
+                        field.Value<string>("id") == "wechatClawbotBotToken" &&
+                        field.Value<string>("kind") == "secret")),
                 "Notification settings did not expose the complete Core-owned upstream channel schema.");
             var telegramSettings = JObject.FromObject(
                 notificationCatalog.SaveChannel(

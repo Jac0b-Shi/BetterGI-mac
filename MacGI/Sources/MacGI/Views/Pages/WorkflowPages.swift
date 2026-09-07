@@ -1323,6 +1323,28 @@ private struct NotificationChannelCard: View {
                 if !channel.fields.isEmpty {
                     Divider()
                 }
+                if channel.id == "qq" || channel.id == "wechatClawbot" {
+                    BGISettingLine(title: "账号绑定", subtitle: bindingMessage) {
+                        HStack(spacing: 8) {
+                            if channel.id == "qq" {
+                                Button("绑定私聊") {
+                                    appState.startNotificationBinding(channel: "qq")
+                                }
+                                Button("绑定群聊") {
+                                    appState.startNotificationBinding(channel: "qqGroup")
+                                }
+                            } else {
+                                Button("扫码登录并绑定") {
+                                    appState.startNotificationBinding(channel: "wechatClawbot")
+                                }
+                            }
+                            if bindingIsRunning {
+                                Button("取消") { appState.cancelNotificationBinding() }
+                            }
+                        }
+                    }
+                    Divider()
+                }
                 BGISettingLine(
                     title: "测试通知",
                     subtitle: "使用当前已保存配置发送一条测试通知。"
@@ -1345,6 +1367,26 @@ private struct NotificationChannelCard: View {
                 }
             }
         }
+    }
+
+    private var bindingStatusMatches: Bool {
+        guard let status = appState.notificationBindingStatus else { return false }
+        return status.channel == channel.id ||
+            (channel.id == "qq" && status.channel == "qqGroup")
+    }
+
+    private var bindingIsRunning: Bool {
+        bindingStatusMatches && appState.notificationBindingStatus?.completed == false
+    }
+
+    private var bindingMessage: String {
+        guard bindingStatusMatches,
+              let status = appState.notificationBindingStatus else {
+            return channel.id == "qq"
+                ? "保存 App ID/App Secret 后，可自动获取私聊或群聊 OpenID。"
+                : "将打开微信二维码，扫码后按提示向 Clawbot 发送验证码。"
+        }
+        return status.message
     }
 
     @ViewBuilder

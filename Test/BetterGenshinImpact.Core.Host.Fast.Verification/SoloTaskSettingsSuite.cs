@@ -4,6 +4,8 @@ using BetterGenshinImpact.Core.Script.Dependence;
 using BetterGenshinImpact.GameTask.Model.GameUI;
 using BetterGenshinImpact.Verification.Framework;
 using Newtonsoft.Json.Linq;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace BetterGenshinImpact.Core.Host.Fast.Verification;
 
@@ -99,6 +101,27 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
 
             var catalog = new SoloTaskSettingsCatalog(layout);
             var commonSettingsCatalog = new CommonSettingsCatalog(layout);
+            var sourceBackground = Path.Combine(root, "source-background.png");
+            using (var sourceImage = new Image<Rgba32>(2, 2))
+                await sourceImage.SaveAsPngAsync(sourceBackground, cancellationToken);
+            var importedBackground = JObject.FromObject(
+                commonSettingsCatalog.ImportMainBackground(sourceBackground));
+            var importedBackgroundPath = importedBackground.Value<string>(
+                "mainBackgroundImagePath") ?? "";
+            context.Require(
+                importedBackground.Value<bool>("mainBackgroundEnabled") &&
+                importedBackgroundPath.StartsWith(
+                    Path.Combine(layout.UserPath, "Background") + Path.DirectorySeparatorChar,
+                    StringComparison.Ordinal) &&
+                File.Exists(importedBackgroundPath),
+                "Common background import did not validate and copy the image into the runtime root.");
+            var clearedBackground = JObject.FromObject(
+                commonSettingsCatalog.ClearMainBackground());
+            context.Require(
+                !clearedBackground.Value<bool>("mainBackgroundEnabled") &&
+                string.IsNullOrEmpty(clearedBackground.Value<string>("mainBackgroundImagePath")) &&
+                !File.Exists(importedBackgroundPath),
+                "Common background clear did not remove the Core-owned runtime image.");
             var bossSettings = JObject.FromObject(catalog.Save(
                 "AutoBoss",
                 JObject.FromObject(new
@@ -457,8 +480,6 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 team = "战斗队",
                 friendshipTeam = "好感队",
                 timeout = 180,
-                useAdventurerHandbook = true,
-                isNotification = true,
             }));
 
             var persisted = JObject.Parse(await File.ReadAllTextAsync(
@@ -473,8 +494,7 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
             context.Require(config.LeyLineOutcropType == "藏金之花" &&
                             config.Country == "枫丹" && config.Count == 9 &&
                             config.FightConfig.ActionSchedulerByCd == "钟离,12" &&
-                            config.FightConfig.Timeout == 180 && config.Timeout == 180 &&
-                            config.UseAdventurerHandbook && config.IsNotification,
+                            config.FightConfig.Timeout == 180 && config.Timeout == 180,
                 "AutoLeyLineOutcrop task config did not reflect the saved Core-owned settings.");
 
             platform.Reset();

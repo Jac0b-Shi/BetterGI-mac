@@ -7,6 +7,8 @@ namespace BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
 
 public enum AutoLeyLineOutcropNotification
 {
+    Start,
+    End,
     Error,
     Summary,
 }

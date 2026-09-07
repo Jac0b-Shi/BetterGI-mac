@@ -1,4 +1,5 @@
 using BetterGenshinImpact.Service.Notification.Model;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;
 
@@ -6,6 +7,7 @@ namespace BetterGenshinImpact.Service.Notification;
 
 public interface INotificationRuntimePlatform
 {
+    ILogger Logger { get; }
     void Send(BaseNotificationData notificationData);
 }
 
@@ -22,4 +24,9 @@ public static class NotificationRuntimePlatform
         (_current ?? throw new InvalidOperationException(
             "Notification runtime platform has not been configured."))
         .Send(notificationData);
+
+    public static ILogger Logger =>
+        (_current ?? throw new InvalidOperationException(
+            "Notification runtime platform has not been configured."))
+        .Logger;
 }

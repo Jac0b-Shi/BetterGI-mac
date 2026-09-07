@@ -93,9 +93,11 @@ public class SeaOfBygoneErasMap : SceneBaseMap
         var teleportPoints = new List<Point>();
 
         // Step 1: Get all teleport positions from current screenshot
-        for (int i = 1; i < result.Rows - 1; ++i)
+        var resultRows = result.Rows;
+        var resultCols = result.Cols;
+        for (int i = 1; i < resultRows - 1; ++i)
         {
-            for (int j = 1; j < result.Cols - 1; ++j)
+            for (int j = 1; j < resultCols - 1; ++j)
             {
                 float val = result.At<float>(i, j);
 

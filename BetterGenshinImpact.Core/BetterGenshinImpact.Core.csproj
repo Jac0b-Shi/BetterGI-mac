@@ -37,7 +37,7 @@
     <PackageReference Include="MimeKit" Version="4.16.0" />
     <PackageReference Include="Semver" Version="3.0.0" />
     <PackageReference Include="YoloSharp" Version="6.0.3" />
-    <PackageReference Include="CsTrees" Version="1.0.1" />
+    <PackageReference Include="CsTrees" Version="1.0.4" />
     <PackageReference Include="NCalc" Version="6.2.0" />
     <PackageReference Include="HungarianAlgorithm" Version="2.3.5" />
     <PackageReference Include="LazyCache" Version="2.4.0" />
@@ -416,6 +416,8 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ExitAndReloginPlatform.cs" Link="GameTask/Common/Job/ExitAndReloginPlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingInput.cs" Link="GameTask/AutoFishing/AutoFishingInput.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingRuntimePlatform.cs" Link="GameTask/AutoFishing/AutoFishingRuntimePlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingBuilder.cs" Link="GameTask/AutoFishing/AutoFishingBuilder.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingTaskCatalog.cs" Link="GameTask/AutoFishing/AutoFishingTaskCatalog.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/Assets/*.cs" Link="GameTask/AutoFishing/Assets/%(Filename)%(Extension)" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/Model/*.cs" Link="GameTask/AutoFishing/Model/%(Filename)%(Extension)" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingConfig.cs" Link="GameTask/AutoFishing/AutoFishingConfig.cs" />
@@ -537,6 +539,7 @@
     <Compile Include="../BetterGenshinImpact/Service/Notification/Model/Enum/NotificationEvent.cs" Link="Service/Notification/Model/Enum/NotificationEvent.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notification/Model/Enum/NotificationEventResult.cs" Link="Service/Notification/Model/Enum/NotificationEventResult.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/Exception/NotifierException.cs" Link="Service/Notifier/Exception/NotifierException.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Notifier/Exception/WechatClawbotSessionExpiredException.cs" Link="Service/Notifier/Exception/WechatClawbotSessionExpiredException.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/Interface/INotifier.cs" Link="Service/Notifier/Interface/INotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/NotifierManager.cs" Link="Service/Notifier/NotifierManager.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/BarkNotifier.cs" Link="Service/Notifier/BarkNotifier.cs" />
@@ -546,10 +549,16 @@
     <Compile Include="../BetterGenshinImpact/Service/Notifier/GotifyNotifier.cs" Link="Service/Notifier/GotifyNotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/MeowNotifier.cs" Link="Service/Notifier/MeowNotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/OneBotNotifier.cs" Link="Service/Notifier/OneBotNotifier.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Notifier/QqNotifier.cs" Link="Service/Notifier/QqNotifier.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Notifier/QqWebSocketHelper.cs" Link="Service/Notifier/QqWebSocketHelper.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/ServerChanNotifier.cs" Link="Service/Notifier/ServerChanNotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/TelegramNotifier.cs" Link="Service/Notifier/TelegramNotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/WebSocketNotifier.cs" Link="Service/Notifier/WebSocketNotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/WebhookNotifier.cs" Link="Service/Notifier/WebhookNotifier.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Notifier/WechatClawbotHelper.cs" Link="Service/Notifier/WechatClawbotHelper.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Notifier/WechatClawbotNotifier.cs" Link="Service/Notifier/WechatClawbotNotifier.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Notifier/WechatClawbotSession.cs" Link="Service/Notifier/WechatClawbotSession.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Notifier/WechatClawbotSessionStore.cs" Link="Service/Notifier/WechatClawbotSessionStore.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/WorkWeixinNotifier.cs" Link="Service/Notifier/WorkWeixinNotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/dingdingwebhookNotifier.cs" Link="Service/Notifier/dingdingwebhookNotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/xxtuiNotifier.cs" Link="Service/Notifier/xxtuiNotifier.cs" />
@@ -643,6 +652,8 @@
                       LogicalName="BetterGenshinImpact.GameTask.AutoFishing.AutoFishingTask.en.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingTask.fr.resx"
                       LogicalName="BetterGenshinImpact.GameTask.AutoFishing.AutoFishingTask.fr.resources" />
+    <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoFishing/AutoFishingTask.it.resx"
+                      LogicalName="BetterGenshinImpact.GameTask.AutoFishing.AutoFishingTask.it.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoArtifactSalvage/AutoArtifactSalvageTask.zh-Hans.resx"
                       LogicalName="BetterGenshinImpact.GameTask.AutoArtifactSalvage.AutoArtifactSalvageTask.zh-Hans.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoArtifactSalvage/AutoArtifactSalvageTask.zh-Hant.resx"
@@ -651,6 +662,8 @@
                       LogicalName="BetterGenshinImpact.GameTask.AutoArtifactSalvage.AutoArtifactSalvageTask.en.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoArtifactSalvage/AutoArtifactSalvageTask.fr.resx"
                       LogicalName="BetterGenshinImpact.GameTask.AutoArtifactSalvage.AutoArtifactSalvageTask.fr.resources" />
+    <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoArtifactSalvage/AutoArtifactSalvageTask.it.resx"
+                      LogicalName="BetterGenshinImpact.GameTask.AutoArtifactSalvage.AutoArtifactSalvageTask.it.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoDomain/AutoDomainTask.zh-Hans.resx"
                       LogicalName="BetterGenshinImpact.GameTask.AutoDomain.AutoDomainTask.zh-Hans.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoDomain/AutoDomainTask.zh-Hant.resx"
@@ -659,6 +672,8 @@
                       LogicalName="BetterGenshinImpact.GameTask.AutoDomain.AutoDomainTask.en.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoDomain/AutoDomainTask.fr.resx"
                       LogicalName="BetterGenshinImpact.GameTask.AutoDomain.AutoDomainTask.fr.resources" />
+    <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoDomain/AutoDomainTask.it.resx"
+                      LogicalName="BetterGenshinImpact.GameTask.AutoDomain.AutoDomainTask.it.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoTrackPath/TpTask.zh-Hans.resx"
                       LogicalName="BetterGenshinImpact.GameTask.AutoTrackPath.TpTask.zh-Hans.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoTrackPath/TpTask.zh-Hant.resx"
@@ -667,6 +682,8 @@
                       LogicalName="BetterGenshinImpact.GameTask.AutoTrackPath.TpTask.en.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoTrackPath/TpTask.fr.resx"
                       LogicalName="BetterGenshinImpact.GameTask.AutoTrackPath.TpTask.fr.resources" />
+    <EmbeddedResource Include="../BetterGenshinImpact/GameTask/AutoTrackPath/TpTask.it.resx"
+                      LogicalName="BetterGenshinImpact.GameTask.AutoTrackPath.TpTask.it.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvResxHelper.zh-Hans.resx"
                       LogicalName="BetterGenshinImpact.GameTask.Common.BgiVision.BvResxHelper.zh-Hans.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvResxHelper.zh-Hant.resx"
@@ -675,6 +692,8 @@
                       LogicalName="BetterGenshinImpact.GameTask.Common.BgiVision.BvResxHelper.en.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvResxHelper.fr.resx"
                       LogicalName="BetterGenshinImpact.GameTask.Common.BgiVision.BvResxHelper.fr.resources" />
+    <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/BgiVision/BvResxHelper.it.resx"
+                      LogicalName="BetterGenshinImpact.GameTask.Common.BgiVision.BvResxHelper.it.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimBattlePassRewardsTask.zh-Hans.resx"
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.ClaimBattlePassRewardsTask.zh-Hans.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimBattlePassRewardsTask.zh-Hant.resx"
@@ -683,6 +702,8 @@
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.ClaimBattlePassRewardsTask.en.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimBattlePassRewardsTask.fr.resx"
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.ClaimBattlePassRewardsTask.fr.resources" />
+    <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimBattlePassRewardsTask.it.resx"
+                      LogicalName="BetterGenshinImpact.GameTask.Common.Job.ClaimBattlePassRewardsTask.it.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/CheckRewardsTask.zh-Hans.resx"
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.CheckRewardsTask.zh-Hans.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/CheckRewardsTask.zh-Hant.resx"
@@ -691,6 +712,8 @@
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.CheckRewardsTask.en.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/CheckRewardsTask.fr.resx"
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.CheckRewardsTask.fr.resources" />
+    <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/CheckRewardsTask.it.resx"
+                      LogicalName="BetterGenshinImpact.GameTask.Common.Job.CheckRewardsTask.it.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimEncounterPointsRewardsTask.zh-Hans.resx"
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.ClaimEncounterPointsRewardsTask.zh-Hans.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimEncounterPointsRewardsTask.zh-Hant.resx"
@@ -699,6 +722,8 @@
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.ClaimEncounterPointsRewardsTask.en.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimEncounterPointsRewardsTask.fr.resx"
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.ClaimEncounterPointsRewardsTask.fr.resources" />
+    <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimEncounterPointsRewardsTask.it.resx"
+                      LogicalName="BetterGenshinImpact.GameTask.Common.Job.ClaimEncounterPointsRewardsTask.it.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/GoToAdventurersGuildTask.zh-Hans.resx"
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.GoToAdventurersGuildTask.zh-Hans.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/GoToAdventurersGuildTask.zh-Hant.resx"
@@ -707,6 +732,8 @@
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.GoToAdventurersGuildTask.en.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/GoToAdventurersGuildTask.fr.resx"
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.GoToAdventurersGuildTask.fr.resources" />
+    <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/GoToAdventurersGuildTask.it.resx"
+                      LogicalName="BetterGenshinImpact.GameTask.Common.Job.GoToAdventurersGuildTask.it.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/GoToCraftingBenchTask.zh-Hans.resx"
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.GoToCraftingBenchTask.zh-Hans.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/GoToCraftingBenchTask.zh-Hant.resx"
@@ -715,6 +742,8 @@
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.GoToCraftingBenchTask.en.resources" />
     <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/GoToCraftingBenchTask.fr.resx"
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.GoToCraftingBenchTask.fr.resources" />
+    <EmbeddedResource Include="../BetterGenshinImpact/GameTask/Common/Job/GoToCraftingBenchTask.it.resx"
+                      LogicalName="BetterGenshinImpact.GameTask.Common.Job.GoToCraftingBenchTask.it.resources" />
   </ItemGroup>
 
 </Project>

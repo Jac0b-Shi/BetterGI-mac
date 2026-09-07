@@ -42,9 +42,11 @@ public static class GridIconClassifier
             throw new ArgumentOutOfRangeException(nameof(mat), "输入图像尺寸应为125*125");
 
         using var rgb = mat.CvtColor(ColorConversionCodes.BGR2RGB);
-        var tensor = new DenseTensor<float>(new[] { 1, 3, rgb.Height, rgb.Width });
-        for (var y = 0; y < rgb.Height; y++)
-        for (var x = 0; x < rgb.Width; x++)
+        var height = rgb.Height;
+        var width = rgb.Width;
+        var tensor = new DenseTensor<float>(new[] { 1, 3, height, width });
+        for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++)
         {
             tensor[0, 0, y, x] = rgb.At<Vec3b>(y, x)[0] / 255f;
             tensor[0, 1, y, x] = rgb.At<Vec3b>(y, x)[1] / 255f;
