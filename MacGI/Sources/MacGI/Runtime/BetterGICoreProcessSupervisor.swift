@@ -26,8 +26,16 @@ struct BetterGIKeyMousePlaybackStatus: Sendable, Equatable {
     let error: String?
 }
 
+struct BetterGICoreAutoComboSettings: Codable, Sendable, Equatable {
+    let planningLlmEndpoint: String
+    let modelName: String
+    let apiKey: String
+    let extraPrompt: String
+}
+
 struct BetterGINotificationSettings: Sendable, Equatable {
     let includeScreenShot: Bool
+    var dragonEndSummaryEnabled: Bool = false
     let jsNotificationEnabled: Bool
     let macOSNotificationEnabled: Bool
     let notificationEventSubscribe: String
@@ -1034,6 +1042,7 @@ actor BetterGICoreProcessSupervisor {
             parameters: [
                 "settings": [
                     "includeScreenShot": settings.includeScreenShot,
+                    "dragonEndSummaryEnabled": settings.dragonEndSummaryEnabled,
                     "jsNotificationEnabled": settings.jsNotificationEnabled,
                     "macOSNotificationEnabled": settings.macOSNotificationEnabled,
                     "notificationEventSubscribe":
@@ -1375,6 +1384,7 @@ actor BetterGICoreProcessSupervisor {
         }
         return BetterGINotificationSettings(
             includeScreenShot: includeScreenShot,
+            dragonEndSummaryEnabled: result["dragonEndSummaryEnabled"] as? Bool ?? false,
             jsNotificationEnabled: jsEnabled,
             macOSNotificationEnabled: nativeEnabled,
             notificationEventSubscribe: eventSubscribe,
@@ -2860,6 +2870,26 @@ actor BetterGICoreProcessSupervisor {
                 "sleepDelay": settings.sleepDelay,
             ]]
         ))
+    }
+
+    func autoComboSettings() throws -> BetterGICoreAutoComboSettings {
+        let result = try requestSoloSettings(
+            method: "solo.settings.get", parameters: ["name": "AutoCombo"])
+        return try JSONDecoder().decode(BetterGICoreAutoComboSettings.self,
+            from: JSONSerialization.data(withJSONObject: result))
+    }
+
+    func saveAutoComboSettings(_ settings: BetterGICoreAutoComboSettings) throws
+        -> BetterGICoreAutoComboSettings {
+        let result = try requestSoloSettings(
+            method: "solo.settings.save", parameters: ["name": "AutoCombo", "settings": [
+                "planningLlmEndpoint": settings.planningLlmEndpoint,
+                "modelName": settings.modelName,
+                "apiKey": settings.apiKey,
+                "extraPrompt": settings.extraPrompt,
+            ]])
+        return try JSONDecoder().decode(BetterGICoreAutoComboSettings.self,
+            from: JSONSerialization.data(withJSONObject: result))
     }
 
     func autoFishingSettings() throws -> BetterGICoreAutoFishingSettings {

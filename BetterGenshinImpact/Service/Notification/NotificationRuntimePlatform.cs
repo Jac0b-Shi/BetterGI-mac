@@ -8,12 +8,14 @@ namespace BetterGenshinImpact.Service.Notification;
 public interface INotificationRuntimePlatform
 {
     ILogger Logger { get; }
+    bool DragonEndSummaryEnabled => false;
     void Send(BaseNotificationData notificationData);
 }
 
 public static class NotificationRuntimePlatform
 {
     private static INotificationRuntimePlatform? _current;
+    public static bool DragonEndSummaryEnabled => _current?.DragonEndSummaryEnabled ?? false;
 
     public static void Configure(INotificationRuntimePlatform platform) =>
         Interlocked.Exchange(

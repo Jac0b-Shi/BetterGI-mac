@@ -417,7 +417,8 @@ for model_asset in \
   Assets/Model/ItemV2/item.onnx \
   Assets/Model/ItemV2/item.csv \
   Assets/Model/AvatarGridIcon/avatar.onnx \
-  Assets/Model/AvatarGridIcon/avatar.csv; do
+  Assets/Model/AvatarGridIcon/avatar.csv \
+  Assets/Model/Item/items.csv; do
   jq -e --arg destination "${model_asset}" --arg source_id "${model_source_id}" \
     '.artifacts[] | select(.destinationRelativePath == $destination and .sourceId == $source_id)' \
     BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json >/dev/null \

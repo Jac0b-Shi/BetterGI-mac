@@ -992,7 +992,19 @@ var requiredRuntimeAssetPaths = new HashSet<string>(StringComparer.Ordinal)
     "Assets/Config/Pick/default_pick_white_lists.json",
     "Assets/Web/ScriptRepo/index.html"
 };
-var expectedLockedArtifactCount = manifestPhysicalPaths.Count + requiredRuntimeAssetPaths.Count;
+// Complete package content is installed, not only the legacy SIFT sidecars.
+// B12.2 independently compares this set with the verified official NuGet archives.
+var mapPackagePaths = artifactsArray.EnumerateArray()
+    .Where(a => a.GetProperty("sourceId").GetString() == "bettergi-assets-map-1.0.24-nupkg")
+    .Select(a => a.GetProperty("destinationRelativePath").GetString()!).ToHashSet(StringComparer.Ordinal);
+var otherPackagePaths = artifactsArray.EnumerateArray()
+    .Where(a => a.GetProperty("sourceId").GetString() == "bettergi-assets-other-1.0.27-nupkg")
+    .Select(a => a.GetProperty("destinationRelativePath").GetString()!).ToHashSet(StringComparer.Ordinal);
+Assert("B11.6.1.4 complete Map 1.0.24 has 725 assets", mapPackagePaths.Count == 725, $"got {mapPackagePaths.Count}");
+Assert("B11.6.1.4 complete Other 1.0.27 has 9 assets", otherPackagePaths.Count == 9, $"got {otherPackagePaths.Count}");
+requiredRuntimeAssetPaths.UnionWith(mapPackagePaths);
+requiredRuntimeAssetPaths.UnionWith(otherPackagePaths);
+var expectedLockedArtifactCount = manifestPhysicalPaths.Union(requiredRuntimeAssetPaths).Count();
 Assert(
     $"B11.6.1.4 Lock has {expectedLockedArtifactCount} artifacts",
     lockArtifactsCount == expectedLockedArtifactCount,
@@ -1427,6 +1439,19 @@ var lockedRuntimeRoot = Path.Combine(Path.GetTempPath(), "bgi-locked-runtime-" +
         Assert($"B12.2 installed artifact sha256 {artifact.DestinationRelativePath}",
             actualSha256 == artifact.Sha256,
             $"expected={artifact.Sha256}, actual={actualSha256}");
+    }
+
+    foreach (var packageId in new[] { "bettergi-assets-map-1.0.24-nupkg", "bettergi-assets-other-1.0.27-nupkg" })
+    {
+        var source = downloaderLock.Sources.Single(s => s.Id == packageId);
+        var archivePath = Path.Combine(sharedArchiveCacheDir, $"bettergi-{source.Sha256}.nupkg");
+        using var archive = System.IO.Compression.ZipFile.OpenRead(archivePath);
+        var officialMembers = archive.Entries.Where(e => e.FullName.StartsWith("contentFiles/any/any/Assets/", StringComparison.Ordinal)
+                && !e.FullName.EndsWith('/')).Select(e => e.FullName).ToHashSet(StringComparer.Ordinal);
+        var lockedMembers = downloaderLock.Artifacts.Where(a => a.SourceId == packageId)
+            .Select(a => a.MemberPath).ToHashSet(StringComparer.Ordinal);
+        Assert($"B12.2 {packageId} installs every official asset", officialMembers.SetEquals(lockedMembers),
+            $"archive={officialMembers.Count}, locked={lockedMembers.Count}");
     }
 
     var moonCanonPreviousRoot = Global.StartUpPath;
@@ -2935,64 +2960,21 @@ try
         }
     }
 
-    // Stage the real MapBack_3 layer (covers the 雷音权现前往 route) from the verified
-    // 0.62.0 release archive through the same hash-checked downloader pipeline as B12.2.
-    var releaseSource = downloaderLock.Sources.Single(source =>
-        source.Id == "bettergi-release-0.62.0-portable-7z");
-    var mapStageSource = new ArtifactDownloader.SourceEntry
+    // Stage the navigation fixture from the same frozen package as production.
+    var mapStageSource = downloaderLock.Sources.Single(source =>
+        source.Id == "bettergi-assets-map-1.0.24-nupkg");
+    var mapStagePaths = new HashSet<string>(StringComparer.Ordinal)
     {
-        Id = releaseSource.Id,
-        Type = releaseSource.Type,
-        Url = releaseSource.Url,
-        Sha256 = releaseSource.Sha256,
-        Format = releaseSource.Format,
-        SizeBytes = releaseSource.SizeBytes,
-        Provenance = new ArtifactDownloader.SourceProvenance
-        {
-            Project = releaseSource.Provenance.Project,
-            ReleaseTag = releaseSource.Provenance.ReleaseTag,
-            CommitSha = releaseSource.Provenance.CommitSha,
-            PublishedAt = releaseSource.Provenance.PublishedAt
-        }
-    };
-    var navigationLocalArchive = Path.GetFullPath(Path.Combine(
-        Directory.GetCurrentDirectory(),
-        "artifacts/provenance-audit/release-0.62.0/downloads/BetterGI_v0.62.0.7z"));
-    if (File.Exists(navigationLocalArchive))
-    {
-        mapStageSource.Url = new Uri(navigationLocalArchive).AbsoluteUri;
-    }
-    var mapLicense = new ArtifactDownloader.LicenseEvidenceEntry
-    {
-        SpdxId = "GPL-3.0",
-        Source = "BetterGI release 0.62.0 map layer data",
-        RedistributionStatus = "allowed"
-    };
-    ArtifactDownloader.ArtifactEntry MapArtifact(
-        string destinationRelativePath, string memberPath, long sizeBytes, string sha256) => new()
-    {
-        DestinationRelativePath = destinationRelativePath,
-        SourceId = mapStageSource.Id,
-        MemberPath = memberPath,
-        SizeBytes = sizeBytes,
-        Sha256 = sha256,
-        Transformation = "relocate",
-        LicenseEvidence = mapLicense
+        "Assets/Map/Teyvat/mapback_info.json",
+        "Assets/Map/Teyvat/MapBack_3_color.webp",
+        "Assets/Map/Teyvat/MapBack_3_gray.webp"
     };
     var mapStageLock = new ArtifactDownloader.SourceLock
     {
         SchemaVersion = 1,
-        ArtifactSetVersion = "0.62.0",
+        ArtifactSetVersion = downloaderLock.ArtifactSetVersion,
         Sources = [mapStageSource],
-        Artifacts =
-        [
-            MapArtifact("Assets/Map/Teyvat/mapback_info.json", "BetterGI/Assets/Map/Teyvat/mapback_info.json", 705,
-                "7adf428edd494f8c6445a3e6f66a889f579b6ba0578a148d4cbf0bc1ddb135ea"),
-            MapArtifact("Assets/Map/Teyvat/MapBack_3_color.webp", "BetterGI/Assets/Map/Teyvat/MapBack_3_color.webp", 149064,
-                "e64715356c3e6e84646d4022533c4c7a709c57cfc93b92213a4cfc8d52b90fc4"),
-            MapArtifact("Assets/Map/Teyvat/MapBack_3_gray.webp", "BetterGI/Assets/Map/Teyvat/MapBack_3_gray.webp", 1302572,
-                "1bfafc57afbda3d0dd4a89a301d2ae645f47df3ad456eb63c856adc0193d1379")
-        ]
+        Artifacts = downloaderLock.Artifacts.Where(a => mapStagePaths.Contains(a.DestinationRelativePath)).ToList()
     };
     var mapStageLockPath = Path.Combine(Path.GetTempPath(), "bgi-map-lock-" + Guid.NewGuid().ToString("N") + ".json");
     File.WriteAllText(mapStageLockPath, JsonSerializer.Serialize(mapStageLock, new JsonSerializerOptions

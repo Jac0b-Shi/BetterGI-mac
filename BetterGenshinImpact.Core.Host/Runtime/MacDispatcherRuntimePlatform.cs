@@ -97,6 +97,11 @@ public sealed class MacDispatcherRuntimePlatform(
     {
         strategyName ??= LoadUserConfig<AutoFightConfig>(
             layout, "autoFightConfig").StrategyName;
+        if (strategyName == AutoFightParam.ComboStrategyName)
+        {
+            path = strategyName;
+            return false;
+        }
         if (string.IsNullOrWhiteSpace(strategyName))
         {
             path = string.Empty;
@@ -112,6 +117,23 @@ public sealed class MacDispatcherRuntimePlatform(
         CancellationToken cancellationToken)
     {
         using var cancellationScope = inputCoordinator.UseCancellationToken(cancellationToken);
+        if (request is DispatcherComboTaskRequest combo)
+        {
+            if (combo.Run)
+            {
+                var session = BetterGenshinImpact.GameTask.AutoCombo.ComboRun.AutoComboRuntime.Session
+                    ?? throw new InvalidOperationException("尚未构建行为树，请先运行自动连招建树。");
+                await new BetterGenshinImpact.GameTask.AutoCombo.ComboRun.AutoComboRunTask(
+                    new AutoFightParam { FightFinishDetectEnabled = false }, session)
+                    .Start(cancellationToken);
+            }
+            else
+            {
+                await new BetterGenshinImpact.GameTask.AutoCombo.ComboBuild.AutoComboBuildTask()
+                    .Start(cancellationToken);
+            }
+            return null;
+        }
         if (request is DispatcherGeniusTaskRequest genius)
         {
             await new AutoGeniusInvokationTask(

@@ -14,4 +14,10 @@
     <ProjectReference Include="..\BetterGenshinImpact.Verification.Framework\BetterGenshinImpact.Verification.Framework.csproj" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\BetterGenshinImpact\GameTask\AutoTrackPath\Assets\tp.json"
+          Link="GameTask\AutoTrackPath\Assets\tp.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\BetterGenshinImpact\GameTask\AutoFight\Assets\combat_avatar.json"
+          Link="GameTask\AutoFight\Assets\combat_avatar.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

@@ -1156,6 +1156,26 @@ struct NotificationPage: View {
                     Divider()
 
                     BGISettingLine(
+                        title: "一条龙结束汇总通知",
+                        subtitle: "检查树脂与每日委托奖励状态，并附带拼接截图。"
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: {
+                                appState.notificationSettings?
+                                    .dragonEndSummaryEnabled ?? false
+                            },
+                            set: {
+                                appState.saveNotificationSettings(
+                                    dragonEndSummaryEnabled: $0)
+                            }
+                        ))
+                        .labelsHidden()
+                        .disabled(appState.notificationSettings == nil)
+                    }
+
+                    Divider()
+
+                    BGISettingLine(
                         title: "允许 JS 脚本发送通知",
                         subtitle: "启用后，调度器中获准发送通知的脚本可以调用通知接口。"
                     ) {

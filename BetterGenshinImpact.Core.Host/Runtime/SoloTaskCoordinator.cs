@@ -38,6 +38,15 @@ public sealed class SoloTaskCoordinator(
             tutorialUrl: "https://www.bettergi.com/feats/task/domain.html",
             showsScriptRepository: true,
             scriptDirectoryPath: AutoFightDirectoryPath),
+        Descriptor(
+            "AutoCombo", "自动连招（实验）",
+            "识别队伍后调用 OpenAI 兼容服务构建行为树；运行与暂停由 Core 控制", true,
+            headerAction: false,
+            actions:
+            [
+                new { name = "AutoCombo", title = "构建连招行为树", description = "将队伍信息发送至配置的模型服务" },
+                new { name = "AutoComboRun", title = "运行 / 暂停连招", description = "运行最近构建的行为树；暂停会取消任务并释放输入" },
+            ]),
         Descriptor("AutoBoss", "自动首领讨伐", "自动传送、战斗并领取奖励", true),
         Descriptor(
             "AutoStygianOnslaught", "自动幽境危战",
@@ -117,7 +126,7 @@ public sealed class SoloTaskCoordinator(
 
     public object Start(string name, string? inputText = null)
     {
-        if (name is not ("AutoGeniusInvokation" or "AutoWood" or "AutoFishing" or "AutoFight" or "AutoCook" or "AutoMusicGame" or "AutoAlbum" or "AutoArtifactSalvage" or "AutoDomain" or "AutoBoss" or "AutoLeyLineOutcrop" or "AutoStygianOnslaught" or "AutoRedeemCode" or "GetGridIcons" or "GridIconsAccuracyTest"))
+        if (name is not ("AutoCombo" or "AutoComboRun" or "AutoGeniusInvokation" or "AutoWood" or "AutoFishing" or "AutoFight" or "AutoCook" or "AutoMusicGame" or "AutoAlbum" or "AutoArtifactSalvage" or "AutoDomain" or "AutoBoss" or "AutoLeyLineOutcrop" or "AutoStygianOnslaught" or "AutoRedeemCode" or "GetGridIcons" or "GridIconsAccuracyTest"))
             throw new CapabilityUnavailableException(
                 $"solo task '{name}' is not composed in the macOS Core yet; no task was executed.");
 
@@ -213,6 +222,8 @@ public sealed class SoloTaskCoordinator(
                 "AutoWood" => new DispatcherWoodTaskRequest(
                     settings.AutoWoodRoundNum, settings.AutoWoodDailyMaxCount),
                 "AutoFight" => new DispatcherFightTaskRequest(null),
+                "AutoCombo" => new DispatcherComboTaskRequest(false),
+                "AutoComboRun" => new DispatcherComboTaskRequest(true),
                 "AutoCook" => new DispatcherCookTaskRequest(),
                 "AutoMusicGame" => new DispatcherMusicGameTaskRequest(),
                 "AutoAlbum" => new DispatcherAlbumTaskRequest(),

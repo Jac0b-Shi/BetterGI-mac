@@ -620,6 +620,7 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
             _ = notificationCatalog.Save(JObject.FromObject(new
             {
                 includeScreenShot = false,
+                dragonEndSummaryEnabled = true,
                 jsNotificationEnabled = true,
                 macOSNotificationEnabled = true,
                 notificationEventSubscribe = "js.error,js.custom,JS.ERROR",
@@ -628,6 +629,17 @@ public sealed class RuntimeSettingsSuite : IVerificationSuite
                 webhookSendTo = "verification",
             }));
             var notificationSettings = JObject.FromObject(notificationCatalog.Get());
+            context.Require(
+                notificationSettings.Value<bool>("dragonEndSummaryEnabled") &&
+                NotificationRuntimePlatform.DragonEndSummaryEnabled,
+                "Reward summary setting did not reach the notification runtime.");
+            var legacyNotificationSettings = (JObject)notificationSettings.DeepClone();
+            legacyNotificationSettings.Remove("dragonEndSummaryEnabled");
+            _ = notificationCatalog.Save(legacyNotificationSettings);
+            context.Require(
+                JObject.FromObject(notificationCatalog.Get())
+                    .Value<bool>("dragonEndSummaryEnabled"),
+                "Legacy notification saves must preserve the reward summary setting.");
             var notificationEvents = (JArray)notificationSettings["events"]!;
             var notificationChannels = (JArray)notificationSettings["channels"]!;
             context.Require(

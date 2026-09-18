@@ -5,6 +5,7 @@ using BetterGenshinImpact.GameTask.AutoBoss;
 using BetterGenshinImpact.GameTask.AutoCook;
 using BetterGenshinImpact.GameTask.AutoDomain;
 using BetterGenshinImpact.GameTask.AutoFight;
+using BetterGenshinImpact.GameTask.AutoCombo.ComboBuild;
 using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
 using BetterGenshinImpact.GameTask.AutoMusicGame;
@@ -44,7 +45,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         "AutoGeniusInvokation" or "AutoCook" or "AutoFishing" or "AutoWood" or
         "AutoMusicGame" or "AutoAlbum" or "AutoBoss" or "AutoFight" or
         "AutoDomain" or "AutoArtifactSalvage" or "AutoLeyLineOutcrop" or
-        "AutoStygianOnslaught" or "AutoRedeemCode" or "GetGridIcons";
+        "AutoStygianOnslaught" or "AutoRedeemCode" or "GetGridIcons" or "AutoCombo" or "AutoComboRun";
 
     public void AttachAutoFightConfigUpdated(Action<AutoFightConfig> callback) =>
         _autoFightConfigUpdated = callback ?? throw new ArgumentNullException(nameof(callback));
@@ -155,6 +156,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             var root = LoadRoot();
             return name switch
             {
+                "AutoCombo" or "AutoComboRun" => Describe(LoadConfig<AutoComboBuildConfig>(root, "autoComboBuildConfig")),
                 "AutoGeniusInvokation" => Describe(
                     LoadConfig<AutoGeniusInvokationConfig>(
                         root, "autoGeniusInvokationConfig")),
@@ -189,6 +191,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
     {
         return name switch
         {
+            "AutoCombo" or "AutoComboRun" => SaveAutoCombo(settings),
             "AutoGeniusInvokation" => SaveAutoGeniusInvokation(settings),
             "AutoCook" => SaveAutoCook(settings),
             "AutoFishing" => SaveAutoFishing(settings),
@@ -204,6 +207,39 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             "GetGridIcons" => SaveGetGridIcons(settings),
             _ => throw Unavailable(name),
         };
+    }
+
+    private static object Describe(AutoComboBuildConfig config) => new
+    {
+        name = "AutoCombo",
+        planningLlmEndpoint = config.PlanningLlmEndpoint,
+        modelName = config.ModelName,
+        apiKey = config.ApiKey,
+        apiKeyKind = "secret",
+        extraPrompt = config.ExtraPrompt,
+    };
+
+    private object SaveAutoCombo(JObject settings)
+    {
+        var endpoint = RequiredString(settings, "planningLlmEndpoint").Trim();
+        if (endpoint.Length > 0 &&
+            (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) ||
+             uri.Scheme is not ("http" or "https") ||
+             (uri.Scheme == "http" && !uri.IsLoopback) ||
+             !string.IsNullOrEmpty(uri.UserInfo)))
+            throw new ArgumentException("LLM endpoint must use HTTPS; HTTP is allowed only for loopback, without URL credentials.");
+        lock (_lock)
+        {
+            var root = LoadRoot();
+            var section = root["autoComboBuildConfig"] as JsonObject ?? [];
+            section["planningLlmEndpoint"] = endpoint;
+            section["modelName"] = RequiredString(settings, "modelName").Trim();
+            section["apiKey"] = RequiredString(settings, "apiKey");
+            section["extraPrompt"] = RequiredString(settings, "extraPrompt");
+            root["autoComboBuildConfig"] = section;
+            SaveRoot(root);
+            return Describe(LoadConfig<AutoComboBuildConfig>(root, "autoComboBuildConfig"));
+        }
     }
 
     private object SaveGetGridIcons(JObject settings)
@@ -453,7 +489,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             throw new ArgumentException($"Unknown AutoFight strategy: {strategyName}");
         var domainName = RequiredString(settings, "domainName");
         if (!string.IsNullOrEmpty(domainName) &&
-            !MapLazyAssets.Get().DomainNameList.Contains(domainName, StringComparer.Ordinal))
+            !DomainOptions().Contains(domainName, StringComparer.Ordinal))
             throw new ArgumentException($"Unknown domainName: {domainName}");
         var artifactStar = RequiredString(settings, "maxArtifactStar");
         if (artifactStar is not ("1" or "2" or "3" or "4"))
@@ -763,7 +799,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         strategyOptions = StrategyOptions(),
         partyName = config.PartyName,
         domainName = config.DomainName,
-        domainOptions = MapLazyAssets.Get().DomainNameList,
+        domainOptions = DomainOptions(),
         specifyResinUse = config.SpecifyResinUse,
         originalResinUseCount = config.OriginalResinUseCount,
         condensedResinUseCount = config.CondensedResinUseCount,
@@ -878,6 +914,9 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         };
     }
 
+    private static string[] DomainOptions() =>
+        MapLazyAssets.Get().DomainNameList.Append(AutoDomainTask.DevelopmentGuideOption).ToArray();
+
     private string[] StrategyOptions()
     {
         var folder = Path.Combine(layout.UserPath, "AutoFight");
@@ -885,6 +924,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         return
         [
             "根据队伍自动选择",
+            AutoFightParam.ComboStrategyName,
             .. Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
                 .Where(path => path.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) ||
                                path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))

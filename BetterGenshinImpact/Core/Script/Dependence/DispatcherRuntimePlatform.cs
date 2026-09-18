@@ -32,6 +32,7 @@ public abstract record DispatcherSoloTaskRequest(string Name);
 public sealed record DispatcherGeniusTaskRequest(string Strategy) : DispatcherSoloTaskRequest("AutoGeniusInvokation");
 public sealed record DispatcherWoodTaskRequest(int RoundNum, int DailyMaxCount) : DispatcherSoloTaskRequest("AutoWood");
 public sealed record DispatcherFightTaskRequest(object? Config) : DispatcherSoloTaskRequest("AutoFight");
+public sealed record DispatcherComboTaskRequest(bool Run) : DispatcherSoloTaskRequest(Run ? "AutoComboRun" : "AutoCombo");
 public sealed record DispatcherDomainTaskRequest(string StrategyPath) : DispatcherSoloTaskRequest("AutoDomain");
 public sealed record DispatcherBossTaskRequest(string StrategyPath) : DispatcherSoloTaskRequest("AutoBoss");
 public sealed record DispatcherFishingTaskRequest(

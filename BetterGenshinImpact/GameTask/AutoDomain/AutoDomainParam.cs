@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using BetterGenshinImpact.GameTask.Model;
+using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.Core.Config;
 
 namespace BetterGenshinImpact.GameTask.AutoDomain;
@@ -119,8 +120,14 @@ public class AutoDomainParam : BaseTaskParam<AutoDomainTask>
         {
             return Global.Absolute(@"User\AutoFight\");
         }
-
-        return Global.Absolute(@"User\AutoFight\" + strategyName + ".txt");
+        else if (AutoFightParam.ComboStrategyName.Equals(strategyName))
+        {
+            return AutoFightParam.ComboStrategyName;
+        }
+        else
+        {
+            return Global.Absolute(@"User\AutoFight\" + strategyName + ".txt");
+        }
     }
 
     public void SetResinPriorityList(params string[] priorities)

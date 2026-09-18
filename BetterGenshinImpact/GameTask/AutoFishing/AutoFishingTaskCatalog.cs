@@ -168,8 +168,6 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             string name,
             ILogger logger,
             IAutoFishingInput input,
-            Blackboard blackboard,
-            CultureInfo? cultureInfo = null,
-            IStringLocalizer? stringLocalizer = null) => new QuitFishingMode(name, logger, input, blackboard, cultureInfo, stringLocalizer);
+            Blackboard blackboard) => new QuitFishingMode(name, logger, input, blackboard);
     }
 }

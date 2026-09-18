@@ -48,6 +48,21 @@ if (args is ["--dependency-smoke"])
     return;
 }
 
+if (args is ["--artifacts-smoke", "--runtime-root", var artifactRuntimeRoot])
+{
+    // Match the production Host's native initialisation order before opening
+    // ONNX sessions; the smoke must exercise the same dependency lifetime.
+    _ = NativeDependencySmoke.Run();
+    // This standalone command owns the ONNX environment. Dispose it after
+    // RunAsync has closed every session, before native static teardown at exit.
+    // The regular RPC Host has its own shutdown ordering below.
+    using var onnxEnvironment = Microsoft.ML.OnnxRuntime.OrtEnv.Instance();
+    using var cancellation = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; cancellation.Cancel(); };
+    Console.WriteLine(JsonConvert.SerializeObject(await RuntimeArtifactSmoke.RunAsync(artifactRuntimeRoot, cancellation.Token)));
+    return;
+}
+
 if (args is ["--recognition-smoke", "--runtime-root", var recognitionRuntimeRoot])
 {
     Global.StartUpPath = Path.GetFullPath(recognitionRuntimeRoot);
@@ -316,6 +331,10 @@ var autoFightRuntimePlatform = new MacAutoFightRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService,
     loggerFactory, server.MacroSettings);
 AutoFightRuntimePlatform.Configure(autoFightRuntimePlatform);
+BetterGenshinImpact.GameTask.AutoCombo.ComboBuild.AutoComboConfigPlatform.Configure(
+    () => MacDispatcherRuntimePlatform.LoadUserConfig<
+        BetterGenshinImpact.GameTask.AutoCombo.ComboBuild.AutoComboBuildConfig>(
+            layout, "autoComboBuildConfig"));
 server.SoloTaskSettings.AttachAutoFightConfigUpdated(autoFightRuntimePlatform.UpdateConfig);
 CharacterDevelopmentRuntimePlatform.Configure(
     new MacCharacterDevelopmentRuntimePlatform(

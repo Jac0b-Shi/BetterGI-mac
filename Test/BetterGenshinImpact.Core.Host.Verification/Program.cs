@@ -3179,6 +3179,7 @@ try
         "AutoBoss", "AutoStygianOnslaught", "AutoFishing",
         "AutoLeyLineOutcrop", "AutoMusicGame", "AutoCook",
         "AutoArtifactSalvage", "AutoRedeemCode",
+        "AutoCombo",
     ], StringComparer.Ordinal);
     var actualSoloTaskNames = soloItems
         .Select(item => item.Value<string>("name"))

@@ -559,6 +559,12 @@ final class AppState: ObservableObject {
     @Published private(set) var autoRedeemCodeSettings: BetterGICoreAutoRedeemCodeSettings?
     @Published private(set) var getGridIconsSettings: BetterGICoreGetGridIconsSettings?
     @Published private(set) var autoFishingSettings: BetterGICoreAutoFishingSettings?
+    @Published private(set) var autoComboSettings: BetterGICoreAutoComboSettings?
+    @Published private(set) var autoComboSettingsSaving = false
+    @Published var autoComboEndpointDraft = ""
+    @Published var autoComboModelDraft = ""
+    @Published var autoComboAPIKeyDraft = ""
+    @Published var autoComboExtraPromptDraft = ""
     @Published private(set) var autoWoodSettings: BetterGICoreAutoWoodSettings?
     @Published private(set) var autoMusicGameSettings: BetterGICoreAutoMusicGameSettings?
     @Published private(set) var autoBossSettings: BetterGICoreAutoBossSettings?
@@ -1222,6 +1228,7 @@ final class AppState: ObservableObject {
 
     func saveNotificationSettings(
         includeScreenShot: Bool? = nil,
+        dragonEndSummaryEnabled: Bool? = nil,
         jsNotificationEnabled: Bool? = nil,
         macOSNotificationEnabled: Bool? = nil,
         selectedEventCodes: Set<String>? = nil,
@@ -1248,6 +1255,7 @@ final class AppState: ObservableObject {
                     }
                     self.applyNotificationSettingsUpdate(
                         includeScreenShot: includeScreenShot,
+                        dragonEndSummaryEnabled: dragonEndSummaryEnabled,
                         jsNotificationEnabled: jsNotificationEnabled,
                         macOSNotificationEnabled: macOSNotificationEnabled,
                         selectedEventCodes: selectedEventCodes,
@@ -1265,6 +1273,7 @@ final class AppState: ObservableObject {
         }
         applyNotificationSettingsUpdate(
             includeScreenShot: includeScreenShot,
+            dragonEndSummaryEnabled: dragonEndSummaryEnabled,
             jsNotificationEnabled: jsNotificationEnabled,
             macOSNotificationEnabled: macOSNotificationEnabled,
             selectedEventCodes: selectedEventCodes,
@@ -1275,6 +1284,7 @@ final class AppState: ObservableObject {
 
     private func applyNotificationSettingsUpdate(
         includeScreenShot: Bool?,
+        dragonEndSummaryEnabled: Bool?,
         jsNotificationEnabled: Bool?,
         macOSNotificationEnabled: Bool?,
         selectedEventCodes: Set<String>?,
@@ -1296,6 +1306,8 @@ final class AppState: ObservableObject {
         let next = BetterGINotificationSettings(
             includeScreenShot:
                 includeScreenShot ?? current.includeScreenShot,
+            dragonEndSummaryEnabled:
+                dragonEndSummaryEnabled ?? current.dragonEndSummaryEnabled,
             jsNotificationEnabled:
                 jsNotificationEnabled ?? current.jsNotificationEnabled,
             macOSNotificationEnabled:
@@ -1379,6 +1391,7 @@ final class AppState: ObservableObject {
             })
         notificationSettings = BetterGINotificationSettings(
             includeScreenShot: current.includeScreenShot,
+            dragonEndSummaryEnabled: current.dragonEndSummaryEnabled,
             jsNotificationEnabled: current.jsNotificationEnabled,
             macOSNotificationEnabled: current.macOSNotificationEnabled,
             notificationEventSubscribe:
@@ -1424,6 +1437,7 @@ final class AppState: ObservableObject {
                 }
                 self.notificationSettings = BetterGINotificationSettings(
                     includeScreenShot: latest.includeScreenShot,
+                    dragonEndSummaryEnabled: latest.dragonEndSummaryEnabled,
                     jsNotificationEnabled:
                         latest.jsNotificationEnabled,
                     macOSNotificationEnabled:
@@ -4281,6 +4295,12 @@ final class AppState: ObservableObject {
             autoRedeemCodeSettings = try await supervisor.autoRedeemCodeSettings()
             getGridIconsSettings = try await supervisor.getGridIconsSettings()
             autoFishingSettings = try await supervisor.autoFishingSettings()
+            let combo = try await supervisor.autoComboSettings()
+            autoComboSettings = combo
+            autoComboEndpointDraft = combo.planningLlmEndpoint
+            autoComboModelDraft = combo.modelName
+            autoComboAPIKeyDraft = combo.apiKey
+            autoComboExtraPromptDraft = combo.extraPrompt
             autoWoodSettings = try await supervisor.autoWoodSettings()
             autoMusicGameSettings = try await supervisor.autoMusicGameSettings()
             autoBossSettings = try await supervisor.autoBossSettings()
@@ -4296,6 +4316,7 @@ final class AppState: ObservableObject {
             autoRedeemCodeSettings = nil
             getGridIconsSettings = nil
             autoFishingSettings = nil
+            autoComboSettings = nil
             autoWoodSettings = nil
             autoMusicGameSettings = nil
             autoBossSettings = nil
@@ -4509,6 +4530,25 @@ final class AppState: ObservableObject {
                 self.autoCookSettings = try await supervisor.saveAutoCookSettings(next)
             } catch {
                 self.addLog(.error, "AutoCook settings save failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func saveAutoComboSettings() {
+        guard let supervisor = betterGICoreSupervisor,
+              autoComboSettings != nil, !autoComboSettingsSaving else { return }
+        let next = BetterGICoreAutoComboSettings(
+            planningLlmEndpoint: autoComboEndpointDraft,
+            modelName: autoComboModelDraft,
+            apiKey: autoComboAPIKeyDraft,
+            extraPrompt: autoComboExtraPromptDraft)
+        autoComboSettingsSaving = true
+        Task { [weak self] in
+            defer { self?.autoComboSettingsSaving = false }
+            do {
+                self?.autoComboSettings = try await supervisor.saveAutoComboSettings(next)
+            } catch {
+                self?.addLog(.error, "自动连招设置保存失败：\(error.localizedDescription)")
             }
         }
     }

@@ -857,6 +857,11 @@ public sealed class SwitchCharacterStateMachineTask : StateMachineBase<SwitchCha
 
         if (!TryClickText(page, _pendingFilterElementType, GetElementFilterOptionsRoi()))
         {
+            // 点击滚动条使筛选界面滚动到最上方，解决用户拖动过筛选界面后，程序识别不到筛选控件的问题
+            if (CurrentStateRetryCount == 0)
+            { 
+                GameCaptureRegion.GameRegion1080PPosClick(796, 125);
+            }
             _logger.LogWarning("切换角色：未找到元素筛选项 {Text}", _pendingFilterElementType);
             return Task.FromResult(StateHandlerResult.Retry);
         }
@@ -881,6 +886,11 @@ public sealed class SwitchCharacterStateMachineTask : StateMachineBase<SwitchCha
 
         if (!TryClickText(page, _pendingFilterWeaponType, GetWeaponFilterOptionsRoi()))
         {
+            // 点击滚动条使筛选界面滚动到最上方，解决用户拖动过筛选界面后，程序识别不到筛选控件的问题
+            if (CurrentStateRetryCount == 0)
+            { 
+                GameCaptureRegion.GameRegion1080PPosClick(796, 125);
+            }
             _logger.LogWarning("切换角色：未找到武器筛选项 {Text}", _pendingFilterWeaponType);
             return Task.FromResult(StateHandlerResult.Retry);
         }
