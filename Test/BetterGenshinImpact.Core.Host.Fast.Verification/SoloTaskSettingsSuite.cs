@@ -405,6 +405,7 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
             context.Require(descriptor.Value<bool>("available") &&
                             descriptor.Value<bool>("settingsAvailable"),
                 "AutoGeniusInvokation was not exposed as a composed configurable solo task.");
+            platform.Reset();
             _ = coordinator.Start("AutoGeniusInvokation");
             for (var retry = 0; retry < 20 && platform.Request is null; retry++)
                 await Task.Delay(10, cancellationToken);
@@ -448,6 +449,7 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                             musicActions[1].Value<string>("description") ==
                                 "进入专辑界面使用，自动演奏未完成乐曲",
                 "AutoMusicGame did not expose the two upstream in-card actions.");
+            platform.Reset();
             _ = coordinator.Start("AutoAlbum");
             for (var retry = 0; retry < 20 && platform.Request is null; retry++)
                 await Task.Delay(10, cancellationToken);
@@ -596,6 +598,16 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
             var stoppedStatus = JObject.FromObject(coordinator.Status());
             context.Require(stoppedStatus.Value<string>("state") == "cancelled",
                 "Active solo task did not reach cancelled after runtime stop.");
+
+            platform.Reset();
+            platform.BlockSynchronously = true;
+            _ = coordinator.Start("AutoComboRun");
+            await platform.Started.Task.WaitAsync(cancellationToken);
+            await coordinator.StopActiveAsync(cancellationToken);
+            stoppedStatus = JObject.FromObject(coordinator.Status());
+            context.Require(platform.Request is DispatcherComboTaskRequest { Run: true } &&
+                stoppedStatus.Value<string>("state") == "cancelled" && stoppedStatus["error"]?.Type == JTokenType.Null,
+                "Synchronous combo execution blocked stop RPC or NormalEndException was reported as failure.");
         }
         finally
         {
@@ -607,12 +619,14 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
     {
         public DispatcherSoloTaskRequest? Request { get; private set; }
         public bool BlockUntilCancelled { get; set; }
+        public bool BlockSynchronously { get; set; }
         public TaskCompletionSource Started { get; private set; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         public void Reset()
         {
             Request = null;
             BlockUntilCancelled = false;
+            BlockSynchronously = false;
             Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
         public CancellationToken GlobalCancellationToken => CancellationToken.None;
@@ -633,6 +647,12 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
         {
             Request = request;
             Started.TrySetResult();
+            if (BlockSynchronously)
+            {
+                if (!cancellationToken.WaitHandle.WaitOne(TimeSpan.FromSeconds(3)))
+                    throw new TimeoutException("The synchronous task prevented cancellation.");
+                throw new BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception.NormalEndException("取消自动任务");
+            }
             if (BlockUntilCancelled)
                 return WaitForCancellation(cancellationToken);
             return Task.FromResult<object?>(null);

@@ -481,8 +481,8 @@ public class AutoArtifactSalvageTask : ISoloTask
     {
         ArgumentNullException.ThrowIfNull(logger);
         using V8ScriptEngine engine = new V8ScriptEngine(V8ScriptEngineFlags.UseCaseInsensitiveMemberBinding | V8ScriptEngineFlags.DisableGlobalMembers);
-        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3), timeProvider ?? TimeProvider.System);    // 这里只是用JS写一个自定义判断方法，由于每个圣遗物都会执行一次，这个方法不应执行太久
-        cts.Token.Register(() =>
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3), timeProvider ?? TimeProvider.System);    // 这里只是用JS写一个自定义判断方法，由于每个圣遗物都会执行一次，这个方法不应执行太久
+        using var interruptRegistration = cts.Token.Register(() =>
         {
             try
             {

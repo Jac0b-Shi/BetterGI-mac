@@ -425,10 +425,21 @@ public class CombatScenes : IDisposable, ICombatScriptScene
         for (var attempt = 1; attempt <= maxRetries; attempt++)
         {
             using var imageRegion = CaptureToRectArea();
-            var combatScenes = new CombatScenes().InitializeTeam(imageRegion);
-            if (combatScenes.CheckTeamInitialized())
+            var combatScenes = new CombatScenes();
+            try
             {
-                return combatScenes;
+                combatScenes.InitializeTeam(imageRegion);
+                if (combatScenes.CheckTeamInitialized())
+                {
+                    return combatScenes;
+                }
+            }
+            catch
+            {
+                // Ownership transfers to the caller only on success. A failed
+                // recognition must not leak the scene's native predictor.
+                combatScenes.Dispose();
+                throw;
             }
 
             combatScenes.Dispose();

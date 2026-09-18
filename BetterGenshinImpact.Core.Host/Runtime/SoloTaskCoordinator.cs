@@ -1,4 +1,5 @@
 using BetterGenshinImpact.Core.Script.Dependence;
+using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
@@ -142,7 +143,10 @@ public sealed class SoloTaskCoordinator(
             _state = "running";
             _error = null;
             var taskId = _activeTaskId;
-            _activeTask = RunAsync(taskId, name, inputText, _activeCancellation.Token);
+            var taskCancellationToken = _activeCancellation.Token;
+            // Shared combat nodes can execute synchronous Sleep/input loops
+            // before yielding. Keep RPC start/status/stop responsive regardless.
+            _activeTask = Task.Run(() => RunAsync(taskId, name, inputText, taskCancellationToken));
             return new { taskId, name, state = _state };
         }
     }
@@ -213,6 +217,7 @@ public sealed class SoloTaskCoordinator(
     {
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var request = name switch
             {
                 "AutoGeniusInvokation" => new DispatcherGeniusTaskRequest(
@@ -248,7 +253,12 @@ public sealed class SoloTaskCoordinator(
                 _ => throw new CapabilityUnavailableException($"Unknown composed solo task '{name}'.")
             };
             await platform.ExecuteSoloTask(request, cancellationToken);
-            Complete(taskId, "completed", null);
+            Complete(taskId, cancellationToken.IsCancellationRequested ? "cancelled" : "completed", null);
+        }
+        catch (NormalEndException)
+        {
+            // Shared TaskControl uses NormalEndException for cooperative stop.
+            Complete(taskId, cancellationToken.IsCancellationRequested ? "cancelled" : "completed", null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

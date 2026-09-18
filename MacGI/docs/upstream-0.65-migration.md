@@ -45,11 +45,16 @@
 - LLDB/debugserver 在 task_for_pid 阶段持续等待且无执行进展，已清理本次自建诊断进程。正在使用仅注入自建诊断子进程的临时 dyld throw 跟踪库捕获 native 抛出前堆栈；不会将注入库纳入 App、不会拦截失败当成功。
 - 后续仓库读取一度返回 Interrupted system call，未见用户授权弹窗，不能归因于 TCC；恢复后确认诊断子进程已终止。资源检查的提前返回分支遗漏了正常 Host 已有的 OrtEnv 释放；现在该独立命令显式持有环境，待全部 session 释放后、原生静态析构前 Dispose。无注入库、无强制退出的真实命令验证 769 个资源、20 个模型和 706 张地图，退出码 0。正在重新验证签名 App 内流程。
 - OrtEnv 清理修复后的 Full 全流程再次通过：Core 14,618 / 0、Host、Real User、静态门禁，脚本退出码 0，日志 /tmp/bgi065-full-after-onnx-cleanup.log。签名 App 内的全新资源根检查仍在下载 Map 1.0.24，未计为通过；本地发布产物尚未封装 ZIP。
+- 合并提交 7808bbb193cfa0425120d5e36e3ee1382575c765 已 GPG 验签（G），双亲精确为 2545d993 与 42e1c0e7，已推送并创建草稿 PR #17。由于路径过滤器未自动触发 adapter-gate，单独 workflow_dispatch 到同一分支，run 35324281770 已成功；core/full-build 仍在等待。
+- 7808bbb1 的签名 App 完整打包退出码 0，使用全新运行根实际下载/安装 769 个资源、加载 20 个模型、解码 706 张地图；deep/strict 与识别配置 smoke 同时通过。验证 ZIP SHA-256 为 642a2a4d40e5dcb374c0dadabf6e96f6df1d46d0070fca24e4179179b05de734，压缩内容检查通过。后续清理修复后需重建最终产物，此 ZIP 不作为最终交付。
+- 新增一个 native integration 连招用例，复用已实际安装的模型，录制游戏帧和输入，在长按 E 后取消并确认 AfterTask 释放。首次运行揭示 TaskControl 的 NormalEndException 契约；Host 独立任务已正确区分 cancelled/completed，避免将正常停止标记 failed。另补队伍初始化失败的预测器释放，以及圣遗物 JS 超时 CTS/注册释放，防止回调访问已销毁 V8 引擎。新 Full 复验日志 /tmp/bgi065-full-runtime-cleanup.log，尚未计为通过。
+- 运行阶段取消用例已经通过（真实 native 模型，录制帧/输入，不宣称实机游戏验证）。同步连招节点可能在第一次 await 前持续阻塞，Host 独立任务改为调度至线程池，使 Start/Status/Stop RPC 不依赖节点是否主动 yield；solo-settings 快验通过同步阻塞任务的停止及 NormalEndException cancelled 契约。旧用例需清空上次请求再等待异步启动，已补齐两处 reset。整个 Full 脚本及后续最终打包仍需等待。
+- 生命周期修复后的 Fast 全部 26 suites 通过（/tmp/bgi065-fast-runtime-cleanup.log）。7808bbb1 的 core / full-build / adapter-gate 已全部通过，其中新 GitHub runner 实际执行完整资源、OCR、打包和 Swift 检查；这些 CI 结果只对应 7808bbb1，后续修复提交必须重新通过全部 gate。
 - WPF 显式 restore 后交叉构建成功：`dotnet build BetterGenshinImpact/BetterGenshinImpact.csproj -c Debug --no-restore -p:EnableWindowsTargeting=true -m:1 -nr:false`，0 error / 247 warnings（主要为上游过时 API、OpenCV 分析器等，未隐藏警告）。
 
 ## 尚待闭环
 
-- AutoCombo 的运行阶段取消与输入释放验证（真实 loopback tool-call 建树和请求取消已通过）。
+- AutoCombo 运行阶段 native 取消/释放用例与 Host 同步节点停止契约已通过，需在最终 Full/CI 中保留这一结果。
 - 一条龙奖励汇总实际识别与通知路径的验证。
 - 新版资源的签名 App 内安装/加载 smoke（Core 主验证已通过，不代替最终打包检查）。
 - 新秘境提升指南、战斗/首领/奖励字段与 Swift 配置能力逐项核对；保留 GridIcon 资源与注册直到消费链验证完毕。

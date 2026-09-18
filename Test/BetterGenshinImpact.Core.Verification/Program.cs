@@ -1810,6 +1810,9 @@ var verificationAutoFightConfig = new AutoFightConfig
 AutoFightRuntimePlatform.Configure(new VerificationAutoFightRuntimePlatform(
     b5SystemInfo, verificationAutoFightConfig, verificationOcrService,
     CpuFactory(new ModelRootPathResolver(lockedRuntimeRoot))));
+Assert("AutoCombo cancellation releases held skill input",
+    await AutoComboRuntimeVerification.CancelDuringHeldSkillAsync(recordingTaskControl),
+    "The held-skill cancellation did not reach AfterTask input cleanup.");
 Console.WriteLine("AutoFight end detection: shared upstream implementation");
 var autoFightStrategyDirectory = Path.Combine("/tmp", "bgi-auto-fight-end-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(autoFightStrategyDirectory);
@@ -3688,6 +3691,7 @@ sealed class RecordingTaskControlPlatform : ITaskControlPlatform
     public Func<Mat>? CaptureFrameProvider { get; set; }
     public bool RecordCaptures { get; set; }
     public bool RecordMiddleClicks { get; set; }
+    public Action<GIActions, KeyType>? ActionObserver { get; set; }
     public Microsoft.Extensions.Logging.ILogger Logger { get; set; } = NullLogger.Instance;
     public double DpiScale => 1;
     public bool IsHdrCapture => false;
@@ -3698,6 +3702,7 @@ sealed class RecordingTaskControlPlatform : ITaskControlPlatform
         if (keyType == KeyType.KeyDown) _pressedActions.Add(action);
         else if (keyType == KeyType.KeyUp) _pressedActions.Remove(action);
         Calls.Add($"action:{action}:{keyType}");
+        ActionObserver?.Invoke(action, keyType);
     }
     public bool IsActionKeyDown(GIActions action)
     {
