@@ -50,6 +50,8 @@
 - 新增一个 native integration 连招用例，复用已实际安装的模型，录制游戏帧和输入，在长按 E 后取消并确认 AfterTask 释放。首次运行揭示 TaskControl 的 NormalEndException 契约；Host 独立任务已正确区分 cancelled/completed，避免将正常停止标记 failed。另补队伍初始化失败的预测器释放，以及圣遗物 JS 超时 CTS/注册释放，防止回调访问已销毁 V8 引擎。新 Full 复验日志 /tmp/bgi065-full-runtime-cleanup.log，尚未计为通过。
 - 运行阶段取消用例已经通过（真实 native 模型，录制帧/输入，不宣称实机游戏验证）。同步连招节点可能在第一次 await 前持续阻塞，Host 独立任务改为调度至线程池，使 Start/Status/Stop RPC 不依赖节点是否主动 yield；solo-settings 快验通过同步阻塞任务的停止及 NormalEndException cancelled 契约。旧用例需清空上次请求再等待异步启动，已补齐两处 reset。整个 Full 脚本及后续最终打包仍需等待。
 - 生命周期修复后的 Fast 全部 26 suites 通过（/tmp/bgi065-fast-runtime-cleanup.log）。7808bbb1 的 core / full-build / adapter-gate 已全部通过，其中新 GitHub runner 实际执行完整资源、OCR、打包和 Swift 检查；这些 CI 结果只对应 7808bbb1，后续修复提交必须重新通过全部 gate。
+- be1a3849 的 full-build 已通过，core 如本地首次新 Full 一样失败于旧 Host verifier 的异步启动竞态：solo.start ACK 后立即读取 FishingStartCount。验证改为等待显式 FishingStarted 信号；项目构建 0 warning / 0 error，完整 Host 运行仍在等待，不将失败 gate 忽略。
+- be1a3849 生产源码的最终本地 App 已 deep/strict 验签；使用四个官方锁定包缓存（每包仍校验 SHA-256）执行 App 内全新安装，结果为 installed=769、modelsLoaded=20、mapImagesLoaded=706，退出码 0。最终 ZIP 通过解压检查，SHA-256 为 fabe09df9c05a7b12f3626ffd6bf5a42059bfc46d8d2d105174c7617f4513d81。
 - WPF 显式 restore 后交叉构建成功：`dotnet build BetterGenshinImpact/BetterGenshinImpact.csproj -c Debug --no-restore -p:EnableWindowsTargeting=true -m:1 -nr:false`，0 error / 247 warnings（主要为上游过时 API、OpenCV 分析器等，未隐藏警告）。
 
 ## 尚待闭环

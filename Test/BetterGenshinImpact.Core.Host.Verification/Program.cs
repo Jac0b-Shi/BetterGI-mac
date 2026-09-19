@@ -3634,6 +3634,7 @@ try
     var soloStart = await ExchangeAsync(connection, "solo-start", "solo.start", sessionToken,
         JObject.FromObject(new { name = "AutoFishing" }), cancellation.Token);
     var soloTaskId = (soloStart.Result as JObject)?.Value<string>("taskId");
+    await dispatcherRuntime.FishingStarted.Task.WaitAsync(cancellation.Token);
     Require(soloStart.Error is null && !string.IsNullOrEmpty(soloTaskId) &&
             dispatcherRuntime.FishingStartCount == 1 &&
             dispatcherRuntime.LastFishingParam is
@@ -4179,6 +4180,8 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
     public int ClearCount { get; private set; }
     public List<string> AddedNames { get; } = [];
     public int FishingStartCount { get; private set; }
+    public TaskCompletionSource FishingStarted { get; } =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
     public AutoFishingTaskParam? LastFishingParam { get; private set; }
     public bool FishingCancelled { get; private set; }
     public int CookStartCount { get; private set; }
@@ -4223,6 +4226,7 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
         {
             FishingStartCount++;
             LastFishingParam = fishing.Param;
+            FishingStarted.TrySetResult();
         }
         else if (request is DispatcherWoodTaskRequest wood)
         {
