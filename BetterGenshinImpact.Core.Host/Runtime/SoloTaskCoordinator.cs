@@ -314,6 +314,12 @@ public sealed class SoloTaskCoordinator(
             if (_activeTaskId != taskId) return;
             _state = state;
             _error = error;
+            // ExecuteSoloTask has returned (or thrown) before Complete is
+            // called, so all task-owned cleanup is finished. Publish an idle
+            // execution slot atomically with the terminal state; otherwise a
+            // follow-up start can observe "cancelled" yet still be rejected by
+            // the not-quite-completed RunAsync Task wrapper.
+            _activeTask = null;
         }
     }
 
