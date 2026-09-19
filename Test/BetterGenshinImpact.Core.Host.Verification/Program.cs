@@ -3179,6 +3179,7 @@ try
         "AutoBoss", "AutoStygianOnslaught", "AutoFishing",
         "AutoLeyLineOutcrop", "AutoMusicGame", "AutoCook",
         "AutoArtifactSalvage", "AutoRedeemCode",
+        "AutoCombo",
     ], StringComparer.Ordinal);
     var actualSoloTaskNames = soloItems
         .Select(item => item.Value<string>("name"))
@@ -3633,6 +3634,7 @@ try
     var soloStart = await ExchangeAsync(connection, "solo-start", "solo.start", sessionToken,
         JObject.FromObject(new { name = "AutoFishing" }), cancellation.Token);
     var soloTaskId = (soloStart.Result as JObject)?.Value<string>("taskId");
+    await dispatcherRuntime.WaitForStartAsync("AutoFishing", cancellation.Token);
     Require(soloStart.Error is null && !string.IsNullOrEmpty(soloTaskId) &&
             dispatcherRuntime.FishingStartCount == 1 &&
             dispatcherRuntime.LastFishingParam is
@@ -3655,6 +3657,7 @@ try
     var cookStart = await ExchangeAsync(connection, "cook-start", "solo.start", sessionToken,
         JObject.FromObject(new { name = "AutoCook" }), cancellation.Token);
     var cookTaskId = (cookStart.Result as JObject)?.Value<string>("taskId");
+    await dispatcherRuntime.WaitForStartAsync("AutoCook", cancellation.Token);
     Require(cookStart.Error is null && !string.IsNullOrEmpty(cookTaskId) &&
             dispatcherRuntime.CookStartCount == 1,
         "solo.start did not execute the shared AutoCook dispatcher request");
@@ -3669,6 +3672,7 @@ try
     var woodStart = await ExchangeAsync(connection, "wood-start", "solo.start", sessionToken,
         JObject.FromObject(new { name = "AutoWood" }), cancellation.Token);
     var woodTaskId = (woodStart.Result as JObject)?.Value<string>("taskId");
+    await dispatcherRuntime.WaitForStartAsync("AutoWood", cancellation.Token);
     Require(woodStart.Error is null && !string.IsNullOrEmpty(woodTaskId) &&
             dispatcherRuntime.WoodStartCount == 1 &&
             dispatcherRuntime.LastWoodRoundNum == 4 &&
@@ -3685,6 +3689,7 @@ try
     var musicStart = await ExchangeAsync(connection, "music-start", "solo.start", sessionToken,
         JObject.FromObject(new { name = "AutoMusicGame" }), cancellation.Token);
     var musicTaskId = (musicStart.Result as JObject)?.Value<string>("taskId");
+    await dispatcherRuntime.WaitForStartAsync("AutoMusicGame", cancellation.Token);
     Require(musicStart.Error is null && !string.IsNullOrEmpty(musicTaskId) &&
             dispatcherRuntime.MusicStartCount == 1,
         "solo.start did not execute the shared AutoMusicGame dispatcher request");
@@ -3699,6 +3704,7 @@ try
     var artifactStart = await ExchangeAsync(connection, "artifact-start", "solo.start", sessionToken,
         JObject.FromObject(new { name = "AutoArtifactSalvage" }), cancellation.Token);
     var artifactTaskId = (artifactStart.Result as JObject)?.Value<string>("taskId");
+    await dispatcherRuntime.WaitForStartAsync("AutoArtifactSalvage", cancellation.Token);
     Require(artifactStart.Error is null && !string.IsNullOrEmpty(artifactTaskId) &&
             dispatcherRuntime.ArtifactSalvageStartCount == 1,
         "solo.start did not execute the shared AutoArtifactSalvage dispatcher request");
@@ -3714,6 +3720,7 @@ try
     var domainStart = await ExchangeAsync(connection, "domain-start", "solo.start", sessionToken,
         JObject.FromObject(new { name = "AutoDomain" }), cancellation.Token);
     var domainTaskId = (domainStart.Result as JObject)?.Value<string>("taskId");
+    await dispatcherRuntime.WaitForStartAsync("AutoDomain", cancellation.Token);
     Require(domainStart.Error is null && !string.IsNullOrEmpty(domainTaskId) &&
             dispatcherRuntime.DomainStartCount == 1 &&
             dispatcherRuntime.LastDomainStrategyPath == "/verification/User/AutoFight/strategy.txt",
@@ -3729,6 +3736,7 @@ try
     var bossStart = await ExchangeAsync(connection, "boss-start", "solo.start", sessionToken,
         JObject.FromObject(new { name = "AutoBoss" }), cancellation.Token);
     var bossTaskId = (bossStart.Result as JObject)?.Value<string>("taskId");
+    await dispatcherRuntime.WaitForStartAsync("AutoBoss", cancellation.Token);
     Require(bossStart.Error is null && !string.IsNullOrEmpty(bossTaskId) &&
             dispatcherRuntime.BossStartCount == 1 &&
             dispatcherRuntime.LastBossStrategyPath == "/verification/User/AutoFight/strategy.txt",
@@ -3744,6 +3752,7 @@ try
     var fightStart = await ExchangeAsync(connection, "fight-start", "solo.start", sessionToken,
         JObject.FromObject(new { name = "AutoFight" }), cancellation.Token);
     var fightTaskId = (fightStart.Result as JObject)?.Value<string>("taskId");
+    await dispatcherRuntime.WaitForStartAsync("AutoFight", cancellation.Token);
     Require(fightStart.Error is null && !string.IsNullOrEmpty(fightTaskId) &&
             dispatcherRuntime.FightStartCount == 1,
         "solo.start did not execute the shared AutoFight dispatcher request");
@@ -4178,6 +4187,8 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
     public int ClearCount { get; private set; }
     public List<string> AddedNames { get; } = [];
     public int FishingStartCount { get; private set; }
+    private readonly System.Threading.Channels.Channel<string> _starts =
+        System.Threading.Channels.Channel.CreateUnbounded<string>();
     public AutoFishingTaskParam? LastFishingParam { get; private set; }
     public bool FishingCancelled { get; private set; }
     public int CookStartCount { get; private set; }
@@ -4248,6 +4259,7 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
             LastBossStrategyPath = boss.StrategyPath;
         }
         else CookStartCount++;
+        _starts.Writer.TryWrite(request.Name);
         try
         {
             await Task.Delay(Timeout.Infinite, cancellationToken);
@@ -4265,6 +4277,12 @@ sealed class VerificationDispatcherRuntimePlatform(CancellationToken cancellatio
             throw;
         }
         return null;
+    }
+    public async Task WaitForStartAsync(string expectedName, CancellationToken cancellationToken)
+    {
+        var actualName = await _starts.Reader.ReadAsync(cancellationToken);
+        if (!string.Equals(actualName, expectedName, StringComparison.Ordinal))
+            throw new InvalidDataException($"Expected '{expectedName}' dispatch, got '{actualName}'.");
     }
     public Task<object?> RunParameterizedTask(string name, object parameter,
         CancellationToken cancellationToken)

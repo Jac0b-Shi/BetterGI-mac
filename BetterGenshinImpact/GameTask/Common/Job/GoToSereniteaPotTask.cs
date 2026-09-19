@@ -293,8 +293,6 @@ public class GoToSereniteaPotTask
             }
         }
         Logger.LogInformation("领取尘歌壶奖励:{text}", "寻找阿圆");
-        CancellationTokenSource treeCts = new();
-        await using var cancellationRegistration = ct.Register(treeCts.Cancel);
         // 中键回正视角
         TaskControlPlatform.Current.MiddleButtonClick();
         await Delay(900, ct);
@@ -362,26 +360,29 @@ public class GoToSereniteaPotTask
             }
         }
 
-        TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
-        Logger.LogInformation("领取尘歌壶奖励:{text}", "接近阿圆");
-        var findDialog = new Task(async () =>
+        ct.ThrowIfCancellationRequested();
+        try
         {
-            while (!treeCts.IsCancellationRequested)
+            TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyDown); // 向前走
+            Logger.LogInformation("领取尘歌壶奖励:{text}", "接近阿圆");
+            while (true)
             {
+                ct.ThrowIfCancellationRequested();
                 using var capture = CaptureToRectArea();
                 if (Bv.FindF(capture, text: this.ayuanHeyString))
                 {
-                    TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                     Logger.LogInformation("领取尘歌壶奖励:{text}", "接近阿圆成功");
-                    treeCts.Cancel();
                     break;
                 }
                 TaskControlPlatform.Current.SimulateAction(GIActions.Drop);
-                await Delay(50, treeCts.Token);
+                await Delay(50, ct);
             }
-        }, treeCts.Token);
-        findDialog.Start();
-        await Task.WhenAll(findDialog);
+        }
+        finally
+        {
+            // 正常结束、取消或异常时都释放前进键。
+            TaskControlPlatform.Current.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+        }
     }
 
     private async Task BuyMaxNumber(CancellationToken ct)

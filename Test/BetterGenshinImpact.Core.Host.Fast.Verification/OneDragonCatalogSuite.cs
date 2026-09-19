@@ -49,7 +49,7 @@ public sealed class OneDragonCatalogSuite : IVerificationSuite
                 options.CraftingBenchCountries.SequenceEqual(
                     ["枫丹", "稻妻", "璃月", "蒙德"]) &&
                 options.AdventurersGuildCountries.FirstOrDefault() == "挪德卡莱" &&
-                options.DomainNames.SequenceEqual(["", "仲夏庭园", "铭记之谷"]) &&
+                options.DomainNames.SequenceEqual(["", BetterGenshinImpact.GameTask.AutoDomain.AutoDomainTask.DevelopmentGuideOption, "仲夏庭园", "铭记之谷"]) &&
                 options.SundayRewardOptions.SequenceEqual(["", "1", "2", "3"]) &&
                 options.BossNames.Count > 0 &&
                 options.FightStrategies.Contains("根据队伍自动选择") &&

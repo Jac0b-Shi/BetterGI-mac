@@ -263,6 +263,12 @@ public sealed class NotificationSettingsCatalog : IDisposable
             var root = LoadRoot();
             var notification = root["notificationConfig"] as JsonObject ?? [];
             notification["includeScreenShot"] = includeScreenShot;
+            if (settings.TryGetValue("dragonEndSummaryEnabled", out var summary))
+            {
+                if (summary.Type != JTokenType.Boolean)
+                    throw new ArgumentException("dragonEndSummaryEnabled must be a boolean.");
+                notification["dragonEndSummaryEnabled"] = summary.Value<bool>();
+            }
             notification["jsNotificationEnabled"] = jsEnabled;
             notification["windowsUwpNotificationEnabled"] = nativeEnabled;
             notification["notificationEventSubscribe"] = normalizedEvents;
@@ -583,6 +589,7 @@ public sealed class NotificationSettingsCatalog : IDisposable
         return new
         {
             includeScreenShot = config.IncludeScreenShot,
+            dragonEndSummaryEnabled = config.DragonEndSummaryEnabled,
             jsNotificationEnabled = config.JsNotificationEnabled,
             macOSNotificationEnabled = config.WindowsUwpNotificationEnabled,
             notificationEventSubscribe = config.NotificationEventSubscribe,

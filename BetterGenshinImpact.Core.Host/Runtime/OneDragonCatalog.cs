@@ -1,6 +1,8 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script.OneDragon;
 using BetterGenshinImpact.GameTask.AutoBoss;
+using BetterGenshinImpact.GameTask.AutoDomain;
+using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -275,6 +277,7 @@ public sealed class OneDragonCatalog(
         string[] fightStrategies =
         [
             "根据队伍自动选择",
+            AutoFightParam.ComboStrategyName,
             .. Directory.EnumerateFiles(
                     autoFightFolder,
                     "*.*",
@@ -290,7 +293,7 @@ public sealed class OneDragonCatalog(
         return new OneDragonConfigOptions(
             ["枫丹", "稻妻", "璃月", "蒙德"],
             ["挪德卡莱", "枫丹", "稻妻", "璃月", "蒙德"],
-            ["", .. (domainNameProvider?.Invoke() ?? MapLazyAssets.Get().DomainNameList)],
+            ["", AutoDomainTask.DevelopmentGuideOption, .. (domainNameProvider?.Invoke() ?? MapLazyAssets.Get().DomainNameList)],
             ["", "1", "2", "3"],
             ["", .. AutoBossData.SupportedBossNames],
             fightStrategies,

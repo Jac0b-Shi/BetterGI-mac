@@ -148,6 +148,8 @@ trap 'rm -rf ${smoke_root}' EXIT
 cp -R ${bundled_resources}/GameTask ${smoke_root}/GameTask
 ${contents}/Resources/BetterGICore/BetterGenshinImpact.Core.Host \
   --recognition-smoke --runtime-root ${smoke_root}
+${contents}/Resources/BetterGICore/BetterGenshinImpact.Core.Host \
+  --artifacts-smoke --runtime-root ${smoke_root}
 
 print "Signing identity: ${signing_identity}"
 print "Bundle identifier: ${bundle_identifier}"

@@ -18,7 +18,7 @@
     <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" ExcludeAssets="analyzers" />
     <PackageReference Include="OpenCvSharp4.Extensions" Version="4.13.0.20260627" ExcludeAssets="analyzers" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.4" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.4" />
     <PackageReference Include="Microsoft.Extensions.Localization" Version="9.0.4" />
@@ -37,7 +37,10 @@
     <PackageReference Include="MimeKit" Version="4.16.0" />
     <PackageReference Include="Semver" Version="3.0.0" />
     <PackageReference Include="YoloSharp" Version="6.0.3" />
-    <PackageReference Include="CsTrees" Version="1.0.4" />
+    <PackageReference Include="CsTrees" Version="1.0.5" />
+    <PackageReference Include="CsTrees.MEAI" Version="1.0.1" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.6.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.6.0" />
     <PackageReference Include="NCalc" Version="6.2.0" />
     <PackageReference Include="HungarianAlgorithm" Version="2.3.5" />
     <PackageReference Include="LazyCache" Version="2.4.0" />
@@ -69,6 +72,8 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimBattlePassRewardsTask.cs" Link="GameTask/Common/Job/ClaimBattlePassRewardsTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimMailRewardsTask.cs" Link="GameTask/Common/Job/ClaimMailRewardsTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/CheckRewardsTask.cs" Link="GameTask/Common/Job/CheckRewardsTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Common/ResinRecognition.cs" Link="GameTask/Common/ResinRecognition.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoCombo/**/*.cs" Link="GameTask/AutoCombo/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/GoToSereniteaPotTask.cs" Link="GameTask/Common/Job/GoToSereniteaPotTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/GoToCraftingBenchRuntimePlatform.cs" Link="GameTask/Common/Job/GoToCraftingBenchRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/GoToCraftingBenchTask.cs" Link="GameTask/Common/Job/GoToCraftingBenchTask.cs" />

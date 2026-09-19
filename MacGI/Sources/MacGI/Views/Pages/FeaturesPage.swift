@@ -312,6 +312,7 @@ struct SoloTasksPage: View {
         switch task.name {
         case "AutoGeniusInvokation": autoGeniusInvokationSettings
         case "AutoFishing": autoFishingSettings
+        case "AutoCombo": autoComboSettings
         case "AutoCook": autoCookSettings
         case "AutoWood": autoWoodSettings
         case "AutoMusicGame": autoMusicGameSettings
@@ -326,6 +327,31 @@ struct SoloTasksPage: View {
         default:
             BGISettingLine(title: "设置", subtitle: "该任务的设置暂不可用") {
                 BGIStatusBadge(text: "不可用", tint: BGIColors.muted)
+            }
+        }
+    }
+
+    private var autoComboSettings: some View {
+        VStack(spacing: 0) {
+            BGISettingLine(title: "模型服务地址", subtitle: "OpenAI 兼容端点；仅本机回环地址允许 HTTP") {
+                TextField("https://…/v1", text: $appState.autoComboEndpointDraft)
+                    .textFieldStyle(.roundedBorder).frame(width: 360)
+            }
+            BGISettingLine(title: "模型名称", subtitle: "使用服务端提供的模型标识") {
+                TextField("模型标识", text: $appState.autoComboModelDraft)
+                    .textFieldStyle(.roundedBorder).frame(width: 360)
+            }
+            BGISettingLine(title: "API 密钥", subtitle: "由 Core 配置持久化；不会写入 Swift 本地设置") {
+                SecureField("API Key", text: $appState.autoComboAPIKeyDraft)
+                    .textFieldStyle(.roundedBorder).frame(width: 360)
+            }
+            BGISettingLine(title: "额外提示词", subtitle: "追加到上游建树系统指令末尾") {
+                TextEditor(text: $appState.autoComboExtraPromptDraft)
+                    .frame(width: 360, height: 100)
+            }
+            BGISettingLine(title: "保存配置", subtitle: "保存后再构建；会把队伍信息发送至配置的模型服务") {
+                Button("保存") { appState.saveAutoComboSettings() }
+                    .disabled(appState.autoComboSettings == nil || appState.autoComboSettingsSaving)
             }
         }
     }

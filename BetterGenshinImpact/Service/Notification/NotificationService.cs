@@ -553,12 +553,17 @@ public class NotificationService
     {
         if (notificationData == null) throw new ArgumentNullException(nameof(notificationData));
 
-        if (!ShouldSendNotification(notificationData.Event)) return;
+        if (!ShouldSendNotification(notificationData.Event))
+        {
+            // 订阅关闭时同样需要释放调用方传入的截图，避免长期泄漏
+            notificationData.Screenshot?.Dispose();
+            notificationData.Screenshot = null;
+            return;
+        }
 
-        Image<Rgb24>? ownedScreenshot = null;
         try
         {
-            ownedScreenshot = AddScreenshotIfNeeded(notificationData);
+            AddScreenshotIfNeeded(notificationData);
             await _notifierManager.SendNotificationToAllAsync(notificationData);
         }
         catch (Exception ex)
@@ -567,15 +572,9 @@ public class NotificationService
         }
         finally
         {
-            if (ownedScreenshot != null)
-            {
-                if (ReferenceEquals(notificationData.Screenshot, ownedScreenshot))
-                {
-                    notificationData.Screenshot = null;
-                }
-
-                ownedScreenshot.Dispose();
-            }
+            // 无论截图由调用方传入还是此处补充，发送完成后统一释放并清空引用
+            notificationData.Screenshot?.Dispose();
+            notificationData.Screenshot = null;
         }
     }
 
@@ -592,25 +591,22 @@ public class NotificationService
     /// <summary>
     ///     如果需要，为通知添加截图
     /// </summary>
-    private Image<Rgb24>? AddScreenshotIfNeeded(BaseNotificationData notificationData)
+    private void AddScreenshotIfNeeded(BaseNotificationData notificationData)
     {
         if (_notificationConfig?.IncludeScreenShot != true || notificationData.Screenshot != null)
         {
-            return null;
+            return;
         }
 
         try
         {
             var screenshot = _screenshotProvider();
             notificationData.Screenshot = screenshot;
-            return screenshot;
         }
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "补充通知截图失败");
         }
-
-        return null;
     }
 
     /// <summary>
@@ -647,6 +643,7 @@ public class NotificationService
         : INotificationRuntimePlatform
     {
         public ILogger Logger => service._logger;
+        public bool DragonEndSummaryEnabled => service._notificationConfig?.DragonEndSummaryEnabled == true;
 
         public void Send(BaseNotificationData notificationData) =>
             service.NotifyAllNotifiers(notificationData);

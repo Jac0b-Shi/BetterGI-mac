@@ -34,6 +34,9 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                   "autoRedeemCodeConfig": {
                     "clipboardListenerEnabled": true
                   },
+                  "autoComboBuildConfig": {
+                    "preserved": 65
+                  },
                   "commonConfig": {
                     "screenshotEnabled": false,
                     "screenshotUidCoverEnabled": true,
@@ -100,6 +103,32 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                 """, cancellationToken);
 
             var catalog = new SoloTaskSettingsCatalog(layout);
+            var domainSettings = JObject.FromObject(catalog.Get("AutoDomain"));
+            context.Require(((JArray)domainSettings["domainOptions"]!).Values<string>()
+                .Contains(BetterGenshinImpact.GameTask.AutoDomain.AutoDomainTask.DevelopmentGuideOption),
+                "AutoDomain did not expose the real development-guide destination.");
+            domainSettings["domainName"] = BetterGenshinImpact.GameTask.AutoDomain.AutoDomainTask.DevelopmentGuideOption;
+            context.Require(JObject.FromObject(catalog.Save("AutoDomain", domainSettings)).Value<string>("domainName")
+                == BetterGenshinImpact.GameTask.AutoDomain.AutoDomainTask.DevelopmentGuideOption,
+                "AutoDomain rejected the upstream development-guide destination.");
+            var combo = JObject.FromObject(catalog.Save("AutoCombo", JObject.FromObject(new
+            {
+                planningLlmEndpoint = "http://127.0.0.1:12345/v1",
+                modelName = "verification-model",
+                apiKey = "verification-secret",
+                extraPrompt = "verification prompt",
+            })));
+            var comboReloaded = JObject.FromObject(new SoloTaskSettingsCatalog(layout).Get("AutoCombo"));
+            var persistedCombo = JObject.Parse(await File.ReadAllTextAsync(
+                Path.Combine(layout.UserPath, "config.json"), cancellationToken))["autoComboBuildConfig"]!;
+            context.Require(
+                combo.Value<string>("apiKeyKind") == "secret" &&
+                comboReloaded.Value<string>("modelName") == "verification-model" &&
+                comboReloaded.Value<string>("apiKey") == "verification-secret" &&
+                persistedCombo.Value<int>("preserved") == 65 &&
+                ((JArray)JObject.FromObject(catalog.Get("AutoFight"))["strategyOptions"]!)
+                    .Values<string>().Contains(BetterGenshinImpact.GameTask.AutoFight.AutoFightParam.ComboStrategyName),
+                "AutoCombo config persistence, secret contract or combat strategy routing is incomplete.");
             var commonSettingsCatalog = new CommonSettingsCatalog(layout);
             var sourceBackground = Path.Combine(root, "source-background.png");
             using (var sourceImage = new Image<Rgba32>(2, 2))
@@ -376,6 +405,7 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
             context.Require(descriptor.Value<bool>("available") &&
                             descriptor.Value<bool>("settingsAvailable"),
                 "AutoGeniusInvokation was not exposed as a composed configurable solo task.");
+            platform.Reset();
             _ = coordinator.Start("AutoGeniusInvokation");
             for (var retry = 0; retry < 20 && platform.Request is null; retry++)
                 await Task.Delay(10, cancellationToken);
@@ -419,6 +449,7 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
                             musicActions[1].Value<string>("description") ==
                                 "进入专辑界面使用，自动演奏未完成乐曲",
                 "AutoMusicGame did not expose the two upstream in-card actions.");
+            platform.Reset();
             _ = coordinator.Start("AutoAlbum");
             for (var retry = 0; retry < 20 && platform.Request is null; retry++)
                 await Task.Delay(10, cancellationToken);
@@ -567,6 +598,16 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
             var stoppedStatus = JObject.FromObject(coordinator.Status());
             context.Require(stoppedStatus.Value<string>("state") == "cancelled",
                 "Active solo task did not reach cancelled after runtime stop.");
+
+            platform.Reset();
+            platform.BlockSynchronously = true;
+            _ = coordinator.Start("AutoComboRun");
+            await platform.Started.Task.WaitAsync(cancellationToken);
+            await coordinator.StopActiveAsync(cancellationToken);
+            stoppedStatus = JObject.FromObject(coordinator.Status());
+            context.Require(platform.Request is DispatcherComboTaskRequest { Run: true } &&
+                stoppedStatus.Value<string>("state") == "cancelled" && stoppedStatus["error"]?.Type == JTokenType.Null,
+                "Synchronous combo execution blocked stop RPC or NormalEndException was reported as failure.");
         }
         finally
         {
@@ -578,12 +619,14 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
     {
         public DispatcherSoloTaskRequest? Request { get; private set; }
         public bool BlockUntilCancelled { get; set; }
+        public bool BlockSynchronously { get; set; }
         public TaskCompletionSource Started { get; private set; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         public void Reset()
         {
             Request = null;
             BlockUntilCancelled = false;
+            BlockSynchronously = false;
             Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
         public CancellationToken GlobalCancellationToken => CancellationToken.None;
@@ -604,6 +647,12 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
         {
             Request = request;
             Started.TrySetResult();
+            if (BlockSynchronously)
+            {
+                if (!cancellationToken.WaitHandle.WaitOne(TimeSpan.FromSeconds(3)))
+                    throw new TimeoutException("The synchronous task prevented cancellation.");
+                throw new BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception.NormalEndException("取消自动任务");
+            }
             if (BlockUntilCancelled)
                 return WaitForCancellation(cancellationToken);
             return Task.FromResult<object?>(null);

@@ -80,7 +80,6 @@ public class TpTask
     private const double AbsoluteMapClickNeighborErrorRatio = 0.25d;
     private const double NearbyMapIconTemplateThreshold = 0.65d;
     private const int MapChooseCandidateClickRetryCount = 2;
-    private const int MapChooseCandidateClickDelayMs = 150;  // 点击候选列表后，等待UI变化的时间
     private const int MapChooseCandidateClickVerificationDelayMs = 600;
     private const int MapChooseCandidateClickVerificationIntervalMs = 100;
     private const double TeleportFinalZoomMinNeighborScreenDistance = 96d;
@@ -1248,6 +1247,11 @@ public class TpTask
             catch (TeleportPanelNotOpenedException)
             {
                 // 同一视野内点击后未出现面板，重试只会重复点击同一位置。
+                
+                // 抛出异常按下 ESC 退出大地图，避免影响后续路径追踪任务
+                TaskControlPlatform.Current.PressEscape();
+                await Delay(300, ct);
+                
                 throw;
             }
             catch (TpPointNotActivate e)
@@ -1650,13 +1654,20 @@ public class TpTask
             (int)Math.Round(x1 * _zoomOutMax1080PRatio),
             (int)Math.Round(y1 * _zoomOutMax1080PRatio));
         await Delay(GetTeleportOperationDelay(50), ct);
-        TaskControlPlatform.Current.LeftButtonDown();
-        await Delay(GetTeleportOperationDelay(50), ct);
-        capture.MoveTo(
-            (int)Math.Round(x2 * _zoomOutMax1080PRatio),
-            (int)Math.Round(y2 * _zoomOutMax1080PRatio));
-        await Delay(GetTeleportOperationDelay(50), ct);
-        TaskControlPlatform.Current.LeftButtonUp();
+        var input = TaskControlPlatform.Current;
+        try
+        {
+            input.LeftButtonDown();
+            await Delay(GetTeleportOperationDelay(50), ct);
+            capture.MoveTo(
+                (int)Math.Round(x2 * _zoomOutMax1080PRatio),
+                (int)Math.Round(y2 * _zoomOutMax1080PRatio));
+            await Delay(GetTeleportOperationDelay(50), ct);
+        }
+        finally
+        {
+            input.LeftButtonUp();
+        }
         await Delay(GetTeleportOperationDelay(50), ct);
         capture.MoveTo(capture.Width / 2, capture.Height / 2);
     }
@@ -1976,30 +1987,36 @@ public class TpTask
         int steps = GetMapDragStepCount(moveMouseLength);
         int[] stepX = GenerateSteps(sentDeltaX, steps);
         int[] stepY = GenerateSteps(sentDeltaY, steps);
-        TaskControlPlatform.Current.LeftButtonDown();
         int movedX = 0;
         int movedY = 0;
-        for (var i = 0; i < steps; i++)
+        var input = TaskControlPlatform.Current;
+        try
         {
-            var i1 = i;
-            await Delay(GetTeleportOperationDelay(TpConfig.DefaultTeleportOperationDelayMilliseconds), ct);
-            movedX += stepX[i1];
-            movedY += stepY[i1];
-            if (_tpConfig.MapDragUseRelativeMove)
+            input.LeftButtonDown();
+            for (var i = 0; i < steps; i++)
             {
-                TaskControlPlatform.Current.MoveMouseBy(
-                    GetDisplayScaleAdjustedMouseDelta(stepX[i1]),
-                    GetDisplayScaleAdjustedMouseDelta(stepY[i1]));
+                await Delay(GetTeleportOperationDelay(TpConfig.DefaultTeleportOperationDelayMilliseconds), ct);
+                movedX += stepX[i];
+                movedY += stepY[i];
+                if (_tpConfig.MapDragUseRelativeMove)
+                {
+                    input.MoveMouseBy(
+                        GetDisplayScaleAdjustedMouseDelta(stepX[i]),
+                        GetDisplayScaleAdjustedMouseDelta(stepY[i]));
+                }
+                else
+                {
+                    capture.MoveTo(
+                        (int)Math.Round(startX + movedX * scale),
+                        (int)Math.Round(startY + movedY * scale));
+                }
             }
-            else
-            {
-                capture.MoveTo(
-                    (int)Math.Round(startX + movedX * scale),
-                    (int)Math.Round(startY + movedY * scale));
-            }
+            await Delay(60, ct);
         }
-
-        TaskControlPlatform.Current.LeftButtonUp();
+        finally
+        {
+            input.LeftButtonUp();
+        }
         return (sentDeltaX, sentDeltaY, steps, startX, startY, endX, endY, sentDeltaX, sentDeltaY);
     }
 
@@ -3514,9 +3531,12 @@ public class TpTask
 
     private async Task ClickMapChooseCandidate(ImageRegion imageRegion, MapChooseCandidate candidate)
     {
+        // 候选列表有个动画，识别到以后一定要再等一会点击
+        var time = TpTaskRuntimePlatform.Current.QuickTeleportConfig.TeleportListClickDelay;
+        await Delay(time < 200 ? 200 : time, ct);
         Logger.LogInformation("点击候选列表：{Text}", candidate.Text);
         imageRegion.ClickTo(candidate.ClickRect.X, candidate.ClickRect.Y, candidate.ClickRect.Width, candidate.ClickRect.Height);
-        await Delay(MapChooseCandidateClickDelayMs, ct);
+        await Delay(150, ct);
     }
 
     private static double GetDistance(double x1, double y1, double x2, double y2)
