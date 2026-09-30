@@ -353,6 +353,22 @@ struct SoloTasksPage: View {
                 Button("保存") { appState.saveAutoComboSettings() }
                     .disabled(appState.autoComboSettings == nil || appState.autoComboSettingsSaving)
             }
+            if let preview = appState.autoComboPresentation, !preview.tree.isEmpty {
+                DisclosureGroup(preview.visible ? "连招行为树（运行中）" : "最近构建的连招行为树") {
+                    ScrollView([.horizontal, .vertical]) {
+                        Text(preview.tree + "\n\n兜底树\n" + preview.fallbackTree)
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                    }.frame(maxHeight: 260)
+                }.padding()
+            }
+        }
+        .task {
+            while !Task.isCancelled {
+                await appState.refreshAutoComboPresentation()
+                do { try await Task.sleep(for: .milliseconds(500)) }
+                catch { break }
+            }
         }
     }
 

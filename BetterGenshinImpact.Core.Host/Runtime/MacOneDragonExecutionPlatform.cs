@@ -194,6 +194,13 @@ public sealed class MacOneDragonExecutionPlatform(
         OneDragonFlowConfig config,
         CancellationToken cancellationToken)
     {
+        bool limited = config.AutoBossSpecifyRunCount && config.AutoBossTotalRunCountLimit > 0;
+        int remaining = config.AutoBossTotalRunCountLimit - config.AutoBossCompletedRunCount;
+        if (limited && remaining <= 0)
+        {
+            Logger.LogInformation("自动首领讨伐累计领奖次数已达到上限 {Limit}，跳过", config.AutoBossTotalRunCountLimit);
+            return;
+        }
         var strategyName = string.IsNullOrWhiteSpace(config.AutoBossStrategyName)
             ? "根据队伍自动选择"
             : config.AutoBossStrategyName;
@@ -215,7 +222,7 @@ public sealed class MacOneDragonExecutionPlatform(
             StrategyName = strategyName,
             TeamName = config.AutoBossTeamName,
             SpecifyRunCount = config.AutoBossSpecifyRunCount,
-            RunCount = config.AutoBossRunCount,
+            RunCount = limited ? Math.Min(config.AutoBossRunCount, remaining) : config.AutoBossRunCount,
             UseTransientResin = config.AutoBossUseTransientResin,
             UseFragileResin = config.AutoBossUseFragileResin,
             ReviveRetryCount = config.AutoBossReviveRetryCount,
@@ -225,6 +232,9 @@ public sealed class MacOneDragonExecutionPlatform(
                 config.AutoBossRewardRecognitionEnabled,
             Timeout = config.AutoBossTimeout,
         };
+        if (limited)
+            parameter.RewardClaimedCallback = () =>
+                config.AutoBossCompletedRunCount = catalog.RecordBossReward(config.Name);
         parameter.CombatStrategyPath = strategyPath;
         await new AutoBossTask(
                 parameter,

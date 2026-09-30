@@ -119,6 +119,14 @@ public sealed class OneDragonCatalogSuite : IVerificationSuite
                     SearchOption.TopDirectoryOnly).Any(),
                 "OneDragon catalog delete left an invalid or temporary config behind.");
 
+            var stale = catalog.Get("默认配置").Config;
+            Parallel.For(0, 8, _ => catalog.RecordBossReward("默认配置"));
+            catalog.Save("默认配置", stale);
+            context.Require(catalog.Get("默认配置").Config.Value<int>("AutoBossCompletedRunCount") == 8,
+                "Concurrent rewards or a stale settings save lost the persisted boss count.");
+            context.Require(catalog.ResetBossCompletedCount("默认配置").Config.Value<int>("AutoBossCompletedRunCount") == 0,
+                "Explicit boss count reset did not persist.");
+
             var rejectedTraversal = false;
             try
             {

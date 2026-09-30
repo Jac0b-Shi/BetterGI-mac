@@ -459,6 +459,11 @@ struct OneDragonWorkspaceView: View {
                         "运行次数：\(appState.oneDragonIntValue("AutoBossRunCount", default: 1))",
                         value: intBinding("AutoBossRunCount", default: 1),
                         in: 1 ... 999)
+                    Stepper(
+                        "累计领奖上限：\(appState.oneDragonIntValue("AutoBossTotalRunCountLimit"))（0 为不限）",
+                        value: intBinding("AutoBossTotalRunCountLimit"), in: 0 ... 99_999)
+                    Text("已累计领奖：\(appState.oneDragonIntValue("AutoBossCompletedRunCount")) 次")
+                    Button("重置累计领奖次数") { appState.resetOneDragonBossCount() }
                     Toggle("使用须臾树脂", isOn: boolBinding("AutoBossUseTransientResin"))
                     Toggle("使用脆弱树脂", isOn: boolBinding("AutoBossUseFragileResin"))
                 }

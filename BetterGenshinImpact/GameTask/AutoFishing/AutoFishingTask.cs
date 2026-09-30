@@ -3,11 +3,9 @@ using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Job;
-using BetterGenshinImpact.GameTask.GetGridIcons;
 using CsTrees;
 using CsTrees.Composites;
 using Microsoft.Extensions.Logging;
-using Microsoft.ML.OnnxRuntime;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -42,7 +40,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             {
 
             IOcrService ocrService = runtime.OcrService;
-            using InferenceSession session = GridIconClassifier.LoadModel(out Dictionary<string, float[]> prototypes);
+            using IItemIconRecognizer itemRecognizer = ItemIconRecognizerFactory.CreateConfigured();
 
             CsTrees.Blackboard.Blackboard blackboard = new CsTrees.Blackboard.Blackboard();
 
@@ -70,7 +68,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                                     .End()
                                     .Try("进入钓鱼模式")
                                         .Sequence("-", memory: true)
-                                            .EnterFishingMode("进入钓鱼模式", _logger, input, session, prototypes, cultureInfo: param.GameCultureInfo, stringLocalizer: param.StringLocalizer)
+                                            .EnterFishingMode("进入钓鱼模式", _logger, input, itemRecognizer, cultureInfo: param.GameCultureInfo, stringLocalizer: param.StringLocalizer)
                                             .SuccessIsRunning(@"\")
                                                 .Sequence("一直钓鱼直到没鱼", memory: false)
                                                     .FailureIsSuccess(@"总是成功")
@@ -83,7 +81,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                                                                 .End()
                                                                 .FindFishTimeout("确认初始状态和找到鱼", 10, _logger)
                                                             .End()
-                                                            .ChooseBait("选择鱼饵", _logger, runtime.SystemInfo, input, session, prototypes)
+                                                            .ChooseBait("选择鱼饵", _logger, runtime.SystemInfo, input, itemRecognizer)
                                                             .Try("抛竿等待上钩提竿")
                                                                 .Sequence("抛竿等待上钩", memory: true)
                                                                     .Parallel("抛竿直到成功或出错", policy: new ParallelPolicy.SuccessOnOne())
@@ -151,7 +149,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                                 .PushLeaf(() => new TurnAround("转圈圈调整视角", blackboard, _logger, param.SaveScreenshotOnKeyTick, input))
                                 .PushLeaf(() => new FindFishTimeout("找到鱼", 20, blackboard, _logger, param.SaveScreenshotOnKeyTick))
                             .End()
-                            .PushLeaf(() => new EnterFishingMode("进入钓鱼模式", blackboard, _logger, param.SaveScreenshotOnKeyTick, input, session, prototypes, cultureInfo: param.GameCultureInfo, stringLocalizer: param.StringLocalizer))
+                            .PushLeaf(() => new EnterFishingMode("进入钓鱼模式", blackboard, _logger, param.SaveScreenshotOnKeyTick, input, itemRecognizer, cultureInfo: param.GameCultureInfo, stringLocalizer: param.StringLocalizer))
                             .UntilFailed(@"\")
                                 .Sequence("一直钓鱼直到没鱼")
                                     .AlwaysSucceed(@"\")
@@ -166,7 +164,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                                                 .End()
                                                 .PushLeaf(() => new FindFishTimeout("确认初始状态和找到鱼", 10, blackboard, _logger, param.SaveScreenshotOnKeyTick))
                                             .End()
-                                            .PushLeaf(() => new ChooseBait("选择鱼饵", blackboard, _logger, param.SaveScreenshotOnKeyTick, TaskContext.Instance().SystemInfo, input, session, prototypes))
+                                            .PushLeaf(() => new ChooseBait("选择鱼饵", blackboard, _logger, param.SaveScreenshotOnKeyTick, TaskContext.Instance().SystemInfo, input, itemRecognizer))
                                             .MySimpleParallel("抛竿直到成功或出错", policy: SimpleParallelPolicy.OnlyOneMustSucceed)
                                                 .UntilSuccess("重复抛竿")
                                                     .Sequence("-")

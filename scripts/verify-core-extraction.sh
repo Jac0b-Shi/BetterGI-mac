@@ -102,7 +102,7 @@ rg -q 'GameTask/CharacterDevelopment/\*\.cs' \
   || fail "CharacterDevelopment is not linked and composed through the macOS Core script host"
 rg -q 'Assets/Model/AvatarGridIcon/avatar.onnx' \
   BetterGenshinImpact.Core/Manifest/model-artifacts.manifest.json \
-  && rg -q 'bettergi-assets-model-1.0.33-nupkg' \
+  && rg -q 'bettergi-assets-model-1.0.36-nupkg' \
     BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json \
   && rg -q 'class ArtifactDownloaderSuite' \
     Test/BetterGenshinImpact.Core.Host.Fast.Verification/ArtifactDownloaderSuite.cs \
@@ -418,6 +418,8 @@ for model_asset in \
   Assets/Model/ItemV2/item.csv \
   Assets/Model/AvatarGridIcon/avatar.onnx \
   Assets/Model/AvatarGridIcon/avatar.csv \
+  Assets/Model/Common/avatar_side_classify_sim.onnx \
+  Assets/Model/Common/e_classify_sim.onnx \
   Assets/Model/Item/items.csv; do
   jq -e --arg destination "${model_asset}" --arg source_id "${model_source_id}" \
     '.artifacts[] | select(.destinationRelativePath == $destination and .sourceId == $source_id)' \

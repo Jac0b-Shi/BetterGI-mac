@@ -126,6 +126,16 @@ public partial class OneDragonTaskItem : ObservableObject
             case "自动首领讨伐":
                 Action = async () =>
                 {
+                    var totalRunCountLimited = config.AutoBossSpecifyRunCount && config.AutoBossTotalRunCountLimit > 0;
+                    var remainingTotalRunCount = config.AutoBossTotalRunCountLimit - config.AutoBossCompletedRunCount;
+                    if (totalRunCountLimited && remainingTotalRunCount <= 0)
+                    {
+                        TaskControl.Logger.LogInformation(
+                            "自动首领讨伐：累计成功次数已达到上限 {Limit}，跳过",
+                            config.AutoBossTotalRunCountLimit);
+                        return;
+                    }
+
                     if (string.IsNullOrEmpty(config.AutoBossStrategyName))
                     {
                         config.AutoBossStrategyName = "根据队伍自动选择";
@@ -149,13 +159,21 @@ public partial class OneDragonTaskItem : ObservableObject
                     param.StrategyName = config.AutoBossStrategyName;
                     param.TeamName = config.AutoBossTeamName;
                     param.SpecifyRunCount = config.AutoBossSpecifyRunCount;
-                    param.RunCount = config.AutoBossRunCount;
+                    param.RunCount = totalRunCountLimited
+                        ? config.AutoBossSpecifyRunCount
+                            ? Math.Min(config.AutoBossRunCount, remainingTotalRunCount)
+                            : remainingTotalRunCount
+                        : config.AutoBossRunCount;
                     param.UseTransientResin = config.AutoBossUseTransientResin;
                     param.UseFragileResin = config.AutoBossUseFragileResin;
                     param.ReviveRetryCount = config.AutoBossReviveRetryCount;
                     param.ReturnToStatueAfterEachRound = config.AutoBossReturnToStatueAfterEachRound;
                     param.RewardRecognitionEnabled = config.AutoBossRewardRecognitionEnabled;
                     param.Timeout = config.AutoBossTimeout;
+                    if (totalRunCountLimited)
+                    {
+                        param.RewardClaimedCallback = () => config.AutoBossCompletedRunCount++;
+                    }
                     await new AutoBossTask(param).Start(CancellationContext.Instance.Cts.Token);
                 };
                 break;

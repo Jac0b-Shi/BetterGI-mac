@@ -38,7 +38,7 @@
     <PackageReference Include="Semver" Version="3.0.0" />
     <PackageReference Include="YoloSharp" Version="6.0.3" />
     <PackageReference Include="CsTrees" Version="1.0.5" />
-    <PackageReference Include="CsTrees.MEAI" Version="1.0.1" />
+    <PackageReference Include="CsTrees.MEAI" Version="1.0.2" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.6.0" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.6.0" />
     <PackageReference Include="NCalc" Version="6.2.0" />
@@ -73,7 +73,7 @@
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ClaimMailRewardsTask.cs" Link="GameTask/Common/Job/ClaimMailRewardsTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/CheckRewardsTask.cs" Link="GameTask/Common/Job/CheckRewardsTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/ResinRecognition.cs" Link="GameTask/Common/ResinRecognition.cs" />
-    <Compile Include="../BetterGenshinImpact/GameTask/AutoCombo/**/*.cs" Link="GameTask/AutoCombo/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoCombo/**/*.cs" Exclude="../BetterGenshinImpact/GameTask/AutoCombo/AutoComboTreeWindowService.cs" Link="GameTask/AutoCombo/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/GoToSereniteaPotTask.cs" Link="GameTask/Common/Job/GoToSereniteaPotTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/GoToCraftingBenchRuntimePlatform.cs" Link="GameTask/Common/Job/GoToCraftingBenchRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/GoToCraftingBenchTask.cs" Link="GameTask/Common/Job/GoToCraftingBenchTask.cs" />
@@ -751,4 +751,11 @@
                       LogicalName="BetterGenshinImpact.GameTask.Common.Job.GoToCraftingBenchTask.it.resources" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoFight/Model/SkillCdState.cs" Link="GameTask/AutoFight/Model/SkillCdState.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/SkillCd/SkillCdOverlayRenderer.cs" Link="GameTask/SkillCd/SkillCdOverlayRenderer.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ChooseFOptionTask.cs" Link="GameTask/Common/Job/ChooseFOptionTask.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Common/Job/ItemMetadataCache.cs" Link="GameTask/Common/Job/ItemMetadataCache.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoSkip/Audio/DialogueOptionVoiceThresholds.cs" Link="GameTask/AutoSkip/Audio/DialogueOptionVoiceThresholds.cs" />
+  </ItemGroup>
 </Project>

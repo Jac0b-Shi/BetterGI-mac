@@ -53,6 +53,8 @@ public sealed class MacScriptGroupExecutionServices : IScriptGroupExecutionServi
 
     public PathingPartyConfig CreateDefaultPartyConfig() => new()
     {
+        Enabled = false,
+        AutoFightEnabled = false,
         OnlyInTeleportRecover = _defaultPartyConfig.OnlyInTeleportRecover,
         UseGadgetIntervalMs = _defaultPartyConfig.UseGadgetIntervalMs,
         AutoEatEnabled = _defaultPartyConfig.AutoEatEnabled,

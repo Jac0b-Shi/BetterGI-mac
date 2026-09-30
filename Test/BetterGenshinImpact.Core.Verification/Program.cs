@@ -765,7 +765,7 @@ Assert("B11.5 Loader leaves stream open", manifestReadStream.CanRead, "stream wa
 manifestReadStream.Close();
 Assert("B11.5 Loader parses successfully", manifest != null, "null");
 Assert("B11.5 Manifest version is 1", manifest!.Version == 1, $"got {manifest.Version}");
-Assert("B11.5 Model artifacts count is 20", manifest.Artifacts.Count == 20, $"got {manifest.Artifacts.Count}");
+Assert("B11.5 Model artifacts count is 21", manifest.Artifacts.Count == 21, $"got {manifest.Artifacts.Count}");
 Assert("B11.5 Sidecar artifacts count is 2", manifest.SidecarArtifacts.Count == 2, $"got {manifest.SidecarArtifacts.Count}");
 // Physical file count: 20 model ONNX + 10 model-bound sidecars + 2 preheat sidecars = 32
 var modelsWithSidecar = manifest.Artifacts.FindAll(a => a.Sidecars.Count > 0);
@@ -775,11 +775,11 @@ var allPhysicalPaths =
     .Concat(manifest.Artifacts.SelectMany(a => a.Sidecars))
     .Concat(manifest.SidecarArtifacts.Select(s => s.RelativePath))
     .ToList();
-Assert("B11.5 Physical paths count 32", allPhysicalPaths.Count == 32, $"got {allPhysicalPaths.Count}");
-Assert("B11.5 Physical paths unique", allPhysicalPaths.Distinct(System.StringComparer.Ordinal).Count() == 32, "duplicate paths");
+Assert("B11.5 Physical paths count 33", allPhysicalPaths.Count == 33, $"got {allPhysicalPaths.Count}");
+Assert("B11.5 Physical paths unique", allPhysicalPaths.Distinct(System.StringComparer.Ordinal).Count() == 33, "duplicate paths");
 // Uniqueness
-Assert("B11.5 Artifact ids unique", manifest.Artifacts.Select(a => a.Id).Distinct().Count() == 20, "duplicate ids");
-Assert("B11.5 Registry keys unique", manifest.Artifacts.Select(a => a.RegistryKey).Distinct().Count() == 20, "duplicate keys");
+Assert("B11.5 Artifact ids unique", manifest.Artifacts.Select(a => a.Id).Distinct().Count() == 21, "duplicate ids");
+Assert("B11.5 Registry keys unique", manifest.Artifacts.Select(a => a.RegistryKey).Distinct().Count() == 21, "duplicate keys");
 Assert("B11.5 Sidecar ids unique", manifest.SidecarArtifacts.Select(s => s.Id).Distinct().Count() == 2, "duplicate sidecar ids");
 // Invariants: all paths use forward slash, not rooted, no ..
 foreach (var a in manifest.Artifacts)
@@ -819,6 +819,7 @@ var registryMap = new Dictionary<string, BetterGenshinImpact.Core.Recognition.ON
     ["PaddleOcrRecV5Korean"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.PaddleOcrRecV5Korean,
     ["PaddleOcrRecV6"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.PaddleOcrRecV6,
     ["BgiAvatarSide"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.BgiAvatarSide,
+    ["BgiEClassify"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.BgiEClassify,
     ["BgiQClassify"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.BgiQClassify,
     ["BgiTree"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.BgiTree,
     ["BgiFish"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.BgiFish,
@@ -828,7 +829,7 @@ var registryMap = new Dictionary<string, BetterGenshinImpact.Core.Recognition.ON
     ["SileroVad"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.SileroVad,
     ["BgiWorld"] = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxModel.BgiWorld
 };
-Assert("B11.5 Registry map has 20 entries", registryMap.Count == 20, $"got {registryMap.Count}");
+Assert("B11.5 Registry map has 21 entries", registryMap.Count == 21, $"got {registryMap.Count}");
 foreach (var entry in manifest.Artifacts)
 {
     Assert($"B11.5 Registry key {entry.RegistryKey} in map", registryMap.ContainsKey(entry.RegistryKey), $"missing {entry.RegistryKey}");
@@ -2169,8 +2170,10 @@ finally
 Assert("Pyro ElementalCollectHandler uses the configured real CombatScenes team",
     pyroCollectTeamNames.SequenceEqual(["烟绯", "钟离", "夜兰", "纳西妲"]),
     string.Join(",", pyroCollectTeamNames));
-Assert("Pyro ElementalCollectHandler avoids a redundant switch when Yanfei is active",
+Assert("Pyro ElementalCollectHandler confirms its first switch target once before attacking",
     recordingTaskControl.Calls.SequenceEqual([
+        "action:Drop:KeyPress",
+        "action:SwitchMember1:KeyPress",
         "action:NormalAttack:KeyPress"
     ]),
     string.Join(" | ", recordingTaskControl.Calls));

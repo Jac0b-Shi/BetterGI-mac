@@ -254,9 +254,11 @@ public sealed class MacDispatcherRuntimePlatform(
         {
             return await RunCountInventory(new CountInventoryItemParam
             {
-                GridScreenName = (GameTask.Model.GameUI.GridScreenName)count.GridScreenName,
+                GridScreenName = count.GridScreenName is null ? null : (GameTask.Model.GameUI.GridScreenName)count.GridScreenName.Value,
                 ItemName = count.ItemName,
-                ItemNames = [.. count.ItemNames]
+                ItemNames = [.. count.ItemNames],
+                IconRecognitionMode = count.IconRecognitionMode ?? ItemIconRecognizerFactory.ConfiguredMode,
+                StopByItemSort = count.StopByItemSort
             }, cancellationToken);
         }
         if (request is DispatcherDomainTaskRequest domain)
@@ -361,7 +363,7 @@ public sealed class MacDispatcherRuntimePlatform(
                 ocrService,
                 loggerFactory.CreateLogger<CountInventoryItem>())
             .Start(cancellationToken);
-        if (parameter.ItemName is not null) return result;
+        if (parameter.ItemName is not null) return ((Dictionary<string, int>)result).GetValueOrDefault(parameter.ItemName, -1);
         dynamic expando = new ExpandoObject();
         var dictionary = (IDictionary<string, object>)expando;
         foreach (var pair in (Dictionary<string, int>)result) dictionary[pair.Key] = pair.Value;

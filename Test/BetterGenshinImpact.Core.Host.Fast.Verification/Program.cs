@@ -6,6 +6,7 @@ return await VerificationRunner.RunAsync(args,
     // Initialise shared avatar metadata from the canonical assets before suites
     // that temporarily redirect Global.StartUpPath to minimal task fixtures.
     new AutoComboSuite(),
+    new ChooseFOptionSuite(),
     new TriggerSettingsSuite(),
     new LocalizationResourceSuite(),
     new SoloTaskSettingsSuite(),

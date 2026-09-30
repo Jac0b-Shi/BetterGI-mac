@@ -80,7 +80,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
 
     public PathingPartyConfig PartyConfig
     {
-        get => _partyConfig ?? _executionServices.DefaultPartyConfig;
+        get => _partyConfig ??= _executionServices.DefaultPartyConfig;
         set => _partyConfig = value;
     }
 
@@ -383,7 +383,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
             {
                 // 调度器未配置的情况下，根据地图追踪条件配置切换队伍
                 var partyName = FilterPartyNameByConditionConfig(task);
-                if (!await SwitchParty(partyName))
+                if (!await SwitchParty(partyName, false))
                 {
                     Logger.LogError("切换队伍失败，无法执行此路径！请检查地图追踪设置！");
                     return false;
@@ -391,7 +391,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
             }
             else if (!string.IsNullOrEmpty(PartyConfig.PartyName))
             {
-                if (!await SwitchParty(PartyConfig.PartyName))
+                if (!await SwitchParty(PartyConfig.PartyName, PartyConfig.IsVisitStatueBeforeSwitchParty))
                 {
                     Logger.LogError("切换队伍失败，无法执行此路径！请检查配置组中的地图追踪配置！");
                     return false;
@@ -431,8 +431,9 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
     /// 切换队伍
     /// </summary>
     /// <param name="partyName"></param>
+    /// <param name="forceTp">切换前是否前往七天神像</param>
     /// <returns></returns>
-    private async Task<bool> SwitchParty(string? partyName)
+    private async Task<bool> SwitchParty(string? partyName, bool forceTp)
     {
         bool success = true;
         if (!string.IsNullOrEmpty(partyName))
@@ -441,8 +442,6 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
             {
                 return success;
             }
-
-            bool forceTp = PartyConfig.IsVisitStatueBeforeSwitchParty;
 
             if (forceTp) // 强制传送模式
             {
@@ -704,7 +703,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
         {
             tpTask = new TpTask(ct);
         }
-        
+
         // 最小5分钟间隔
         if ( _combatScenes?.CurrentMultiGameStatus?.IsInMultiGame == true || (DateTime.UtcNow - _lastGetExpeditionRewardsTime).TotalMinutes < 5)
         {
@@ -1216,7 +1215,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
         Logger.LogInformation("尝试切换角色{Name}失败！", avatar.Name);
         return null;
     }
-    
+
     /// <summary>
     /// 根据时间在两个点之间插值。
     /// </summary>
@@ -1253,7 +1252,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
 
         return new Point2f(x, y);
     }
-    
+
     private  Point2f prePosition;
     private  DateTime preTime;
     private async Task WaitForCloseMap(int maxAttempts, int delayMs)
@@ -1269,7 +1268,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
 
             await Delay(delayMs, ct);
         }
-        
+
     }
 
     private async Task<Point2f> GetPosition(ImageRegion imageRegion, WaypointForTrack waypoint)
@@ -1280,7 +1279,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
     public bool GetPositionAndTimeSuspendFlag = false;
     private async Task<(Point2f point,int additionalTimeInMs)> GetPositionAndTime(ImageRegion imageRegion, WaypointForTrack waypoint)
     {
-        
+
         var position = Navigation.GetPosition(imageRegion, waypoint.MapName, waypoint.MapMatchMethod);
         int time = 0;
         if (position == new Point2f())
@@ -1322,7 +1321,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
                 {
                     Logger.LogInformation(@$"地图中心点识别失败！");
                 }
-               
+
                 PressEscape();
                 //Bv.IsInMainUi(imageRegion);
                 await WaitForCloseMap(10,200);
@@ -1330,7 +1329,7 @@ public partial class PathExecutor : IPathExecutor, IPathExecutorSuspendContext
                 time=(int)(end - start).TotalMilliseconds;
                 Logger.LogInformation(@$"未识别到具体路径，打开地图计算中心点({position.X},{position.Y})");
             }
-            
+
             /*if (prePosition!=default)
             {*/
                 //position = InterpolatePointByTime(prePosition,new Point2f((float)waypoint.GameX,(float)waypoint.GameY),preTime,DateTime.Now,preTime.AddMilliseconds(maxAutoPositionTime));

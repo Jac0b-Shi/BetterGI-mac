@@ -85,8 +85,8 @@ public partial class ScriptGroupProject : ObservableObject
         get => _skipFlag;
         set => SetProperty(ref _skipFlag, value);
     }
-    
-    
+
+
     [ObservableProperty]
     private bool? _allowJsNotification = true;
 

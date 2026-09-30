@@ -1,4 +1,6 @@
 using BetterGenshinImpact.GameTask.AutoCombo.ComboBuild;
+using BetterGenshinImpact.GameTask.AutoFight.Model;
+using OpenCvSharp;
 using BetterGenshinImpact.Verification.Framework;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
@@ -26,33 +28,33 @@ public sealed class AutoComboSuite : IVerificationSuite
         var requests = new List<JsonDocument>();
         var server = Task.Run(async () =>
         {
-            for (var i = 0; i <= steps.Length; i++)
+            for (var i = 0; i <= steps.Length + 1; i++)
             {
                 using var client = await listener.AcceptTcpClientAsync(timeout.Token);
                 await using var stream = client.GetStream();
                 requests.Add(JsonDocument.Parse(await ReadBody(stream, timeout.Token)));
-                object message = i == steps.Length
+                object message = i >= steps.Length
                     ? new { role = "assistant", content = "Built." }
                     : new { role = "assistant", content = (string?)null, tool_calls = new[] {
                         new { id = $"call-{i}", type = "function", function = new { name = steps[i].Item1, arguments = steps[i].Item2 } } } };
                 var body = JsonSerializer.SerializeToUtf8Bytes(new { id = $"response-{i}", @object = "chat.completion",
                     created = 1, model = config.ModelName, choices = new[] { new { index = 0, message,
-                        finish_reason = i == steps.Length ? "stop" : "tool_calls" } } });
+                        finish_reason = i >= steps.Length ? "stop" : "tool_calls" } } });
                 await stream.WriteAsync(Encoding.ASCII.GetBytes($"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n"), timeout.Token);
                 await stream.WriteAsync(body, timeout.Token);
             }
         }, timeout.Token);
         try
         {
-            var session = await AutoComboBuildTask.BuildComboTreeAsync(["钟离"], config, NullLogger.Instance, timeout.Token);
+            var session = await AutoComboBuildTask.BuildComboTreeAsync([new Avatar(null!, "钟离", 1, new Rect())], config, NullLogger.Instance, timeout.Token);
             await server;
-            context.Require(session.TeamNames.SequenceEqual(new[] { "钟离" }) &&
+            context.Require(session.Avatars.Select(a => a.Name).SequenceEqual(new[] { "钟离" }) &&
                 CsTrees.Display.Display.AsciiTree(session.Builder.Build()).Contains("verification-jump"),
                 "The real OpenAI/MEAI tool-call pipeline did not build the requested combo tree.");
             var toolNames = requests[0].RootElement.GetProperty("tools").EnumerateArray()
                 .Select(t => t.GetProperty("function").GetProperty("name").GetString()).ToArray();
             context.Require(!toolNames.Contains("RunTree") && steps.All(s => toolNames.Contains(s.Item1)) &&
-                requests[^1].RootElement.GetProperty("messages").EnumerateArray()
+                requests[steps.Length].RootElement.GetProperty("messages").EnumerateArray()
                     .Count(m => m.GetProperty("role").GetString() == "tool") == steps.Length,
                 "Tool results were not returned to the real client, or RunTree was exposed to the LLM.");
         }
@@ -66,7 +68,7 @@ public sealed class AutoComboSuite : IVerificationSuite
         using var cancelled = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(10));
-        var build = AutoComboBuildTask.BuildComboTreeAsync(["钟离"], config, NullLogger.Instance, cancelled.Token);
+        var build = AutoComboBuildTask.BuildComboTreeAsync([new Avatar(null!, "钟离", 1, new Rect())], config, NullLogger.Instance, cancelled.Token);
         using var stalledClient = await listener.AcceptTcpClientAsync(deadline.Token);
         await ReadBody(stalledClient.GetStream(), deadline.Token);
         await cancelled.CancelAsync();
