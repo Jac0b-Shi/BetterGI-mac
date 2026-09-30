@@ -54,7 +54,8 @@ public sealed record DispatcherStygianTaskRequest(
     DispatcherSoloTaskRequest("AutoStygianOnslaught");
 public sealed record DispatcherEatTaskRequest(string? FoodName, DispatcherAutoEatSettings Settings) : DispatcherSoloTaskRequest("AutoEat");
 public sealed record DispatcherCountInventoryTaskRequest(
-    int GridScreenName, string? ItemName, IReadOnlyList<string> ItemNames) : DispatcherSoloTaskRequest("CountInventoryItem");
+    int? GridScreenName, string? ItemName, IReadOnlyList<string> ItemNames,
+    BetterGenshinImpact.GameTask.Common.Job.ItemIconRecognitionMode? IconRecognitionMode = null, bool StopByItemSort = false) : DispatcherSoloTaskRequest("CountInventoryItem");
 
 public static class DispatcherRuntimePlatform
 {

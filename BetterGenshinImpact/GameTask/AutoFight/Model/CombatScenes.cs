@@ -8,7 +8,6 @@ using BetterGenshinImpact.GameTask.AutoFight.Assets;
 using BetterGenshinImpact.GameTask.AutoFight.Config;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
 using BetterGenshinImpact.GameTask.Common;
-using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Helpers;
@@ -44,6 +43,15 @@ public class CombatScenes : IDisposable, ICombatScriptScene
     /// 最近一次识别出的出战角色编号，从1开始，-1表示未识别
     /// </summary>
     public int LastActiveAvatarIndex { get; set; } = -1;
+
+    private int _lastTrySwitchTargetIndex = -1;
+
+    internal bool UpdateTrySwitchTarget(int targetIndex)
+    {
+        var targetChanged = _lastTrySwitchTargetIndex != targetIndex;
+        _lastTrySwitchTargetIndex = targetIndex;
+        return targetChanged;
+    }
 
     public MultiGameStatus? CurrentMultiGameStatus { set; get; }
 
@@ -396,22 +404,51 @@ public class CombatScenes : IDisposable, ICombatScriptScene
     /// <returns>返回配置中有效的角色名</returns>
     public List<string> UpdateActionSchedulerByCd(string cdConfig)
     {
-        if (string.IsNullOrEmpty(cdConfig))
-        {
-            return [];
-        }
-
         List<string> names = [];
         foreach (var t in Avatars)
         {
             var mCd = Avatar.ParseActionSchedulerByCd(t.Name, cdConfig);
-            // 手动cd不为0，不是麦当劳不是0
+            t.ManualSkillCd = mCd ?? -1;
             if (mCd is null) continue;
-            t.ManualSkillCd = (double)mCd;
             names.Add(t.Name);
         }
 
         return names;
+    }
+
+    /// <summary>
+    /// 以给定的队伍成员实例化战斗场景，供跨任务携带 Avatar 实例时接管复用（如自动连招建树会话）
+    /// 会先重新识别当前游戏内队伍并校验与给定成员一致（与顺序无关），不一致或识别失败抛异常；
+    /// 校验通过后用给定成员替换识别结果中的队伍（修正其 CombatScenes 反向引用），并同步编号框位置
+    /// </summary>
+    public static CombatScenes FromAvatars(Avatar[] avatars)
+    {
+        // 复用识别重试逻辑获取当前队伍场景，识别出的成员被替换丢弃，场景本身作为接管载体
+        var scenes = GetCombatScenesWithRetry();
+        var currentNames = scenes.GetAvatars().Select(a => a.Name).ToList();
+        var takenNames = avatars.Select(a => a.Name).ToList();
+        var missing = takenNames.Except(currentNames).ToList();
+        var extra = currentNames.Except(takenNames).ToList();
+        if (missing.Count > 0 || extra.Count > 0)
+        {
+            scenes.Dispose();
+            throw new Exception(
+                $"给定队伍成员与当前游戏内队伍不一致（给定：{string.Join("、", takenNames)}；当前：{string.Join("、", currentNames)}）");
+        }
+
+        // 编号框位置取自本次识别，接管的建树实例可能已过期
+        var indexRects = scenes.GetAvatars().ToDictionary(a => a.Name, a => a.IndexRect);
+        scenes.Avatars = avatars;
+        foreach (var avatar in avatars)
+        {
+            // 修正 Avatar 持有的场景反向引用，避免运行期间访问到已丢弃的建树场景
+            avatar.CombatScenes = scenes;
+            avatar.IndexRect = indexRects[avatar.Name];
+            // 复位跨 run 残留的就绪缓存（Avatar 实例随会话携带，旧缓存对新战斗不再可信）
+            avatar.IsBurstReady = false;
+        }
+
+        return scenes;
     }
 
     /// <summary>

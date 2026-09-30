@@ -335,6 +335,9 @@ BetterGenshinImpact.GameTask.AutoCombo.ComboBuild.AutoComboConfigPlatform.Config
     () => MacDispatcherRuntimePlatform.LoadUserConfig<
         BetterGenshinImpact.GameTask.AutoCombo.ComboBuild.AutoComboBuildConfig>(
             layout, "autoComboBuildConfig"));
+BetterGenshinImpact.GameTask.Common.Job.ItemIconRecognizerFactory.ModeProvider =
+    () => MacDispatcherRuntimePlatform.LoadUserConfig<BetterGenshinImpact.Core.Config.OtherConfig>(
+        layout, "otherConfig").ItemIconRecognitionMode;
 server.SoloTaskSettings.AttachAutoFightConfigUpdated(autoFightRuntimePlatform.UpdateConfig);
 CharacterDevelopmentRuntimePlatform.Configure(
     new MacCharacterDevelopmentRuntimePlatform(

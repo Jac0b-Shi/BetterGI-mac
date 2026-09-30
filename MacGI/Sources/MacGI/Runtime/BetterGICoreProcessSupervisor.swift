@@ -1,3 +1,9 @@
+struct BetterGICoreAutoComboPresentation: Codable, Sendable {
+    let visible: Bool
+    let tree: String
+    let fallbackTree: String
+}
+
 import Darwin
 import Foundation
 import Security
@@ -2203,6 +2209,11 @@ actor BetterGICoreProcessSupervisor {
             parameters: ["name": name]))
     }
 
+    func resetOneDragonBossCount(name: String) throws -> BetterGIOneDragonConfigDocument {
+        try decodeOneDragonConfig(try runningClient().request(
+            method: "oneDragon.bossCount.reset", parameters: ["name": name]))
+    }
+
     func saveOneDragonConfig(_ document: BetterGIOneDragonConfigDocument) throws
         -> BetterGIOneDragonConfigDocument
     {
@@ -2870,6 +2881,12 @@ actor BetterGICoreProcessSupervisor {
                 "sleepDelay": settings.sleepDelay,
             ]]
         ))
+    }
+
+    func autoComboPresentation() throws -> BetterGICoreAutoComboPresentation {
+        let result = try runningClient().request(method: "combo.presentation.get", parameters: [:])
+        return try JSONDecoder().decode(BetterGICoreAutoComboPresentation.self,
+            from: JSONSerialization.data(withJSONObject: result))
     }
 
     func autoComboSettings() throws -> BetterGICoreAutoComboSettings {

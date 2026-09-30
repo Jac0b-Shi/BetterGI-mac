@@ -117,7 +117,10 @@ public sealed class OneDragonCatalog(
         ValidatePlan(config);
         lock (_writeLock)
         {
-            Write(Resolve(name), preservedDocument);
+            var path = Resolve(name);
+            if (File.Exists(path))
+                preservedDocument["AutoBossCompletedRunCount"] = ReadRawDocument(path)["AutoBossCompletedRunCount"]?.DeepClone() ?? 0;
+            Write(path, preservedDocument);
             SaveSelectedName(name);
             return ToDocument(preservedDocument);
         }
@@ -189,7 +192,39 @@ public sealed class OneDragonCatalog(
         ValidateName(config.Name);
         ValidatePlan(config);
         lock (_writeLock)
-            Write(Resolve(config.Name), config);
+        {
+            var path = Resolve(config.Name);
+            var document = JObject.FromObject(config);
+            if (File.Exists(path))
+                document["AutoBossCompletedRunCount"] = ReadRawDocument(path)["AutoBossCompletedRunCount"]?.DeepClone() ?? 0;
+            Write(path, document);
+        }
+    }
+
+    public OneDragonConfigDocument ResetBossCompletedCount(string name)
+    {
+        lock (_writeLock)
+        {
+            var path = Resolve(name);
+            var document = ReadRawDocument(path);
+            document["AutoBossCompletedRunCount"] = 0;
+            Write(path, document);
+            return ToDocument(document);
+        }
+    }
+
+    public int RecordBossReward(string name)
+    {
+        lock (_writeLock)
+        {
+            var path = Resolve(name);
+            var document = ReadRawDocument(path);
+            var config = DeserializeConfig(document, "Invalid OneDragon config.");
+            int count = checked(config.AutoBossCompletedRunCount + 1);
+            document["AutoBossCompletedRunCount"] = count;
+            Write(path, document);
+            return count;
+        }
     }
 
     private void EnsureDefaultConfig()

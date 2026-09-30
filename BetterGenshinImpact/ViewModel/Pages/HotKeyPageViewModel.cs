@@ -709,8 +709,15 @@ public partial class HotKeyPageViewModel : ObservableObject, IViewModel
             Config.HotKeyConfig.RecBigMapPosHotkeyType,
             (_, _) =>
             {
-                var p = new TpTask(CancellationToken.None).GetPositionFromBigMap(MapTypes.MoonCanon.ToString());
-                _logger.LogInformation("大地图位置：{Position}", p);
+                try
+                {
+                    var p = new TpTask(CancellationToken.None).GetPositionFromBigMap(MapTypes.Teyvat.ToString());
+                    _logger.LogInformation("大地图位置：{Position}", p);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e.Message);
+                }
             }
         ));
 
@@ -802,8 +809,8 @@ public partial class HotKeyPageViewModel : ObservableObject, IViewModel
                 Config.HotKeyConfig.Test2HotkeyType,
                 (_, _) =>
                 {
-                    SetTimeTask setTimeTask = new SetTimeTask();
-                    Task.Run(async () => { await setTimeTask.Start(12, 05, new CancellationToken()); });
+                    var myTask = new ChooseFOptionTask();
+                    Task.Run(async () => { await myTask.SingleSelectText("荒坠的圣迹", CancellationToken.None); });
 
                     // var pName = SystemControl.GetActiveProcessName();
                     // Debug.WriteLine($"当前处于前台的程序：{pName}，原神是否位于前台：{SystemControl.IsGenshinImpactActive()}");

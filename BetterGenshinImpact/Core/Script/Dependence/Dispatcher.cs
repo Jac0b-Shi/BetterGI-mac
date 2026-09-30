@@ -1,3 +1,4 @@
+using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script.Dependence.Model;
 using BetterGenshinImpact.GameTask.AutoEat;
@@ -182,12 +183,13 @@ public class Dispatcher
                 if (soloTask.Config is not ScriptObject countConfig)
                     throw new NullReferenceException($"{nameof(soloTask.Config)}为空");
                 var screenName = ScriptObjectConverter.GetValue(
-                    countConfig, "gridScreenName", (GridScreenName?)null)
-                    ?? throw new Exception("gridScreenName为空或错误");
+                    countConfig, "gridScreenName", (GridScreenName?)null);
                 request = new DispatcherCountInventoryTaskRequest(
-                    (int)screenName,
+                    screenName is null ? null : (int)screenName,
                     ScriptObjectConverter.GetValue(countConfig, "itemName", (string?)null),
-                    ScriptObjectConverter.GetValue<string>(countConfig, "itemNames")?.ToList() ?? []);
+                    ScriptObjectConverter.GetValue<string>(countConfig, "itemNames")?.ToList() ?? [],
+                    ScriptObjectConverter.GetValue(countConfig, "iconRecognitionMode", (ItemIconRecognitionMode?)null),
+                    ScriptObjectConverter.GetValue(countConfig, "stopByItemSort", false));
                 break;
             default:
                 throw new ArgumentException($"未知的任务名称: {soloTask.Name}", nameof(soloTask.Name));

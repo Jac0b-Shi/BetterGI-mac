@@ -51,6 +51,7 @@ public class AutoMusicGameTask : ISoloTask
             var points = new Point[KeyLanes.Length];
             var blueChannels = new byte[KeyLanes.Length];
             var pressed = new bool[KeyLanes.Length];
+            var pressTicks = new long[KeyLanes.Length];
             for (var index = 0; index < KeyLanes.Length; index++)
             {
                 points[index] = new Point(
@@ -65,13 +66,17 @@ public class AutoMusicGameTask : ISoloTask
                 for (var index = 0; index < KeyLanes.Length; index++)
                 {
                     var shouldPress = blueChannels[index] < 220;
+                    if (!shouldPress && pressed[index] && Environment.TickCount64 - pressTicks[index] < 80) continue;
                     if (shouldPress == pressed[index])
                     {
                         continue;
                     }
 
                     if (shouldPress)
+                    {
+                        pressTicks[index] = Environment.TickCount64;
                         KeyDown(KeyLanes[index].Key);
+                    }
                     else
                         KeyUp(KeyLanes[index].Key);
                     pressed[index] = shouldPress;

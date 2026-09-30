@@ -1,12 +1,23 @@
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
+using BetterGenshinImpact.GameTask.AutoCombo.ComboBuild;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
+using BetterGenshinImpact.GameTask.SkillCd;
+#if !BGI_PLATFORM_MAC
+using BetterGenshinImpact.View.Drawable;
+#endif
+#if !BGI_PLATFORM_MAC
+using BetterGenshinImpact.ViewModel.Windows;
+#endif
+#if !BGI_PLATFORM_MAC
+using System.Windows.Media;
+#endif
 using CsTrees;
-using CsTrees.Blackboard;
 using CsTrees.Display;
 using CsTrees.Visitors;
 using Microsoft.Extensions.Logging;
 using System;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -49,30 +60,39 @@ public class AutoComboRunTask : ISoloTask
     {
         var session = _session;
 
-        // 标准消费者协议：重新识别队伍（顺带由 BindAndBuild 校验与建树队伍是否一致）→ BeforeTask 写入本任务令牌
-        using var combatScenes = CombatScenes.GetCombatScenesWithRetry();
+        // 标准消费者协议：FromAvatars 重新识别队伍并校验与建树队伍一致，接管建树会话的 Avatar 实例 → BeforeTask 写入本任务令牌
+        using var combatScenes = CombatScenes.FromAvatars(_session.Avatars);
         combatScenes.BeforeTask(ct);
 
-        // 清黑板 → 授权写入 CombatScenes → 重新 Build 得到全新节点实例的行为树（行为状态复位）
-        var comboTree = session.BindAndBuild(combatScenes);
+        // 清黑板（复位上次运行的键值状态）→ 重新 Build 得到全新节点实例的行为树（节点内状态随实例自然复位）
+        var (comboTree, fallbackTree) = session.BindAndBuild();
 
         // 按宿主意图决定是否包装自带战斗结束检测：外部控制结束时（如秘境）关闭，只认取消令牌
         Behaviour extendedRoot;
         if (_param.FightFinishDetectEnabled)
         {
             Logger.LogInformation("{Name}扩展行为树：包装 LLM 树与战斗结束检测", Name);
-            extendedRoot = new AutoComboRunBuilder()
+            extendedRoot = new AutoComboRunBuilder(session.Avatars)
                 .WithBlackboard(session.Blackboard)
-                    .Sequence("-", memory: true)
-                        .Leaf(() => comboTree)
+                    .Sequence("-", true)
                         .CheckFightFinish("战斗结束检测")
+                        .Selector("-", false)
+                            .Leaf(() => comboTree)
+                            .Leaf(() => fallbackTree)
+                        .End()
                     .End()
                 .End().Build();
         }
         else
         {
             Logger.LogInformation("{Name}使用宿主场景的结束控制，不包装战斗结束检测", Name);
-            extendedRoot = comboTree;
+            extendedRoot = new AutoComboRunBuilder(session.Avatars)
+                .WithBlackboard(session.Blackboard)
+                    .Selector("-", false)
+                        .Leaf(() => comboTree)
+                        .Leaf(() => fallbackTree)
+                    .End()
+                .End().Build();
         }
 
         Logger.LogInformation("{Name}任务启动，持续 Tick 行为树", Name);
@@ -85,41 +105,72 @@ public class AutoComboRunTask : ISoloTask
         // 使用独立的 CancellationTokenSource，暂停/结束时先停索敌并等待其清理
         using var targetingCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         Task? targetingTask = null;
-        if (AutoFightRuntimePlatform.Current.AutoFightConfig.EnableCombatTargeting)
+        using var overlayCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        Task? overlayTask = null;
+        try
         {
-            targetingTask = Task.Run(async () =>
+            SkillCdTrigger.Suspend();
+            if (AutoFightRuntimePlatform.Current.AutoFightConfig.EnableCombatTargeting)
+            {
+                targetingTask = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await AvatarRecognition.ContinuousTargetingLoopAsync(targetingCts.Token, () => false);
+                    }
+                    catch (OperationCanceledException) { }
+                    catch (Exception e)
+                    {
+                        Logger.LogError(e, "持续索敌循环异常");
+                    }
+                }, targetingCts.Token);
+            }
+
+            // 全队战技 CD 遮罩显示：与 Tick 循环并发的后台展示循环，刷新间隔自定，与树 Tick 节奏解耦
+            overlayTask = Task.Run(async () =>
             {
                 try
                 {
-                    await AvatarRecognition.ContinuousTargetingLoopAsync(targetingCts.Token, () => false);
+                    await TeamSkillCdOverlay.LoopAsync(overlayCts.Token, combatScenes);
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception e)
                 {
-                    Logger.LogError(e, "持续索敌循环异常");
+                    Logger.LogError(e, "全队战技CD遮罩循环异常");
                 }
-            }, targetingCts.Token);
-        }
+            }, overlayCts.Token);
 
-        try
-        {
+            // 行为树与并发循环均已就绪，进入正式运行段：显示浮窗
+            AutoComboPresentation.Show();
+
+            // E 技能识别结果显示：订阅 VM 通知，运行期间 Avatar 分类结果自动渲染到遮罩
+#if !BGI_PLATFORM_MAC
+            ESkillClassifyViewModel.Instance.PropertyChanged += OnESkillClassifyResultChanged;
+#endif
+
+
             while (!ct.IsCancellationRequested)
             {
                 await tree.Tick();
 
-                // 只渲染本次 Tick 遍历的路径，未访问的子树折叠为占位符
+
+
+                // 只渲染本次 Tick 遍历的路径，未访问的子树折叠为占位符（主树与兜底树共用同一快照）
                 var path = Display.AsciiTree(
                     comboTree,
                     showOnlyVisited: true,
                     visited: snapshot.Visited,
                     previouslyVisited: snapshot.PreviouslyVisited);
-                Logger.LogInformation("Tick {Count}：\n{Path}", tree.Count, path);
+                AutoComboPresentation.Tree = path;
 
-                // 树完成一轮评估（根节点非 Running）时稍作等待，避免空转
-                if (tree.Root.Status != Status.Running)
-                {
-                    Sleep(200, ct);
-                }
+                var fallbackPath = Display.AsciiTree(
+                    fallbackTree,
+                    showOnlyVisited: true,
+                    visited: snapshot.Visited,
+                    previouslyVisited: snapshot.PreviouslyVisited);
+                AutoComboPresentation.FallbackTree = fallbackPath;
+
+                Sleep(35, ct);
             }
         }
         catch (OperationCanceledException)
@@ -128,17 +179,107 @@ public class AutoComboRunTask : ISoloTask
         }
         finally
         {
-            // 暂停/结束时先停止索敌循环并等待其完成清理，避免其 finally 释放按键与后续操作冲突
-            if (targetingTask != null)
+            try
             {
+                // Stop both background loops before publishing final UI state.
                 await targetingCts.CancelAsync();
-                try { await targetingTask; } catch (OperationCanceledException) { }
+                await overlayCts.CancelAsync();
+                if (targetingTask is not null)
+                    try { await targetingTask; } catch (OperationCanceledException) { }
+                if (overlayTask is not null)
+                    try { await overlayTask; } catch (OperationCanceledException) { }
+                AutoComboPresentation.Hide();
+#if !BGI_PLATFORM_MAC
+                ESkillClassifyViewModel.Instance.PropertyChanged -= OnESkillClassifyResultChanged;
+                RemoveESkillClassifyDrawables();
+#endif
+                TeamSkillCdOverlay.Clear();
             }
-
-            combatScenes.AfterTask();
+            finally
+            {
+                // Overlay transport failure must not leave the trigger suspended or input held.
+                SkillCdTrigger.Resume();
+                combatScenes.AfterTask();
+            }
             Logger.LogInformation("{Name}任务暂停，可再次点击继续", Name);
         }
     }
+
+    /// <summary>
+    /// E 技能识别结果显示：将最新的分类结果（就绪/冷却/未知 + 编号）绘制到遮罩 E 技能图标上方，
+    /// 是否可见仍由 MaskWindow 渲染时的"显示识别结果"开关统一过滤
+    /// </summary>
+#if !BGI_PLATFORM_MAC
+    private void OnESkillClassifyResultChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ESkillClassifyViewModel.Result))
+        {
+            return;
+        }
+
+        var result = ESkillClassifyViewModel.Instance.Result;
+        if (result == null)
+        {
+            RemoveESkillClassifyDrawables();
+            return;
+        }
+
+        var stateText = result.State switch
+        {
+            SkillCdState.Ready => "就绪",
+            SkillCdState.Cooldown => "冷却",
+            _ => "未知",
+        };
+
+        if (!string.IsNullOrEmpty(result.Code))
+        {
+            stateText += $"({result.Code})";
+        }
+
+        var textColor = GetElementColor(result.AvatarName);
+
+        // 坐标（ClassifyRect/TextPosition）已由 Avatar 换算到捕获像素域，直接绘制
+        var drawContent = VisionContext.Instance().DrawContent;
+        drawContent.PutOrRemoveRectList("ESkillClassifyRegion",
+            [result.ClassifyRect.ToRectDrawable(System.Drawing.Pens.White)]);
+        drawContent.PutOrRemoveTextList("ESkillClassify",
+            [new TextDrawable(stateText, result.TextPosition, textColor)]);
+    }
+
+    /// <summary>
+    /// 根据角色名经 AvatarProfiles 推导元素颜色，无档案或非元素标签时回退默认识别文本色
+    /// </summary>
+    private static System.Windows.Media.Color GetElementColor(string? avatarName)
+    {
+        var defaultColor = (System.Windows.Media.Color)ColorConverter.ConvertFromString(
+            TaskContext.Instance().Config.MaskWindowConfig.RecognitionTextColor);
+        if (string.IsNullOrEmpty(avatarName))
+        {
+            return defaultColor;
+        }
+
+        var profile = AvatarProfiles.TryGet(avatarName);
+        var elementTag = profile?.Tags.FirstOrDefault(t => t.EndsWith("元素", StringComparison.Ordinal));
+        return elementTag switch
+        {
+            "火元素" => System.Windows.Media.Color.FromRgb(0xFF, 0x57, 0x49),
+            "水元素" => System.Windows.Media.Color.FromRgb(0x33, 0xA6, 0xFF),
+            "风元素" => System.Windows.Media.Color.FromRgb(0x3F, 0xCE, 0xC0),
+            "雷元素" => System.Windows.Media.Color.FromRgb(0xB3, 0x80, 0xFF),
+            "草元素" => System.Windows.Media.Color.FromRgb(0x9A, 0xD9, 0x36),
+            "冰元素" => System.Windows.Media.Color.FromRgb(0x7A, 0xF2, 0xF2),
+            "岩元素" => System.Windows.Media.Color.FromRgb(0xFF, 0xB5, 0x3A),
+            _ => defaultColor,
+        };
+    }
+
+    private void RemoveESkillClassifyDrawables()
+    {
+        var drawContent = VisionContext.Instance().DrawContent;
+        drawContent.PutOrRemoveTextList("ESkillClassify", null);
+        drawContent.PutOrRemoveRectList("ESkillClassifyRegion", null);
+    }
+#endif
 }
 
 /// <summary>
@@ -148,16 +289,16 @@ public class AutoComboRunTask : ISoloTask
 /// </summary>
 public partial class CheckFightFinish : Behaviour
 {
-    [BlackboardKey(Access = Access.Read)]
-    public BehaviourKeyAccess<CombatScenes> CombatScenes { get; private set; } = null!;
+    private readonly Avatar[] _avatars;
 
     /// <summary>上次完整检查时间（静态共享：多个检查节点实例共用同一节流周期）</summary>
     private static DateTime _lastCheckTime = DateTime.MinValue;
 
     private TaskFightFinishDetectConfig _detectConfig = null!;
 
-    private CheckFightFinish(string name) : base(name)
+    public CheckFightFinish(string name, Avatar[] avatars) : base(name)
     {
+        _avatars = avatars;
     }
 
     protected override void Initialize()
@@ -185,13 +326,13 @@ public partial class CheckFightFinish : Behaviour
         // 节流：未到 CheckTime 间隔直接视为未结束，避免树的高频 Tick 反复打开编队界面
         if ((DateTime.Now - _lastCheckTime).TotalSeconds < _detectConfig.CheckTime)
         {
-            return Status.Failure;
+            return Status.Success;
         }
 
         _lastCheckTime = DateTime.Now;
 
         // 令牌与其他行为节点保持同源（BeforeTask 写入 Avatar.Ct 的那个）
-        var avatar = CombatScenes.Get().GetAvatars().FirstOrDefault();
+        var avatar = _avatars.FirstOrDefault();
         var ct = avatar?.Ct ?? CancellationToken.None;
         if (await AutoFightTask.CheckFightFinish(_detectConfig, ct))
         {
@@ -199,6 +340,46 @@ public partial class CheckFightFinish : Behaviour
             throw new NormalEndException("战斗结束");
         }
 
-        return Status.Failure;
+        return Status.Success;
+    }
+}
+
+/// <summary>
+/// 全队 E 技能 CD 遮罩显示：复用 SkillCd 模块的 <see cref="SkillCdOverlayRenderer"/>
+/// 渲染全队角色的战技 CD 文字（含未知状态"?"），坐标与样式跟随 SkillCdConfig 用户配置
+/// CD 由时间戳推算，每次刷新即为当前时刻值，以固定间隔的后台循环形式运行，与行为树 Tick 解耦
+/// </summary>
+public static class TeamSkillCdOverlay
+{
+    /// <summary>遮罩文字 key：与 SkillCd 共用（AutoCombo 运行期间已通过 SkillCdTrigger.Suspend 接管显示权）</summary>
+    private const string OverlayKey = "SkillCdText";
+
+    /// <summary>遮罩文字刷新间隔（毫秒）</summary>
+    private const int RefreshIntervalMs = 100;
+
+    /// <summary>持续刷新全队战技 CD 遮罩文字，取消令牌触发后退出</summary>
+    public static async Task LoopAsync(CancellationToken ct, CombatScenes combatScenes)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            var avatars = combatScenes.GetAvatars();
+            var slotCds = new double?[4];
+            for (int i = 0; i < slotCds.Length && i < avatars.Count; i++)
+            {
+                // GetSkillCdSecondsV2：>0 冷却中 / 0 就绪（不绘制）/ null 未知（NaN → "?"）
+                var seconds = avatars[i].GetSkillCdSecondsV2();
+                slotCds[i] = seconds == null ? double.NaN : (seconds.Value > 0 ? seconds.Value : null);
+            }
+
+            SkillCdOverlayRenderer.Update(OverlayKey, slotCds);
+
+            await Task.Delay(RefreshIntervalMs, ct);
+        }
+    }
+
+    /// <summary>清除此循环提交的遮罩文字（任务收尾时调用）</summary>
+    public static void Clear()
+    {
+        SkillCdRuntimePlatform.Current.Publish(null);
     }
 }

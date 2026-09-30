@@ -47,12 +47,14 @@ public class SkillCdTrigger : ITaskTrigger
 
     private DateTime _lastTickTime = DateTime.Now;
     private DateTime _contextEnterTime = DateTime.MinValue;
+    /// <summary>上一帧的启用状态，用于边沿触发清理遮罩文字</summary>
+    private bool _wasEnabled = true;
     /// <summary>
     /// 离开场景时间，用于0.8秒防抖避免识别失误导致UI闪烁（仅影响UI渲染，不影响CD计时）
     /// </summary>
     private DateTime _contextLeaveTime = DateTime.MinValue;
     private bool _wasInContext = false;
-    
+
     /// <summary>
     /// 上一次激活的角色索引（1-4），用于检测当前激活角色切换
     /// </summary>
@@ -68,6 +70,30 @@ public class SkillCdTrigger : ITaskTrigger
 
 
     private volatile bool _isSyncingTeam = false;
+
+    /// <summary>
+    /// 外部任务挂起开关：任务运行期间接管 CD 显示时挂起本触发器（不渲染、不计时、不做识别），
+    /// 任务收尾后恢复。由调用方保证 Suspend/Resume 成对调用（配合 try/finally）
+    /// </summary>
+    private static volatile bool _suspended = false;
+
+    /// <summary>
+    /// 挂起本触发器：外部任务（如 AutoCombo）接管 CD 遮罩显示期间调用，
+    /// 同时清掉自己的遮罩文字，避免两套显示叠加
+    /// </summary>
+    public static void Suspend()
+    {
+        _suspended = true;
+        SkillCdRuntimePlatform.Current.Publish(null);
+    }
+
+    /// <summary>
+    /// 恢复本触发器：接管方任务收尾时调用（务必在 finally 中，防止异常路径漏调）
+    /// </summary>
+    public static void Resume()
+    {
+        _suspended = false;
+    }
 
     private DateTime _lastSyncTime = DateTime.MinValue;
 
@@ -120,9 +146,22 @@ public class SkillCdTrigger : ITaskTrigger
     /// </summary>
     public void OnCapture(CaptureContent content)
     {
-        if (!IsEnabled)
+        var enabled = IsEnabled;
+        if (!enabled)
         {
-            _platform.Publish(null);
+            // 仅在启用→禁用的状态变化边沿清理一次遮罩文字，避免每帧重复清 key
+            if (_wasEnabled)
+            {
+                SkillCdRuntimePlatform.Current.Publish(null);
+            }
+            _wasEnabled = enabled;
+            return;
+        }
+        _wasEnabled = enabled;
+
+        // 被外部任务挂起：整体跳过（不渲染、不计时、不做识别），数据由接管方维护
+        if (_suspended)
+        {
             return;
         }
 
@@ -147,7 +186,7 @@ public class SkillCdTrigger : ITaskTrigger
         // 场景检测（带0.5秒防抖，仅影响UI渲染）
         bool rawInContext = Bv.IsInMainUi(content.CaptureRectArea) || Bv.IsInDomain(content.CaptureRectArea);
         bool isInContext;
-        
+
         if (rawInContext)
         {
             var multiGameStatus = PartyAvatarSideIndexHelper.DetectedMultiGameStatus(content.CaptureRectArea);
@@ -198,7 +237,7 @@ public class SkillCdTrigger : ITaskTrigger
             _lastSyncTime = DateTime.MinValue;
             _wasInContext = true;
             _isSyncingTeam = true;
-            
+
             Task.Run(async () =>
             {
                 // 确保画面加载完成，提高识别成功率
@@ -209,19 +248,19 @@ public class SkillCdTrigger : ITaskTrigger
                     // 刚按过换人键，人物头像还在读秒，此时yolo识别可能会失败
                     await Task.Delay(TimeSpan.FromSeconds(1.1 - delaySinceLastPressIndex));
                 }
-                    
+
                 CombatScenes? scenes = null;
-                try 
+                try
                 {
                     scenes = _platform.TrySyncCombatScenesSilent();
                     if (scenes != null && scenes.CheckTeamInitialized())
                     {
                         var avatars = scenes.GetAvatars();
-                        
+
                         if (avatars.Count >= 1)
                         {
                             var newTeamNames = avatars.Select(a => a.Name).ToArray();
-                            
+
                             // 检测队伍配置是否变化
                             bool teamChanged = false;
                             for (int i = 0; i < 4; i++)
@@ -233,7 +272,7 @@ public class SkillCdTrigger : ITaskTrigger
                                     break;
                                 }
                             }
-                            
+
                             lock (_stateLock)
                             {
                                 if (teamChanged)
@@ -247,7 +286,7 @@ public class SkillCdTrigger : ITaskTrigger
                                             string.Join(",", _lastTeamAvatarNames),
                                             string.Join(",", newTeamNames));
                                     }
-                                    
+
                                     for (int i = 0; i < 4; i++)
                                     {
                                         _cds[i] = 0;
@@ -255,9 +294,9 @@ public class SkillCdTrigger : ITaskTrigger
                                     }
                                     _lastActiveIndex = -1;
                                 }
-                                
+
                                 SyncAvatarInfo(avatars.ToList());
-                                
+
                                 for (int i = 0; i < 4; i++)
                                 {
                                     _lastTeamAvatarNames[i] = i < newTeamNames.Length ? newTeamNames[i] : string.Empty;
@@ -345,7 +384,7 @@ public class SkillCdTrigger : ITaskTrigger
         // 更新帧缓存队列
         _penultimateImage?.Dispose();
         _penultimateImage = _lastImage; // 把上一帧移到倒数第二帧
-        
+
         // 记录当前帧为上一帧（深拷贝，避免current用完会被dispose）
         _lastImage = new ImageRegion(
             content.CaptureRectArea.SrcMat.Clone(),
@@ -385,7 +424,7 @@ public class SkillCdTrigger : ITaskTrigger
         if (activeIdx <= 0) return;
 
         int slot = activeIdx - 1;
-        
+
         // 记录被切走角色的CD
         if (slot != pressedTarget)
         {
@@ -394,7 +433,7 @@ public class SkillCdTrigger : ITaskTrigger
             {
                 _cds[slot] = ocrVal;
                 _lastSetTime[slot] = DateTime.Now;
-                
+
                 // 记录切人保护
                 _lastSwitchFromSlot = slot;
                 _lastSwitchTime = DateTime.Now;
@@ -429,7 +468,7 @@ public class SkillCdTrigger : ITaskTrigger
                 }
             }
         }
-        
+
         // 更新当前激活角色索引（不清零CD，让计时器持续运行）
         _lastActiveIndex = pressedTarget + 1;
     }
@@ -501,7 +540,7 @@ public class SkillCdTrigger : ITaskTrigger
     private void ApplyFallbackCd(int slot)
     {
         var name = _teamAvatarNames[slot];
-        
+
         // 1. 优先自定义规则
         double? customRule = GetCustomCdRule(name);
         if (customRule.HasValue)
@@ -527,7 +566,7 @@ public class SkillCdTrigger : ITaskTrigger
     {
         var result = new Dictionary<string, double?>();
         var list = _platform.Config.CustomCdList;
-        
+
         if (list == null) return result;
 
         foreach (var item in list)
@@ -589,7 +628,7 @@ public class SkillCdTrigger : ITaskTrigger
         var captureRect = systemInfo.ScaleMax1080PCaptureRect;
         var sideRects = AutoFightAssets.Get(captureRect.Width, captureRect.Height).AvatarSideIconRectList;
         var config = _platform.Config;
-        
+
         if (sideRects == null || sideRects.Count < 4)
         {
             _platform.Publish(null);
@@ -597,7 +636,7 @@ public class SkillCdTrigger : ITaskTrigger
         }
 
         double factor = (double)systemInfo.GameScreenSize.Width / systemInfo.ScaleMax1080PCaptureRect.Width;
-        
+
         // 使用配置中的坐标（保留一位小数）
         double userPX = Math.Round(config.PX, 1);
         double userPY = Math.Round(config.PY, 1);
@@ -608,7 +647,7 @@ public class SkillCdTrigger : ITaskTrigger
         double intervalY = userGap * factor;
 
         var textList = new List<SkillCdTextCommand>();
-        
+
         if (_isSyncingTeam)
         {
             _platform.Publish(null);
@@ -618,14 +657,14 @@ public class SkillCdTrigger : ITaskTrigger
         // 检查是否有足够的角色信息（必须恰好4人）
         int validAvatarCount = _teamAvatarNames.Count(n => !string.IsNullOrEmpty(n));
         // _logger.LogDebug("[SkillCD] UpdateOverlay: 有效角色数量={Count}, Names={Names}", validAvatarCount, string.Join(",", _teamAvatarNames));
-        
+
         if (validAvatarCount != 4)
         {
             // 不是4人，确保清空
             _platform.Publish(null);
             return;
         }
-        
+
         for (int i = 0; i < 4; i++)
         {
             if (!string.IsNullOrEmpty(_teamAvatarNames[i]))

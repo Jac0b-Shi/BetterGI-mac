@@ -68,7 +68,7 @@ public partial class ScriptGroupProject
             var pathingTask = ScriptGroupExecutionServices.Current.CreatePathExecutor(CancellationContext.Instance.Cts.Token);
             pathingTask.PartyConfig = GroupInfo?.Config.PathingConfig
                 ?? ScriptGroupExecutionServices.Current.DefaultPartyConfig;
-            if (pathingTask.PartyConfig is null || pathingTask.PartyConfig.AutoPickEnabled)
+            if (!pathingTask.PartyConfig.Enabled || pathingTask.PartyConfig.AutoPickEnabled)
             {
                 ScriptGroupExecutionServices.Current.AddAutoPickTrigger();
             }

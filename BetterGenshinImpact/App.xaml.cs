@@ -10,6 +10,7 @@ using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.Core.Runtime.Windows;
 using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.GameTask.AutoSkip.Audio;
 using BetterGenshinImpact.GameTask.Music.Service;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Helpers.Extensions;
@@ -181,6 +182,9 @@ public partial class App : Application
                 services.AddSingleton<IRelativeMouseInputMonitorFactory, RelativeMouseInputMonitorFactory>();
                 services.AddSingleton<OverlayMetricsService>();
                 services.AddSingleton<CustomHtmlMaskService>();
+                services.AddSingleton<DialogueOptionVoiceDiagnosticState>();
+                services.AddSingleton<DialogueOptionVoiceDiagnosticService>();
+                services.AddHostedService(sp => sp.GetRequiredService<DialogueOptionVoiceDiagnosticService>());
                 services.AddSingleton<TaskTriggerDispatcher>();
                 services.AddSingleton<RecognitionTemplateAssetService>();
                 services.AddSingleton<RecognitionTemplateEditorService>();
@@ -358,7 +362,10 @@ public partial class App : Application
             RegisterEvents();
             await _host.StartAsync();
             ServerTimeHelper.Initialize(_host.Services.GetRequiredService<IServerTimeProvider>());
-            await UrlProtocolHelper.RegisterAsync();
+            if (InstanceBootstrap.Current.Context.IsRoot)
+            {
+                await UrlProtocolHelper.RegisterAsync();
+            }
         }
         catch (Exception ex)
         {

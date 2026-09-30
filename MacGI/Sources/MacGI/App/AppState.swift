@@ -559,6 +559,7 @@ final class AppState: ObservableObject {
     @Published private(set) var autoRedeemCodeSettings: BetterGICoreAutoRedeemCodeSettings?
     @Published private(set) var getGridIconsSettings: BetterGICoreGetGridIconsSettings?
     @Published private(set) var autoFishingSettings: BetterGICoreAutoFishingSettings?
+    @Published private(set) var autoComboPresentation: BetterGICoreAutoComboPresentation?
     @Published private(set) var autoComboSettings: BetterGICoreAutoComboSettings?
     @Published private(set) var autoComboSettingsSaving = false
     @Published var autoComboEndpointDraft = ""
@@ -3198,6 +3199,17 @@ final class AppState: ObservableObject {
         }
     }
 
+    func resetOneDragonBossCount() {
+        guard let document = oneDragonDocument, let supervisor = betterGICoreSupervisor else { return }
+        Task { [weak self] in
+            do {
+                self?.oneDragonDocument = try await supervisor.resetOneDragonBossCount(name: document.name)
+            } catch {
+                self?.addLog(.error, "重置累计领奖次数失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
     func saveOneDragonConfig() {
         guard let supervisor = betterGICoreSupervisor,
               let document = oneDragonDocument,
@@ -4532,6 +4544,12 @@ final class AppState: ObservableObject {
                 self.addLog(.error, "AutoCook settings save failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    func refreshAutoComboPresentation() async {
+        guard let supervisor = betterGICoreSupervisor else { return }
+        do { autoComboPresentation = try await supervisor.autoComboPresentation() }
+        catch { autoComboPresentation = nil }
     }
 
     func saveAutoComboSettings() {

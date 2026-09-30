@@ -4,6 +4,7 @@ using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoSkip.Assets;
+using BetterGenshinImpact.GameTask.AutoSkip.Audio;
 using BetterGenshinImpact.GameTask.AutoSkip.Model;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
@@ -70,6 +71,10 @@ public partial class AutoSkipTrigger : ITaskTrigger
     private readonly AutoSkipConfig _config;
     private readonly IAutoSkipAudioWaiter _dialogueOptionAudioWaiter =
         AutoSkipRuntimePlatform.Current.CreateAudioWaiter();
+
+    #if !BGI_PLATFORM_MAC
+    internal DialogueOptionAudioWaiter VoiceWaiter => (DialogueOptionAudioWaiter)_dialogueOptionAudioWaiter;
+#endif
 
     /// <summary>
     /// 不自动点击的选项，优先级低于橙色文字点击

@@ -43,7 +43,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
     private readonly IAutoLeyLineOutcropRuntimePlatform _runtime;
     private readonly IScriptGroupExecutionServices _executionServices;
     private readonly ILogger<AutoLeyLineOutcropTask> _logger;
-    private readonly AutoLeyLineOutcropParam _taskParam; 
+    private readonly AutoLeyLineOutcropParam _taskParam;
     private readonly bool _oneDragonMode;
     private TpTask _tpTask = null!;
     private readonly ReturnMainUiTask _returnMainUiTask = new();
@@ -730,9 +730,13 @@ public class AutoLeyLineOutcropTask : ISoloTask
 
     private PathingPartyConfig BuildLeyLinePathingPartyConfig()
     {
-        var partyConfig = _executionServices.DefaultPartyConfig;
-        partyConfig.SkipPartySwitch = true;
-        return partyConfig;
+        // 地脉路径使用程序化默认配置，不走配置组禁用时的回退逻辑。
+        return new PathingPartyConfig
+        {
+            Enabled = true,
+            AutoFightEnabled = true,
+            SkipPartySwitch = true
+        };
     }
 
     private Task<NodeData> LoadNodeData()
@@ -1039,12 +1043,12 @@ public class AutoLeyLineOutcropTask : ISoloTask
             using var eRa = region.DeriveCrop(AutoFightAssets.Get(region).ECooldownRect);
             using var eRaWhite = OpenCvCommonHelper.InRangeHsv(eRa.SrcMat, new Scalar(0, 0, 235), new Scalar(0, 25, 255));
             var text = _runtime.OcrService.OcrWithoutDetector(eRaWhite);
-            
+
             // 如果成功读到了大于 0 的 CD 数值，说明技能已释放
-            var hasOcrCd = double.TryParse(text, out var ocrCd) && ocrCd > 0;  
+            var hasOcrCd = double.TryParse(text, out var ocrCd) && ocrCd > 0;
             // 视觉上判断当前技能图标是否高亮就绪，如果不亮（false）也说明技能释放进入了冷却
-            var isVisualReady = Bv.IsSkillReady(region, kazuha.Index, false);  
-            
+            var isVisualReady = Bv.IsSkillReady(region, kazuha.Index, false);
+
             // 当 OCR 没读出 CD（可能网络卡顿技能没放出来），并且视觉上技能图标依然亮着就绪时，判断为释放失败
             if (!hasOcrCd && isVisualReady)
             {

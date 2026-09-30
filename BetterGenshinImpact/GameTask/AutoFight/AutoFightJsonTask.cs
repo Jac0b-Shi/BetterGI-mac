@@ -87,7 +87,7 @@ public class AutoFightJsonTask : ISoloTask
             _predictor = AutoFightRuntimePlatform.Current.CreateYoloPredictor(BgiOnnxModel.BgiWorld);
         }
 
-        _finishDetectConfig = new AutoFightTask.TaskFightFinishDetectConfig(_taskParam.FinishDetectConfig);
+        _finishDetectConfig = new AutoFightTask.TaskFightFinishDetectConfig(_taskParam);
     }
 
     /// <summary>
@@ -454,7 +454,7 @@ public class AutoFightJsonTask : ISoloTask
                     {
                         if (_taskParam is { PickDropsAfterFightEnabled: true })
                         {
-                            await new ScanPickTask().Start(_ct);
+                            await new ScanPickTask().Start(_ct, _taskParam.PickDropsAfterFightSeconds);
                         }
                         return;
                     }
@@ -836,7 +836,7 @@ public class AutoFightJsonTask : ISoloTask
 
         if (_taskParam is { PickDropsAfterFightEnabled: true })
         {
-            await new ScanPickTask().Start(_ct);
+            await new ScanPickTask().Start(_ct, _taskParam.PickDropsAfterFightSeconds);
         }
     }
 

@@ -625,6 +625,8 @@ public sealed class CoreRpcServer(
                 "keyMouse.play" => KeyMouseScripts.Start(
                     RequiredString(request.Params, "id")),
                 "keyMouse.status" => KeyMouseScripts.Status(),
+                "oneDragon.bossCount.reset" => _oneDragonCatalog.ResetBossCompletedCount(RequiredString(request.Params, "name")),
+                "combo.presentation.get" => BetterGenshinImpact.GameTask.AutoCombo.AutoComboPresentation.Snapshot(),
                 "notification.settings.get" => NotificationSettings.Get(),
                 "notification.channel.save" =>
                     NotificationSettings.SaveChannel(
