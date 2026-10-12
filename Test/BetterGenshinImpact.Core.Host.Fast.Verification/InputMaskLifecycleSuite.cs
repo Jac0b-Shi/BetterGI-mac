@@ -65,6 +65,7 @@ public sealed class InputMaskLifecycleSuite : IVerificationSuite
             dispatcher.UpdateLifecycle(false);
         }
 
+        new BetterGenshinImpact.GameTask.Model.Area.Region(0, 0, 10, 10).DrawSelf("offscreen-contract");
         var board = new MaskWindowDrawingBoard();
         var shapes = new List<MaskWindowDrawingShape> { new MaskWindowDrawingRect(new MaskRect(1, 2, 3, 4)) };
         board.Set("rect", shapes);

@@ -93,6 +93,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
         private int _isEnabled;
         private int _isExclusive;
         private int _tickRunning;
+        private volatile bool _needsRebuild;
         private int _disposed;
 
         public AutoFishingTrigger()
@@ -136,7 +137,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
             StopSession();
-            if (!_customBehaviour) BuildBehaviourTree();
+            _needsRebuild = !_customBehaviour;
             _prevExecute = DateTime.MinValue;
             IsEnabled = true;
         }
@@ -171,9 +172,20 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
         public void OnCapture(CaptureContent content)
         {
-            if (Volatile.Read(ref _disposed) != 0)
+            if (Volatile.Read(ref _disposed) != 0 || !IsEnabled || Volatile.Read(ref _tickRunning) != 0)
             {
                 return;
+            }
+
+            // 停用已取消旧 Tick，但它可能仍在收尾；在旧截图释放后才替换行为树。
+            lock (_sessionLock)
+            {
+                if (_needsRebuild)
+                {
+                    ReleaseScreenshotIfIdle();
+                    BuildBehaviourTree();
+                    _needsRebuild = false;
+                }
             }
 
             if ((DateTime.Now - _prevExecute).TotalMilliseconds <= 67)
@@ -217,8 +229,11 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             }
             finally
             {
-                Volatile.Write(ref _tickRunning, 0);
-                ReleaseScreenshotIfIdle();
+                lock (_sessionLock)
+                {
+                    Volatile.Write(ref _tickRunning, 0);
+                    ReleaseScreenshotIfIdle();
+                }
             }
         }
 
@@ -227,7 +242,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             CancellationTokenSource? previous;
             lock (_sessionLock)
             {
-                if (_isExclusive != 0 || _isEnabled == 0 || _disposed != 0)
+                if (_isExclusive != 0 || _isEnabled == 0 || _disposed != 0 || _needsRebuild)
                 {
                     return;
                 }

@@ -229,11 +229,13 @@ public class Region : IDisposable
     /// </summary>
     public void DrawRect(int x, int y, int w, int h, string name, Pen? pen = null)
     {
+        if (ReferenceEquals(DrawingBoard, NullMaskWindowDrawingBoard.Instance)) return;
         DrawingBoard.Set(name, ToMaskWindowDrawingRect(x, y, w, h, pen));
     }
 
     public void DrawRect(Rect rect, string name, Pen? pen = null)
     {
+        if (ReferenceEquals(DrawingBoard, NullMaskWindowDrawingBoard.Instance)) return;
         DrawingBoard.Set(name, ToMaskWindowDrawingRect(rect.X, rect.Y, rect.Width, rect.Height, pen));
     }
 
@@ -281,11 +283,13 @@ public class Region : IDisposable
 
     public void DrawLine(int x1, int y1, int x2, int y2, string name, Pen? pen = null)
     {
+        if (ReferenceEquals(DrawingBoard, NullMaskWindowDrawingBoard.Instance)) return;
         DrawingBoard.Set(name, ToMaskWindowDrawingLine(x1, y1, x2, y2, pen));
     }
 
     public void DrawRect(Rect rect, string name, RegionDrawColor color)
     {
+        if (ReferenceEquals(DrawingBoard, NullMaskWindowDrawingBoard.Instance)) return;
         var shape = ToMaskWindowDrawingRect(rect);
         var stroke = color switch
         {
