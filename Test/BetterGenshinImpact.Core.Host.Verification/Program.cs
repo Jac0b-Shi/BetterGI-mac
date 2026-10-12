@@ -444,6 +444,7 @@ DesktopRegionInputPlatform.Configure(verificationInputBackend);
 var verificationAutoPickConfig = new BetterGenshinImpact.GameTask.AutoPick.AutoPickConfig();
 var verificationAutoPickConfigProvider = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     verificationAutoPickConfig, BetterGenshinImpact.Core.Recognition.PaddleOcrModelConfig.V5Auto, "zh-Hans");
+server.TriggerSettings.AttachAutoPickUpdated(verificationAutoPickConfigProvider.UpdateAutoPickConfig);
 var scriptGroupExecutionServices = new MacScriptGroupExecutionServices(
     layout,
     new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(

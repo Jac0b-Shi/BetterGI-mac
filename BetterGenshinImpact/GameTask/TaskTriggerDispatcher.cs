@@ -1,3 +1,4 @@
+using BetterGenshinImpact.GameTask.Screenshot;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Mask;
 using BetterGenshinImpact.GameTask.Common;
@@ -743,7 +744,7 @@ namespace BetterGenshinImpact.GameTask
             try
             {
                 if (GameCapture is null) throw new InvalidOperationException("截图器尚未启动");
-                new BetterGenshinImpact.GameTask.Screenshot.GameScreenshotTask(new BetterGenshinImpact.Core.Runtime.Windows.WindowsGameScreenshotRuntimePlatform(GameCapture), _logger)
+                new GameScreenshotTask(new BetterGenshinImpact.Core.Runtime.Windows.WindowsGameScreenshotRuntimePlatform(GameCapture), _logger)
                     .TakeScreenshot();
             }
             catch (Exception e)

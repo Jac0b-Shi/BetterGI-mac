@@ -3,13 +3,13 @@ using BetterGenshinImpact.Platform.Abstractions;
 
 // Compile-time verification that adapter types are resolvable.
 // This file is never executed — it only exists to force the compiler
-// to type-check Win32InputBackend, Win32InputHelpers, IInputBackend,
+// to type-check WindowsSemanticInputBackend, Win32InputHelpers, IInputBackend,
 // Fischless API calls, and Vanara type conversions.
 
 public static class AdapterBuildVerification
 {
     // IInputBackend instantiation check
-    static readonly IInputBackend _backend = new Win32InputBackend();
+    static readonly IInputBackend _backend = new WindowsSemanticInputBackend(() => throw new InvalidOperationException(), () => throw new InvalidOperationException());
 
     // Win32InputHelpers pure-function resolution check
     static readonly int _vkCode = Win32InputHelpers.MapBgiKeyToVk(BgiKey.F);

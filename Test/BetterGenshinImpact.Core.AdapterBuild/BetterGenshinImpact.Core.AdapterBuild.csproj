@@ -14,6 +14,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\BetterGenshinImpact\Core\Input\IKeyboardInput.cs" Link="IKeyboardInput.cs" />
+    <Compile Include="..\..\BetterGenshinImpact\Core\Input\IMouseInput.cs" Link="IMouseInput.cs" />
     <Compile Include="..\..\BetterGenshinImpact\Core\Runtime\Windows\Win32InputHelpers.cs" Link="Win32InputHelpers.cs" />
     <Compile Include="..\..\BetterGenshinImpact\Core\Runtime\Windows\Win32InputBackend.cs" Link="Win32InputBackend.cs" />
   </ItemGroup>

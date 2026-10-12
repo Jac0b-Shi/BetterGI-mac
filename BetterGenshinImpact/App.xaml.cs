@@ -248,7 +248,10 @@ public partial class App : Application
                 services.AddSingleton<GameTask.AutoMusicGame.IAutoMusicGameRuntimePlatform,
                     Core.Runtime.Windows.WindowsAutoMusicGameRuntimePlatform>();
                 // Platform abstractions (Windows backend)
-                services.AddSingleton<Platform.Abstractions.IInputBackend, Core.Runtime.Windows.WindowsSemanticInputBackend>();
+                services.AddSingleton<Platform.Abstractions.IInputBackend>(_ =>
+                    new Core.Runtime.Windows.WindowsSemanticInputBackend(
+                        () => Core.Input.InputHub.Foreground.Keyboard,
+                        () => Core.Input.InputHub.Foreground.Mouse));
                 // B9 Text recognition adapters
                 services.AddSingleton<Core.Abstractions.Recognition.IPaddleAutoPickTextRecognizer, Core.Runtime.Windows.WindowsPaddleAutoPickTextRecognizer>();
                 services.AddSingleton<Core.Abstractions.Recognition.IYapAutoPickTextRecognizer, Core.Runtime.Windows.WindowsYapAutoPickTextRecognizer>();
