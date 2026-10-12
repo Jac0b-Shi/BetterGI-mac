@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Only an assembly-scoped community license may be committed here. -->
+    <SixLaborsLicenseFile Condition="'$(SixLaborsLicenseFile)' == ''">$(MSBuildThisFileDirectory)../licenses/sixlabors-BetterGenshinImpact.Core.lic</SixLaborsLicenseFile>
     <!-- CsTrees.SourceGenerator currently targets a newer compiler than this project. -->
     <NoWarn>$(NoWarn);CS9057</NoWarn>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -32,7 +34,7 @@
     <PackageReference Include="System.Drawing.Common" Version="10.0.9" />
     <PackageReference Include="System.Collections.Immutable" Version="10.0.7" />
     <PackageReference Include="System.IO.Packaging" Version="9.0.4" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="4.1.2" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="4.1.3" />
     <PackageReference Include="MailKit" Version="4.16.0" />
     <PackageReference Include="MimeKit" Version="4.16.0" />
     <PackageReference Include="Semver" Version="3.0.0" />

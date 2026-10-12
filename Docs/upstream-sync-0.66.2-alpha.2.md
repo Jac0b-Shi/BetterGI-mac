@@ -25,6 +25,6 @@ Model 1.0.36、Map 1.0.24、Other 1.0.27、CsTrees.MEAI 1.0.2 保持原版本和
 
 执行 Fast、Core/Host/真实用户脚本、Pathing、静态架构、Swift 测试及 Windows 编译，再由 PR CI 验证干净 runner。最小新增契约覆盖输入释放竞态、触发器生命周期、遮罩快照、重复音排序与模型查询跨源密钥保护。
 
-Core 的 ImageSharp 从 3.1.12 升至 4.1.2，以修复当前 NuGet audit 报告的漏洞；未关闭漏洞检查。新版本会提示 Six Labors 许可证配置，发行使用应遵循该依赖的授权条款。
+Core 的 ImageSharp 从 3.1.12 升至 4.1.3，以修复当前 NuGet audit 报告的漏洞；未关闭漏洞检查。正式构建须使用 Six Labors 为 `BetterGenshinImpact.Core` 颁发的程序集范围社区许可证，遵循其开源许可证申请与仓库提交规则；不绕过构建时许可证校验。
 
 CI 通过并合入 main 后，构建本机稳定 Apple Development 签名 App，验证 App/Helper 签名及实际资源加载；随后推送 GPG 签名 tag，验证 macOS Release 产物及 SHA-256。本机开发签名与云端 Developer ID/公证签名分开报告。游戏内效果由用户事后测试。
