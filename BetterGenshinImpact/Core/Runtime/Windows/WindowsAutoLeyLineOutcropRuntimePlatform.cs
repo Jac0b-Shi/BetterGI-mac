@@ -52,18 +52,7 @@ public sealed class WindowsAutoLeyLineOutcropRuntimePlatform : IAutoLeyLineOutcr
 
     public void RefreshOverlay()
     {
-        var maskWindow = MaskWindow.InstanceNullable();
-        if (maskWindow is null) return;
-        var now = DateTime.UtcNow;
-        var shouldBringTop = now - _lastMaskBringTopTime > TimeSpan.FromSeconds(1);
-        if (shouldBringTop) _lastMaskBringTopTime = now;
-        maskWindow.Invoke(() =>
-        {
-            maskWindow.Topmost = true;
-            if (!maskWindow.IsVisible) maskWindow.Show();
-            if (shouldBringTop) maskWindow.BringToTop();
-            maskWindow.Refresh();
-        });
+        // Immutable drawing-board snapshots notify the mask host directly.
     }
 
     public void RestoreOverlayVisible()

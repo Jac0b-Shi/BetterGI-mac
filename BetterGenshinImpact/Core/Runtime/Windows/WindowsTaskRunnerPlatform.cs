@@ -1,10 +1,11 @@
+using BetterGenshinImpact.Core.Mask;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Service.Notification;
 using BetterGenshinImpact.Service.Notification.Model.Enum;
 using BetterGenshinImpact.View;
-using BetterGenshinImpact.View.Drawable;
+
 using BetterGenshinImpact.ViewModel;
 using Microsoft.Extensions.Logging;
 using System;
@@ -32,25 +33,18 @@ public sealed class WindowsTaskRunnerPlatform : ITaskRunnerPlatform
             UIDispatcherHelper.Invoke(() => Toast.Warning("请先在启动页，启动截图器再使用本功能"));
             throw new NormalEndException("请先在启动页，启动截图器再使用本功能");
         }
-        TaskTriggerDispatcher.Instance().ClearTriggers();
-        UIDispatcherHelper.Invoke(() =>
-        {
-            if (MaskWindow.InstanceNullable() != null && MaskWindow.Instance().DataContext is MaskWindowViewModel vm)
-                vm.IsInBigMapUi = false;
-        });
-        VisionContext.Instance().DrawContent.ClearAll();
-        var maskWindow = MaskWindow.Instance();
-        SystemControl.ActivateWindow();
-        maskWindow.Invoke(maskWindow.Show);
+        TaskTriggerDispatcher.Instance().BeginTask();
+        TaskContext.Instance().Runtime?.MaskWindowMapState.Reset();
+        MaskWindowDrawingPlatform.Current.ClearAll();
+        TaskContext.Instance().Runtime?.Window.Activate();
     }
 
     public void EndTask()
     {
         if (!TaskContext.Instance().IsInitialized) return;
-        Simulation.ReleaseAllKey();
-        TaskTriggerDispatcher.Instance().ClearTriggers();
-        TaskTriggerDispatcher.Instance().ReloadInitialTriggers();
-        VisionContext.Instance().DrawContent.ClearAll();
+        BetterGenshinImpact.Core.Input.InputHub.ReleaseAll();
+        TaskTriggerDispatcher.Instance().EndTask();
+        MaskWindowDrawingPlatform.Current.ClearAll();
         HtmlMaskWindow.CloseAll();
     }
 }

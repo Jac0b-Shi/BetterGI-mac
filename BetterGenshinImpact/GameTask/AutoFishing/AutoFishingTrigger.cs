@@ -50,6 +50,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                 }
             }
         }
+        public bool IsEnabledByConfig => runtime.Config.Enabled;
         public int Priority => 15;
 
         /// <summary>
@@ -78,14 +79,15 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             }
         }
 
-        private CsTrees.Blackboard.Blackboard blackboard;
+        private CsTrees.Blackboard.Blackboard blackboard = null!;
 
         /// <summary>
         /// 辣条（误）
         /// </summary>
-        private Behaviour BehaviourTreeLaTiao { get; set; }
+        private Behaviour BehaviourTreeLaTiao { get; set; } = null!;
 
-        private readonly TakeScreenshot _takeScreenshot;
+        private TakeScreenshot _takeScreenshot = null!;
+        private bool _customBehaviour;
         private readonly object _sessionLock = new();
         private CancellationTokenSource? _sessionCancellation;
         private int _isEnabled;
@@ -98,6 +100,11 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             runtime = AutoFishingRuntimePlatform.Current;
             _logger = runtime.GetLogger<AutoFishingTrigger>();
             input = new SessionBoundAutoFishingInput(new TaskControlAutoFishingInput());
+            BuildBehaviourTree();
+        }
+
+        private void BuildBehaviourTree()
+        {
             AutoFishingTaskParam autoFishingTaskParam =
                 AutoFishingTaskParam.BuildFromConfig(runtime.Config);
             IOcrService ocrService = runtime.OcrService;
@@ -125,6 +132,17 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                 .Build();
         }
 
+        public void OnEnabled(object? options)
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+            StopSession();
+            if (!_customBehaviour) BuildBehaviourTree();
+            _prevExecute = DateTime.MinValue;
+            IsEnabled = true;
+        }
+
+        public void OnDisabled() => IsEnabled = false;
+
         internal AutoFishingTrigger(
             IAutoFishingRuntimePlatform runtime,
             ILogger<AutoFishingTrigger> logger,
@@ -136,6 +154,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             _logger = logger;
             this.input = new SessionBoundAutoFishingInput(input);
             blackboard = new CsTrees.Blackboard.Blackboard();
+            _customBehaviour = true;
             BehaviourTreeLaTiao = behaviourFactory(this.input);
             _takeScreenshot = takeScreenshot;
         }

@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
@@ -10,6 +11,10 @@ using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Helpers;
+using BetterGenshinImpact.Service;
+#if !BGI_PLATFORM_MAC
+using BetterGenshinImpact.View.Windows;
+#endif
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -34,32 +39,21 @@ public partial class AutoSkipTrigger : ITaskTrigger
     private readonly ILogger<AutoSkipTrigger> _logger = AutoSkipRuntimePlatform.Current.GetLogger<AutoSkipTrigger>();
 
     public string Name => "自动剧情";
-    private bool _isEnabled;
-    public bool IsEnabled
-    {
-        get => _isEnabled;
-        set
-        {
-            if (_isEnabled == value)
-            {
-                return;
-            }
 
-            _isEnabled = value;
-            if (!value)
-            {
-                ReleaseChooseOptionWait("触发器关闭");
-                ResetPageCloseRecognition();
-            }
-        }
-    }
+    /// <summary>
+    /// 用户开关，始终读全局配置。脚本启用时不看这个值（与原来"强制启用"一致）
+    /// </summary>
+    public bool IsEnabledByConfig => _defaultConfig.Enabled;
+
     public int Priority => 20;
     public bool IsExclusive => false;
 
     public GameUiCategory SupportedGameUiCategory => GameUiCategory.Talk;
 
-
-    public bool IsBackgroundRunning { get; private set; }
+    /// <summary>
+    /// 实时读取当前生效的配置（全局配置或脚本传入的配置）
+    /// </summary>
+    public bool IsBackgroundRunning => _config.RunBackgroundEnabled;
 
     public bool UseBackgroundOperation { get; private set; }
 
@@ -68,9 +62,19 @@ public partial class AutoSkipTrigger : ITaskTrigger
     private const int PlayingFlagDisappearDelaySeconds = 10; // 播放标识消失后继续识别的秒数
     private const int PageCloseRecognitionDelayMilliseconds = 200;
 
-    private readonly AutoSkipConfig _config;
-    private readonly IAutoSkipAudioWaiter _dialogueOptionAudioWaiter =
-        AutoSkipRuntimePlatform.Current.CreateAudioWaiter();
+    /// <summary>
+    /// 构造时指定的配置：无参构造为全局配置，内部调用方可以传入自定义配置
+    /// </summary>
+    private readonly AutoSkipConfig _defaultConfig;
+
+    private readonly bool _isDefaultCustomConfiguration;
+
+    /// <summary>
+    /// 本次启用期间生效的配置。脚本通过 AddTrigger 传入 AutoSkipConfig 时使用它，否则使用 _defaultConfig
+    /// </summary>
+    private AutoSkipConfig _config;
+
+    private readonly IAutoSkipAudioWaiter _dialogueOptionAudioWaiter = AutoSkipRuntimePlatform.Current.CreateAudioWaiter();
 
     #if !BGI_PLATFORM_MAC
     internal DialogueOptionAudioWaiter VoiceWaiter => (DialogueOptionAudioWaiter)_dialogueOptionAudioWaiter;
@@ -91,8 +95,6 @@ public partial class AutoSkipTrigger : ITaskTrigger
     /// </summary>
     private List<string> _selectList = [];
 
-    private readonly bool _isCustomConfiguration;
-
     private static RecognitionObject GetRecognitionObject(string objectName, ImageRegion region)
     {
         return RecognitionAssets.Get("AutoSkip", objectName, region.Width, region.Height);
@@ -102,25 +104,55 @@ public partial class AutoSkipTrigger : ITaskTrigger
     {
         return AutoPickAssets.Get(region, AutoSkipRuntimePlatform.Current.PickKey);
     }
+
+#if !BGI_PLATFORM_MAC
+    public AutoSkipTrigger() : this(TaskContext.Instance().Config.AutoSkipConfig, customConfiguration: false) { }
+#endif
     /// <summary>
-    /// 使用由应用组合层提供的业务配置。
+    /// 用于内部的其他方法调用，调用方需自行调用 OnEnabled(null) 后再调用 OnCapture
     /// </summary>
     /// <param name="config"></param>
-    public AutoSkipTrigger(AutoSkipConfig config)
+    public AutoSkipTrigger(AutoSkipConfig config, bool customConfiguration = true)
     {
+        _defaultConfig = config;
+        _isDefaultCustomConfiguration = customConfiguration;
         _config = config;
-        _isCustomConfiguration = true;
     }
 
-    public void Init()
+    /// <summary>
+    /// 选定本次生效的配置，并重置运行状态。使用全局配置时读取关键词文件，使用自定义配置时不使用关键词
+    /// </summary>
+    /// <param name="options">脚本传入的 AutoSkipConfig，没有则为 null</param>
+    public void OnEnabled(object? options)
     {
-        IsEnabled = _config.Enabled;
-        IsBackgroundRunning = _config.RunBackgroundEnabled;
+        var customConfig = options as AutoSkipConfig;
+        _config = customConfig ?? _defaultConfig;
         // IsUseInteractionKey = _config.SelectChatOptionType == SelectChatOptionTypes.UseInteractionKey;
-        if (!_isCustomConfiguration)
+
+        _prevPlayingTime = DateTime.MinValue;
+        _prevExecute = DateTime.MinValue;
+        _prevHangoutExecute = DateTime.MinValue;
+        _prevGetDailyRewardsTime = DateTime.MinValue;
+        _prevClickTime = DateTime.MinValue;
+        _prevBringToFrontTime = DateTime.MinValue;
+        _chooseOptionDelayUntil = DateTime.MinValue;
+        _chooseOptionWaitRecheckUntil = DateTime.MinValue;
+        _pendingBringToFront = false;
+        ResetPageCloseRecognition();
+
+        _defaultPauseList = [];
+        _pauseList = [];
+        _selectList = [];
+        if (customConfig == null && !_isDefaultCustomConfiguration)
         {
             InitKeyword();
         }
+    }
+
+    public void OnDisabled()
+    {
+        ReleaseChooseOptionWait("触发器关闭");
+        ResetPageCloseRecognition();
     }
 
     private void InitKeyword()
@@ -419,8 +451,8 @@ public partial class AutoSkipTrigger : ITaskTrigger
                         HangoutOptionClick(target);
                         _logger.LogInformation("邀约分支[{Text}]关键词命中，选择[{Option}]", _config.AutoHangoutEndChoose, target.OptionTextSrc);
                         AutoHangoutSkipLog(target.OptionTextSrc);
-                        OverlayDrawPlatform.Current.RemoveRectangles("HangoutSelected");
-                        OverlayDrawPlatform.Current.RemoveRectangles("HangoutUnselected");
+                        captureRegion.DrawingBoard.Clear("HangoutSelected");
+                        captureRegion.DrawingBoard.Clear("HangoutUnselected");
                         return;
                     }
                 }
@@ -431,16 +463,16 @@ public partial class AutoSkipTrigger : ITaskTrigger
                 {
                     HangoutOptionClick(unselectedOption);
                     AutoHangoutSkipLog(unselectedOption.OptionTextSrc);
-                    OverlayDrawPlatform.Current.RemoveRectangles("HangoutSelected");
-                    OverlayDrawPlatform.Current.RemoveRectangles("HangoutUnselected");
+                    captureRegion.DrawingBoard.Clear("HangoutSelected");
+                    captureRegion.DrawingBoard.Clear("HangoutUnselected");
                     return;
                 }
 
                 // 没有未点击的选项时选择第一个已点击选项，推进对话状态。
                 HangoutOptionClick(hangoutOptionList[0]);
                 AutoHangoutSkipLog(hangoutOptionList[0].OptionTextSrc);
-                OverlayDrawPlatform.Current.RemoveRectangles("HangoutSelected");
-                OverlayDrawPlatform.Current.RemoveRectangles("HangoutUnselected");
+                captureRegion.DrawingBoard.Clear("HangoutSelected");
+                captureRegion.DrawingBoard.Clear("HangoutUnselected");
             }
             finally
             {
@@ -1298,7 +1330,7 @@ public partial class AutoSkipTrigger : ITaskTrigger
                 btnWhiteConfirmRa.Click();
                 _logger.LogInformation("提交物品：{Text}", "3. 交付");
 
-                OverlayDrawPlatform.Current.ClearAll();
+                ra2.DrawingBoard.ClearAll();
             }
 
             // 最多4个物品 现在就支持一个

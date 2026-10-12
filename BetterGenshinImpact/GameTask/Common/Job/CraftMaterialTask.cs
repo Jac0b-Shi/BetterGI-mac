@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.BgiVision;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition;
@@ -30,6 +31,8 @@ public class CraftMaterialTask
     private static readonly Lazy<Dictionary<string, string>> MaterialTypes = new(LoadMaterialTypes);
 
     private readonly ILogger<CraftMaterialTask> _logger = CraftMaterialRuntimePlatform.Current.Logger;
+    private IInputChannel input => InputHub.Foreground;
+    private IInputChannel _input => InputHub.Foreground;
     private readonly string _materialName;
     private readonly int _targetQuantity;
     private readonly string? _materialType;
@@ -264,7 +267,7 @@ public class CraftMaterialTask
         using IItemIconRecognizer itemRecognizer = ItemIconRecognizerFactory.CreateConfigured();
         GridScreen gridScreen = new(GridParams.Templates[GridScreenName.Crafting], _logger, _ct);
         gridScreen.OnAfterTurnToNewPage += GridScreen.DrawItemsAfterTurnToNewPage;
-        gridScreen.OnBeforeScroll += () => OverlayDrawPlatform.Current.ClearAll();
+            gridScreen.OnBeforeScroll += () => BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Current.ClearAll();
 
         try
         {
@@ -292,7 +295,7 @@ public class CraftMaterialTask
         }
         finally
         {
-            OverlayDrawPlatform.Current.ClearAll();
+            BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Current.ClearAll();
         }
 
         return false;

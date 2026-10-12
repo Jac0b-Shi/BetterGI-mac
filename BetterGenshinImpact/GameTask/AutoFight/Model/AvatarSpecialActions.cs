@@ -1,3 +1,5 @@
+using BetterGenshinImpact.Core.Mask;
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Simulator.Extensions;
@@ -312,6 +314,8 @@ public static class AvatarSpecialAction
                     var startTime = DateTime.UtcNow;
                     var maxDurationMs = ms;
                     int overheatCount = 0;  // 红温连续命中计数
+                    // 取自截图区域，收尾清理时截图已释放，所以单独保存
+                    IMaskWindowDrawingBoard drawingBoard = NullMaskWindowDrawingBoard.Instance;
 
                     try
                     {
@@ -319,6 +323,7 @@ public static class AvatarSpecialAction
                         {
                             using (var capture = CaptureToRectArea())
                             {
+                                drawingBoard = capture.DrawingBoard;
                                 // 距重击开始超过 3 秒后开始检测红温，连续命中 3 次（1/3 → 2/3 → 3/3）才提前退出
                                 if ((DateTime.UtcNow - startTime).TotalSeconds >= 3)
                                 {
@@ -345,7 +350,7 @@ public static class AvatarSpecialAction
                                 var bars = AvatarRecognition.FindBloodBars(capture);
                                 var valid = bars.Where(b => b.x > (int)(200 * AssetScale)).ToList();
 
-                                var drawList = new List<OpenCvSharp.Rect>();
+                                var drawList = new System.Collections.Generic.List<MaskWindowDrawingShape>();
 
                                 bool hasLegendaryBar = valid.Any(b => AvatarRecognition.IsLegendaryBar(b.x, b.y));
 
@@ -364,9 +369,9 @@ public static class AvatarSpecialAction
                                         {
                                             var rect = new OpenCvSharp.Rect(b.x, b.y, b.width, b.height);
                                             if (b.x == nearest.x && b.y == nearest.y && b.width == nearest.width && b.height == nearest.height)
-                                                drawList.Add(rect);
+                                                drawList.Add(capture.ToMaskWindowDrawingRect(rect) with { Stroke = MaskWindowDrawingStroke.FromColor(System.Drawing.Color.LightPink) });
                                             else
-                                                drawList.Add(rect);
+                                                drawList.Add(capture.ToMaskWindowDrawingRect(rect));
                                         }
                                     }
                                 }
@@ -382,7 +387,7 @@ public static class AvatarSpecialAction
                                         TaskControlPlatform.Current.MoveMouseBy((int)(offsetX * 0.35 * dpi), (int)(offsetY * 0.25 * dpi));
                                         if (drawResults)
                                         {
-                                            drawList.Add(new OpenCvSharp.Rect(dx, dy, dw, dh));
+                                            drawList.Add(capture.ToMaskWindowDrawingRect(new OpenCvSharp.Rect(dx, dy, dw, dh)) with { Stroke = MaskWindowDrawingStroke.FromColor(System.Drawing.Color.LightPink) });
                                         }
                                     }
 
@@ -392,7 +397,7 @@ public static class AvatarSpecialAction
                                         if (!hasLegendaryBar && (DateTime.UtcNow - (lastSeenTargetTime ?? startTime)).TotalSeconds >= 1.5)
                                         {
                                             Logger.LogInformation("桑多涅重击特化：超过1.5秒未找到目标，提前退出");
-                                            OverlayDrawPlatform.Current.SetRectangles("SandroneBloodBars", capture, drawList);
+                                            drawingBoard.Set("SandroneBloodBars", drawList);
                                             break;
                                         }
 
@@ -403,7 +408,7 @@ public static class AvatarSpecialAction
                                     }
                                 }
 
-                                OverlayDrawPlatform.Current.SetRectangles("SandroneBloodBars", capture, drawList);
+                                drawingBoard.Set("SandroneBloodBars", drawList);
                             }
 
                             Sleep(frameIntervalMs);
@@ -415,7 +420,7 @@ public static class AvatarSpecialAction
                     }
                     finally
                     {
-                        OverlayDrawPlatform.Current.RemoveRectangles("SandroneBloodBars");
+                        drawingBoard.Clear("SandroneBloodBars");
                         TaskControlPlatform.Current.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
                     }
                 }

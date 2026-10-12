@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 #if !BGI_PLATFORM_MAC
 using BetterGenshinImpact.Core.Simulator;
@@ -12,6 +13,7 @@ using Fischless.WindowsInput;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
+using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 
 namespace BetterGenshinImpact.Core.BgiVision;
@@ -20,15 +22,9 @@ public class BvPage
 {
     private readonly CancellationToken _cancellationToken;
 
-#if BGI_PLATFORM_MAC
-    public BvKeyboard Keyboard { get; } = new();
+    public IKeyboardInput Keyboard => InputHub.Foreground.Keyboard;
 
-    public BvMouse Mouse { get; } = new();
-#else
-    public IKeyboardSimulator Keyboard => Simulation.SendInput.Keyboard;
-
-    public IMouseSimulator Mouse => Simulation.SendInput.Mouse;
-#endif
+    public IMouseInput Mouse => InputHub.Foreground.Mouse;
 
     /// <summary>
     /// Default timeout for operations in milliseconds

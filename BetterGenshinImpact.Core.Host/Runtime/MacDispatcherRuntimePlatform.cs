@@ -81,9 +81,7 @@ public sealed class MacDispatcherRuntimePlatform(
                 autoPickConfigProvider, paddleRecognizer, yapRecognizer))
             return false;
 
-        var trigger = GameTaskManager.TriggerDictionary![name];
-        trigger.Init();
-        trigger.IsEnabled = true;
+        // Activation is applied at the next serialized dispatcher tick.
         return true;
     }
 

@@ -65,6 +65,7 @@ public sealed class NotificationSettingsCatalog : IDisposable
             "通过 QQ 开放平台 REST API 向私聊或群聊发送文本与截图",
             "qqNotificationEnabled",
             [
+                new("qqMessageFormat", "消息格式", "select", Options: ["text", "markdown"]),
                 new("qqAppId", "App ID", "string"),
                 new("qqClientSecret", "App Secret", "secret"),
                 new("qqOpenId", "私聊 OpenID", "secret"),
@@ -153,9 +154,13 @@ public sealed class NotificationSettingsCatalog : IDisposable
         new(
             "discord",
             "Discord",
-            "通过 Discord Webhook 发送通知",
+            "通过 Webhook 或 Bot 向频道、私信发送通知",
             "discordWebhookNotificationEnabled",
             [
+                new("discordNotificationMode", "通知方式", "select", Options: ["Webhook", "Bot"]),
+                new("discordBotToken", "Bot Token", "secret"),
+                new("discordBotTargets", "Bot 推送目标", "targets"),
+                new("discordBotMessageFormat", "Bot 消息格式", "select", Options: ["Plain", "Embed"]),
                 new("discordWebhookUrl", "Webhook 地址", "string"),
                 new("discordWebhookUsername", "用户名", "string"),
                 new("discordWebhookAvatarUrl", "头像地址", "string"),
@@ -361,6 +366,8 @@ public sealed class NotificationSettingsCatalog : IDisposable
                 .TestNotifierAsync<XxtuiNotifier>(),
             "dingDing" => await _notificationService
                 .TestNotifierAsync<DingDingWebhook>(),
+            "discord" when DiscordNotificationModes.IsBot(config.DiscordNotificationMode) =>
+                await _notificationService.TestNotifierAsync<DiscordBotNotifier>(),
             "discord" => await _notificationService
                 .TestNotifierAsync<DiscordWebhookNotifier>(),
             "serverChan" => await _notificationService
@@ -638,6 +645,7 @@ public sealed class NotificationSettingsCatalog : IDisposable
         {
             "boolean" => ReadBoolean(values, field.Id),
             "integer" => values[field.Id]?.GetValue<int>() ?? 0,
+            "targets" => (object)(values[field.Id]?.DeepClone() ?? new JsonArray()),
             _ => values[field.Id]?.GetValue<string>() ?? "",
         };
 
@@ -650,6 +658,7 @@ public sealed class NotificationSettingsCatalog : IDisposable
     {
         return field.Kind switch
         {
+            "targets" when value is JArray targets => NormalizeTargets(targets),
             "boolean" when value.Type == JTokenType.Boolean =>
                 JsonValue.Create(value.Value<bool>())!,
             "integer" when value.Type == JTokenType.Integer =>
@@ -664,6 +673,18 @@ public sealed class NotificationSettingsCatalog : IDisposable
             _ => throw new ArgumentException(
                 $"Invalid value for notification field {field.Id}."),
         };
+    }
+
+    private static JsonNode NormalizeTargets(JArray value)
+    {
+        foreach (var target in value)
+        {
+            if (target is not JObject item || item["type"]?.Value<string>() is not ("Channel" or "DirectMessage") ||
+                !ulong.TryParse(item["id"]?.Value<string>(), out var id) || id == 0 ||
+                item["displayName"]?.Type != JTokenType.String)
+                throw new ArgumentException("Discord 目标必须包含类型、有效的频道或用户 ID 和显示名称。");
+        }
+        return JsonNode.Parse(value.ToString(Newtonsoft.Json.Formatting.None))!;
     }
 
     private static string NormalizeKnownEventCodes(string eventSubscribe)

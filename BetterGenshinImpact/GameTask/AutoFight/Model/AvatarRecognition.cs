@@ -1,9 +1,11 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.Core.Mask;
 using OpenCvSharp;
 using System;
 using System.Collections.Generic;
@@ -402,6 +404,8 @@ public static class AvatarRecognition
         var drawResults = visConfig.DrawRecognitionResults;
         var lockLostWaitTime = visConfig.LockLostWaitTime;
         DateTime? lastSeenTargetTime = null;  // 最后找到目标的时间（null = 从未找到）
+        // 取自截图区域，收尾清理时截图已释放，所以单独保存
+        IMaskWindowDrawingBoard drawingBoard = NullMaskWindowDrawingBoard.Instance;
 
         try
         {
@@ -416,6 +420,7 @@ public static class AvatarRecognition
 
                 using (var capture = CaptureToRectArea())
                 {
+                    drawingBoard = capture.DrawingBoard;
                     int preAimX = (int)(capture.Width * 0.5);
                     int preAimY = (int)(capture.Height * (480.0 / 1080.0));
 
@@ -430,7 +435,7 @@ public static class AvatarRecognition
                     var bars = FindBloodBars(capture);
                     var valid = bars.Where(b => b.x > (int)(200 * AssetScale)).ToList();
 
-                    var drawList = new List<OpenCvSharp.Rect>();
+                    var drawList = new List<MaskWindowDrawingShape>();
 
                     bool hasLegendaryBar = valid.Any(b => IsLegendaryBar(b.x, b.y));
 
@@ -458,7 +463,7 @@ public static class AvatarRecognition
                                 var rect = new OpenCvSharp.Rect(b.x, b.y, b.width, b.height);
                                 bool isTarget = b.x == nearest.x && b.y == nearest.y &&
                                                 b.width == nearest.width && b.height == nearest.height;
-                                drawList.Add(rect);
+                                drawList.Add(capture.ToMaskWindowDrawingRect(rect) with { Stroke = isTarget ? MaskWindowDrawingStroke.FromColor(System.Drawing.Color.LightPink) : null });
                             }
                         }
                     }
@@ -482,7 +487,7 @@ public static class AvatarRecognition
                             // 叠加层：伤害数字区域绿色框
                             if (drawResults)
                             {
-                                drawList.Add(new OpenCvSharp.Rect(dx, dy, dw, dh));
+                                drawList.Add(capture.ToMaskWindowDrawingRect(new OpenCvSharp.Rect(dx, dy, dw, dh)) with { Stroke = MaskWindowDrawingStroke.FromColor(System.Drawing.Color.LightPink) });
                             }
                         }
 
@@ -503,7 +508,7 @@ public static class AvatarRecognition
                     }
 
                     // 提交叠加层
-                    OverlayDrawPlatform.Current.SetRectangles("ContinuousTargeting", capture, drawList);
+                    drawingBoard.Set("ContinuousTargeting", drawList);
                 }
 
                 // 按配置的索敌识别间隔等待
@@ -519,7 +524,7 @@ public static class AvatarRecognition
             TaskControlPlatform.Current.ReleasePressedInputs();
             await Task.Delay(50, CancellationToken.None);
             TaskControlPlatform.Current.MiddleButtonClick();
-            OverlayDrawPlatform.Current.RemoveRectangles("ContinuousTargeting");
+            drawingBoard.Clear("ContinuousTargeting");
         }
     }
 }

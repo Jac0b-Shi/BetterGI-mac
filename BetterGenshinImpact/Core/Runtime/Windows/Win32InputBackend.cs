@@ -10,28 +10,28 @@ namespace BetterGenshinImpact.Core.Runtime.Windows;
 /// All mouse coordinates are screen-pixel coordinates; this backend converts them
 /// to normalized 0–65535 absolute coordinates using the virtual desktop.
 /// </summary>
-public sealed class Win32InputBackend : IInputBackend
+public sealed class WindowsSemanticInputBackend : IInputBackend
 {
-    private readonly InputSimulator _sim = new();
+
 
     // --- Keyboard ---
 
     public void KeyDown(BgiKey key)
     {
         var vk = (User32.VK)Win32InputHelpers.MapBgiKeyToVk(key);
-        _sim.Keyboard.KeyDown(vk);
+        BetterGenshinImpact.Core.Input.InputHub.Foreground.Keyboard.KeyDown(vk);
     }
 
     public void KeyUp(BgiKey key)
     {
         var vk = (User32.VK)Win32InputHelpers.MapBgiKeyToVk(key);
-        _sim.Keyboard.KeyUp(vk);
+        BetterGenshinImpact.Core.Input.InputHub.Foreground.Keyboard.KeyUp(vk);
     }
 
     public void KeyPress(BgiKey key)
     {
         var vk = (User32.VK)Win32InputHelpers.MapBgiKeyToVk(key);
-        _sim.Keyboard.KeyPress(vk);
+        BetterGenshinImpact.Core.Input.InputHub.Foreground.Keyboard.KeyPress(vk);
     }
 
     // --- Mouse ---
@@ -47,22 +47,22 @@ public sealed class Win32InputBackend : IInputBackend
 
         // Fischless MoveMouseToPositionOnVirtualDesktop uses
         // MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK | MOUSEEVENTF_MOVE
-        _sim.Mouse.MoveMouseToPositionOnVirtualDesktop(nx, ny);
+        BetterGenshinImpact.Core.Input.InputHub.Foreground.Mouse.MoveMouseTo(nx, ny);
     }
 
     public void MoveMouseBy(int deltaX, int deltaY)
     {
-        _sim.Mouse.MoveMouseBy(deltaX, deltaY);
+        BetterGenshinImpact.Core.Input.InputHub.Foreground.Mouse.MoveMouseBy(deltaX, deltaY);
     }
 
     public void LeftButtonDown()
     {
-        _sim.Mouse.LeftButtonDown();
+        BetterGenshinImpact.Core.Input.InputHub.Foreground.Mouse.LeftButtonDown();
     }
 
     public void LeftButtonUp()
     {
-        _sim.Mouse.LeftButtonUp();
+        BetterGenshinImpact.Core.Input.InputHub.Foreground.Mouse.LeftButtonUp();
     }
 
     public void LeftClick(int screenX, int screenY)
@@ -78,6 +78,6 @@ public sealed class Win32InputBackend : IInputBackend
     {
         // Scroll(delta) means delta logical scroll clicks, equivalent to
         // VerticalScroll(delta) on Windows. Positive → wheel up.
-        _sim.Mouse.VerticalScroll(delta);
+        BetterGenshinImpact.Core.Input.InputHub.Foreground.Mouse.VerticalScroll(delta);
     }
 }

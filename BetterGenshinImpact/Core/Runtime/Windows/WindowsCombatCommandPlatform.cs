@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Core.Simulator;
@@ -12,25 +13,25 @@ public sealed class WindowsCombatCommandPlatform : ICombatCommandPlatform
     public void ValidateKeyName(string keyName) => User32Helper.ToVk(keyName);
 
     public void KeyDown(string keyName) => Dispatch(keyName,
-        vk => Simulation.SendInput.Keyboard.KeyDown(vk),
-        () => Simulation.SendInput.Mouse.LeftButtonDown(),
-        () => Simulation.SendInput.Mouse.RightButtonDown(),
-        () => Simulation.SendInput.Mouse.MiddleButtonDown(),
-        button => Simulation.SendInput.Mouse.XButtonDown(button));
+        vk => InputHub.Foreground.Keyboard.KeyDown(vk),
+        () => InputHub.Foreground.Mouse.LeftButtonDown(),
+        () => InputHub.Foreground.Mouse.RightButtonDown(),
+        () => InputHub.Foreground.Mouse.MiddleButtonDown(),
+        button => InputHub.Foreground.Mouse.XButtonDown(button));
 
     public void KeyUp(string keyName) => Dispatch(keyName,
-        vk => Simulation.SendInput.Keyboard.KeyUp(vk),
-        () => Simulation.SendInput.Mouse.LeftButtonUp(),
-        () => Simulation.SendInput.Mouse.RightButtonUp(),
-        () => Simulation.SendInput.Mouse.MiddleButtonUp(),
-        button => Simulation.SendInput.Mouse.XButtonUp(button));
+        vk => InputHub.Foreground.Keyboard.KeyUp(vk),
+        () => InputHub.Foreground.Mouse.LeftButtonUp(),
+        () => InputHub.Foreground.Mouse.RightButtonUp(),
+        () => InputHub.Foreground.Mouse.MiddleButtonUp(),
+        button => InputHub.Foreground.Mouse.XButtonUp(button));
 
     public void KeyPress(string keyName) => Dispatch(keyName,
-        vk => Simulation.SendInput.Keyboard.KeyPress(vk),
-        () => Simulation.SendInput.Mouse.LeftButtonClick(),
-        () => Simulation.SendInput.Mouse.RightButtonClick(),
-        () => Simulation.SendInput.Mouse.MiddleButtonClick(),
-        button => Simulation.SendInput.Mouse.XButtonClick(button));
+        vk => InputHub.Foreground.Keyboard.KeyPress(vk),
+        () => InputHub.Foreground.Mouse.LeftButtonClick(),
+        () => InputHub.Foreground.Mouse.RightButtonClick(),
+        () => InputHub.Foreground.Mouse.MiddleButtonClick(),
+        button => InputHub.Foreground.Mouse.XButtonClick(button));
 
     private static void Dispatch(string keyName, Action<User32.VK> keyboard, Action left, Action right,
         Action middle, Action<int> xButton)

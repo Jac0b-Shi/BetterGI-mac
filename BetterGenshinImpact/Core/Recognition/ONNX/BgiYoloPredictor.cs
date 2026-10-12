@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using BetterGenshinImpact.GameTask.Model.Area;
 using OpenCvSharp;
 using System.Collections.Generic;
@@ -64,8 +64,9 @@ public class BgiYoloPredictor : IDisposable
 
         var rectangles = result
             .Select(box => new Rect(box.Bounds.X, box.Bounds.Y, box.Bounds.Width, box.Bounds.Height))
-            .ToList();
-        OverlayDrawPlatform.Current.SetRectangles(_model.Name, region, rectangles);
+            .Select(rect => region.ToMaskWindowDrawingRect(rect)).ToList();
+
+        region.DrawingBoard.Set(_model.Name, rectangles);
 
         return dict;
     }

@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -7,6 +8,7 @@ using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.Model.Area;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
@@ -36,7 +38,7 @@ public class ScanPickTask
         }
         finally
         {
-            Core.Recognition.OverlayDrawPlatform.Current.ClearAll();
+            BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Current.ClearAll();
         }
     }
 

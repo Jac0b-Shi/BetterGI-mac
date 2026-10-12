@@ -1,3 +1,9 @@
+#if BGI_PLATFORM_MAC
+using MaskPoint = BetterGenshinImpact.Core.Mask.MaskPoint;
+#else
+using MaskPoint = System.Windows.Point;
+#endif
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
@@ -11,6 +17,7 @@ using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Model.GameUI;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Helpers.Extensions;
+using BetterGenshinImpact.Core.Mask;
 using Microsoft.ClearScript;
 using Microsoft.ClearScript.V8;
 using Microsoft.Extensions.Localization;
@@ -36,6 +43,7 @@ namespace BetterGenshinImpact.GameTask.AutoArtifactSalvage;
 public class AutoArtifactSalvageTask : ISoloTask
 {
     private readonly ILogger logger;
+    private IInputChannel input => InputHub.Foreground;
     private readonly IOcrService ocrService;
     private readonly double assetScale;
 
@@ -355,12 +363,8 @@ public class AutoArtifactSalvageTask : ISoloTask
                 using IItemIconRecognizer iconRecognizer = ItemIconRecognizerFactory.CreateConfigured();
                 ArtifactSetFilterScreen gridScreen = new ArtifactSetFilterScreen(new GridParams(new Rect(40, 100, 1300, 852), 2, 3, 40, 40, 0.024), this.logger, this.ct);
                 string drawKey = "ArtifactSetFilter";
-                var drawLabels = new List<OverlayLabel>();
-                gridScreen.OnBeforeScroll += () =>
-                {
-                    OverlayDrawPlatform.Current.RemoveLabels(drawKey);
-                    drawLabels.Clear();
-                };
+                var drawShapes = new List<MaskWindowDrawingShape>();
+                gridScreen.OnBeforeScroll += () => { MaskWindowDrawingPlatform.Current.Clear(drawKey); drawShapes.Clear(); };
                 try
                 {
                     await foreach ((ImageRegion pageRegion, Rect itemRect) in gridScreen)
@@ -370,23 +374,29 @@ public class AutoArtifactSalvageTask : ISoloTask
                         string? predName = iconRecognizer.Recognize(img125);
                         if (predName == null)
                         {
-                            drawLabels.Add(new OverlayLabel(itemRect, "识别失败", false));
+                            var rect = itemRegion.SelfToMaskWindowDrawingRect();
+                            drawShapes.Add(rect);
+                            drawShapes.Add(new MaskWindowDrawingText("识别失败", new MaskPoint(rect.Bounds.X + rect.Bounds.Width / 3, rect.Bounds.Y)));
+                            itemRegion.DrawingBoard.Set(drawKey, drawShapes);
                         }
                         else
                         {
-                            drawLabels.Add(new OverlayLabel(itemRect, predName, true));
+                            var rect = itemRegion.SelfToMaskWindowDrawingRect() with { Stroke = MaskWindowDrawingStroke.FromColor(System.Drawing.Color.Lime) };
+                            drawShapes.Add(rect);
+                            drawShapes.Add(new MaskWindowDrawingText(predName, new MaskPoint(rect.Bounds.X + rect.Bounds.Width / 3, rect.Bounds.Y)));
+                            itemRegion.DrawingBoard.Set(drawKey, drawShapes);
                             if (this.artifactSetFilter.Contains(predName))
                             {
                                 itemRegion.Click();
                                 await Delay(100, ct);
                             }
                         }
-                        OverlayDrawPlatform.Current.SetLabels(drawKey, pageRegion, drawLabels);
+
                     }
                 }
                 finally
                 {
-                    OverlayDrawPlatform.Current.ClearAll();
+                    MaskWindowDrawingPlatform.Current.ClearAll();
                 }
                 // 点击确认筛选
                 using var confirmFilterBtnRegion = CaptureToRectArea();
@@ -435,7 +445,7 @@ public class AutoArtifactSalvageTask : ISoloTask
         GridParams gridParams = GridParams.Templates[GridScreenName.ArtifactSalvage];
         GridScreen gridScreen = new GridScreen(gridParams, this.logger, this.ct); // 圣遗物分解Grid有4行9列
         gridScreen.OnAfterTurnToNewPage += GridScreen.DrawItemsAfterTurnToNewPage;
-        gridScreen.OnBeforeScroll += () => OverlayDrawPlatform.Current.ClearAll();
+        gridScreen.OnBeforeScroll += () => MaskWindowDrawingPlatform.Current.ClearAll();
         try
         {
             await foreach ((ImageRegion pageRegion, Rect itemRect) in gridScreen)
@@ -496,7 +506,7 @@ public class AutoArtifactSalvageTask : ISoloTask
         }
         finally
         {
-            OverlayDrawPlatform.Current.ClearAll();
+            MaskWindowDrawingPlatform.Current.ClearAll();
         }
     }
 

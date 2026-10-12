@@ -29,6 +29,8 @@ public sealed class WindowsAutoDomainRuntimePlatform : IAutoDomainRuntimePlatfor
     public void DrawCameraDirection(ImageRegion region, double angle) =>
         CameraOrientation.DrawDirection(region, angle);
 
+    public IDisposable AddAutoEatTriggerLease() => TaskTriggerDispatcher.Instance().AddTrigger("AutoEat", null);
+
     public void AddAutoEatTrigger() => TaskTriggerDispatcher.Instance().AddTrigger("AutoEat", null);
 
     public void Notify(AutoDomainNotification notification, string message)

@@ -1,5 +1,5 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition.OCR;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Job;
@@ -53,6 +53,7 @@ internal sealed class InventoryCountComparisonTask : ISoloTask
     private const int MaxPages = 100;
     private readonly InventoryCountComparisonTarget target;
     private readonly ILogger logger = App.GetLogger<InventoryCountComparisonTask>();
+    private IInputChannel input => InputHub.Foreground;
 
     /// <summary>
     /// 创建指定目标的数量 OCR 对比任务。

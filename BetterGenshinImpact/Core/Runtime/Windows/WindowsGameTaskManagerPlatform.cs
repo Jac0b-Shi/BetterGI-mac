@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Mask;
 using System.Collections.Generic;
 using BetterGenshinImpact.Core.Abstractions.Recognition;
 using BetterGenshinImpact.Core.Abstractions.Runtime;
@@ -9,7 +10,7 @@ using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.Placeholder;
 using BetterGenshinImpact.GameTask.SkillCd;
 using BetterGenshinImpact.Platform.Abstractions;
-using BetterGenshinImpact.View.Drawable;
+
 using BetterGenshinImpact.Core.Recognition;
 
 namespace BetterGenshinImpact.GameTask;
@@ -49,7 +50,7 @@ public sealed class WindowsGameTaskManagerPlatform : IGameTaskManagerPlatform
         _ => null,
     };
 
-    public void ClearOverlay() => VisionContext.Instance().DrawContent.ClearAll();
+    public void ClearOverlay() => MaskWindowDrawingPlatform.Current.ClearAll();
     public void ReloadAssets()
     {
         RecognitionAssets.ClearAll();

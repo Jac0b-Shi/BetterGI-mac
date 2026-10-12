@@ -562,6 +562,9 @@ final class AppState: ObservableObject {
     @Published private(set) var autoComboPresentation: BetterGICoreAutoComboPresentation?
     @Published private(set) var autoComboSettings: BetterGICoreAutoComboSettings?
     @Published private(set) var autoComboSettingsSaving = false
+    @Published var autoComboProviderDraft = "openai"
+    @Published private(set) var autoComboModels: [String] = []
+    @Published private(set) var autoComboModelsLoading = false
     @Published var autoComboEndpointDraft = ""
     @Published var autoComboModelDraft = ""
     @Published var autoComboAPIKeyDraft = ""
@@ -4309,6 +4312,7 @@ final class AppState: ObservableObject {
             autoFishingSettings = try await supervisor.autoFishingSettings()
             let combo = try await supervisor.autoComboSettings()
             autoComboSettings = combo
+            autoComboProviderDraft = combo.provider
             autoComboEndpointDraft = combo.planningLlmEndpoint
             autoComboModelDraft = combo.modelName
             autoComboAPIKeyDraft = combo.apiKey
@@ -4552,10 +4556,28 @@ final class AppState: ObservableObject {
         catch { autoComboPresentation = nil }
     }
 
+    func fetchAutoComboModels() {
+        guard let supervisor = betterGICoreSupervisor, !autoComboModelsLoading else { return }
+        let provider = autoComboProviderDraft
+        let endpoint = autoComboEndpointDraft
+        let key = autoComboAPIKeyDraft
+        autoComboModelsLoading = true
+        Task { [weak self] in
+            defer { self?.autoComboModelsLoading = false }
+            do {
+                let models = try await supervisor.autoComboModels(provider: provider, endpoint: endpoint, apiKey: key)
+                guard self?.autoComboProviderDraft == provider, self?.autoComboEndpointDraft == endpoint,
+                      self?.autoComboAPIKeyDraft == key else { return }
+                self?.autoComboModels = models
+            } catch { self?.addLog(.error, "获取模型列表失败：\(error.localizedDescription)") }
+        }
+    }
+
     func saveAutoComboSettings() {
         guard let supervisor = betterGICoreSupervisor,
               autoComboSettings != nil, !autoComboSettingsSaving else { return }
         let next = BetterGICoreAutoComboSettings(
+            provider: autoComboProviderDraft,
             planningLlmEndpoint: autoComboEndpointDraft,
             modelName: autoComboModelDraft,
             apiKey: autoComboAPIKeyDraft,

@@ -23,6 +23,22 @@ struct CoreOverlayText: Identifiable, Equatable {
     let position: CGPoint
 }
 
+struct CoreOverlayDrawingShape: Identifiable, Equatable {
+    let id: String
+    let group: String
+    let isFeature: Bool
+    let type: String
+    let origin: CGPoint
+    let end: CGPoint
+    let bounds: CGRect
+    let text: String
+    let color: String?
+    let background: String?
+    let thickness: CGFloat
+    let fontSize: CGFloat
+    let numeric: Bool
+}
+
 struct CoreOverlayMapPoint: Identifiable, Equatable {
     let id: String
     let sourceID: String
@@ -33,6 +49,8 @@ struct CoreOverlayMapPoint: Identifiable, Equatable {
 }
 
 struct CoreOverlayState: Equatable {
+    private(set) var drawingShapes: [CoreOverlayDrawingShape] = []
+    private(set) var drawingVersion: Int64 = -1
     private(set) var rectangles: [String: [CoreOverlayRectangle]] = [:]
     private(set) var labels: [String: [CoreOverlayLabel]] = [:]
     private(set) var texts: [String: [CoreOverlayText]] = [:]
@@ -53,6 +71,14 @@ struct CoreOverlayState: Equatable {
         }
 
         switch operation {
+        case "setDrawingSnapshot":
+            guard name == "MaskWindowDrawing", let version = parameters["version"] as? NSNumber else {
+                throw CoreOverlayCommandError.invalid("Drawing snapshot requires an owner and version.")
+            }
+            let shapes = try Self.parseDrawingGroups(parameters["groups"])
+            // The Host publisher is serial. Accept zero after a Host session restart as well.
+            drawingShapes = shapes
+            drawingVersion = version.int64Value
         case "setRectangles":
             rectangles[name] = try Self.parseRectangles(parameters["rectangles"], name: name)
         case "removeRectangles":
@@ -66,6 +92,7 @@ struct CoreOverlayState: Equatable {
         case "removeText":
             texts.removeValue(forKey: name)
         case "clearAll":
+            drawingShapes.removeAll()
             rectangles.removeAll()
             labels.removeAll()
             texts.removeAll()
@@ -96,6 +123,39 @@ struct CoreOverlayState: Equatable {
             }
         default:
             throw CoreOverlayCommandError.invalid("Unsupported overlay operation: \(operation)")
+        }
+    }
+
+    private static func parseDrawingGroups(_ value: Any?) throws -> [CoreOverlayDrawingShape] {
+        try dictionaries(value, field: "groups").flatMap { group in
+            guard let name = group["name"] as? String, let kind = group["kind"] as? String,
+                  kind == "Feature" || kind == "Recognition" else {
+                throw CoreOverlayCommandError.invalid("Drawing group requires a valid name and kind.")
+            }
+            return try dictionaries(group["shapes"], field: "shapes").enumerated().map { index, item in
+                guard let type = item["type"] as? String, ["rect", "line", "text"].contains(type),
+                      let x = number(item["x"]), let y = number(item["y"]) else {
+                    throw CoreOverlayCommandError.invalid("Invalid drawing shape.")
+                }
+                let bounds = type == "rect" ? try rect(item) : CGRect.zero
+                let end: CGPoint
+                if type == "line" {
+                    guard let x2 = number(item["x2"]), let y2 = number(item["y2"]) else {
+                        throw CoreOverlayCommandError.invalid("Line requires both endpoints.")
+                    }
+                    end = CGPoint(x: x2, y: y2)
+                } else { end = .zero }
+                if type == "text", !(item["text"] is String) {
+                    throw CoreOverlayCommandError.invalid("Text shape requires text.")
+                }
+                return CoreOverlayDrawingShape(
+                    id: "\(name)-\(index)", group: name, isFeature: kind == "Feature", type: type,
+                    origin: CGPoint(x: x, y: y), end: end, bounds: bounds,
+                    text: item["text"] as? String ?? "", color: item["color"] as? String,
+                    background: item["background"] as? String,
+                    thickness: max(0, number(item["thickness"]) ?? 2),
+                    fontSize: max(1, number(item["fontSize"]) ?? 20), numeric: item["numeric"] as? Bool ?? false)
+            }
         }
     }
 

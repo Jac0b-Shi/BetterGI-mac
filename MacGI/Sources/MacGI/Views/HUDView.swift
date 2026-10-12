@@ -189,6 +189,7 @@ private struct CoreOverlayHUDLayer: View {
             if showMapPoints { mapMaskOverlay }
             if showRecognition { recognitionOverlay }
             skillCdOverlay
+            drawingOverlay
         }
         .frame(width: size.width, height: size.height)
         .allowsHitTesting(false)
@@ -259,6 +260,45 @@ private struct CoreOverlayHUDLayer: View {
                 .tag(url.absoluteString)
             }
         }
+    }
+
+    private var drawingOverlay: some View {
+        Canvas { context, canvasSize in
+            context.opacity = opacity
+            for shape in store.state.drawingShapes where shape.isFeature || showRecognition {
+                let color = Self.drawingColor(shape.color) ?? (shape.type == "text" ? .white : .lime)
+                let point = HUDOverlayGeometry.displayPoint(shape.origin, capturePixelSize: capturePixelSize, in: canvasSize)
+                switch shape.type {
+                case "rect":
+                    let rect = HUDOverlayGeometry.displayRect(shape.bounds, capturePixelSize: capturePixelSize, in: canvasSize)
+                    context.stroke(Path(rect), with: .color(color), lineWidth: shape.thickness)
+                case "line":
+                    let end = HUDOverlayGeometry.displayPoint(shape.end, capturePixelSize: capturePixelSize, in: canvasSize)
+                    var path = Path()
+                    path.move(to: point)
+                    path.addLine(to: end)
+                    context.stroke(path, with: .color(color), lineWidth: shape.thickness)
+                case "text":
+                    let fontSize = shape.fontSize * canvasSize.height / max(1, capturePixelSize.height)
+                    let font: Font = shape.numeric ? .custom("FgiRegular", size: fontSize) : .system(size: fontSize)
+                    let text = context.resolve(Text(shape.text).font(font).foregroundColor(color))
+                    if let background = Self.drawingColor(shape.background) {
+                        let measured = text.measure(in: canvasSize)
+                        let rect = CGRect(origin: point, size: measured).insetBy(dx: -4, dy: -2)
+                        context.fill(Path(roundedRect: rect, cornerRadius: 4), with: .color(background))
+                    }
+                    context.draw(text, at: point, anchor: .topLeading)
+                default: break
+                }
+            }
+        }
+    }
+
+    private static func drawingColor(_ text: String?) -> Color? {
+        guard let text, text.count == 9, text.first == "#", let argb = UInt32(text.dropFirst(), radix: 16) else { return nil }
+        return Color(red: Double((argb >> 16) & 255) / 255,
+                     green: Double((argb >> 8) & 255) / 255, blue: Double(argb & 255) / 255,
+                     opacity: Double((argb >> 24) & 255) / 255)
     }
 
     private var recognitionOverlay: some View {

@@ -69,8 +69,7 @@ public sealed class MacScriptGroupExecutionServices : IScriptGroupExecutionServi
                 "AutoPick", null, _autoPickRuntimeState, _inputBackend, _getSystemInfo(),
                 _autoPickConfigProvider, _paddleRecognizer, _yapRecognizer))
             throw new CapabilityUnavailableException("The shared AutoPick trigger could not be created.");
-        GameTaskManager.TriggerDictionary!["AutoPick"].Init();
-        GameTaskManager.TriggerDictionary["AutoPick"].IsEnabled = true;
+
     }
 
     public PathingFailurePolicy PathingFailurePolicy

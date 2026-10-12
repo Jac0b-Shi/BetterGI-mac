@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.AutoSkip;
@@ -23,11 +24,11 @@ public sealed class WindowsAutoSkipRuntimePlatform : IAutoSkipRuntimePlatform
         GetGameProcessId,
         processId => new ProcessLoopbackAudioCapture(processId));
     public void SimulateBackgroundAction(GIActions action) =>
-        TaskContext.Instance().PostMessageSimulator.SimulateActionBackground(action);
+        InputHub.Background.SimulateAction(action);
     public void PressBackgroundKey(BgiKey key) =>
-        TaskContext.Instance().PostMessageSimulator.KeyPressBackground(key.ToWindowsVirtualKey());
+        InputHub.Background.Keyboard.KeyPress(key.ToWindowsVirtualKey());
     public void BackgroundLeftButtonClick() =>
-        TaskContext.Instance().PostMessageSimulator.LeftButtonClickBackground();
+        InputHub.Background.Mouse.LeftButtonClick();
     public void BackgroundClick(Region region) => region.BackgroundClick();
     public void ReportError(string message) => ThemedMessageBox.Error(message);
 

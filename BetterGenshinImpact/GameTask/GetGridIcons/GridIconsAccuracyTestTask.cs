@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
@@ -28,6 +29,8 @@ public class GridIconsAccuracyTestTask : ISoloTask
 {
     private readonly IOcrService ocrService;
     private readonly ILogger logger;
+    private IInputChannel input => InputHub.Foreground;
+    private IInputChannel _input => InputHub.Foreground;
     private CancellationToken ct;
 
     public string Name => "获取Grid界面物品图标独立任务";
@@ -99,7 +102,7 @@ public class GridIconsAccuracyTestTask : ISoloTask
 
         GridScreen gridScreen = new GridScreen(GridParams.Templates[this.gridScreenName], this.logger, this.ct);
         gridScreen.OnAfterTurnToNewPage += GridScreen.DrawItemsAfterTurnToNewPage;
-        gridScreen.OnBeforeScroll += () => OverlayDrawPlatform.Current.ClearAll();
+            gridScreen.OnBeforeScroll += () => BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Current.ClearAll();
         try
         {
             await foreach ((ImageRegion pageRegion, Rect itemRect) in gridScreen)
@@ -155,7 +158,7 @@ public class GridIconsAccuracyTestTask : ISoloTask
         }
         finally
         {
-            OverlayDrawPlatform.Current.ClearAll();
+            BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Current.ClearAll();
         }
     }
 

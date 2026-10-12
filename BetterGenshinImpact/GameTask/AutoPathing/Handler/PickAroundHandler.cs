@@ -1,5 +1,5 @@
+using BetterGenshinImpact.Core.Input;
 using System;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.Common;
 using Microsoft.Extensions.Logging;
 using System.Threading;

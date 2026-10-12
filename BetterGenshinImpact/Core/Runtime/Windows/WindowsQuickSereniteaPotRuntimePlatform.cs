@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
@@ -29,7 +30,7 @@ public sealed class WindowsQuickSereniteaPotRuntimePlatform
     public void SimulateAction(
         GIActions action,
         CancellationToken cancellationToken) =>
-        Simulation.SendInput.SimulateAction(action);
+        InputHub.Foreground.SimulateAction(action);
 
     public void ClickGame1080P(
         double x,

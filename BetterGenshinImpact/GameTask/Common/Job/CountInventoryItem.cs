@@ -1,10 +1,11 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Model.GameUI;
 #if !BGI_PLATFORM_MAC
-using BetterGenshinImpact.View.Drawable;
+
 #endif
 using BetterGenshinImpact.Helpers;
 using Microsoft.Extensions.Logging;
@@ -24,6 +25,8 @@ namespace BetterGenshinImpact.GameTask.Common.Job
 
         private readonly ILogger logger = TaskControlPlatform.Current.Logger;
         private readonly IOcrService ocrService;
+    private IInputChannel input => InputHub.Foreground;
+    private IInputChannel _input => InputHub.Foreground;
         private CancellationToken ct;
         private readonly GridScreenName? gridScreenName;
         private readonly IReadOnlyCollection<string> itemNames;
@@ -157,7 +160,7 @@ namespace BetterGenshinImpact.GameTask.Common.Job
         {
             GridScreen gridScreen = new GridScreen(CreateGridParams(page), logger, ct);
             gridScreen.OnAfterTurnToNewPage += GridScreen.DrawItemsAfterTurnToNewPage;
-            gridScreen.OnBeforeScroll += () => OverlayDrawPlatform.Current.ClearAll();
+            gridScreen.OnBeforeScroll += () => BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Current.ClearAll();
 
             // 本页尚未找到的目标物品
             List<string> notFound = pageItemNames.Where(name => !results.ContainsKey(name)).ToList();
@@ -206,7 +209,7 @@ namespace BetterGenshinImpact.GameTask.Common.Job
             }
             finally
             {
-                OverlayDrawPlatform.Current.ClearAll();
+            BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Current.ClearAll();
             }
         }
 

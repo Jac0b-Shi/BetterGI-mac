@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -108,7 +109,7 @@ public sealed class WindowsGameLoadingRuntimePlatform : IGameLoadingRuntimePlatf
         return result;
     }
 
-    public void BackgroundClick() => TaskContext.Instance().PostMessageSimulator.LeftButtonClickBackground();
+    public void BackgroundClick() => InputHub.Background.Mouse.LeftButtonClick();
     public void MoveToGame1080P(double x, double y) => GameCaptureRegion.GameRegion1080PPosMove(x, y);
     public void ClickGame1080P(double x, double y) => GameCaptureRegion.GameRegion1080PPosClick(x, y);
 }

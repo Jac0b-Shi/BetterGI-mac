@@ -182,7 +182,7 @@ var triggerDispatcher = new MacTriggerDispatcher(
                 "macOS did not acknowledge HTML mask cleanup.");
         }
     },
-    isGameActive: foregroundInputCoordinator.IsGameFocused);
+    isGameActive: foregroundInputCoordinator.IsInputAvailable);
 server.AttachTriggerDispatcher(triggerDispatcher);
 server.AttachPlatformAssetInitializer(() =>
 {
@@ -357,7 +357,12 @@ var useRedemptionCodeRuntimePlatform = new MacUseRedemptionCodeRuntimePlatform(
 var autoFishingRuntimePlatform = new MacAutoFishingRuntimePlatform(
     layout, () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
 AutoFishingRuntimePlatform.Configure(autoFishingRuntimePlatform);
-server.SoloTaskSettings.AttachAutoFishingConfigUpdated(autoFishingRuntimePlatform.UpdateConfig);
+server.SoloTaskSettings.AttachAutoFishingConfigUpdated(config =>
+{
+    autoFishingRuntimePlatform.UpdateConfig(config);
+    GameTaskManager.RequestRefresh("AutoFish");
+});
+server.TriggerSettings.AttachAutoFishingUpdated(autoFishingRuntimePlatform.UpdateConfig);
 var autoDomainRuntimePlatform = new MacAutoDomainRuntimePlatform(
     () => gameTaskManagerPlatform.SystemInfo, imageRegionOcrService, loggerFactory);
 var autoSkipRuntimePlatform = new MacAutoSkipRuntimePlatform(
@@ -524,6 +529,9 @@ TaskRunnerPlatform.Configure(new MacTaskRunnerPlatform(
     loggerFactory.CreateLogger("BetterGenshinImpact.GameTask.RunnerContext"),
     foregroundInputCoordinator));
 GameTaskManagerPlatform.Configure(gameTaskManagerPlatform);
+await using var drawingBoard = new MacOverlayDrawingBoard(server.PlatformCallbacks, sessionToken,
+    shutdown.Token, loggerFactory.CreateLogger<MacOverlayDrawingBoard>());
+BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Configure(drawingBoard);
 OverlayDrawPlatform.Configure(new MacOverlayDrawPlatform(
     server.PlatformCallbacks, sessionToken, shutdown.Token));
 GlobalMethod.Configure(globalMethodRuntime);

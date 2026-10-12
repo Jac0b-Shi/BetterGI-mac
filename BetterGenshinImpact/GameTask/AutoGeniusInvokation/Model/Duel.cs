@@ -3,6 +3,7 @@ using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Assets;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.Core.Recognition;
+using BetterGenshinImpact.Service.Notification;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -297,7 +298,7 @@ public class Duel
                 // 等待对方行动+回合结算
                 _control.WaitOpponentAction(this);
 
-                OverlayDrawPlatform.Current.ClearAll();
+            BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Current.ClearAll();
                 RoundNum++;
             }
         }

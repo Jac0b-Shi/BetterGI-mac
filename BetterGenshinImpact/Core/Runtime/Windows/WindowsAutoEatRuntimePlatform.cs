@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask;
@@ -10,5 +11,5 @@ public sealed class WindowsAutoEatRuntimePlatform : IAutoEatRuntimePlatform
 {
     public AutoEatConfig Config => TaskContext.Instance().Config.AutoEatConfig;
     public ILogger<T> GetLogger<T>() => App.GetLogger<T>();
-    public void SimulateAction(GIActions action) => Simulation.SendInput.SimulateAction(action);
+    public void SimulateAction(GIActions action) => InputHub.Foreground.SimulateAction(action);
 }

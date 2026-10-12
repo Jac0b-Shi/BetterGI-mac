@@ -4,10 +4,11 @@ using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.Common.Job;
 #if !BGI_PLATFORM_MAC
-using BetterGenshinImpact.View.Drawable;
+
 #endif
 using CsTrees.Blackboard;
 using CsTrees.FluentBuilder;
+using InputHub = BetterGenshinImpact.Core.Input.InputHub;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using System;

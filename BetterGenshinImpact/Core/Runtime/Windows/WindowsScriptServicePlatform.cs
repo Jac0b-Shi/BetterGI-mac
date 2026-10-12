@@ -41,7 +41,7 @@ public sealed class WindowsScriptServicePlatform : IScriptServicePlatform
         }
     }
     public void SetCurrentScriptProject(ScriptGroupProject project) =>
-        TaskContext.Instance().CurrentScriptProject = project;
+        RunnerContext.Instance.CurrentScriptProject = project;
 
     public Task HandleBlessingOfTheWelkinMoon(CancellationToken cancellationToken) =>
         _blessingTask.Start(cancellationToken);

@@ -15,7 +15,8 @@ public sealed class MacTriggerDispatcher(
     CancellationToken shutdown,
     Func<CancellationToken, Task>? runLoop = null,
     Func<CancellationToken, Task>? stopCleanup = null,
-    Func<CancellationToken, bool>? isGameActive = null)
+    Func<CancellationToken, bool>? isGameActive = null,
+    Func<bool>? isTaskRunning = null)
 {
     private const int IntervalMilliseconds = 50;
     private const int CaptureFailureBackoffMilliseconds = 500;
@@ -27,6 +28,15 @@ public sealed class MacTriggerDispatcher(
     private GameUiCategory _previousCategory = GameUiCategory.Unknown;
     private DateTime _categoryChangedAt = DateTime.MinValue;
     private MapMaskTrigger? _mapMaskCompanion;
+    private sealed class Slot(ITaskTrigger trigger)
+    {
+        public ITaskTrigger Trigger { get; } = trigger;
+        public bool Active;
+        public (long Refresh, long Request, bool InTask) Version;
+    }
+    private readonly Dictionary<ITaskTrigger, Slot> _slots = new(ReferenceEqualityComparer.Instance);
+    private readonly object _lifecycleLock = new();
+
 
     internal bool IsRunning
     {
@@ -43,7 +53,6 @@ public sealed class MacTriggerDispatcher(
     internal void SetMapMaskCompanion(MapMaskTrigger trigger)
     {
         ArgumentNullException.ThrowIfNull(trigger);
-        trigger.Init();
         var previous = Interlocked.Exchange(ref _mapMaskCompanion, trigger);
         if (previous is not null && !ReferenceEquals(previous, trigger))
             previous.Invalidate();
@@ -100,6 +109,7 @@ public sealed class MacTriggerDispatcher(
         }
         finally
         {
+            DisableAllTriggers();
             lock (_startLock)
             {
                 if (ReferenceEquals(_runCancellation, runCancellation))
@@ -115,18 +125,15 @@ public sealed class MacTriggerDispatcher(
         using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(IntervalMilliseconds));
         while (await timer.WaitForNextTickAsync(cancellationToken))
         {
-            var registeredTriggers = GameTaskManager.TriggerDictionary?.Values
-                .Where(trigger => trigger.IsEnabled)
-                .OrderByDescending(trigger => trigger.Priority)
-                .ToArray() ?? [];
-            var triggers = SelectTriggersForFrame(
-                registeredTriggers, Volatile.Read(ref _mapMaskCompanion));
-            if (triggers.Length == 0)
-                continue;
-
             try
             {
-                if (isGameActive is not null && !isGameActive(cancellationToken))
+                var gameActive = isGameActive is null || isGameActive(cancellationToken);
+                var registeredTriggers = UpdateLifecycle(gameActive);
+                var triggers = SelectTriggersForFrame(
+                    registeredTriggers, registeredTriggers.OfType<MapMaskTrigger>().FirstOrDefault());
+                if (triggers.Length == 0) continue;
+
+                if (RunnerContext.Instance.AutoPickTriggerStopCount > 0 || RunnerContext.Instance.IsSuspend)
                     continue;
 
                 using var content = new CaptureContent(
@@ -163,6 +170,69 @@ public sealed class MacTriggerDispatcher(
                 await Task.Delay(CaptureFailureBackoffMilliseconds, cancellationToken);
             }
         }
+    }
+
+    internal ITaskTrigger[] UpdateLifecycle(bool gameActive)
+    {
+        lock (_lifecycleLock)
+        {
+            var registered = GameTaskManager.TriggerDictionary?.ToArray() ?? [];
+            var companion = Volatile.Read(ref _mapMaskCompanion);
+            var retained = registered.Select(pair => pair.Value).ToHashSet(ReferenceEqualityComparer.Instance);
+            if (companion is not null) retained.Add(companion);
+            var retired = _slots.Keys.Where(trigger => !retained.Contains(trigger)).ToHashSet(ReferenceEqualityComparer.Instance);
+            while (GameTaskManager.RetiredTriggers.TryDequeue(out var trigger)) retired.Add(trigger);
+            foreach (var removed in retired.OfType<ITaskTrigger>().Where(trigger => !retained.Contains(trigger)))
+            {
+                if (_slots.Remove(removed, out var slot)) Disable(slot);
+                (removed as IDisposable)?.Dispose();
+            }
+            bool inTask = isTaskRunning?.Invoke() ?? TaskRunnerPlatform.Current.TaskSemaphore.CurrentCount == 0;
+            var selected = new List<ITaskTrigger>();
+            foreach (var pair in registered)
+            {
+                if (pair.Value is MapMaskTrigger) continue;
+                GameTaskManager.RequestedTriggers.TryGetValue(pair.Key, out var request);
+                bool wanted = (inTask ? request is not null : pair.Value.IsEnabledByConfig)
+                    && (gameActive || pair.Value.IsBackgroundRunning);
+                var version = (GameTaskManager.RefreshVersion(pair.Key), inTask ? request?.Version ?? 0 : 0, inTask);
+                Apply(pair.Value, wanted, inTask ? request?.Options : null, version);
+                if (_slots[pair.Value].Active) selected.Add(pair.Value);
+            }
+            if (companion is not null)
+            {
+                Apply(companion, companion.IsEnabledByConfig && (gameActive || ((ITaskTrigger)companion).IsBackgroundRunning), null,
+                    (GameTaskManager.RefreshVersion("MapMask"), 0, false));
+                if (_slots[companion].Active) selected.Add(companion);
+            }
+            return selected.OrderByDescending(trigger => trigger.Priority).ToArray();
+        }
+    }
+
+    private void Apply(ITaskTrigger trigger, bool wanted, object? options, (long Refresh, long Request, bool InTask) version)
+    {
+        if (!_slots.TryGetValue(trigger, out var slot)) _slots.Add(trigger, slot = new Slot(trigger));
+        if (slot.Active && (!wanted || slot.Version != version)) Disable(slot);
+        if (wanted && !slot.Active)
+        {
+            try { trigger.OnEnabled(options); slot.Active = true; slot.Version = version; }
+            catch (Exception e)
+            {
+                logger.LogError(e, "macOS trigger {TriggerName} enable failed", trigger.Name);
+                try { trigger.OnDisabled(); } catch (Exception cleanup) { logger.LogError(cleanup, "Trigger enable cleanup failed"); }
+            }
+        }
+    }
+    private void Disable(Slot slot)
+    {
+        if (!slot.Active) return;
+        slot.Active = false;
+        try { slot.Trigger.OnDisabled(); }
+        catch (Exception e) { logger.LogError(e, "macOS trigger {TriggerName} disable failed", slot.Trigger.Name); }
+    }
+    private void DisableAllTriggers()
+    {
+        lock (_lifecycleLock) foreach (var slot in _slots.Values) Disable(slot);
     }
 
     internal void DispatchTriggers(IEnumerable<ITaskTrigger> triggers, CaptureContent content)
@@ -202,7 +272,7 @@ public sealed class MacTriggerDispatcher(
             .Where(trigger => trigger is not MapMaskTrigger)
             .ToArray();
         var exclusive = businessTriggers.FirstOrDefault(trigger => trigger.IsExclusive);
-        var mapMask = mapMaskCompanion is { IsEnabled: true } ? mapMaskCompanion : null;
+        var mapMask = mapMaskCompanion is { IsEnabledByConfig: true } ? mapMaskCompanion : null;
         if (exclusive is null)
         {
             return mapMask is null

@@ -10,9 +10,11 @@ using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Model.GameUI;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Helpers.Extensions;
+using BetterGenshinImpact.Core.Mask;
 using Compunet.YoloSharp;
 using CsTrees;
 using CsTrees.Blackboard;
+using InputHub = BetterGenshinImpact.Core.Input.InputHub;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
@@ -113,7 +115,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                     imageRegion.Derive(fish.Rect).DrawSelf($"{fish.FishType.ChineseName}.{i++}");
                 }
                 Sleep.Get()(1000);
-                drawContent.ClearAll();
+                imageRegion.DrawingBoard.ClearAll();
                 if (Fishpond.Get().Fishes.Any(f =>
                     !chooseBaitfailuresIgnoredBaits.Contains(f.FishType.BaitType)
                     && !throwRodNoTargetFishfailuresIgnoredBaits.Contains(f.FishType.BaitType)))
@@ -963,14 +965,14 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                 using var tipsRa = imageRegion.Derive((Rect)currentBiteWordsTips + liftingWordsAreaRect.Location);
                 tipsRa.DrawSelf("FishBiteTips");
 
-                return RaiseRod("文字块");
+                return RaiseRod("文字块", imageRegion.DrawingBoard);
             }
 
             // 图像提竿判断
             using var liftRodButtonRa = imageRegion.Find(RecognitionAssets.Get("AutoFishing", "LiftRodButton", imageRegion));
             if (!liftRodButtonRa.IsEmpty())
             {
-                return RaiseRod("图像识别");
+                return RaiseRod("图像识别", imageRegion.DrawingBoard);
             }
 
             // OCR 提竿判断
@@ -978,13 +980,13 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
             if (!string.IsNullOrEmpty(text) && StringUtils.RemoveAllSpace(text).Contains(this.getABiteLocalizedString))
             {
-                return RaiseRod("OCR");
+                return RaiseRod("OCR", imageRegion.DrawingBoard);
             }
 
             return Status.Running;
         }
 
-        private Status RaiseRod(string method)
+        private Status RaiseRod(string method, IMaskWindowDrawingBoard drawingBoard)
         {
             logger.LogInformation(@"┌------------------------┐");
             logger.LogInformation("  提竿识别=>{m}", method);

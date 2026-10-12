@@ -14,7 +14,7 @@ namespace BetterGenshinImpact.GameTask.Placeholder;
 public class TestTrigger : ITaskTrigger
 {
     public string Name => "自定义占位触发器";
-    public bool IsEnabled { get; set; }
+    public bool IsEnabledByConfig => false;
     public int Priority => 9999;
     public bool IsExclusive { get; private set; }
 
@@ -22,9 +22,9 @@ public class TestTrigger : ITaskTrigger
 
     // private readonly YoloV8 _predictor = new(Global.Absolute("Assets\\Model\\Domain\\bgi_tree.onnx"));
 
-    public void Init()
+    public void OnDisabled()
     {
-        IsEnabled = false;
+
         IsExclusive = false;
     }
 

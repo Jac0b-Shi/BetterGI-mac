@@ -11,7 +11,7 @@ namespace BetterGenshinImpact.Core.Runtime.Windows;
 public sealed class WindowsScriptHostServices(ILoggerFactory loggerFactory) : IScriptHostServices
 {
     public ILogger CreateLogger(string categoryName) => loggerFactory.CreateLogger(categoryName);
-    public ScriptGroupProject? CurrentProject => TaskContext.Instance().CurrentScriptProject;
+    public ScriptGroupProject? CurrentProject => RunnerContext.Instance.CurrentScriptProject;
     public TimeSpan ServerTimeZoneOffset => TaskContext.Instance().Config.OtherConfig.ServerTimeZoneOffset;
     public bool JsNotificationEnabled => TaskContext.Instance().Config.NotificationConfig.JsNotificationEnabled;
 

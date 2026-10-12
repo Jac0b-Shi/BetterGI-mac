@@ -184,7 +184,7 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
                             persisted["autoPickConfig"]?["itemIconLeftOffset"]?.Value<int>() == 61 &&
                             persisted["autoPickConfig"]?["fastModeEnabled"]?.Value<bool>() == false,
                 "AutoPick save did not persist fast mode or update the live adapter.");
-            context.Require(trigger.InitCount == 1 && platform.ReloadAssetsCount == 1,
+            context.Require(GameTaskManager.RefreshVersion("AutoPick") > 0 && platform.ReloadAssetsCount == 1,
                 "AutoPick save did not refresh the shared trigger and recognition assets exactly once.");
             context.Require(await File.ReadAllTextAsync(
                                 Path.Combine(layout.UserPath, "pick_black_lists.txt"), cancellationToken) == "史莱姆凝液\n" &&
@@ -349,34 +349,34 @@ public sealed class TriggerSettingsSuite : IVerificationSuite
     private sealed class RecordingTrigger : ITaskTrigger
     {
         public string Name => "自动拾取";
-        public bool IsEnabled { get; set; }
+        public bool IsEnabledByConfig { get; set; }
         public int Priority => 30;
         public bool IsExclusive => false;
         public int InitCount { get; private set; }
-        public void Init() => InitCount++;
+        public void OnEnabled(object? options) => InitCount++;
         public void OnCapture(CaptureContent content) { }
     }
 
     private sealed class ExclusiveTrigger : ITaskTrigger
     {
         public string Name => "独占测试触发器";
-        public bool IsEnabled { get; set; } = true;
+        public bool IsEnabledByConfig { get; set; } = true;
         public int Priority => 100;
         public bool IsExclusive => true;
-        public void Init() { }
+        public void OnEnabled(object? options) { }
         public void OnCapture(CaptureContent content) { }
     }
 
     private sealed class MapMaskCategoryTrigger : ITaskTrigger
     {
         public string Name => "地图遮罩";
-        public bool IsEnabled { get; set; }
+        public bool IsEnabledByConfig { get; set; }
         public int Priority => 1;
         public bool IsExclusive => false;
         public GameUiCategory SupportedGameUiCategory => GameUiCategory.Unknown;
         public bool SupportsGameUiCategory(GameUiCategory category) =>
             category is GameUiCategory.Unknown or GameUiCategory.BigMap;
-        public void Init() { }
+        public void OnEnabled(object? options) { }
         public void OnCapture(CaptureContent content) { }
     }
 

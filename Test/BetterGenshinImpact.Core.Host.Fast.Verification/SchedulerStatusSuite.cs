@@ -99,6 +99,7 @@ public sealed class SchedulerStatusSuite : IVerificationSuite
             Name = "路线",
             FolderName = "AutoHoeing"
         });
+        progress.ScriptGroupNames = [firstGroup.Name, secondGroup.Name];
         progress.LastScriptGroupName = firstGroup.Name;
         progress.LastSuccessScriptGroupProjectInfo =
             new TaskProgress.ScriptGroupProjectInfo
@@ -106,7 +107,7 @@ public sealed class SchedulerStatusSuite : IVerificationSuite
                 Name = "委托",
                 FolderName = "AutoEntrust"
             };
-        TaskProgressManager.GenerNextProjectInfo(progress, [firstGroup, secondGroup]);
+        TaskProgressManager.GenerNextProjectInfo(progress, [firstGroup, secondGroup], Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
         context.Require(
             progress.Next is
                 {
@@ -121,7 +122,7 @@ public sealed class SchedulerStatusSuite : IVerificationSuite
                 Name = "派遣",
                 FolderName = "AutoExpedition"
             };
-        TaskProgressManager.GenerNextProjectInfo(progress, [firstGroup, secondGroup]);
+        TaskProgressManager.GenerNextProjectInfo(progress, [firstGroup, secondGroup], Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
         context.Require(
             progress.Next is
                 {

@@ -580,6 +580,8 @@ public sealed class CoreRpcServer(
                     request.Params?["inputText"]?.Value<string>()),
                 "solo.stop" => SoloTasks.Stop(RequiredString(request.Params, "taskId")),
                 "solo.status" => SoloTasks.Status(),
+                "combo.models.list" => await _soloTaskSettings.FetchAutoComboModelsAsync(
+                    request.Params?["settings"] as JObject ?? throw new ArgumentException("settings is required."), _shutdown.Token),
                 "solo.settings.get" => _soloTaskSettings.Get(RequiredString(request.Params, "name")),
                 "solo.settings.save" => _soloTaskSettings.Save(
                     RequiredString(request.Params, "name"),
@@ -921,16 +923,7 @@ public sealed class CoreRpcServer(
             if (restart)
                 await dispatcher.StopAsync(cancellationToken);
 
-            var enabledStates = GameTaskManager.TriggerDictionary?
-                .ToDictionary(pair => pair.Key, pair => pair.Value.IsEnabled, StringComparer.Ordinal)
-                ?? new Dictionary<string, bool>(StringComparer.Ordinal);
             _platformAssetInitializer();
-            if (GameTaskManager.TriggerDictionary is { } triggers)
-            {
-                foreach (var (name, enabled) in enabledStates)
-                    if (triggers.TryGetValue(name, out var trigger))
-                        trigger.IsEnabled = enabled;
-            }
             if (restart)
                 dispatcher.Start();
             return new { running = dispatcher.IsRunning, assetsReloaded = true };
@@ -969,8 +962,8 @@ public sealed class CoreRpcServer(
             {
                 name = pair.Key,
                 displayName = pair.Value.Name,
-                enabled = pair.Value.IsEnabled,
-                canSetEnabled = CanSetTriggerEnabled(pair.Value),
+                enabled = pair.Value.IsEnabledByConfig,
+                canSetEnabled = CanSetTriggerEnabled(pair.Key, pair.Value),
                 priority = pair.Value.Priority,
                 exclusive = pair.Value.IsExclusive,
                 settingsAvailable = _triggerSettings.IsAvailable(pair.Key),
@@ -988,12 +981,11 @@ public sealed class CoreRpcServer(
                 "The shared trigger registry is unavailable until core.initialize completes with the platform attached.");
         if (!triggers.TryGetValue(name, out var trigger))
             throw new CapabilityUnavailableException($"Trigger '{name}' is not composed in the macOS Core.");
-        if (!CanSetTriggerEnabled(trigger))
+        if (!CanSetTriggerEnabled(name, trigger))
             throw new CapabilityUnavailableException(
                 $"Trigger '{name}' is controlled by its upstream configuration and cannot be toggled directly.");
-        trigger.IsEnabled = enabled;
         _triggerSettings.SaveEnabled(name, enabled);
-        return new { name, enabled = trigger.IsEnabled };
+        return new { name, enabled = trigger.IsEnabledByConfig };
     }
 
     private object SelectOneDragonConfig(string name)
@@ -1072,7 +1064,7 @@ public sealed class CoreRpcServer(
                 throw new CapabilityUnavailableException(
                     $"Trigger '{name}' is not composed in the macOS Core.");
             }
-            return SetTriggerEnabled(name, !trigger.IsEnabled);
+            return SetTriggerEnabled(name, !trigger.IsEnabledByConfig);
         }
         if (descriptor.Action.StartsWith("solo.toggle:", StringComparison.Ordinal))
             return SoloTasks.Toggle(descriptor.Action["solo.toggle:".Length..]);
@@ -1089,8 +1081,8 @@ public sealed class CoreRpcServer(
             $"Hotkey action '{descriptor.Action}' is not composed in the macOS Core.");
     }
 
-    private static bool CanSetTriggerEnabled(ITaskTrigger trigger) =>
-        trigger is not GameLoadingTrigger;
+    private bool CanSetTriggerEnabled(string name, ITaskTrigger trigger) =>
+        _triggerSettings.IsAvailable(name) && trigger is not GameLoadingTrigger;
 
     private IGameScreenshotAction RequiredGameScreenshotAction() =>
         _gameScreenshotAction

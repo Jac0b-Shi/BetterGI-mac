@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recorder.Model;
 using Microsoft.Extensions.Logging;
 using System;
@@ -8,6 +9,15 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+#if !BGI_PLATFORM_MAC
+using System.Windows.Forms;
+#endif
+#if !BGI_PLATFORM_MAC
+using Vanara.PInvoke;
+#endif
+#if !BGI_PLATFORM_MAC
+using Wpf.Ui.Violeta.Controls;
+#endif
 
 namespace BetterGenshinImpact.Core.Recorder;
 
@@ -62,6 +72,9 @@ public class KeyMouseMacroPlayer
             else if (timeToWait > 0)
                 await Task.Delay((int)timeToWait, ct);
 
+            // 每个事件都从 InputHub 取当前通道，不缓存：回放期间截图器停止时后端会被替换。
+            // 扩展键标志由通道按真实键盘判断（Win32 见 ExtendedKeys），网页版由 WebSdk 后端映射
+            var input = InputHub.Foreground;
             switch (e.Type)
             {
                 case MacroEventType.KeyDown:

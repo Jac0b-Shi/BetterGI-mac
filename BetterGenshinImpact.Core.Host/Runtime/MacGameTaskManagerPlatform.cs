@@ -35,6 +35,12 @@ public sealed class MacGameTaskManagerPlatform(
 
     public void UpdateAutoSkipConfig(AutoSkipConfig source)
     {
+        _autoSkipConfig.Enabled = source.Enabled;
+        _autoSkipConfig.RunBackgroundEnabled = source.RunBackgroundEnabled;
+        _autoSkipConfig.BringGameToFrontAfterBackgroundDialogEnabled = source.BringGameToFrontAfterBackgroundDialogEnabled;
+        _autoSkipConfig.SkipBuiltInClickOptions = source.SkipBuiltInClickOptions;
+        _autoSkipConfig.DialogueOptionVoiceVadDiagnosticEnabled = source.DialogueOptionVoiceVadDiagnosticEnabled;
+        _autoSkipConfig.AutoReExploreCharacter = source.AutoReExploreCharacter;
         _autoSkipConfig.QuicklySkipConversationsEnabled = source.QuicklySkipConversationsEnabled;
         _autoSkipConfig.AfterChooseOptionSleepDelay = source.AfterChooseOptionSleepDelay;
         _autoSkipConfig.AutoWaitDialogueOptionVoiceEnabled = source.AutoWaitDialogueOptionVoiceEnabled;
@@ -69,7 +75,7 @@ public sealed class MacGameTaskManagerPlatform(
                 inputBackend, systemInfo, loggerFactory.CreateLogger<AutoPickTrigger>(),
                 paddleRecognizer, yapRecognizer)),
             new("QuickTeleport", new QuickTeleportTrigger()),
-            new("AutoSkip", new AutoSkipTrigger(_autoSkipConfig)),
+            new("AutoSkip", new AutoSkipTrigger(_autoSkipConfig, customConfiguration: false)),
             new("AutoFish", new AutoFishingTrigger()),
             new("AutoEat", new AutoEatTrigger()),
             new("MapMask", new MapMaskTrigger()),
@@ -98,7 +104,7 @@ public sealed class MacGameTaskManagerPlatform(
                 name,
                 externalConfig is AutoSkipConfig config
                     ? new AutoSkipTrigger(config)
-                    : new AutoSkipTrigger(_autoSkipConfig)),
+                    : new AutoSkipTrigger(_autoSkipConfig, customConfiguration: false)),
             "AutoFish" => new KeyValuePair<string, ITaskTrigger>(name, new AutoFishingTrigger()),
             "QuickTeleport" => new KeyValuePair<string, ITaskTrigger>(name, new QuickTeleportTrigger()),
             "AutoEat" => new KeyValuePair<string, ITaskTrigger>(name, new AutoEatTrigger()),

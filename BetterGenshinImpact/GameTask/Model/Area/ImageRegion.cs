@@ -4,9 +4,7 @@ using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area.Converter;
 using BetterGenshinImpact.Helpers;
-#if BGI_FULL_WINDOWS
-using BetterGenshinImpact.View.Drawable;
-#endif
+using BetterGenshinImpact.Core.Mask;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using SixLabors.ImageSharp;
@@ -57,7 +55,7 @@ public class ImageRegion : Region
     }
 
     public ImageRegion(Mat mat, int x, int y, Region? owner = null, INodeConverter? converter = null,
-        IOverlayDrawPlatform? drawContent = null) : base(x, y, mat.Width, mat.Height, owner, converter, drawContent)
+        IMaskWindowDrawingBoard? drawingBoard = null) : base(x, y, mat.Width, mat.Height, owner, converter, drawingBoard)
     {
         SrcMat = mat;
     }
@@ -196,7 +194,7 @@ public class ImageRegion : Region
                     {
                         if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                         {
-                            drawContent.RemoveRectangles(ro.Name);
+                            DrawingBoard.Clear(ro.Name);
                         }
 
                         failAction?.Invoke();
@@ -281,13 +279,11 @@ public class ImageRegion : Region
                 var newRa = Derive(effectiveRegionOfInterest);
                 if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                 {
-#if BGI_FULL_WINDOWS
                     // 画出OCR识别到的区域
                     var drawList = result.Regions.Select(item =>
-                        this.ToRectDrawable(item.Rect.BoundingRect() + effectiveRegionOfInterest.Location, ro.Name,
+                        this.ToMaskWindowDrawingRect(item.Rect.BoundingRect() + effectiveRegionOfInterest.Location,
                             ro.DrawOnWindowPen)).ToList();
-                    VisionContext.Instance().DrawContent.PutOrRemoveRectList(ro.Name, drawList);
-#endif
+                    DrawingBoard.Set(ro.Name, drawList);
                 }
 
                 successAction?.Invoke(newRa);
@@ -297,7 +293,7 @@ public class ImageRegion : Region
             {
                 if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                 {
-                    OverlayDrawPlatform.Current.RemoveRectangles(ro.Name);
+                    DrawingBoard.Clear(ro.Name);
                 }
 
                 failAction?.Invoke();
@@ -347,13 +343,11 @@ public class ImageRegion : Region
                 {
                     if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                     {
-#if BGI_FULL_WINDOWS
                         // 画出OCR识别到的区域
                         var drawList = result.Regions.Select(item =>
-                            this.ToRectDrawable(item.Rect.BoundingRect() + effectiveRegionOfInterest.Location, ro.Name,
+                            this.ToMaskWindowDrawingRect(item.Rect.BoundingRect() + effectiveRegionOfInterest.Location,
                                 ro.DrawOnWindowPen)).ToList();
-                        VisionContext.Instance().DrawContent.PutOrRemoveRectList(ro.Name, drawList);
-#endif
+                        DrawingBoard.Set(ro.Name, drawList);
                     }
 
                     if (effectiveRegionOfInterest != default)
@@ -374,7 +368,7 @@ public class ImageRegion : Region
                 {
                     if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                     {
-                        OverlayDrawPlatform.Current.RemoveRectangles(ro.Name);
+                        DrawingBoard.Clear(ro.Name);
                     }
 
                     failAction?.Invoke();
@@ -485,7 +479,7 @@ public class ImageRegion : Region
                     {
                         if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                         {
-                            OverlayDrawPlatform.Current.RemoveRectangles(ro.Name);
+                            DrawingBoard.Clear(ro.Name);
                         }
 
                         failAction?.Invoke();
@@ -544,11 +538,9 @@ public class ImageRegion : Region
             {
                 if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                 {
-#if BGI_FULL_WINDOWS
                     // 画出OCR识别到的区域
-                    var drawList = resRaList.Select(item => item.SelfToRectDrawable(ro.Name, ro.DrawOnWindowPen)).ToList();
-                    VisionContext.Instance().DrawContent.PutOrRemoveRectList(ro.Name, drawList);
-#endif
+                    var drawList = resRaList.Select(item => item.SelfToMaskWindowDrawingRect(ro.DrawOnWindowPen)).ToList();
+                    DrawingBoard.Set(ro.Name, drawList);
                 }
 
                 successAction?.Invoke(resRaList);
@@ -558,7 +550,7 @@ public class ImageRegion : Region
             {
                 if (ro.DrawOnWindow && !string.IsNullOrEmpty(ro.Name))
                 {
-                    OverlayDrawPlatform.Current.RemoveRectangles(ro.Name);
+                    DrawingBoard.Clear(ro.Name);
                 }
 
                 failAction?.Invoke();

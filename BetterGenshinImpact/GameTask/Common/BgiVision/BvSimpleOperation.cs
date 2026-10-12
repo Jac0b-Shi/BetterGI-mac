@@ -1,10 +1,8 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Model.Area;
-#if BGI_FULL_WINDOWS
-using Fischless.WindowsInput;
-#endif
 using OpenCvSharp;
 using System;
 using System.Text.RegularExpressions;
@@ -222,8 +220,8 @@ public static partial class Bv
         return false;
     }
 
-#if BGI_FULL_WINDOWS
-    public static bool FindFAndPress(ImageRegion captureRa, IKeyboardSimulator keyboard, params string[] text)
+    #if !BGI_PLATFORM_MAC
+    public static bool FindFAndPress(ImageRegion captureRa, IKeyboardInput keyboard, params string[] text)
     {
         if (FindF(captureRa, text))
         {

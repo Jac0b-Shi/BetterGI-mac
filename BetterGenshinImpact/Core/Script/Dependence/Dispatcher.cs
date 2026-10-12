@@ -52,7 +52,7 @@ public class Dispatcher
     }
 
     /// <summary>
-    /// 清理所有实时任务
+    /// 清理所有实时任务（清空任务期间的启用名单，不销毁触发器实例）
     /// </summary>
     public void ClearAllTriggers()
     {

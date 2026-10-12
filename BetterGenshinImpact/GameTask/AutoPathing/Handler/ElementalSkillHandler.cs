@@ -1,4 +1,4 @@
-﻿using BetterGenshinImpact.Core.Simulator;
+﻿using BetterGenshinImpact.Core.Input;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;

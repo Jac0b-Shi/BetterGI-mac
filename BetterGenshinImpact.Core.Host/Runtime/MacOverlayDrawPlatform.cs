@@ -1,5 +1,6 @@
 using BetterGenshinImpact.Core.Host.Transport;
 using BetterGenshinImpact.Core.Recognition;
+using BetterGenshinImpact.Core.Mask;
 using BetterGenshinImpact.GameTask.Model.Area;
 using Newtonsoft.Json.Linq;
 using OpenCvSharp;
@@ -19,8 +20,8 @@ public sealed class MacOverlayDrawPlatform(
         Emit(name, "setRectangles", mapped);
     }
 
-    public void RemoveRectangles(string name) => Emit(name, "removeRectangles", Array.Empty<object>());
-    public void ClearAll() => Emit(string.Empty, "clearAll", Array.Empty<object>());
+    public void RemoveRectangles(string name) { MaskWindowDrawingPlatform.Current.Clear(name); Emit(name, "removeRectangles", Array.Empty<object>()); }
+    public void ClearAll() { MaskWindowDrawingPlatform.Current.ClearAll(); Emit(string.Empty, "clearAll", Array.Empty<object>()); }
 
     public void SetLabels(string name, Region source, IReadOnlyList<OverlayLabel> labels)
     {
@@ -37,7 +38,7 @@ public sealed class MacOverlayDrawPlatform(
         }).ToArray();
         Emit(name, "setLabels", mapped);
     }
-    public void RemoveLabels(string name) => Emit(name, "removeLabels", Array.Empty<object>());
+    public void RemoveLabels(string name) { MaskWindowDrawingPlatform.Current.Clear(name); Emit(name, "removeLabels", Array.Empty<object>()); }
 
     private void Emit(string name, string operation, object rectangles)
     {

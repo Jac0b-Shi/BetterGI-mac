@@ -3,7 +3,7 @@
 // using BetterGenshinImpact.Core.Recognition.OpenCv;
 // using BetterGenshinImpact.Helpers;
 // using BetterGenshinImpact.Helpers.Extensions;
-// using BetterGenshinImpact.View.Drawable;
+//
 // using OpenCvSharp;
 // using OpenCvSharp.Extensions;
 // using Sdcb.PaddleOCR;

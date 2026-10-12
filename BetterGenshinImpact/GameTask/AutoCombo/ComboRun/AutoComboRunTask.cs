@@ -3,9 +3,7 @@ using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoCombo.ComboBuild;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.SkillCd;
-#if !BGI_PLATFORM_MAC
-using BetterGenshinImpact.View.Drawable;
-#endif
+using BetterGenshinImpact.Core.Mask;
 #if !BGI_PLATFORM_MAC
 using BetterGenshinImpact.ViewModel.Windows;
 #endif
@@ -50,6 +48,11 @@ public class AutoComboRunTask : ISoloTask
     /// <summary>本次运行消费的建树会话：构造时强制注入，任务自身不读取任何静态状态</summary>
     private readonly ComboTreeSession _session;
 
+    /// <summary>
+    /// 本次运行所在运行环境的遮罩绘制入口，每次 Start 时取一次：任务可能在截图器启动前构造，暂停后也可能在新的运行环境里继续
+    /// </summary>
+    private IMaskWindowDrawingBoard _drawingBoard = NullMaskWindowDrawingBoard.Instance;
+
     public AutoComboRunTask(AutoFightParam param, ComboTreeSession session)
     {
         _param = param;
@@ -58,6 +61,7 @@ public class AutoComboRunTask : ISoloTask
 
     public async Task Start(CancellationToken ct)
     {
+        _drawingBoard = MaskWindowDrawingPlatform.Current;
         var session = _session;
 
         // 标准消费者协议：FromAvatars 重新识别队伍并校验与建树队伍一致，接管建树会话的 Avatar 实例 → BeforeTask 写入本任务令牌
@@ -109,7 +113,7 @@ public class AutoComboRunTask : ISoloTask
         Task? overlayTask = null;
         try
         {
-            SkillCdTrigger.Suspend();
+            SkillCdTrigger.Suspend(_drawingBoard);
             if (AutoFightRuntimePlatform.Current.AutoFightConfig.EnableCombatTargeting)
             {
                 targetingTask = Task.Run(async () =>
@@ -131,7 +135,7 @@ public class AutoComboRunTask : ISoloTask
             {
                 try
                 {
-                    await TeamSkillCdOverlay.LoopAsync(overlayCts.Token, combatScenes);
+                    await TeamSkillCdOverlay.LoopAsync(_drawingBoard, overlayCts.Token, combatScenes);
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception e)
@@ -193,7 +197,7 @@ public class AutoComboRunTask : ISoloTask
                 ESkillClassifyViewModel.Instance.PropertyChanged -= OnESkillClassifyResultChanged;
                 RemoveESkillClassifyDrawables();
 #endif
-                TeamSkillCdOverlay.Clear();
+                TeamSkillCdOverlay.Clear(_drawingBoard);
             }
             finally
             {
@@ -239,11 +243,10 @@ public class AutoComboRunTask : ISoloTask
         var textColor = GetElementColor(result.AvatarName);
 
         // 坐标（ClassifyRect/TextPosition）已由 Avatar 换算到捕获像素域，直接绘制
-        var drawContent = VisionContext.Instance().DrawContent;
-        drawContent.PutOrRemoveRectList("ESkillClassifyRegion",
-            [result.ClassifyRect.ToRectDrawable(System.Drawing.Pens.White)]);
-        drawContent.PutOrRemoveTextList("ESkillClassify",
-            [new TextDrawable(stateText, result.TextPosition, textColor)]);
+        _drawingBoard.Set("ESkillClassifyRegion",
+            new MaskWindowDrawingRect(result.ClassifyRect, MaskWindowDrawingStroke.FromPen(System.Drawing.Pens.White)));
+        _drawingBoard.Set("ESkillClassify",
+            new MaskWindowDrawingText(stateText, result.TextPosition, new MaskWindowDrawingTextStyle(textColor)));
     }
 
     /// <summary>
@@ -275,9 +278,8 @@ public class AutoComboRunTask : ISoloTask
 
     private void RemoveESkillClassifyDrawables()
     {
-        var drawContent = VisionContext.Instance().DrawContent;
-        drawContent.PutOrRemoveTextList("ESkillClassify", null);
-        drawContent.PutOrRemoveRectList("ESkillClassifyRegion", null);
+        _drawingBoard.Clear("ESkillClassify");
+        _drawingBoard.Clear("ESkillClassifyRegion");
     }
 #endif
 }
@@ -351,14 +353,14 @@ public partial class CheckFightFinish : Behaviour
 /// </summary>
 public static class TeamSkillCdOverlay
 {
-    /// <summary>遮罩文字 key：与 SkillCd 共用（AutoCombo 运行期间已通过 SkillCdTrigger.Suspend 接管显示权）</summary>
-    private const string OverlayKey = "SkillCdText";
+    /// <summary>遮罩文字分组名：与 SkillCd 共用（AutoCombo 运行期间已通过 SkillCdTrigger.Suspend 接管显示权）</summary>
+    private const string OverlayKey = SkillCdTrigger.OverlayKey;
 
     /// <summary>遮罩文字刷新间隔（毫秒）</summary>
     private const int RefreshIntervalMs = 100;
 
     /// <summary>持续刷新全队战技 CD 遮罩文字，取消令牌触发后退出</summary>
-    public static async Task LoopAsync(CancellationToken ct, CombatScenes combatScenes)
+    public static async Task LoopAsync(IMaskWindowDrawingBoard drawingBoard, CancellationToken ct, CombatScenes combatScenes)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -371,15 +373,15 @@ public static class TeamSkillCdOverlay
                 slotCds[i] = seconds == null ? double.NaN : (seconds.Value > 0 ? seconds.Value : null);
             }
 
-            SkillCdOverlayRenderer.Update(OverlayKey, slotCds);
+            SkillCdOverlayRenderer.Update(drawingBoard, OverlayKey, slotCds);
 
             await Task.Delay(RefreshIntervalMs, ct);
         }
     }
 
     /// <summary>清除此循环提交的遮罩文字（任务收尾时调用）</summary>
-    public static void Clear()
+    public static void Clear(IMaskWindowDrawingBoard drawingBoard)
     {
-        SkillCdRuntimePlatform.Current.Publish(null);
+        drawingBoard.Clear(OverlayKey);
     }
 }
