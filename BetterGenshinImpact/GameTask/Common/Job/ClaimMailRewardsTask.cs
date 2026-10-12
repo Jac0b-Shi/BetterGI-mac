@@ -1,4 +1,5 @@
-﻿using System;
+﻿using BetterGenshinImpact.Core.Input;
+using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;

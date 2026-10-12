@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoEat;
+using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.AutoPick;
 using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.AutoSkip.Assets;
@@ -15,6 +17,8 @@ namespace BetterGenshinImpact.Core.Host.Runtime;
 public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
 {
     private readonly object _lock = new();
+    private Action<AutoFishingConfig>? _autoFishingUpdated;
+    public void AttachAutoFishingUpdated(Action<AutoFishingConfig> callback) => _autoFishingUpdated = callback;
     private Action<AutoEatConfig>? _autoEatUpdated;
     private Action<AutoPickConfig>? _autoPickUpdated;
     private Action? _autoPickListsUpdated;
@@ -87,6 +91,7 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
             config.AutoHangoutEventEnabled = !config.AutoHangoutEventEnabled;
             SaveConfig(root, "autoSkipConfig", config);
             _autoSkipUpdated?.Invoke(config);
+            GameTaskManager.RequestRefresh("AutoSkip");
             return new
             {
                 name = "AutoSkipHangout",
@@ -135,6 +140,7 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
             config.BackgroundReadyColor = backgroundReadyColor;
             SaveConfig(root, "skillCdConfig", config);
             _skillCdUpdated?.Invoke(config);
+            GameTaskManager.RequestRefresh("SkillCd");
             return Describe(config);
         }
     }
@@ -185,6 +191,7 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
             config.ClosePopupPagedEnabled = closePopupPagedEnabled;
             SaveConfig(root, "autoSkipConfig", config);
             _autoSkipUpdated?.Invoke(config);
+            GameTaskManager.RequestRefresh("AutoSkip");
             return Describe(config);
         }
     }
@@ -254,6 +261,17 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
             config["enabled"] = enabled;
             root[propertyName] = config;
             SaveRoot(root);
+            switch (name)
+            {
+                case "AutoPick": _autoPickUpdated?.Invoke(LoadConfig<AutoPickConfig>(root, propertyName)); break;
+                case "AutoSkip": _autoSkipUpdated?.Invoke(LoadConfig<AutoSkipConfig>(root, propertyName)); break;
+                case "AutoFish": _autoFishingUpdated?.Invoke(LoadConfig<AutoFishingConfig>(root, propertyName)); break;
+                case "AutoEat": _autoEatUpdated?.Invoke(LoadConfig<AutoEatConfig>(root, propertyName)); break;
+                case "QuickTeleport": _quickTeleportUpdated?.Invoke(LoadConfig<QuickTeleportConfig>(root, propertyName)); break;
+                case "MapMask": _mapMaskUpdated?.Invoke(LoadConfig<MapMaskConfig>(root, propertyName)); break;
+                case "SkillCd": _skillCdUpdated?.Invoke(LoadConfig<SkillCdConfig>(root, propertyName)); break;
+            }
+            GameTaskManager.RequestRefresh(name);
         }
     }
 
@@ -278,6 +296,7 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
             config.EatInterval = eatInterval;
             SaveConfig(root, "autoEatConfig", config);
             _autoEatUpdated?.Invoke(config);
+            GameTaskManager.RequestRefresh("AutoEat");
             return Describe(config);
         }
     }
@@ -297,6 +316,7 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
             config.HotkeyTpEnabled = hotkeyEnabled;
             SaveConfig(root, "quickTeleportConfig", config);
             _quickTeleportUpdated?.Invoke(config);
+            GameTaskManager.RequestRefresh("QuickTeleport");
             return Describe(config);
         }
     }
@@ -312,6 +332,7 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
             config.MiniMapMaskEnabled = miniMapMaskEnabled;
             SaveConfig(root, "mapMaskConfig", config);
             _mapMaskUpdated?.Invoke(config);
+            GameTaskManager.RequestRefresh("MapMask");
             return Describe(config);
         }
     }
@@ -346,6 +367,7 @@ public sealed class TriggerSettingsCatalog(RuntimeLayout layout)
             config.HoYoLabLanguage = language;
             SaveConfig(root, "mapMaskConfig", config);
             _mapMaskUpdated?.Invoke(config);
+            GameTaskManager.RequestRefresh("MapMask");
             return DescribeMapMaskPicker(config);
         }
     }

@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.Common;
@@ -18,11 +19,11 @@ public class AutoEatTrigger : ITaskTrigger
     private readonly ILogger<AutoEatTrigger> _logger;
 
     public string Name => "自动吃药";
-    public bool IsEnabled { get; set; }
+    public bool IsEnabledByConfig => _config.Enabled;
     public int Priority => 25; // 中等优先级
     public bool IsExclusive => false;
 
-    private readonly AutoEatConfig _config;
+    private AutoEatConfig _config => _runtime.Config;
     private DateTime _lastRecoveryCheckTime = DateTime.MinValue;
     private DateTime _lastResurrectionTime = DateTime.MinValue;
     private DateTime _lastEatTime = DateTime.MinValue;
@@ -34,12 +35,16 @@ public class AutoEatTrigger : ITaskTrigger
     {
         _runtime = AutoEatRuntimePlatform.Current;
         _logger = _runtime.GetLogger<AutoEatTrigger>();
-        _config = _runtime.Config;
     }
 
-    public void Init()
+    public void OnEnabled(object? options)
     {
-        IsEnabled = _config.Enabled;
+        // 与原来"重新创建实例"时的初始状态一致
+        _lastRecoveryCheckTime = DateTime.MinValue;
+        _lastResurrectionTime = DateTime.MinValue;
+        _lastEatTime = DateTime.MinValue;
+        _recoveryDetected = false;
+        _prevExecute = DateTime.MinValue;
     }
 
     public void OnCapture(CaptureContent content)

@@ -1227,6 +1227,7 @@ public class Avatar : ICombatCommandAvatar
         TaskControlPlatform.Current.VerticalScroll(scrollAmountInClicks);
     }
 
+    // 鼠标键（VK_LBUTTON、VK_RBUTTON、VK_MBUTTON、VK_XBUTTON1、VK_XBUTTON2）由输入通道转成对应的鼠标键
     public void KeyDown(string key)
     {
         CombatCommandPlatform.Current.KeyDown(key);

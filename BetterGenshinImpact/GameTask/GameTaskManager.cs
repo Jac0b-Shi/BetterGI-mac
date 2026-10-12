@@ -11,14 +11,104 @@ using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
 using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.Platform.Abstractions;
 using OpenCvSharp;
+#if !BGI_PLATFORM_MAC
+using BetterGenshinImpact.GameTask.GameLoading;
+using BetterGenshinImpact.GameTask.Placeholder;
+using BetterGenshinImpact.GameTask.MapMask;
+using BetterGenshinImpact.GameTask.SkillCd;
+#endif
 using System.Collections.Concurrent;
+using System.Threading;
 
 namespace BetterGenshinImpact.GameTask;
 
 /// <summary>Shared trigger registry, lifecycle ordering and asset-loading behavior.</summary>
 public static class GameTaskManager
 {
-    public static ConcurrentDictionary<string, ITaskTrigger>? TriggerDictionary { get; set; }
+#if !BGI_PLATFORM_MAC
+    public static List<ITaskTrigger> CreateTriggers()
+    {
+        List<ITaskTrigger> triggers =
+        [
+            new TestTrigger(),
+            new GameLoadingTrigger(),
+            new AutoPick.AutoPickTrigger(),
+            new QuickTeleport.QuickTeleportTrigger(),
+            new AutoSkip.AutoSkipTrigger(),
+            new AutoFishing.AutoFishingTrigger(),
+            new AutoEat.AutoEatTrigger(),
+            new MapMaskTrigger(),
+            new SkillCdTrigger(),
+        ];
+
+        return [.. triggers.OrderByDescending(t => t.Priority)];
+    }
+
+#endif
+    public sealed record TriggerRequest(object? Options, long Version);
+    private static long _requestVersion;
+    public static ConcurrentDictionary<string, TriggerRequest> RequestedTriggers { get; } = new();
+    private static readonly ConcurrentDictionary<string, long> RefreshVersions = new();
+    private static readonly object RequestLock = new();
+    private static readonly Dictionary<string, List<TriggerRequest>> RequestOwners = new();
+    public static void RequestTrigger(string name, object? options)
+    {
+        lock (RequestLock)
+        {
+            var request = new TriggerRequest(options, Interlocked.Increment(ref _requestVersion));
+            RequestOwners[name] = [request];
+            RequestedTriggers[name] = request;
+        }
+    }
+    public static IDisposable RequestTriggerLease(string name, object? options)
+    {
+        lock (RequestLock)
+        {
+            var request = new TriggerRequest(options, Interlocked.Increment(ref _requestVersion));
+            if (!RequestOwners.TryGetValue(name, out var owners)) RequestOwners[name] = owners = [];
+            owners.Add(request);
+            RequestedTriggers[name] = request;
+            return new TriggerLease(name, request);
+        }
+    }
+    public static void ClearTriggerRequests()
+    {
+        lock (RequestLock)
+        {
+            RequestOwners.Clear();
+            RequestedTriggers.Clear();
+        }
+    }
+    private sealed class TriggerLease(string name, TriggerRequest request) : IDisposable
+    {
+        public void Dispose()
+        {
+            lock (RequestLock)
+            {
+                if (!RequestOwners.TryGetValue(name, out var owners) || !owners.Remove(request)) return;
+                if (owners.Count == 0)
+                {
+                    RequestOwners.Remove(name);
+                    RequestedTriggers.TryRemove(name, out _);
+                }
+                else RequestedTriggers[name] = owners[^1];
+            }
+        }
+    }
+    public static void RequestRefresh(string name) => RefreshVersions[name] = Interlocked.Increment(ref _requestVersion);
+    public static long RefreshVersion(string name) => RefreshVersions.GetValueOrDefault(name);
+    private static ConcurrentDictionary<string, ITaskTrigger>? _triggerDictionary;
+    public static ConcurrentQueue<ITaskTrigger> RetiredTriggers { get; } = new();
+    public static ConcurrentDictionary<string, ITaskTrigger>? TriggerDictionary
+    {
+        get => Volatile.Read(ref _triggerDictionary);
+        set
+        {
+            var previous = Interlocked.Exchange(ref _triggerDictionary, value);
+            if (previous is not null && !ReferenceEquals(previous, value))
+                foreach (var trigger in previous.Values) RetiredTriggers.Enqueue(trigger);
+        }
+    }
 
     public static List<ITaskTrigger> LoadInitialTriggers(
         IInputBackend inputBackend, ISystemInfo systemInfo, IAutoPickRuntimeState runtimeState,
@@ -38,8 +128,7 @@ public static class GameTaskManager
     {
         if (TriggerDictionary is null) return [];
         var loadedTriggers = TriggerDictionary.Values.ToList();
-        loadedTriggers.ForEach(trigger => trigger.Init());
-        if (allEnabled) loadedTriggers.ForEach(trigger => trigger.IsEnabled = true);
+        if (allEnabled) foreach (var pair in TriggerDictionary) RequestTrigger(pair.Key, null);
         return [.. loadedTriggers.OrderByDescending(trigger => trigger.Priority)];
     }
 
@@ -50,12 +139,10 @@ public static class GameTaskManager
             return;
         }
 
-        var removed = triggers.Values.ToArray();
+        ClearTriggerRequests();
+        foreach (var trigger in triggers.Values) RetiredTriggers.Enqueue(trigger);
         triggers.Clear();
-        foreach (var disposable in removed.OfType<IDisposable>())
-        {
-            disposable.Dispose();
-        }
+        // Dispatcher observes removed instances and invokes OnDisabled before disposing them.
     }
 
     public static bool AddTrigger(
@@ -70,7 +157,9 @@ public static class GameTaskManager
             name, externalConfig, runtimeState, inputBackend, systemInfo,
             autoPickConfigProvider, paddleRecognizer, yapRecognizer);
         if (created is not { } pair) return false;
-        TriggerDictionary[pair.Key] = pair.Value;
+        if (!TriggerDictionary.TryAdd(pair.Key, pair.Value))
+            (pair.Value as IDisposable)?.Dispose();
+        RequestTrigger(pair.Key, externalConfig);
         return true;
     }
 
@@ -79,7 +168,7 @@ public static class GameTaskManager
         if (TriggerDictionary is { Count: > 0 })
         {
             foreach (var name in new[] { "AutoPick", "AutoSkip", "AutoFish", "QuickTeleport", "AutoEat", "MapMask", "SkillCd" })
-                TriggerDictionary.GetValueOrDefault(name)?.Init();
+                RequestRefresh(name);
             GameTaskManagerPlatform.Current.ClearOverlay();
         }
         GameTaskManagerPlatform.Current.ReloadAssets();
@@ -88,7 +177,7 @@ public static class GameTaskManager
     public static void RefreshTriggerConfig(string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        TriggerDictionary?.GetValueOrDefault(name)?.Init();
+        RequestRefresh(name);
         GameTaskManagerPlatform.Current.ReloadAssets();
     }
 

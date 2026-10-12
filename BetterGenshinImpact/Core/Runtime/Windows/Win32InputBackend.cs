@@ -1,37 +1,38 @@
 using BetterGenshinImpact.Platform.Abstractions;
-using Fischless.WindowsInput;
+using BetterGenshinImpact.Core.Input;
+using System;
 using Vanara.PInvoke;
 using System.Threading;
 
 namespace BetterGenshinImpact.Core.Runtime.Windows;
 
 /// <summary>
-/// Windows IInputBackend implementation using Fischless.WindowsInput (Win32 SendInput).
+/// Windows semantic adapter using the current InputHub channels supplied at composition.
 /// All mouse coordinates are screen-pixel coordinates; this backend converts them
 /// to normalized 0–65535 absolute coordinates using the virtual desktop.
 /// </summary>
-public sealed class Win32InputBackend : IInputBackend
+public sealed class WindowsSemanticInputBackend(Func<IKeyboardInput> keyboard, Func<IMouseInput> mouse) : BetterGenshinImpact.Platform.Abstractions.IInputBackend
 {
-    private readonly InputSimulator _sim = new();
+
 
     // --- Keyboard ---
 
     public void KeyDown(BgiKey key)
     {
         var vk = (User32.VK)Win32InputHelpers.MapBgiKeyToVk(key);
-        _sim.Keyboard.KeyDown(vk);
+        keyboard().KeyDown(vk);
     }
 
     public void KeyUp(BgiKey key)
     {
         var vk = (User32.VK)Win32InputHelpers.MapBgiKeyToVk(key);
-        _sim.Keyboard.KeyUp(vk);
+        keyboard().KeyUp(vk);
     }
 
     public void KeyPress(BgiKey key)
     {
         var vk = (User32.VK)Win32InputHelpers.MapBgiKeyToVk(key);
-        _sim.Keyboard.KeyPress(vk);
+        keyboard().KeyPress(vk);
     }
 
     // --- Mouse ---
@@ -47,22 +48,22 @@ public sealed class Win32InputBackend : IInputBackend
 
         // Fischless MoveMouseToPositionOnVirtualDesktop uses
         // MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK | MOUSEEVENTF_MOVE
-        _sim.Mouse.MoveMouseToPositionOnVirtualDesktop(nx, ny);
+        mouse().MoveMouseTo(nx, ny);
     }
 
     public void MoveMouseBy(int deltaX, int deltaY)
     {
-        _sim.Mouse.MoveMouseBy(deltaX, deltaY);
+        mouse().MoveMouseBy(deltaX, deltaY);
     }
 
     public void LeftButtonDown()
     {
-        _sim.Mouse.LeftButtonDown();
+        mouse().LeftButtonDown();
     }
 
     public void LeftButtonUp()
     {
-        _sim.Mouse.LeftButtonUp();
+        mouse().LeftButtonUp();
     }
 
     public void LeftClick(int screenX, int screenY)
@@ -78,6 +79,6 @@ public sealed class Win32InputBackend : IInputBackend
     {
         // Scroll(delta) means delta logical scroll clicks, equivalent to
         // VerticalScroll(delta) on Windows. Positive → wheel up.
-        _sim.Mouse.VerticalScroll(delta);
+        mouse().VerticalScroll(delta);
     }
 }

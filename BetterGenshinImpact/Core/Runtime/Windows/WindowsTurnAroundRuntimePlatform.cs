@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Macro;
@@ -20,7 +21,7 @@ public sealed class WindowsTurnAroundRuntimePlatform : ITurnAroundRuntimePlatfor
         int x,
         int y,
         CancellationToken cancellationToken) =>
-        Simulation.SendInput.Mouse.MoveMouseBy(x, y);
+        InputHub.Foreground.Mouse.MoveMouseBy(x, y);
 
     public void Wait(int milliseconds, CancellationToken cancellationToken)
     {

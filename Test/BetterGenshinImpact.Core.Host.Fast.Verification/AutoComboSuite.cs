@@ -16,6 +16,7 @@ public sealed class AutoComboSuite : IVerificationSuite
 
     public async Task RunAsync(VerificationContext context, CancellationToken cancellationToken)
     {
+        await VerifyModelListRedirectAsync(context, cancellationToken);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
         using var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -81,6 +82,38 @@ public sealed class AutoComboSuite : IVerificationSuite
         {
             context.Require(true, "In-flight LLM requests honour task cancellation.");
         }
+    }
+
+    private static async Task VerifyModelListRedirectAsync(VerificationContext context, CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        using var source = new TcpListener(IPAddress.Loopback, 0);
+        using var other = new TcpListener(IPAddress.Loopback, 0);
+        source.Start(); other.Start();
+        var sourcePort = ((IPEndPoint)source.LocalEndpoint).Port;
+        var otherPort = ((IPEndPoint)other.LocalEndpoint).Port;
+        var serve = Task.Run(async () =>
+        {
+            using var client = await source.AcceptTcpClientAsync(timeout.Token);
+            await using var stream = client.GetStream();
+            var header = new StringBuilder();
+            var one = new byte[1];
+            while (!header.ToString().EndsWith("\r\n\r\n", StringComparison.Ordinal))
+            {
+                if (header.Length >= 65536 || await stream.ReadAsync(one, timeout.Token) != 1) throw new InvalidDataException();
+                header.Append((char)one[0]);
+            }
+            context.Require(header.ToString().Contains("x-api-key: contract-secret", StringComparison.OrdinalIgnoreCase),
+                "Anthropic model lookup omitted its authentication header.");
+            await stream.WriteAsync(Encoding.ASCII.GetBytes($"HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:{otherPort}/models\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"), timeout.Token);
+        }, timeout.Token);
+        var rejected = false;
+        try { await AutoComboModelListFetcher.FetchAsync("anthropic", $"http://127.0.0.1:{sourcePort}", "contract-secret", timeout.Token); }
+        catch (Exception ex) when (ex.Message.Contains("跨域重定向")) { rejected = true; }
+        await serve;
+        context.Require(rejected && !other.Pending(), "Model lookup followed a cross-origin redirect and exposed the credential.");
+        context.Require(AutoComboLlmProvider.Normalize(null) == "openai", "Legacy provider-free configuration no longer defaults to OpenAI.");
     }
 
     private static async Task<byte[]> ReadBody(NetworkStream stream, CancellationToken ct)

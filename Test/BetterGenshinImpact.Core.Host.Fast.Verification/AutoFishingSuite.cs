@@ -21,7 +21,7 @@ public sealed class AutoFishingSuite : IVerificationSuite
         cancellationToken.ThrowIfCancellationRequested();
         var blackboard = new Blackboard();
         var source = new Mat(8, 8, MatType.CV_8UC4, Scalar.Black);
-        var frame = new ImageRegion(source, 0, 0, drawContent: new NoopOverlayDrawPlatform());
+        var frame = new ImageRegion(source, 0, 0, drawingBoard: BetterGenshinImpact.Core.Mask.NullMaskWindowDrawingBoard.Instance);
         var captures = new Queue<ImageRegion?>([null, frame]);
         var takeScreenshot = new TakeScreenshot(
             "verification screenshot",
@@ -78,7 +78,7 @@ public sealed class AutoFishingSuite : IVerificationSuite
             new Mat(8, 8, MatType.CV_8UC4, Scalar.Black),
             0,
             0,
-            drawContent: new NoopOverlayDrawPlatform());
+            drawingBoard: BetterGenshinImpact.Core.Mask.NullMaskWindowDrawingBoard.Instance);
         trigger.OnCapture(new CaptureContent(triggerFrame));
 
         await blockingBehaviour!.Entered.Task.WaitAsync(cancellationToken);
@@ -141,11 +141,11 @@ public sealed class AutoFishingSuite : IVerificationSuite
             new Mat(8, 8, MatType.CV_8UC4, Scalar.Black),
             0,
             0,
-            drawContent: new NoopOverlayDrawPlatform());
+            drawingBoard: BetterGenshinImpact.Core.Mask.NullMaskWindowDrawingBoard.Instance);
         activeTrigger.OnCapture(new CaptureContent(activeFrame));
 
         await activeBehaviour!.Entered.Task.WaitAsync(cancellationToken);
-        activeTrigger.IsEnabled = false;
+        activeTrigger.OnDisabled();
         context.Require(
             !activeTrigger.IsExclusive && activeInput.ReleaseAllCount >= 1,
             "Disabling an active auto-fishing session did not cancel it and release held input.");

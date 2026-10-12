@@ -15,7 +15,7 @@ namespace BetterGenshinImpact.GameTask.QuickTeleport;
 public class QuickTeleportTrigger : ITaskTrigger
 {
     public string Name => "快速传送";
-    public bool IsEnabled { get; set; }
+    public bool IsEnabledByConfig => _config.Enabled;
     public int Priority => 21;
     public bool IsExclusive { get; set; }
 
@@ -28,18 +28,16 @@ public class QuickTeleportTrigger : ITaskTrigger
     // private DateTime _prevClickTeleportButtonTime = DateTime.MinValue;
     private DateTime _prevExecute = DateTime.MinValue;
 
-    private readonly QuickTeleportConfig _config;
+    private QuickTeleportConfig _config => _runtime.Config;
     private readonly IQuickTeleportRuntimePlatform _runtime;
 
     public QuickTeleportTrigger()
     {
         _runtime = QuickTeleportRuntimePlatform.Current;
-        _config = _runtime.Config;
     }
 
-    public void Init()
+    public void OnDisabled()
     {
-        IsEnabled = _config.Enabled;
         IsExclusive = false;
     }
 

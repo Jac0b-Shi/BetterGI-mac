@@ -24,6 +24,7 @@ public sealed class MacTaskRunnerPlatform(
 
     public void InitializeTask()
     {
+        GameTaskManager.ClearTriggerRequests();
         _ = Invoke("window.metrics", null);
         inputCoordinator.WaitForGameFocus(hostCancellationToken);
     }
@@ -35,6 +36,7 @@ public sealed class MacTaskRunnerPlatform(
 
     public void InitializeTask(CancellationToken cancellationToken, bool waitForInput)
     {
+        GameTaskManager.ClearTriggerRequests();
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(
             hostCancellationToken, cancellationToken);
         _ = Invoke("window.metrics", null, linked.Token);
@@ -44,7 +46,7 @@ public sealed class MacTaskRunnerPlatform(
         }
     }
 
-    public void EndTask() => inputCoordinator.ReleaseAllWhenFocused(hostCancellationToken);
+    public void EndTask() => inputCoordinator.ReleaseAllWhenFocused(hostCancellationToken, includeOperationCancellation: false);
 
     public void NotifyCancellation(string message) =>
         NotifyService.Event(NotificationEvent.TaskCancel).Success(message);

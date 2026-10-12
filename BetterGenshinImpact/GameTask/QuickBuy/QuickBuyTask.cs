@@ -1,6 +1,12 @@
 using BetterGenshinImpact.Core.Recognition;
 using System;
 using System.Threading;
+using BetterGenshinImpact.GameTask.Common;
+using BetterGenshinImpact.GameTask.Model.Area;
+using Microsoft.Extensions.Logging;
+#if !BGI_PLATFORM_MAC
+using Wpf.Ui.Violeta.Controls;
+#endif
 
 namespace BetterGenshinImpact.GameTask.QuickBuy;
 

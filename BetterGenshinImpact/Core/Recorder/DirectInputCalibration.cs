@@ -8,8 +8,8 @@
 // using BetterGenshinImpact.GameTask.Common.Element.Assets;
 // using BetterGenshinImpact.GameTask.Common.Map;
 // using BetterGenshinImpact.GameTask.Model.Area;
-// 
-// using BetterGenshinImpact.View.Drawable;
+//
+//
 // using BetterGenshinImpact.ViewModel.Pages;
 // using Microsoft.Extensions.Logging;
 // using OpenCvSharp;

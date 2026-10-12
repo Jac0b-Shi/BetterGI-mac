@@ -65,6 +65,8 @@ using (var parentMonitorTimeout = new CancellationTokenSource(TimeSpan.FromSecon
 Require(parentExitObserved,
     "parent lifetime monitor did not report a missing parent process");
 
+var drawingBoard = new BetterGenshinImpact.Core.Mask.MaskWindowDrawingBoard();
+BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Configure(drawingBoard);
 var root = Path.Combine("/tmp", "bgi-" + Guid.NewGuid().ToString("N"));
 var layout = new RuntimeLayout(root);
 OverlayDrawPlatform.Configure(new VerificationOverlayDrawPlatform());
@@ -442,6 +444,7 @@ DesktopRegionInputPlatform.Configure(verificationInputBackend);
 var verificationAutoPickConfig = new BetterGenshinImpact.GameTask.AutoPick.AutoPickConfig();
 var verificationAutoPickConfigProvider = new BetterGenshinImpact.Core.Adapters.MacCoreRuntimeAdapter(
     verificationAutoPickConfig, BetterGenshinImpact.Core.Recognition.PaddleOcrModelConfig.V5Auto, "zh-Hans");
+server.TriggerSettings.AttachAutoPickUpdated(verificationAutoPickConfigProvider.UpdateAutoPickConfig);
 var scriptGroupExecutionServices = new MacScriptGroupExecutionServices(
     layout,
     new BetterGenshinImpact.Core.Adapters.MacAutoPickRuntimeState(
@@ -608,8 +611,8 @@ try
         await Task.Delay(10, cancellation.Token);
     Require(Volatile.Read(ref runtimeDispatcherIterations) > 0,
         "runtime.start did not execute the trigger dispatcher loop");
-    var triggerToPreserve = GameTaskManager.TriggerDictionary!.First();
-    triggerToPreserve.Value.IsEnabled = false;
+    var triggerToPreserve = GameTaskManager.TriggerDictionary!.Single(pair => pair.Key == "AutoPick");
+    server.TriggerSettings.SaveEnabled(triggerToPreserve.Key, false);
     var metricsBeforeRunningGeometryRefresh = Volatile.Read(ref initializationMetricsCount);
     var runningGeometryRefresh = await ExchangeAsync(
         connection, "runtime-refresh-geometry-running", "runtime.refreshGeometry",
@@ -619,7 +622,7 @@ try
             JObject.FromObject(runningGeometryRefresh.Result!).Value<bool>("running") &&
             Volatile.Read(ref initializationMetricsCount) > metricsBeforeRunningGeometryRefresh &&
             GameTaskManager.TriggerDictionary!.TryGetValue(triggerToPreserve.Key, out var refreshedTrigger) &&
-            refreshedTrigger is { IsEnabled: false },
+            refreshedTrigger is { IsEnabledByConfig: false },
         runningGeometryRefresh.Error?.Message ??
         "runtime.refreshGeometry did not reload assets, preserve trigger state, and restart a running dispatcher");
     var runtimeStopped = await ExchangeAsync(
@@ -743,13 +746,13 @@ try
             .Where(item => item?["name"]?.Value<string>() != "GameLoading")
             .All(item => item?["canSetEnabled"]?.Value<bool>() == true),
         "trigger.list did not preserve the upstream GameLoading direct-toggle boundary.");
-    var initialGameLoadingEnabled = GameTaskManager.TriggerDictionary!["GameLoading"].IsEnabled;
+    var initialGameLoadingEnabled = GameTaskManager.TriggerDictionary!["GameLoading"].IsEnabledByConfig;
     var gameLoadingToggle = await ExchangeAsync(
         connection, "disable-game-loading-trigger", "trigger.setEnabled", sessionToken,
         JObject.FromObject(new { name = "GameLoading", enabled = !initialGameLoadingEnabled }),
         cancellation.Token);
     Require(gameLoadingToggle.Error?.Code == "CapabilityUnavailable" &&
-            GameTaskManager.TriggerDictionary!["GameLoading"].IsEnabled == initialGameLoadingEnabled,
+            GameTaskManager.TriggerDictionary!["GameLoading"].IsEnabledByConfig == initialGameLoadingEnabled,
         "trigger.setEnabled did not reject the upstream read-only GameLoading trigger.");
     var mapMaskTriggerSettings = await ExchangeAsync(
         connection, "map-mask-trigger-settings", "trigger.settings.get", sessionToken,
@@ -1352,13 +1355,13 @@ try
     Require(triggerList.Error is null && triggerDocuments.Count == 1 &&
             triggerDocuments[0]?["name"]?.Value<string>() == "Verification" &&
             triggerDocuments[0]?["enabled"]?.Value<bool>() == false &&
-            triggerDocuments[0]?["canSetEnabled"]?.Value<bool>() == true,
+            triggerDocuments[0]?["canSetEnabled"]?.Value<bool>() == false,
         triggerList.Error?.Message ?? "trigger.list did not expose the shared GameTaskManager registry");
     var triggerEnable = await ExchangeAsync(
         connection, "trigger-enable", "trigger.setEnabled", sessionToken,
         JObject.FromObject(new { name = "Verification", enabled = true }), cancellation.Token);
-    Require(triggerEnable.Error is null && GameTaskManager.TriggerDictionary["Verification"].IsEnabled,
-        triggerEnable.Error?.Message ?? "trigger.setEnabled did not mutate the shared trigger instance");
+    Require(triggerEnable.Error?.Code == "CapabilityUnavailable" && !GameTaskManager.TriggerDictionary["Verification"].IsEnabledByConfig,
+        "trigger.setEnabled did not reject a trigger without persisted configuration.");
     var missingTrigger = await ExchangeAsync(
         connection, "trigger-missing", "trigger.setEnabled", sessionToken,
         JObject.FromObject(new { name = "Missing", enabled = true }), cancellation.Token);
@@ -4170,6 +4173,7 @@ sealed class VerificationOverlayDrawPlatform : IOverlayDrawPlatform
 sealed class VerificationTrigger(string name = "Verification Trigger", Action<CaptureContent>? onCapture = null) : ITaskTrigger
 {
     public string Name { get; } = name;
+    public bool IsEnabledByConfig => IsEnabled;
     public bool IsEnabled { get; set; }
     public int Priority => 42;
     public bool IsExclusive => false;

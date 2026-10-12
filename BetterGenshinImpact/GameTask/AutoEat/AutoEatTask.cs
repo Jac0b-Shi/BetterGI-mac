@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Simulator.Extensions;
@@ -35,6 +36,8 @@ public class AutoEatTask : ISoloTask<int?>
     private readonly IOcrService _ocrService;
     private readonly IAutoEatRuntimePlatform _runtimePlatform;
     private readonly ILogger<AutoEatTask> _logger;
+    private IInputChannel input => InputHub.Foreground;
+    private IInputChannel _input => InputHub.Foreground;
     private CancellationToken _ct;
 
 #if !BGI_PLATFORM_MAC
@@ -112,7 +115,7 @@ public class AutoEatTask : ISoloTask<int?>
 
             GridScreen gridScreen = new GridScreen(GridParams.Templates[GridScreenName.Food], _logger, _ct);
             gridScreen.OnAfterTurnToNewPage += GridScreen.DrawItemsAfterTurnToNewPage;
-            gridScreen.OnBeforeScroll += () => OverlayDrawPlatform.Current.ClearAll();
+            gridScreen.OnBeforeScroll += () => BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Current.ClearAll();
             int? count = null;
             try
             {
@@ -155,7 +158,7 @@ public class AutoEatTask : ISoloTask<int?>
             }
             finally
             {
-                OverlayDrawPlatform.Current.ClearAll();
+            BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Current.ClearAll();
             }
             if (count == null)
             {

@@ -34,14 +34,9 @@ public sealed class MacAutoDomainRuntimePlatform(
             [new OverlayLabel(rectangle, $"{angle:0} deg", true)]);
     }
 
-    public void AddAutoEatTrigger()
-    {
-        if (GameTaskManager.TriggerDictionary is null ||
-            !GameTaskManager.TriggerDictionary.TryGetValue("AutoEat", out var trigger))
-            throw new InvalidOperationException("AutoEat trigger is unavailable before runtime initialization.");
-        trigger.Init();
-        trigger.IsEnabled = true;
-    }
+    public void AddAutoEatTrigger() => GameTaskManager.RequestTrigger("AutoEat", null);
+
+    public IDisposable AddAutoEatTriggerLease() => GameTaskManager.RequestTriggerLease("AutoEat", null);
 
     public void Notify(AutoDomainNotification notification, string message)
     {

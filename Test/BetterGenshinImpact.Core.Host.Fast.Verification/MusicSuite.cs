@@ -86,6 +86,7 @@ public sealed class MusicSuite : IVerificationSuite
             await VerifySeekWinsFocusProbeRaceAsync(
                 context, score, profile, cancellationToken);
             await VerifyReleaseDoesNotWaitForSendAsync(context, cancellationToken);
+            VerifyRepeatedMidiNotes(context, profile);
             VerifyEffectiveMidiDuration(context, profile);
             VerifyMappingModeOverride(context);
             await VerifyConfigureTrackMappingModeAsync(context, root, cancellationToken);
@@ -464,6 +465,34 @@ public sealed class MusicSuite : IVerificationSuite
 
         service.Stop();
         await playback.WaitAsync(TimeSpan.FromSeconds(1), cancellationToken);
+    }
+
+    private static void VerifyRepeatedMidiNotes(VerificationContext context, InstrumentProfile profile)
+    {
+        // 分离、重叠、三次重触发，以及同一时间松开/按下。
+        var cases = new (int[][] Notes, int[] Edges)[]
+        {
+            ([[0, 100], [200, 300]], [0, 100, 200, 300]),
+            ([[0, 200], [100, 300]], [0, 70, 100, 300]),
+            ([[0, 300], [100, 400], [200, 500]], [0, 70, 100, 170, 200, 500]),
+            ([[0, 100], [100, 200]], [0, 70, 100, 200]),
+            ([[0, 100], [0, 100]], [0, 0, 0, 100]),
+        };
+        foreach (var item in cases)
+        {
+            var score = new PerformanceScore
+            {
+                Format = MusicScoreFormat.MidiFile,
+                Tracks = [new MusicTrackInfo { Index = 0, IsEnabled = true }],
+                MidiNotes = item.Notes.Select(n => new MidiNoteData(0, 60,
+                    TimeSpan.FromMilliseconds(n[0]), TimeSpan.FromMilliseconds(n[1]))).ToList(),
+            };
+            var timeline = new MusicTimelineBuilder(new FixedProfileService(profile)).Build(score, profile, 0);
+            context.Require(timeline.Events.Select(e => (int)e.Time.TotalMilliseconds).SequenceEqual(item.Edges) &&
+                timeline.Events.Select(e => e.Type).SequenceEqual(item.Edges.Select((_, i) =>
+                    i % 2 == 0 ? PerformanceEventType.KeyDown : PerformanceEventType.KeyUp)),
+                "Repeated MIDI notes lost a key edge or changed release/retrigger ordering.");
+        }
     }
 
     private static void VerifyEffectiveMidiDuration(

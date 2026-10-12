@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using System;
 using System.Diagnostics;
 using System.Threading;
@@ -7,6 +8,7 @@ using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Model;
+using BetterGenshinImpact.Helpers;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
@@ -57,8 +59,20 @@ public class LowerHeadThenWalkToTask
         using var initialCapture = CaptureToRectArea();
         if (initialCapture.Find(_trackPoint).IsEmpty())
         {
-            Logger.LogInformation("未找到追踪点，停止任务");
-            throw new Exception("未找到追踪点");
+            // 第一次未识别到：低头转动一次视角后重试。
+            // 被遮挡（如战斗准备交互框）的追踪点图标在视角变动后可能露出，主动低头转动比等待自动缩放更省时
+            Logger.LogInformation("未找到追踪点，低头转动视角后重试");
+            InputHub.Foreground.Mouse.MoveMouseBy(0, 800); // 低头（保证俯视角）
+            await Delay(500, ct);
+
+            using var retryCapture = CaptureToRectArea();
+            if (retryCapture.Find(_trackPoint).IsEmpty())
+            {
+                Logger.LogInformation("未找到追踪点，停止任务");
+                throw new Exception("未找到追踪点");
+            }
+
+            return await MakeTrackPointDirectlyAbove(ct);
         }
 
         return await MakeTrackPointDirectlyAbove(ct);
@@ -146,7 +160,7 @@ public class LowerHeadThenWalkToTask
         finally
         {
             SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
-            OverlayDrawPlatform.Current.ClearAll();
+            BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Current.ClearAll();
         }
     }
 }

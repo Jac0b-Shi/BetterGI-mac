@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recorder;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.Common;
@@ -37,28 +38,26 @@ public sealed class WindowsKeyMouseMacroPlatform : IKeyMouseMacroPlatform
     public void KeyDown(int windowsVirtualKey)
     {
         var key = (User32.VK)windowsVirtualKey;
-        if (InputBuilder.IsExtendedKey(key)) Simulation.SendInput.Keyboard.KeyDown(false, key);
-        else Simulation.SendInput.Keyboard.KeyDown(key);
+        InputHub.Foreground.Keyboard.KeyDown(key);
     }
 
     public void KeyUp(int windowsVirtualKey)
     {
         var key = (User32.VK)windowsVirtualKey;
-        if (InputBuilder.IsExtendedKey(key)) Simulation.SendInput.Keyboard.KeyUp(false, key);
-        else Simulation.SendInput.Keyboard.KeyUp(key);
+        InputHub.Foreground.Keyboard.KeyUp(key);
     }
 
     public void MoveMouseTo(double normalizedX, double normalizedY) =>
-        Simulation.SendInput.Mouse.MoveMouseTo(normalizedX, normalizedY);
-    public void MoveMouseBy(int x, int y) => Simulation.SendInput.Mouse.MoveMouseBy(x, y);
+        InputHub.Foreground.Mouse.MoveMouseTo(normalizedX, normalizedY);
+    public void MoveMouseBy(int x, int y) => InputHub.Foreground.Mouse.MoveMouseBy(x, y);
 
     public void MouseDown(string button)
     {
         switch (button)
         {
-            case "left": Simulation.SendInput.Mouse.LeftButtonDown(); break;
-            case "right": Simulation.SendInput.Mouse.RightButtonDown(); break;
-            case "middle": Simulation.SendInput.Mouse.MiddleButtonDown(); break;
+            case "left": InputHub.Foreground.Mouse.LeftButtonDown(); break;
+            case "right": InputHub.Foreground.Mouse.RightButtonDown(); break;
+            case "middle": InputHub.Foreground.Mouse.MiddleButtonDown(); break;
             default: throw new ArgumentOutOfRangeException(nameof(button));
         }
     }
@@ -67,12 +66,12 @@ public sealed class WindowsKeyMouseMacroPlatform : IKeyMouseMacroPlatform
     {
         switch (button)
         {
-            case "left": Simulation.SendInput.Mouse.LeftButtonUp(); break;
-            case "right": Simulation.SendInput.Mouse.RightButtonUp(); break;
-            case "middle": Simulation.SendInput.Mouse.MiddleButtonUp(); break;
+            case "left": InputHub.Foreground.Mouse.LeftButtonUp(); break;
+            case "right": InputHub.Foreground.Mouse.RightButtonUp(); break;
+            case "middle": InputHub.Foreground.Mouse.MiddleButtonUp(); break;
             default: throw new ArgumentOutOfRangeException(nameof(button));
         }
     }
 
-    public void VerticalScroll(int clicks) => Simulation.SendInput.Mouse.VerticalScroll(clicks);
+    public void VerticalScroll(int clicks) => InputHub.Foreground.Mouse.VerticalScroll(clicks);
 }

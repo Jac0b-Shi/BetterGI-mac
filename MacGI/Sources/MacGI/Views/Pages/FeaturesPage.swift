@@ -333,13 +333,34 @@ struct SoloTasksPage: View {
 
     private var autoComboSettings: some View {
         VStack(spacing: 0) {
-            BGISettingLine(title: "模型服务地址", subtitle: "OpenAI 兼容端点；仅本机回环地址允许 HTTP") {
+            BGISettingLine(title: "模型服务商", subtitle: "使用所选服务商的 API 协议") {
+                Picker("", selection: $appState.autoComboProviderDraft) {
+                    Text("OpenAI 兼容").tag("openai")
+                    Text("Anthropic").tag("anthropic")
+                }.frame(width: 220)
+            }
+            BGISettingLine(title: "模型服务地址", subtitle: "OpenAI 填写兼容端点；Anthropic 可留空使用官方服务") {
                 TextField("https://…/v1", text: $appState.autoComboEndpointDraft)
                     .textFieldStyle(.roundedBorder).frame(width: 360)
             }
             BGISettingLine(title: "模型名称", subtitle: "使用服务端提供的模型标识") {
                 TextField("模型标识", text: $appState.autoComboModelDraft)
                     .textFieldStyle(.roundedBorder).frame(width: 360)
+            }
+            BGISettingLine(title: "可用模型", subtitle: "按当前服务商、地址和密钥查询") {
+                HStack {
+                    if !appState.autoComboModels.isEmpty {
+                        Picker("", selection: $appState.autoComboModelDraft) {
+                            Text(appState.autoComboModelDraft.isEmpty ? "请选择" : appState.autoComboModelDraft)
+                                .tag(appState.autoComboModelDraft)
+                            ForEach(appState.autoComboModels.filter { $0 != appState.autoComboModelDraft }, id: \.self) {
+                                Text($0).tag($0)
+                            }
+                        }.frame(width: 240)
+                    }
+                    Button(appState.autoComboModelsLoading ? "正在获取…" : "获取列表") { appState.fetchAutoComboModels() }
+                        .disabled(appState.autoComboModelsLoading)
+                }
             }
             BGISettingLine(title: "API 密钥", subtitle: "由 Core 配置持久化；不会写入 Swift 本地设置") {
                 SecureField("API Key", text: $appState.autoComboAPIKeyDraft)

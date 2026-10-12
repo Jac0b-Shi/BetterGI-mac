@@ -50,6 +50,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                 }
             }
         }
+        public bool IsEnabledByConfig => runtime.Config.Enabled;
         public int Priority => 15;
 
         /// <summary>
@@ -78,19 +79,21 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             }
         }
 
-        private CsTrees.Blackboard.Blackboard blackboard;
+        private CsTrees.Blackboard.Blackboard blackboard = null!;
 
         /// <summary>
         /// 辣条（误）
         /// </summary>
-        private Behaviour BehaviourTreeLaTiao { get; set; }
+        private Behaviour BehaviourTreeLaTiao { get; set; } = null!;
 
-        private readonly TakeScreenshot _takeScreenshot;
+        private TakeScreenshot _takeScreenshot = null!;
+        private bool _customBehaviour;
         private readonly object _sessionLock = new();
         private CancellationTokenSource? _sessionCancellation;
         private int _isEnabled;
         private int _isExclusive;
         private int _tickRunning;
+        private volatile bool _needsRebuild;
         private int _disposed;
 
         public AutoFishingTrigger()
@@ -98,6 +101,11 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             runtime = AutoFishingRuntimePlatform.Current;
             _logger = runtime.GetLogger<AutoFishingTrigger>();
             input = new SessionBoundAutoFishingInput(new TaskControlAutoFishingInput());
+            BuildBehaviourTree();
+        }
+
+        private void BuildBehaviourTree()
+        {
             AutoFishingTaskParam autoFishingTaskParam =
                 AutoFishingTaskParam.BuildFromConfig(runtime.Config);
             IOcrService ocrService = runtime.OcrService;
@@ -125,6 +133,17 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                 .Build();
         }
 
+        public void OnEnabled(object? options)
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+            StopSession();
+            _needsRebuild = !_customBehaviour;
+            _prevExecute = DateTime.MinValue;
+            IsEnabled = true;
+        }
+
+        public void OnDisabled() => IsEnabled = false;
+
         internal AutoFishingTrigger(
             IAutoFishingRuntimePlatform runtime,
             ILogger<AutoFishingTrigger> logger,
@@ -136,6 +155,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             _logger = logger;
             this.input = new SessionBoundAutoFishingInput(input);
             blackboard = new CsTrees.Blackboard.Blackboard();
+            _customBehaviour = true;
             BehaviourTreeLaTiao = behaviourFactory(this.input);
             _takeScreenshot = takeScreenshot;
         }
@@ -152,9 +172,20 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
         public void OnCapture(CaptureContent content)
         {
-            if (Volatile.Read(ref _disposed) != 0)
+            if (Volatile.Read(ref _disposed) != 0 || !IsEnabled || Volatile.Read(ref _tickRunning) != 0)
             {
                 return;
+            }
+
+            // 停用已取消旧 Tick，但它可能仍在收尾；在旧截图释放后才替换行为树。
+            lock (_sessionLock)
+            {
+                if (_needsRebuild)
+                {
+                    ReleaseScreenshotIfIdle();
+                    BuildBehaviourTree();
+                    _needsRebuild = false;
+                }
             }
 
             if ((DateTime.Now - _prevExecute).TotalMilliseconds <= 67)
@@ -198,8 +229,11 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             }
             finally
             {
-                Volatile.Write(ref _tickRunning, 0);
-                ReleaseScreenshotIfIdle();
+                lock (_sessionLock)
+                {
+                    Volatile.Write(ref _tickRunning, 0);
+                    ReleaseScreenshotIfIdle();
+                }
             }
         }
 
@@ -208,7 +242,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             CancellationTokenSource? previous;
             lock (_sessionLock)
             {
-                if (_isExclusive != 0 || _isEnabled == 0 || _disposed != 0)
+                if (_isExclusive != 0 || _isEnabled == 0 || _disposed != 0 || _needsRebuild)
                 {
                     return;
                 }

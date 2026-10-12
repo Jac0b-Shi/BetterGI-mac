@@ -1,3 +1,4 @@
+using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.Core.Abstractions.Recognition;
 using BetterGenshinImpact.Core.Abstractions.Runtime;
 using BetterGenshinImpact.Core.Config;
@@ -26,7 +27,7 @@ public partial class AutoPickTrigger : ITaskTrigger
     private readonly ILogger<AutoPickTrigger> _logger;
 
     public string Name => "自动拾取";
-    public bool IsEnabled { get; set; }
+    public bool IsEnabledByConfig => _configProvider.AutoPickConfig.Enabled;
     public int Priority => 30;
     public bool IsExclusive => false;
 
@@ -64,11 +65,35 @@ public partial class AutoPickTrigger : ITaskTrigger
     private readonly IYapAutoPickTextRecognizer _yapRecognizer;
     private readonly int _requiredStableInteractionFrames;
 
+    /// <summary>
+    /// 名单文件版本号。界面修改名单文件后递增，触发器下一次拾取时重读
+    /// </summary>
+    private static int _listVersion;
+
+    /// <summary>
+    /// 当前名单对应的缓存键，键不变就不重读文件
+    /// </summary>
+    private (AutoPickMode Mode, bool BlacklistModePickEnabled, bool WhitelistModeDoNotPickEnabled, int Version)? _loadedListKey;
+
+    /// <summary>
+    /// 名单文件被界面修改后调用，下一次拾取时重读
+    /// </summary>
+    public static void ReloadLists()
+    {
+        Interlocked.Increment(ref _listVersion);
+    }
+
     private int StopCount => _runtimeState.StopCount;
 
     /// <summary>
     /// Master constructor. All injected dependencies are required — no static fallback.
     /// </summary>
+#if !BGI_PLATFORM_MAC
+    public AutoPickTrigger() : this(null,
+        App.GetService<IAutoPickRuntimeState>()!, App.GetService<IAutoPickConfigProvider>()!,
+        App.GetService<IInputBackend>()!, TaskContext.Instance().SystemInfo, App.GetLogger<AutoPickTrigger>(),
+        App.GetService<IPaddleAutoPickTextRecognizer>()!, App.GetService<IYapAutoPickTextRecognizer>()!) { }
+#endif
     public AutoPickTrigger(
         AutoPickExternalConfig? config,
         IAutoPickRuntimeState runtimeState,
@@ -99,11 +124,33 @@ public partial class AutoPickTrigger : ITaskTrigger
         _requiredStableInteractionFrames = requiredStableInteractionFrames;
     }
 
-    public void Init()
+    public void OnEnabled(object? options)
     {
-        var config = _configProvider.AutoPickConfig;
-        IsEnabled = config.Enabled;
+        _externalConfig = options as AutoPickExternalConfig;
+        _lastText = string.Empty;
+        _prevClickFrameIndex = -1;
+        EnsureLists(_configProvider.AutoPickConfig);
+    }
+    public void OnDisabled() { _externalConfig = null; _lastText = string.Empty; }
+    public void Init() => OnEnabled(_externalConfig);
 
+
+
+    private void EnsureLists(AutoPickConfig config)
+    {
+        var key = (config.Mode, config.BlacklistModePickEnabled, config.WhitelistModeDoNotPickEnabled, Volatile.Read(ref _listVersion));
+        if (_loadedListKey == key)
+        {
+            return;
+        }
+
+        // 读取失败时也记下这个键，同一份配置只提示一次
+        _loadedListKey = key;
+        LoadLists(config);
+    }
+
+    private void LoadLists(AutoPickConfig config)
+    {
         var blackList = new HashSet<string>();
         var fuzzyBlackList = new List<string>();
         var whiteList = new HashSet<string>();
@@ -135,6 +182,14 @@ public partial class AutoPickTrigger : ITaskTrigger
         _fuzzyBlackList = fuzzyBlackList;
         _whiteList = whiteList;
         _whitelistModeFinalPickList = whitelistModeFinalPickList;
+    }
+
+    /// <summary>
+    /// 名单在截图线程上读取，弹窗投递到 UI 线程，不等待用户确认
+    /// </summary>
+    private static void ShowListReadError()
+    {
+        TaskControlPlatform.Current.Logger.LogError("读取拾取名单配置失败，请确认名单内容格式");
     }
 
     private HashSet<string> ReadJson(string jsonFilePath)
@@ -215,10 +270,7 @@ public partial class AutoPickTrigger : ITaskTrigger
     {
         _autoPickAssets = AutoPickAssets.Get(content.CaptureRectArea, _configProvider.AutoPickConfig.PickKey);
         _pickRo = _autoPickAssets.PickRo;
-        while (StopCount > 0)
-        {
-            Thread.Sleep(1000);
-        }
+        if (StopCount > 0) return;
 
         var speedTimer = new SpeedTimer();
 
@@ -250,6 +302,7 @@ public partial class AutoPickTrigger : ITaskTrigger
 
         var scale = _systemInfo.AssetScale;
         var config = _configProvider.AutoPickConfig;
+        EnsureLists(config);
 
         // 存在 L 键位是千星奇遇，无需拾取
         using var lKeyRa = content.CaptureRectArea.Find(RecognitionAssets.Get("AutoPick", "L", content.CaptureRectArea));

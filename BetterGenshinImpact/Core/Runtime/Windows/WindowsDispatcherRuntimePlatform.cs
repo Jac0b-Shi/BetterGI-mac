@@ -48,7 +48,7 @@ public sealed class WindowsDispatcherRuntimePlatform(
     public void ClearTriggers() => TaskTriggerDispatcher.Instance().ClearTriggers();
 
     public bool AddTrigger(string name, object? config) =>
-        TaskTriggerDispatcher.Instance().AddTrigger(name, config);
+        TaskTriggerDispatcher.Instance().AddTrigger(name, config) is not null;
 
     public bool GetTcgStrategy(out string content) => Settings.GetTcgStrategy(out content);
 

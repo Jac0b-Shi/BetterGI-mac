@@ -37,7 +37,7 @@ public sealed class PathExecutorAutoSkipSessionFactory : IPathExecutorAutoSkipPl
             ClickChatOption = "优先选择最后一个选项",
         });
 
-        public AutoSkipTriggerSession() => _trigger.Init();
+        public AutoSkipTriggerSession() => _trigger.OnEnabled(null);
 
         public void OnCapture(CaptureContent content) => _trigger.OnCapture(content);
     }

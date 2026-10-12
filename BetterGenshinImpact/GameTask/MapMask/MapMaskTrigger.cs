@@ -121,6 +121,10 @@ public class MapMaskTrigger : ITaskTrigger
     /// <summary>
     /// 初始化触发器状态，并在关闭时同步隐藏遮罩UI
     /// </summary>
+    private volatile bool _active;
+    public bool IsEnabledByConfig => Config.Enabled;
+    public void OnEnabled(object? options) { _active = true; IsEnabled = true; }
+    public void OnDisabled() { _active = false; IsEnabled = false; Invalidate(); }
     public void Init()
     {
         IsEnabled = Config.Enabled;
@@ -474,7 +478,7 @@ public class MapMaskTrigger : ITaskTrigger
         {
             Interlocked.Increment(ref _miniMapMatchSuccesses);
             Volatile.Write(ref _lastMiniMapPoint, $"{miniPoint.X:F3},{miniPoint.Y:F3}");
-            double viewportSize = MapAssets.MimiMapRect1080P.Width;
+            double viewportSize = MapAssets.MimiMapRect1080P.Width / 3.0 * 10;
             QueueUiUpdate(new PendingUiUpdate
             {
                 Generation = workItem.Generation,
@@ -550,7 +554,7 @@ public class MapMaskTrigger : ITaskTrigger
             var update = Interlocked.Exchange(ref _pendingUiUpdate, null);
             if (update != null && update.Generation == Volatile.Read(ref _generation))
             {
-                _platform.Publish(Config.Enabled
+                _platform.Publish(_active && Config.Enabled
                     ? new(update.IsInBigMapUi, update.BigMapViewport, update.MiniMapViewport)
                     : new(false, new(0, 0, 0, 0), new(0, 0, 0, 0)));
                 Interlocked.Increment(ref _uiApplyCount);

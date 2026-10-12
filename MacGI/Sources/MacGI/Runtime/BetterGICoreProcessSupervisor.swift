@@ -33,6 +33,7 @@ struct BetterGIKeyMousePlaybackStatus: Sendable, Equatable {
 }
 
 struct BetterGICoreAutoComboSettings: Codable, Sendable, Equatable {
+    var provider: String = "openai"
     let planningLlmEndpoint: String
     let modelName: String
     let apiKey: String
@@ -70,16 +71,24 @@ struct BetterGINotificationEvent: Sendable, Equatable, Identifiable {
     var id: String { code }
 }
 
+struct BetterGIDiscordTarget: Codable, Sendable, Equatable {
+    var type: String = "Channel"
+    var id: String = ""
+    var displayName: String = ""
+}
+
 enum BetterGINotificationFieldValue: Sendable, Equatable {
     case boolean(Bool)
     case integer(Int)
     case string(String)
+    case targets([BetterGIDiscordTarget])
 
     var rpcValue: Any {
         switch self {
         case .boolean(let value): value
         case .integer(let value): value
         case .string(let value): value
+        case .targets(let value): value.map { ["type": $0.type, "id": $0.id, "displayName": $0.displayName] }
         }
     }
 }
@@ -1353,6 +1362,9 @@ actor BetterGICoreProcessSupervisor {
                 }
                 let field: BetterGINotificationFieldValue
                 switch kind {
+                case "targets":
+                    let data = try JSONSerialization.data(withJSONObject: fieldValue["value"] ?? [])
+                    field = .targets(try JSONDecoder().decode([BetterGIDiscordTarget].self, from: data))
                 case "boolean":
                     guard let raw = fieldValue["value"] as? Bool else {
                         throw BetterGICoreRPCError.protocolViolation(
@@ -2900,6 +2912,7 @@ actor BetterGICoreProcessSupervisor {
         -> BetterGICoreAutoComboSettings {
         let result = try requestSoloSettings(
             method: "solo.settings.save", parameters: ["name": "AutoCombo", "settings": [
+                "provider": settings.provider,
                 "planningLlmEndpoint": settings.planningLlmEndpoint,
                 "modelName": settings.modelName,
                 "apiKey": settings.apiKey,
@@ -2907,6 +2920,16 @@ actor BetterGICoreProcessSupervisor {
             ]])
         return try JSONDecoder().decode(BetterGICoreAutoComboSettings.self,
             from: JSONSerialization.data(withJSONObject: result))
+    }
+
+    func autoComboModels(provider: String, endpoint: String, apiKey: String) throws -> [String] {
+        let result = try requestSoloSettings(method: "combo.models.list", parameters: ["settings": [
+            "provider": provider, "planningLlmEndpoint": endpoint, "apiKey": apiKey,
+        ]])
+        guard let object = result as? [String: Any], let models = object["models"] as? [String] else {
+            throw BetterGICoreRPCError.protocolViolation("Invalid model list.")
+        }
+        return models
     }
 
     func autoFishingSettings() throws -> BetterGICoreAutoFishingSettings {

@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Core.Config;
@@ -29,6 +30,8 @@ public class GetGridIconsTask : ISoloTask
     private readonly IOcrService ocrService;
     private readonly ISystemInfo systemInfo;
     private readonly ILogger logger;
+    private IInputChannel input => InputHub.Foreground;
+    private IInputChannel _input => InputHub.Foreground;
 
     private CancellationToken ct;
 
@@ -108,7 +111,7 @@ public class GetGridIconsTask : ISoloTask
     {
         GridScreen gridScreen = new GridScreen(GridParams.Templates[this.gridScreenName], this.logger, this.ct);
         gridScreen.OnAfterTurnToNewPage += GridScreen.DrawItemsAfterTurnToNewPage;
-        gridScreen.OnBeforeScroll += () => OverlayDrawPlatform.Current.ClearAll();
+            gridScreen.OnBeforeScroll += () => BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Current.ClearAll();
         HashSet<string> fileNames = new HashSet<string>();
         try
         {
@@ -150,7 +153,7 @@ public class GetGridIconsTask : ISoloTask
         }
         finally
         {
-            OverlayDrawPlatform.Current.ClearAll();
+            BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Current.ClearAll();
         }
     }
 

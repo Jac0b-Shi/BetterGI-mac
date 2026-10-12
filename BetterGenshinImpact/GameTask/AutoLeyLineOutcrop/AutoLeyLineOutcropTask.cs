@@ -1,9 +1,9 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.Core.Script.Dependence;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoDomain;
 using BetterGenshinImpact.GameTask.AutoPathing;
@@ -22,6 +22,9 @@ using BetterGenshinImpact.GameTask.Common.Map.Maps.Base;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.Service.Notification;
+using BetterGenshinImpact.Service.Notification.Model.Enum;
+using BetterGenshinImpact.Core.Mask;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -51,6 +54,12 @@ public class AutoLeyLineOutcropTask : ISoloTask
     private ISystemInfo _systemInfo = null!;
 
     private CancellationToken _ct;
+
+    /// <summary>
+    /// 本任务启用的自动拾取，任务结束时撤销
+    /// </summary>
+    private IDisposable? _autoPickLease;
+
     private AutoLeyLineConfigData? _configData;
     private NodeData? _nodeData;
 
@@ -122,7 +131,6 @@ public class AutoLeyLineOutcropTask : ISoloTask
         try
         {
             Initialize();
-            EnsureMaskOverlayVisible();
             var runTimesValue = await HandleResinExhaustionMode();
             if (runTimesValue <= 0)
             {
@@ -162,8 +170,9 @@ public class AutoLeyLineOutcropTask : ISoloTask
                 }
                 finally
                 {
+                    _autoPickLease?.Dispose();
+                    _autoPickLease = null;
                     ClearOcrOverlayKeys();
-                    RestoreMaskOverlayVisible();
                 }
             }
             finally
@@ -1657,9 +1666,13 @@ public class AutoLeyLineOutcropTask : ISoloTask
         return Task.FromResult(HasRewardPrompt(capture));
     }
 
+    /// <summary>
+    /// 在遮罩上标出本次 OCR 的区域。功能提示类分组不受「显示识别结果」开关影响，Dispose 时清除
+    /// </summary>
     private IDisposable DrawOcrOverlayScope(ImageRegion capture, string key, params Rect[] rois)
     {
-        var drawList = new List<Rect>(rois.Length);
+        var group = new MaskWindowDrawingGroup(key, MaskWindowDrawingKind.Feature);
+        var drawList = new List<MaskWindowDrawingShape>(rois.Length);
         foreach (var roi in rois)
         {
             var clamped = roi.ClampTo(capture.Width, capture.Height);
@@ -1668,20 +1681,19 @@ public class AutoLeyLineOutcropTask : ISoloTask
                 continue;
             }
 
-            drawList.Add(clamped);
+            drawList.Add(capture.ToMaskWindowDrawingRect(clamped) with { Stroke = MaskWindowDrawingStroke.FromColor(System.Drawing.Color.DeepSkyBlue) });
         }
 
-        if (drawList.Count > 0) OverlayDrawPlatform.Current.SetRectangles(key, capture, drawList);
-        else OverlayDrawPlatform.Current.RemoveRectangles(key);
-        _runtime.RefreshOverlay();
-        return new OcrOverlayScope(key, _runtime.RefreshOverlay);
+        capture.DrawingBoard.Set(group, drawList);
+        return capture.DrawingBoard.Scope(group);
     }
 
     private void ClearOcrOverlayKeys()
     {
-        OverlayDrawPlatform.Current.RemoveRectangles(OcrFlowOverlayKey);
-        OverlayDrawPlatform.Current.RemoveRectangles(OcrFightOverlayKey);
-        _runtime.RefreshOverlay();
+        // 任务结束时截图区域已释放，从当前运行环境取；截图器已停止时解绑已清空，这里不做任何事
+        var drawingBoard = MaskWindowDrawingPlatform.Current;
+        drawingBoard?.Clear(OcrFlowOverlayKey);
+        drawingBoard?.Clear(OcrFightOverlayKey);
     }
 
     private async Task WaitOcrOverlayRenderTick()
@@ -2568,21 +2580,6 @@ public class AutoLeyLineOutcropTask : ISoloTask
         public int FragileResinTimes { get; set; }
     }
 
-    private sealed class OcrOverlayScope(string key, Action refreshAction) : IDisposable
-    {
-        private bool _disposed;
 
-        public void Dispose()
-        {
-            if (_disposed)
-            {
-                return;
-            }
-
-            _disposed = true;
-            OverlayDrawPlatform.Current.RemoveRectangles(key);
-            refreshAction();
-        }
-    }
 
 }

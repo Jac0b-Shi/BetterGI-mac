@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Recognition;

@@ -1,6 +1,8 @@
 using BetterGenshinImpact.Core.Host.Fast.Verification;
 using BetterGenshinImpact.Verification.Framework;
 
+BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Configure(new BetterGenshinImpact.Core.Mask.MaskWindowDrawingBoard());
+
 return await VerificationRunner.RunAsync(args,
 [
     // Initialise shared avatar metadata from the canonical assets before suites
@@ -30,6 +32,7 @@ return await VerificationRunner.RunAsync(args,
     new LogParseSuite(),
     new TemplateMatchingSuite(),
     new ArtifactDownloaderSuite(),
+    new InputMaskLifecycleSuite(),
     new MusicSuite(),
     new AutoFishingSuite(),
 ]);

@@ -11,14 +11,8 @@ public sealed class WindowsMapMaskRuntimePlatform : IMapMaskRuntimePlatform
     public string MapMatchingMethod => TaskContext.Instance().Config.PathingConditionConfig.MapMatchingMethod;
     public ILogger<MapMaskTrigger> Logger => App.GetLogger<MapMaskTrigger>();
 
-    public void Publish(MapMaskDrawCommand command) => UIDispatcherHelper.BeginInvoke(() =>
-    {
-        var window = MaskWindow.Instance();
-        if (command.IsInBigMapUi is { } isInBigMapUi && window.DataContext is MaskWindowViewModel vm)
-            vm.IsInBigMapUi = isInBigMapUi;
-        if (command.BigMapViewport is { } big)
-            window.PointsCanvasControl.UpdateViewport(big.X, big.Y, big.Width, big.Height);
-        if (command.MiniMapViewport is { } mini)
-            window.MiniMapPointsCanvasControl.UpdateViewport(mini.X, mini.Y, mini.Width, mini.Height);
-    });
+    public void Publish(MapMaskDrawCommand command) => TaskContext.Instance().Runtime?.MaskWindowMapState.Update(
+        command.IsInBigMapUi, Convert(command.BigMapViewport), Convert(command.MiniMapViewport));
+    private static System.Windows.Rect? Convert(MapMaskViewport? value) => value is { } v
+        ? new System.Windows.Rect(v.X, v.Y, v.Width, v.Height) : null;
 }

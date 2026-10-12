@@ -1,6 +1,10 @@
-﻿using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Platform.Abstractions;
 using System.Diagnostics;
+using OpenCvSharp;
+#if !BGI_PLATFORM_MAC
+using Vanara.PInvoke;
+#endif
 using Size = System.Drawing.Size;
 
 namespace BetterGenshinImpact.GameTask.Model
@@ -45,11 +49,13 @@ namespace BetterGenshinImpact.GameTask.Model
         /// </summary>
         public BgiRect ScaleMax1080PCaptureRect { get; set; }
 
+#if BGI_PLATFORM_MAC
         public Process? GameProcess { get; }
 
         public string GameProcessName { get; }
 
         public int GameProcessId { get; }
+#endif
 
         public DesktopRegion DesktopRectArea { get; }
     }

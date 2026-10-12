@@ -32,6 +32,8 @@ public static class TaskRunnerPlatform
     public static ITaskRunnerPlatform Current => Volatile.Read(ref _current)
         ?? throw new InvalidOperationException("TaskRunner platform has not been composed.");
 
+    public static ITaskRunnerPlatform? TryGetCurrent() => Volatile.Read(ref _current);
+
     public static void Configure(ITaskRunnerPlatform platform)
     {
         ArgumentNullException.ThrowIfNull(platform);

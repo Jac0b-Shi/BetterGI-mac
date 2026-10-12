@@ -1,8 +1,13 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.GameTask.Model.Area.Converter;
-#if BGI_FULL_WINDOWS
-using BetterGenshinImpact.View.Drawable;
-using Fischless.WindowsInput;
+using BetterGenshinImpact.Core.Mask;
+#if BGI_PLATFORM_MAC
+using MaskRect = BetterGenshinImpact.Core.Mask.MaskRect;
+using MaskPoint = BetterGenshinImpact.Core.Mask.MaskPoint;
+#else
 using Vanara.PInvoke;
+using MaskRect = System.Windows.Rect;
+using MaskPoint = System.Windows.Point;
 #endif
 using OpenCvSharp;
 using System;
@@ -71,8 +76,7 @@ public class Region : IDisposable
     {
     }
 
-    public Region(int x, int y, int width, int height, Region? owner = null, INodeConverter? converter = null,
-        IOverlayDrawPlatform? drawContent = null)
+    public Region(int x, int y, int width, int height, Region? owner = null, INodeConverter? converter = null, IMaskWindowDrawingBoard? drawingBoard = null)
     {
         X = x;
         Y = y;
@@ -80,7 +84,7 @@ public class Region : IDisposable
         Height = height;
         Prev = owner;
         PrevConverter = converter;
-        this.drawContent = drawContent ?? OverlayDrawPlatform.Current;
+        DrawingBoard = drawingBoard ?? owner?.DrawingBoard ?? NullMaskWindowDrawingBoard.Instance;
     }
 
     public Region(Rect rect, Region? owner = null, INodeConverter? converter = null) : this(rect.X, rect.Y, rect.Width, rect.Height, owner, converter)
@@ -95,9 +99,9 @@ public class Region : IDisposable
     public INodeConverter? PrevConverter { get; }
 
     /// <summary>
-    /// 绘图上下文 (Windows/WPF overlay only; no-op stub on other platforms via DrawableStubs)
+    /// 遮罩窗口绘制入口。根区域创建时传入，子区域自动继承；不在截图区域树下的 Region 为空实现
     /// </summary>
-    protected readonly IOverlayDrawPlatform drawContent = null!;
+    public IMaskWindowDrawingBoard DrawingBoard { get; } = NullMaskWindowDrawingBoard.Instance;
 
     // public List<Region>? NextChildren { get; protected set; }
 
@@ -108,8 +112,8 @@ public class Region : IDisposable
     public void BackgroundClick()
     {
         User32.GetCursorPos(out var p);
-        this.Move();  // 必须移动实际鼠标
-        TaskContext.Instance().PostMessageSimulator.LeftButtonClickBackground();
+        this.Move();  // 必须移动实际鼠标（前台通道）
+        InputHub.Background.Mouse.LeftButtonClick(); // 后台通道点击
         Thread.Sleep(10);
         DesktopRegion.DesktopRegionMove(p.X, p.Y); // 鼠标移动回原来位置
     }
@@ -209,136 +213,92 @@ public class Region : IDisposable
     /// <summary>
     /// 直接在遮罩窗口绘制【自己】
     /// </summary>
-    /// <param name="name"></param>
-    /// <param name="pen"></param>
+    /// <param name="name">绘制分组名</param>
+    /// <param name="pen">线条样式，为空时使用默认样式</param>
     public void DrawSelf(string name, Pen? pen = null)
     {
         // 相对自己是 0, 0 坐标
         DrawRect(0, 0, Width, Height, name, pen);
     }
 
-    public void DrawSelf(string name, RegionDrawColor color)
-    {
-#if BGI_FULL_WINDOWS
-        DrawSelf(name, color switch
-        {
-            RegionDrawColor.White => Pens.White,
-            RegionDrawColor.LightPink => Pens.LightPink,
-            _ => null,
-        });
-#else
-        DrawSelf(name);
-#endif
-    }
+    public void DrawSelf(string name, RegionDrawColor color) =>
+        DrawRect(new Rect(0, 0, Width, Height), name, color);
 
     /// <summary>
     /// 直接在遮罩窗口绘制当前区域下的【指定区域】
     /// </summary>
-    /// <param name="x"></param>
-    /// <param name="y"></param>
-    /// <param name="w"></param>
-    /// <param name="h"></param>
-    /// <param name="name"></param>
-    /// <param name="pen"></param>
     public void DrawRect(int x, int y, int w, int h, string name, Pen? pen = null)
     {
-#if BGI_FULL_WINDOWS
-        var drawable = ToRectDrawable(x, y, w, h, name, pen);
-        VisionContext.Instance().DrawContent.PutRect(name, drawable);
-#else
-        drawContent.SetRectangles(name, this, [new Rect(x, y, w, h)]);
-#endif
+        if (ReferenceEquals(DrawingBoard, NullMaskWindowDrawingBoard.Instance)) return;
+        DrawingBoard.Set(name, ToMaskWindowDrawingRect(x, y, w, h, pen));
     }
 
     public void DrawRect(Rect rect, string name, Pen? pen = null)
     {
-#if BGI_FULL_WINDOWS
-        var drawable = ToRectDrawable(rect.X, rect.Y, rect.Width, rect.Height, name, pen);
-        VisionContext.Instance().DrawContent.PutRect(name, drawable);
-#else
-        drawContent.SetRectangles(name, this, [rect]);
-#endif
+        if (ReferenceEquals(DrawingBoard, NullMaskWindowDrawingBoard.Instance)) return;
+        DrawingBoard.Set(name, ToMaskWindowDrawingRect(rect.X, rect.Y, rect.Width, rect.Height, pen));
     }
 
-    public void DrawRect(Rect rect, string name, RegionDrawColor color)
-    {
-#if BGI_FULL_WINDOWS
-        DrawRect(rect, name, color switch
-        {
-            RegionDrawColor.White => Pens.White,
-            RegionDrawColor.LightPink => Pens.LightPink,
-            _ => null,
-        });
-#else
-        DrawRect(rect, name);
-#endif
-    }
-
-#if BGI_FULL_WINDOWS
     /// <summary>
     /// 转换【自己】到遮罩窗口绘制矩形
     /// </summary>
-    /// <param name="name"></param>
-    /// <param name="pen"></param>
-    /// <returns></returns>
-    public RectDrawable SelfToRectDrawable(string name, Pen? pen = null)
+    public MaskWindowDrawingRect SelfToMaskWindowDrawingRect(Pen? pen = null)
     {
         // 相对自己是 0, 0 坐标
-        return ToRectDrawable(0, 0, Width, Height, name, pen);
+        return ToMaskWindowDrawingRect(0, 0, Width, Height, pen);
     }
 
     /// <summary>
     /// 转换【指定区域】到遮罩窗口绘制矩形
     /// </summary>
-    /// <param name="rect"></param>
-    /// <param name="name"></param>
-    /// <param name="pen"></param>
-    /// <returns></returns>
-    public RectDrawable ToRectDrawable(Rect rect, string name, Pen? pen = null)
+    public MaskWindowDrawingRect ToMaskWindowDrawingRect(Rect rect, Pen? pen = null)
     {
-        return ToRectDrawable(rect.X, rect.Y, rect.Width, rect.Height, name, pen);
+        return ToMaskWindowDrawingRect(rect.X, rect.Y, rect.Width, rect.Height, pen);
     }
 
     /// <summary>
-    /// 转换【指定区域】到遮罩窗口绘制矩形
+    /// 转换【指定区域】到遮罩窗口绘制矩形，坐标为游戏捕获区域的物理像素
     /// </summary>
-    /// <param name="x"></param>
-    /// <param name="y"></param>
-    /// <param name="w"></param>
-    /// <param name="h"></param>
-    /// <param name="name"></param>
-    /// <param name="pen"></param>
-    /// <returns></returns>
-    /// <exception cref="Exception"></exception>
-    public RectDrawable ToRectDrawable(int x, int y, int w, int h, string name, Pen? pen = null)
+    /// <exception cref="Exception">当前区域不在游戏捕获区域树下</exception>
+    public MaskWindowDrawingRect ToMaskWindowDrawingRect(int x, int y, int w, int h, Pen? pen = null)
     {
         var res = ConvertRes<GameCaptureRegion>.ConvertPositionToTargetRegion(x, y, w, h, this);
-        return res.TargetRegion.ConvertToRectDrawable(res.X, res.Y, res.Width, res.Height, pen, name);
+        return new MaskWindowDrawingRect(
+            new MaskRect(res.X, res.Y, res.Width, res.Height),
+            MaskWindowDrawingStroke.FromPen(pen));
     }
 
     /// <summary>
-    /// 转换【指定直线】到遮罩窗口绘制直线
+    /// 转换【指定直线】到遮罩窗口绘制直线，坐标为游戏捕获区域的物理像素
     /// </summary>
-    /// <param name="x1"></param>
-    /// <param name="y1"></param>
-    /// <param name="x2"></param>
-    /// <param name="y2"></param>
-    /// <param name="name"></param>
-    /// <param name="pen"></param>
-    /// <returns></returns>
-    public LineDrawable ToLineDrawable(int x1, int y1, int x2, int y2, string name, Pen? pen = null)
+    public MaskWindowDrawingLine ToMaskWindowDrawingLine(int x1, int y1, int x2, int y2, Pen? pen = null)
     {
         var res1 = ConvertRes<GameCaptureRegion>.ConvertPositionToTargetRegion(x1, y1, 0, 0, this);
         var res2 = ConvertRes<GameCaptureRegion>.ConvertPositionToTargetRegion(x2, y2, 0, 0, this);
-        return res1.TargetRegion.ConvertToLineDrawable(res1.X, res1.Y, res2.X, res2.Y, pen, name);
+        return new MaskWindowDrawingLine(
+            new MaskPoint(res1.X, res1.Y),
+            new MaskPoint(res2.X, res2.Y),
+            MaskWindowDrawingStroke.FromPen(pen));
     }
 
     public void DrawLine(int x1, int y1, int x2, int y2, string name, Pen? pen = null)
     {
-        var drawable = ToLineDrawable(x1, y1, x2, y2, name, pen);
-        VisionContext.Instance().DrawContent.PutLine(name, drawable);
+        if (ReferenceEquals(DrawingBoard, NullMaskWindowDrawingBoard.Instance)) return;
+        DrawingBoard.Set(name, ToMaskWindowDrawingLine(x1, y1, x2, y2, pen));
     }
-#endif
+
+    public void DrawRect(Rect rect, string name, RegionDrawColor color)
+    {
+        if (ReferenceEquals(DrawingBoard, NullMaskWindowDrawingBoard.Instance)) return;
+        var shape = ToMaskWindowDrawingRect(rect);
+        var stroke = color switch
+        {
+            RegionDrawColor.White => MaskWindowDrawingStroke.FromColor(Color.White),
+            RegionDrawColor.LightPink => MaskWindowDrawingStroke.FromColor(Color.LightPink),
+            _ => shape.Stroke,
+        };
+        DrawingBoard.Set(name, shape with { Stroke = stroke });
+    }
 
     public Rect ConvertSelfPositionToGameCaptureRegion()
     {
@@ -427,7 +387,7 @@ public class Region : IDisposable
     /// <returns></returns>
     public Region Derive(int x, int y, int w, int h)
     {
-        return new Region(x, y, w, h, this, new TranslationConverter(x, y), this.drawContent);
+        return new Region(x, y, w, h, this, new TranslationConverter(x, y), DrawingBoard);
     }
 
     public Region Derive(Rect rect)

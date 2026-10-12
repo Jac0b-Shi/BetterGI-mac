@@ -212,6 +212,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
     private static object Describe(AutoComboBuildConfig config) => new
     {
         name = "AutoCombo",
+        provider = AutoComboLlmProvider.Normalize(config.Provider),
         planningLlmEndpoint = config.PlanningLlmEndpoint,
         modelName = config.ModelName,
         apiKey = config.ApiKey,
@@ -219,8 +220,17 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         extraPrompt = config.ExtraPrompt,
     };
 
+    public async Task<object> FetchAutoComboModelsAsync(JObject settings, CancellationToken ct)
+    {
+        var models = await AutoComboModelListFetcher.FetchAsync(
+            settings["provider"]?.Value<string>() ?? AutoComboLlmProvider.Default,
+            RequiredString(settings, "planningLlmEndpoint"), RequiredString(settings, "apiKey"), ct);
+        return new { models };
+    }
+
     private object SaveAutoCombo(JObject settings)
     {
+        var provider = AutoComboLlmProvider.Normalize(settings["provider"]?.Value<string>());
         var endpoint = RequiredString(settings, "planningLlmEndpoint").Trim();
         if (endpoint.Length > 0 &&
             (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) ||
@@ -232,6 +242,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         {
             var root = LoadRoot();
             var section = root["autoComboBuildConfig"] as JsonObject ?? [];
+            section["provider"] = provider;
             section["planningLlmEndpoint"] = endpoint;
             section["modelName"] = RequiredString(settings, "modelName").Trim();
             section["apiKey"] = RequiredString(settings, "apiKey");

@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Only an assembly-scoped community license may be committed here. -->
+    <SixLaborsLicenseFile Condition="'$(SixLaborsLicenseFile)' == ''">$(MSBuildThisFileDirectory)../licenses/sixlabors-BetterGenshinImpact.Core.lic</SixLaborsLicenseFile>
     <!-- CsTrees.SourceGenerator currently targets a newer compiler than this project. -->
     <NoWarn>$(NoWarn);CS9057</NoWarn>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -32,7 +34,7 @@
     <PackageReference Include="System.Drawing.Common" Version="10.0.9" />
     <PackageReference Include="System.Collections.Immutable" Version="10.0.7" />
     <PackageReference Include="System.IO.Packaging" Version="9.0.4" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="4.1.3" />
     <PackageReference Include="MailKit" Version="4.16.0" />
     <PackageReference Include="MimeKit" Version="4.16.0" />
     <PackageReference Include="Semver" Version="3.0.0" />
@@ -41,6 +43,7 @@
     <PackageReference Include="CsTrees.MEAI" Version="1.0.2" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.6.0" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.6.0" />
+    <PackageReference Include="Anthropic" Version="12.53.0" />
     <PackageReference Include="NCalc" Version="6.2.0" />
     <PackageReference Include="HungarianAlgorithm" Version="2.3.5" />
     <PackageReference Include="LazyCache" Version="2.4.0" />
@@ -54,6 +57,27 @@
   <ItemGroup>
     <InternalsVisibleTo Include="BetterGenshinImpact.Core.Verification" />
     <InternalsVisibleTo Include="BetterGenshinImpact.Core.Host.Fast.Verification" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../BetterGenshinImpact/Core/Input/InputHub.cs" Link="Core/Input/InputHub.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Input/IInputBackend.cs" Link="Core/Input/IInputBackend.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Input/IInputChannel.cs" Link="Core/Input/IInputChannel.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Input/IKeyboardInput.cs" Link="Core/Input/IKeyboardInput.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Input/IMouseInput.cs" Link="Core/Input/IMouseInput.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Input/InputChannelBase.cs" Link="Core/Input/InputChannelBase.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Input/InputEnums.cs" Link="Core/Input/InputEnums.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Input/Backends/Mac/MacTaskControlInputBackend.cs" Link="Core/Input/Backends/Mac/MacTaskControlInputBackend.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Mask/IMaskWindowDrawingBoard.cs" Link="Core/Mask/IMaskWindowDrawingBoard.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Mask/IMaskWindowSnapshotSource.cs" Link="Core/Mask/IMaskWindowSnapshotSource.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Mask/NullMaskWindowDrawingBoard.cs" Link="Core/Mask/NullMaskWindowDrawingBoard.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Mask/MaskWindowDrawingBoard.cs" Link="Core/Mask/MaskWindowDrawingBoard.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Mask/MaskWindowDrawingModels.cs" Link="Core/Mask/MaskWindowDrawingModels.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Mask/MaskWindowDrawingConversions.cs" Link="Core/Mask/MaskWindowDrawingConversions.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Mask/MaskColorHelper.cs" Link="Core/Mask/MaskColorHelper.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Mask/MaskGeometry.cs" Link="Core/Mask/MaskGeometry.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Mask/MaskWindowDrawingPlatform.cs" Link="Core/Mask/MaskWindowDrawingPlatform.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Runtime/GameRuntimeKind.cs" Link="GameTask/Runtime/GameRuntimeKind.cs" />
   </ItemGroup>
 
   <!-- ==================== LINKED: upstream business logic ==================== -->
@@ -548,6 +572,10 @@
     <Compile Include="../BetterGenshinImpact/Service/Notifier/Interface/INotifier.cs" Link="Service/Notifier/Interface/INotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/NotifierManager.cs" Link="Service/Notifier/NotifierManager.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/BarkNotifier.cs" Link="Service/Notifier/BarkNotifier.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Notifier/DiscordBotTarget.cs" Link="Service/Notifier/DiscordBotTarget.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Notifier/DiscordBotApiClient.cs" Link="Service/Notifier/DiscordBotApiClient.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Notifier/DiscordNotificationModes.cs" Link="Service/Notifier/DiscordNotificationModes.cs" />
+    <Compile Include="../BetterGenshinImpact/Service/Notifier/DiscordBotNotifier.cs" Link="Service/Notifier/DiscordBotNotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/DiscordWebhookNotifier.cs" Link="Service/Notifier/DiscordWebhookNotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/EmailNotifier.cs" Link="Service/Notifier/EmailNotifier.cs" />
     <Compile Include="../BetterGenshinImpact/Service/Notifier/FeishuNotifier.cs" Link="Service/Notifier/FeishuNotifier.cs" />

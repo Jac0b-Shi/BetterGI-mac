@@ -16,6 +16,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.RegularExpressions;
 using BetterGenshinImpact.Core.Host.Transport;
 
+var drawingBoard = new BetterGenshinImpact.Core.Mask.MaskWindowDrawingBoard();
+BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Configure(drawingBoard);
 var root = args.Length == 1
     ? Path.GetFullPath(args[0])
     : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "betterGI-mac");

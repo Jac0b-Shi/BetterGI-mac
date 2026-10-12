@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition;
 using System;
@@ -16,11 +17,12 @@ namespace BetterGenshinImpact.GameTask.GameLoading;
 
 public class GameLoadingTrigger : ITaskTrigger
 {
-    public static bool GlobalEnabled = true;
-    
     public string Name => "自动开门";
 
-    public bool IsEnabled { get => GlobalEnabled; set {} }
+    /// <summary>
+    /// 开启了自动进入游戏，并且本次截图会话中还没有完成（进入主界面或超过 5 分钟后自停）
+    /// </summary>
+    public bool IsEnabledByConfig => _config.AutoEnterGameEnabled && !_finished;
 
     public int Priority => 999;
 
@@ -42,13 +44,15 @@ public class GameLoadingTrigger : ITaskTrigger
 
     private DateTime _prevExecuteTime = DateTime.MinValue;
 
-    private DateTime _triggerStartTime = DateTime.Now;
+    /// <summary>
+    /// 实例在启动截图器时创建，5 分钟计时从这里开始
+    /// </summary>
+    private readonly DateTime _triggerStartTime = DateTime.Now;
 
-    private string GameServer = "";
-
-    private string channelValue = "";
-
-    private string FileName = "";
+    /// <summary>
+    /// 已经进入游戏或超时，本次截图会话内不再运行
+    /// </summary>
+    private volatile bool _finished;
 
     private bool biliLoginClicked = false;
     private DateTime _prevAgePromptOcrTime = DateTime.MinValue;
@@ -60,91 +64,6 @@ public class GameLoadingTrigger : ITaskTrigger
         _config = _runtime.Config;
         _logger = _runtime.Logger;
     }
-
-    public void InnerSetEnabled(bool enabled)
-    {
-        GlobalEnabled = enabled;
-    }
-
-    public void Init()
-    {
-        if (!_config.AutoEnterGameEnabled)
-        {
-            InnerSetEnabled(false);
-        }
-
-        // // 前面没有联动启动原神，这个任务也不用启动
-        // if ((DateTime.Now - TaskContext.Instance().LinkedStartGenshinTime).TotalMinutes >= 5)
-        // {
-        //     IsEnabled = false;
-        // }
-        if (_config.RecordGameTimeEnabled)
-        {
-            FileName = Path.GetFileName(_config.InstallPath);
-            if (FileName == "GenshinImpact.exe")
-            {
-                GameServer = "hk4e_global";
-                StartStarward();
-            }
-
-            if (FileName == "YuanShen.exe")
-            {
-                string iniPath = Path.GetDirectoryName(_config.InstallPath) + "//config.ini";
-                string iniContent;
-                string pattern = @"
-            ^\s*\[General\]\s*$
-            (?:(?!\[).|\r?\n)*
-            ^\s*channel=(\S+)
-        ";
-
-                try
-                {
-                    iniContent = File.ReadAllText(iniPath);
-                    Regex regex = new Regex(pattern,
-                        RegexOptions.Multiline | RegexOptions.IgnorePatternWhitespace | RegexOptions.IgnoreCase);
-                    Match match = regex.Match(iniContent);
-                    channelValue = match.Success ? match.Groups[1].Value : "";
-                }
-                catch (Exception e)
-                {
-                    _logger.LogDebug(e, "读取游戏区服配置失败");
-                }
-
-                // channelValue = 1 ： 官服
-                // channelValue = 14 ： B服
-                if (channelValue == "1")
-                {
-                    GameServer = "hk4e_cn";
-                    StartStarward();
-                }
-
-                if (channelValue == "14")
-                {
-                    GameServer = "hk4e_bilibili";
-                    StartStarward();
-                }
-
-
-                _logger.LogDebug("[GameLoading] 从文件读取到游戏区服：{GameServer}", GameServer);
-                // 这里注册表的优先级要比读取文件低，因为使用starward安装原神不会写入注册表
-                if (GameServer == null)
-                {
-                    GameServer = _runtime.GetInstalledGameServer();
-                    _logger.LogDebug("[GameLoading] 从平台读取到游戏区服：{GameServer}", GameServer);
-                    StartStarward();
-                }
-            }
-        }
-    }
-
-    public bool StartStarward()
-        => _runtime.TryStartPlaytimeTracking(GameServer);
-
-    public string GetGameServerRegistry()
-        => _runtime.GetInstalledGameServer();
-
-    public bool IsStarwardProtocolRegistered()
-        => _runtime.IsPlaytimeTrackingAvailable();
 
     public void OnCapture(CaptureContent content)
     {
@@ -158,7 +77,7 @@ public class GameLoadingTrigger : ITaskTrigger
         // 5min 后自动停止
         if ((DateTime.Now - _triggerStartTime).TotalMinutes >= 5)
         {
-            InnerSetEnabled(false);
+            _finished = true;
             return;
         }
         
@@ -166,7 +85,7 @@ public class GameLoadingTrigger : ITaskTrigger
         if (Bv.IsInMainUi(content.CaptureRectArea) || Bv.IsInAnyClosableUi(content.CaptureRectArea) || Bv.IsInDomain(content.CaptureRectArea))
         {
             // _logger.LogInformation("当前在游戏主界面");
-            InnerSetEnabled(false);
+            _finished = true;
             return;
         }
 

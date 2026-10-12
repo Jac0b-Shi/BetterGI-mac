@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Simulator.Extensions;
@@ -5,6 +6,9 @@ using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.Model.Area;
+#if !BGI_PLATFORM_MAC
+using BetterGenshinImpact.Genshin.Settings;
+#endif
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -122,7 +126,7 @@ public partial class AutoWoodTask : ISoloTask
                 }
 
                 await Felling(_taskParam, i + 1 == _taskParam.WoodRoundNum);
-                BetterGenshinImpact.Core.Recognition.OverlayDrawPlatform.Current.ClearAll();
+            BetterGenshinImpact.Core.Mask.MaskWindowDrawingPlatform.Current.ClearAll();
                 Sleep(500, _ct);
             }
         }

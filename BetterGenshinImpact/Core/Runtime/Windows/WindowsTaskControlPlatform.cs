@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.Core.Config;
@@ -22,6 +23,12 @@ public sealed class WindowsTaskControlPlatform : ITaskControlPlatform
 
     public void EnsureGameActive()
     {
+        var window = TaskContext.Instance().Runtime?.Window;
+        if (window is { RequiresForeground: false })
+        {
+            if (window.IsMinimized) window.Activate();
+            return;
+        }
         if (!TaskContext.Instance().Config.OtherConfig.RestoreFocusOnLostEnabled &&
             !SystemControl.IsGenshinImpactActiveByProcess())
         {
@@ -51,42 +58,43 @@ public sealed class WindowsTaskControlPlatform : ITaskControlPlatform
 
     public void ReleasePressedInputs()
     {
-        foreach (User32.VK key in Enum.GetValues(typeof(User32.VK)))
-        {
-            if ((User32.GetAsyncKeyState((int)key) & 0x8000) == 0) continue;
-            Logger.LogWarning("解除{Key}的按下状态.", key);
-            Simulation.SendInput.Keyboard.KeyUp(key);
-        }
+        InputHub.ReleaseAll();
     }
 
     public void SimulateAction(GIActions action, KeyType keyType) =>
-        Simulation.SendInput.SimulateAction(action, keyType);
+        InputHub.Foreground.SimulateAction(action, keyType);
     public bool IsActionKeyDown(GIActions action) =>
-        Simulation.IsKeyDown(action.ToActionKey().ToVK());
-    public void MoveMouseBy(int x, int y) => Simulation.SendInput.Mouse.MoveMouseBy(x, y);
-    public void LeftButtonDown() => Simulation.SendInput.Mouse.LeftButtonDown();
-    public void LeftButtonUp() => Simulation.SendInput.Mouse.LeftButtonUp();
-    public void LeftButtonClick() => Simulation.SendInput.Mouse.LeftButtonClick();
-    public void RightButtonDown() => Simulation.SendInput.Mouse.RightButtonDown();
-    public void RightButtonUp() => Simulation.SendInput.Mouse.RightButtonUp();
-    public void RightButtonClick() => Simulation.SendInput.Mouse.RightButtonClick();
-    public void MiddleButtonDown() => Simulation.SendInput.Mouse.MiddleButtonDown();
-    public void MiddleButtonUp() => Simulation.SendInput.Mouse.MiddleButtonUp();
-    public void MiddleButtonClick() => Simulation.SendInput.Mouse.MiddleButtonClick();
+        InputHub.Foreground.IsKeyDown(action.ToActionKey().ToVK());
+    public void MoveMouseBy(int x, int y) => InputHub.Foreground.Mouse.MoveMouseBy(x, y);
+    public void LeftButtonDown() => InputHub.Foreground.Mouse.LeftButtonDown();
+    public void LeftButtonUp() => InputHub.Foreground.Mouse.LeftButtonUp();
+    public void LeftButtonClick() => InputHub.Foreground.Mouse.LeftButtonClick();
+    public void RightButtonDown() => InputHub.Foreground.Mouse.RightButtonDown();
+    public void RightButtonUp() => InputHub.Foreground.Mouse.RightButtonUp();
+    public void RightButtonClick() => InputHub.Foreground.Mouse.RightButtonClick();
+    public void MiddleButtonDown() => InputHub.Foreground.Mouse.MiddleButtonDown();
+    public void MiddleButtonUp() => InputHub.Foreground.Mouse.MiddleButtonUp();
+    public void MiddleButtonClick() => InputHub.Foreground.Mouse.MiddleButtonClick();
     public void VerticalScroll(int scrollAmountInClicks) =>
-        Simulation.SendInput.Mouse.VerticalScroll(scrollAmountInClicks);
+        InputHub.Foreground.Mouse.VerticalScroll(scrollAmountInClicks);
     public void KeyDown(int windowsVirtualKey) =>
-        Simulation.SendInput.Keyboard.KeyDown((User32.VK)windowsVirtualKey);
+        InputHub.Foreground.Keyboard.KeyDown((User32.VK)windowsVirtualKey);
     public void KeyUp(int windowsVirtualKey) =>
-        Simulation.SendInput.Keyboard.KeyUp((User32.VK)windowsVirtualKey);
+        InputHub.Foreground.Keyboard.KeyUp((User32.VK)windowsVirtualKey);
     public void PressKey(int windowsVirtualKey) =>
-        Simulation.SendInput.Keyboard.KeyPress((User32.VK)windowsVirtualKey);
-    public void InputText(string text) => Simulation.SendInput.Keyboard.TextEntry(text);
-    public void PressEscape() => Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+        InputHub.Foreground.Keyboard.KeyPress((User32.VK)windowsVirtualKey);
+    public void InputText(string text)
+    {
+        BetterGenshinImpact.Helpers.UIDispatcherHelper.Invoke(() => System.Windows.Clipboard.SetDataObject(text));
+        InputHub.Foreground.Keyboard.KeyDown(User32.VK.VK_CONTROL);
+        try { Thread.Sleep(50); InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_V); Thread.Sleep(50); }
+        finally { InputHub.Foreground.Keyboard.KeyUp(User32.VK.VK_CONTROL); }
+    }
+    public void PressEscape() => InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
 
     public ImageRegion CaptureToRectArea(bool forceNew)
     {
-        var image = TaskControl.CaptureGameImage(TaskTriggerDispatcher.GlobalGameCapture);
+        var image = TaskControl.CaptureGameImage(TaskContext.Instance().Runtime?.Capture);
         var content = new CaptureContent(image, 0, 0);
         return content.CaptureRectArea;
     }

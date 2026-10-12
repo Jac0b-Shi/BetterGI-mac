@@ -1412,6 +1412,8 @@ private struct NotificationChannelCard: View {
     @ViewBuilder
     private func fieldControl(_ field: BetterGINotificationField) -> some View {
         switch field.value {
+        case .targets(let value):
+            DiscordTargetsEditor(targets: value) { save(field, value: .targets($0)) }
         case .boolean(let value):
             Toggle(
                 "",
@@ -1491,5 +1493,56 @@ private struct NotificationChannelCard: View {
         case "discord": "bubble.left.and.bubble.right"
         default: "link"
         }
+    }
+}
+
+
+private struct DiscordTargetsEditor: View {
+    let targets: [BetterGIDiscordTarget]
+    let onSave: ([BetterGIDiscordTarget]) -> Void
+    @State private var showing = false
+    var body: some View {
+        Button("管理目标（\(targets.count)）") { showing = true }
+            .sheet(isPresented: $showing) {
+                DiscordTargetsForm(targets: targets) { onSave($0); showing = false }
+            }
+    }
+}
+
+private struct DiscordTargetsForm: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft: [BetterGIDiscordTarget]
+    let onSave: ([BetterGIDiscordTarget]) -> Void
+    init(targets: [BetterGIDiscordTarget], onSave: @escaping ([BetterGIDiscordTarget]) -> Void) {
+        _draft = State(initialValue: targets)
+        self.onSave = onSave
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Discord Bot 推送目标").font(.headline)
+            Text("频道 ID 或用户 ID 可在 Discord 开发者模式中复制。").foregroundStyle(.secondary)
+            ScrollView {
+                ForEach(draft.indices, id: \.self) { index in
+                    VStack(alignment: .leading) {
+                        HStack {
+                            Picker("目标类型", selection: $draft[index].type) {
+                                Text("频道").tag("Channel")
+                                Text("用户私信").tag("DirectMessage")
+                            }
+                            Button("移除") { draft.remove(at: index) }
+                        }
+                        TextField("频道或用户 ID", text: $draft[index].id)
+                        TextField("显示名称", text: $draft[index].displayName)
+                    }.textFieldStyle(.roundedBorder).padding(.bottom, 8)
+                }
+            }.frame(minHeight: 120, maxHeight: 360)
+            HStack {
+                Button("添加目标") { draft.append(BetterGIDiscordTarget()) }
+                Spacer()
+                Button("取消") { dismiss() }
+                Button("保存") { onSave(draft) }
+                    .disabled(draft.contains { UInt64($0.id) == nil || UInt64($0.id) == 0 })
+            }
+        }.padding(20).frame(width: 500)
     }
 }

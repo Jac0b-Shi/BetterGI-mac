@@ -24,5 +24,6 @@ public interface IAutoDomainRuntimePlatform
     BgiYoloPredictor CreateTreePredictor();
     void DrawCameraDirection(ImageRegion region, double angle);
     void AddAutoEatTrigger();
+    System.IDisposable? AddAutoEatTriggerLease() { AddAutoEatTrigger(); return null; }
     void Notify(AutoDomainNotification notification, string message);
 }

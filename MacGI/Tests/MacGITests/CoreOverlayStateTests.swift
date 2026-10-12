@@ -27,6 +27,36 @@ struct CoreOverlayStateTests {
         #expect(state.allTexts.isEmpty)
     }
 
+    @Test("Drawing snapshots replace groups and reject malformed updates atomically")
+    func drawingSnapshots() throws {
+        var state = CoreOverlayState()
+        try state.apply(parameters: [
+            "name": "MaskWindowDrawing", "operation": "setDrawingSnapshot", "version": 1,
+            "groups": [["name": "cooldown", "kind": "Feature", "shapes": [
+                ["type": "line", "x": 10, "y": 20, "x2": 30, "y2": 40, "color": "#FFFF0000"],
+                ["type": "text", "x": 10, "y": 20, "text": "4.2", "numeric": true]
+            ]]]
+        ])
+        #expect(state.drawingShapes.count == 2)
+        #expect(state.drawingShapes.allSatisfy { $0.isFeature })
+        #expect(state.drawingShapes.first?.end == CGPoint(x: 30, y: 40))
+        let previous = state
+        do {
+            try state.apply(parameters: [
+                "name": "MaskWindowDrawing", "operation": "setDrawingSnapshot", "version": 2,
+                "groups": [["name": "invalid", "kind": "invalid", "shapes": []]]
+            ])
+            Issue.record("Malformed drawing snapshot was accepted")
+        } catch {
+            #expect(state == previous)
+        }
+        try state.apply(parameters: [
+            "name": "MaskWindowDrawing", "operation": "setDrawingSnapshot", "version": 3, "groups": []
+        ])
+        #expect(state.drawingShapes.isEmpty)
+        #expect(state.drawingVersion == 3)
+    }
+
     @Test("Map viewport updates independently from point data")
     func mapViewportUpdatesIndependently() throws {
         var state = CoreOverlayState()

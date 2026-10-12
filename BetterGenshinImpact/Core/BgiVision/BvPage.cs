@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 #if !BGI_PLATFORM_MAC
 using BetterGenshinImpact.Core.Simulator;
@@ -12,6 +13,7 @@ using Fischless.WindowsInput;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
+using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 
 namespace BetterGenshinImpact.Core.BgiVision;
@@ -22,12 +24,10 @@ public class BvPage
 
 #if BGI_PLATFORM_MAC
     public BvKeyboard Keyboard { get; } = new();
-
     public BvMouse Mouse { get; } = new();
 #else
-    public IKeyboardSimulator Keyboard => Simulation.SendInput.Keyboard;
-
-    public IMouseSimulator Mouse => Simulation.SendInput.Mouse;
+    public IKeyboardInput Keyboard => InputHub.Foreground.Keyboard;
+    public IMouseInput Mouse => InputHub.Foreground.Mouse;
 #endif
 
     /// <summary>
@@ -190,21 +190,23 @@ public sealed class BvKeyboard
 {
     public BvKeyboard KeyDown(int windowsVirtualKey)
     {
-        TaskControlPlatform.Current.KeyDown(windowsVirtualKey);
+        InputHub.Foreground.Keyboard.KeyDown(windowsVirtualKey);
         return this;
     }
 
     public BvKeyboard KeyUp(int windowsVirtualKey)
     {
-        TaskControlPlatform.Current.KeyUp(windowsVirtualKey);
+        InputHub.Foreground.Keyboard.KeyUp(windowsVirtualKey);
         return this;
     }
 
     public BvKeyboard KeyPress(int windowsVirtualKey)
     {
-        TaskControlPlatform.Current.PressKey(windowsVirtualKey);
+        InputHub.Foreground.Keyboard.KeyPress(windowsVirtualKey);
         return this;
     }
+
+    public BvKeyboard Sleep(int milliseconds) { InputHub.Foreground.Keyboard.Sleep(milliseconds); return this; }
 
     public BvKeyboard TextEntry(string text)
     {
@@ -217,23 +219,29 @@ public sealed class BvMouse
 {
     public BvMouse MoveMouseBy(int x, int y)
     {
-        TaskControlPlatform.Current.MoveMouseBy(x, y);
+        InputHub.Foreground.Mouse.MoveMouseBy(x, y);
         return this;
     }
 
-    public BvMouse LeftButtonDown() { TaskControlPlatform.Current.LeftButtonDown(); return this; }
-    public BvMouse LeftButtonUp() { TaskControlPlatform.Current.LeftButtonUp(); return this; }
-    public BvMouse LeftButtonClick() { TaskControlPlatform.Current.LeftButtonClick(); return this; }
-    public BvMouse RightButtonDown() { TaskControlPlatform.Current.RightButtonDown(); return this; }
-    public BvMouse RightButtonUp() { TaskControlPlatform.Current.RightButtonUp(); return this; }
-    public BvMouse RightButtonClick() { TaskControlPlatform.Current.RightButtonClick(); return this; }
-    public BvMouse MiddleButtonDown() { TaskControlPlatform.Current.MiddleButtonDown(); return this; }
-    public BvMouse MiddleButtonUp() { TaskControlPlatform.Current.MiddleButtonUp(); return this; }
-    public BvMouse MiddleButtonClick() { TaskControlPlatform.Current.MiddleButtonClick(); return this; }
+    public BvMouse LeftButtonDown() { InputHub.Foreground.Mouse.LeftButtonDown(); return this; }
+    public BvMouse LeftButtonUp() { InputHub.Foreground.Mouse.LeftButtonUp(); return this; }
+    public BvMouse LeftButtonClick() { InputHub.Foreground.Mouse.LeftButtonClick(); return this; }
+    public BvMouse RightButtonDown() { InputHub.Foreground.Mouse.RightButtonDown(); return this; }
+    public BvMouse RightButtonUp() { InputHub.Foreground.Mouse.RightButtonUp(); return this; }
+    public BvMouse RightButtonClick() { InputHub.Foreground.Mouse.RightButtonClick(); return this; }
+    public BvMouse MiddleButtonDown() { InputHub.Foreground.Mouse.MiddleButtonDown(); return this; }
+    public BvMouse MiddleButtonUp() { InputHub.Foreground.Mouse.MiddleButtonUp(); return this; }
+    public BvMouse MiddleButtonClick() { InputHub.Foreground.Mouse.MiddleButtonClick(); return this; }
+
+    public BvMouse MoveMouseTo(double x, double y) { InputHub.Foreground.Mouse.MoveMouseTo(x, y); return this; }
+    public BvMouse Sleep(int milliseconds) { InputHub.Foreground.Mouse.Sleep(milliseconds); return this; }
+    public BvMouse XButtonDown(int buttonId) { InputHub.Foreground.Mouse.XButtonDown(buttonId); return this; }
+    public BvMouse XButtonUp(int buttonId) { InputHub.Foreground.Mouse.XButtonUp(buttonId); return this; }
+    public BvMouse XButtonClick(int buttonId) { InputHub.Foreground.Mouse.XButtonClick(buttonId); return this; }
 
     public BvMouse VerticalScroll(int scrollAmountInClicks)
     {
-        TaskControlPlatform.Current.VerticalScroll(scrollAmountInClicks);
+        InputHub.Foreground.Mouse.VerticalScroll(scrollAmountInClicks);
         return this;
     }
 }
