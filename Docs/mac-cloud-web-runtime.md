@@ -7,6 +7,7 @@
 ## 平台边界
 
 - C# Core 继续执行现有触发器、脚本与任务；Swift 提供宿主、截图、输入回调。
+- 被动触发器的按键查询合并 SDK 注入集合和游戏窗口处于前台时的系统按键状态；释放仍只处理 SDK 注入集合。
 - `CloudWebInputDispatcher` 发送上游 `__ysInputInject` / ClientCore 数据包，不发送模拟 DOM `KeyboardEvent`，不调用 Wine 或全局 CGEvent。
 - `Region` 使用实际 video 内容区域。ScreenCaptureKit 捕获无边框窗口后显式裁剪 CSS 留白；窗口的有效像素比例与 SCK 的 1920px 宽度上限一致。云宿主不使用像素比例不一致的 Quartz 回退。
 - Web SDK 在 `.page` 内容世界注入，仅供国服官方 HTTPS cloud 页面使用。SDK 未就绪、断流、导航、网页进程退出或输入确认超时均禁用自动化。

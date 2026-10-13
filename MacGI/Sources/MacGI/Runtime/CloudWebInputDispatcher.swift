@@ -33,9 +33,20 @@ final class CloudWebInputDispatcher: InputDispatching, Sendable {
     func query(_ query: InputQuery, targetWindow: WindowInfo) throws -> Bool {
         guard targetWindow.id == windowID, !targetWindow.isSynthetic else { throw CloudWebInputError.unavailable }
         let status = try bridge.execute([])
+        // ClientCore's injected set omits real keyboard/mouse events. Existing passive
+        // triggers (e.g. SkillCd) need both, but physical state is scoped to this key window.
+        let frontmost = DispatchQueue.main.sync {
+            MainActor.assumeIsolated { ForegroundWindowGuard.isTargetFrontmost(targetWindow) }
+        }
+        let physical = frontmost ? try CGEventInputDispatcher().query(query, targetWindow: targetWindow) : false
         switch query {
-        case .key(let key): return (status["pressedKeys"] as? [String] ?? []).contains(Self.code(key))
-        case .mouseButton(let button): return (status["pressedButtons"] as? [String] ?? []).contains(try Self.button(button))
+        case .key(let key):
+            let injected = (status["pressedKeys"] as? [String] ?? []).contains(Self.code(key))
+            return injected || physical
+        case .mouseButton(let button):
+            let name = try? Self.button(button)
+            let injected = name.map { (status["pressedButtons"] as? [String] ?? []).contains($0) } ?? false
+            return injected || physical
         }
     }
 
