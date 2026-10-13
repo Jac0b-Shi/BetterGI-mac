@@ -13,29 +13,6 @@ struct OverviewPage: View {
         VStack(alignment: .leading, spacing: 14) {
             launchBanner
 
-            BGISettingGroup(icon: "cloud", title: "云原神（国服）", subtitle: appState.cloudGameStatus) {
-                Button(appState.cloudGameIsOpen ? "显示游戏窗口" : "打开云原神") {
-                    appState.openCloudGame()
-                }
-            } content: {
-                BGISettingLine(title: "内置游戏窗口", subtitle: "无标题栏、16:9；请在官方页面内完成登录与排队。国际服网页入口暂未接入。") {
-                    HStack {
-                        Button("用于自动化") { appState.selectCloudGame() }
-                            .disabled(!appState.cloudGameReady || appState.runtimeLifecycle.isTransitioning)
-                        Button("关闭") { appState.closeCloudGame() }
-                            .disabled(!appState.cloudGameIsOpen)
-                    }
-                }
-                BGISettingLine(title: "窗口大小", subtitle: "自动适配屏幕，截图只保留游戏视频区域。") {
-                    HStack {
-                        Button("960 × 540") { appState.resizeCloudGame(width: 960) }
-                        Button("1280 × 720") { appState.resizeCloudGame(width: 1280) }
-                    }
-                    .disabled(!appState.cloudGameIsOpen || appState.runtimeLifecycle.isTransitioning)
-                }
-            }
-
-
             BGISettingGroup(
                 icon: "lock.shield",
                 title: "macOS 权限",
@@ -168,6 +145,28 @@ struct OverviewPage: View {
                             })
                     )
                     .labelsHidden()
+                }
+            }
+
+            BGISettingGroup(icon: "cloud", title: "云原神（国服）", subtitle: appState.cloudGameStatus) {
+                Button(appState.cloudGameIsOpen ? "显示游戏窗口" : "打开云原神") {
+                    appState.openCloudGame()
+                }
+            } content: {
+                BGISettingLine(title: "内置游戏窗口", subtitle: "游戏内容保持 16:9，可拖动标题栏移动窗口；移动时会停止自动化。请在官方页面内登录与排队。") {
+                    HStack {
+                        Button("用于自动化") { appState.selectCloudGame() }
+                            .disabled(!appState.cloudGameReady || appState.runtimeLifecycle.isTransitioning)
+                        Button("关闭") { appState.closeCloudGame() }
+                            .disabled(!appState.cloudGameIsOpen)
+                    }
+                }
+                BGISettingLine(title: "窗口大小", subtitle: "自动适配屏幕，截图只保留游戏视频区域。") {
+                    HStack {
+                        Button("960 × 540") { appState.resizeCloudGame(width: 960) }
+                        Button("1280 × 720") { appState.resizeCloudGame(width: 1280) }
+                    }
+                    .disabled(!appState.cloudGameIsOpen || appState.runtimeLifecycle.isTransitioning)
                 }
             }
         }

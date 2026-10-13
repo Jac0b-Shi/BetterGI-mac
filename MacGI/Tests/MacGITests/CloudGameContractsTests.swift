@@ -20,6 +20,21 @@ struct CloudGameContractsTests {
         #expect(CloudGameGeometry.videoRect(["x": -1.0, "y": 0.0, "width": 1200.0, "height": 675.0], in: frame) == nil)
     }
 
+    @Test("Native title bar is excluded from video capture and click coordinates")
+    func titleBarGeometry() throws {
+        let frame = CGRect(x: -100, y: 200, width: 960, height: 568)
+        let content = CGRect(x: -100, y: 228, width: 960, height: 540)
+        let viewport = try #require(CloudGameGeometry.videoRect(
+            ["x": 0.0, "y": 0.0, "width": 960.0, "height": 540.0], in: content))
+        let window = WindowInfo(id: 7, ownerPID: 1, ownerName: "MacGI", title: "云原神", frame: frame,
+                                layer: 0, isOnScreen: true, scaleFactor: 2,
+                                contentRectOverride: viewport, isHostedCloud: true)
+        #expect(CloudGameGeometry.cropRect(imageSize: CGSize(width: 1920, height: 1136), window: window)
+                == CGRect(x: 0, y: 56, width: 1920, height: 1080))
+        #expect(try CloudGameGeometry.normalizedPoint(CGPoint(x: 380, y: 498), in: viewport)
+                == CGPoint(x: 0.5, y: 0.5))
+    }
+
     @Test("Holds use cancellable waits and releases, with no opaque SDK delayed key-up")
     func holdSequence() throws {
         let commands = try CloudWebInputDispatcher.commands(for: .keyHold(key: .f, durationMs: 500), viewport: .zero)

@@ -47,7 +47,7 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
 #endif
         let screen = NSScreen.main?.visibleFrame.size ?? CGSize(width: 1280, height: 800)
         let size = CloudGameGeometry.fittedWindowSize(CGSize(width: 1280, height: 720), visibleSize: screen)
-        window = CloudGameWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
+        window = CloudGameWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = "云原神（国服）"
         window.backgroundColor = .black
         window.hasShadow = false
@@ -98,7 +98,13 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
               let row = rows.first,
               let bounds = row[kCGWindowBounds as String] as? [String: Any],
               let frame = CGRect(dictionaryRepresentation: bounds as CFDictionary) else { return nil }
-        let crop = viewport.flatMap { CloudGameGeometry.videoRect($0, in: frame) }
+        // DOM coordinates start below the native title bar. Convert the actual web view
+        // bounds into the same top-left Quartz coordinates as the full captured window.
+        let contentOnScreen = window.convertToScreen(webView.convert(webView.bounds, to: nil))
+        let contentFrame = CGRect(x: frame.minX + contentOnScreen.minX - window.frame.minX,
+                                  y: frame.minY + window.frame.maxY - contentOnScreen.maxY,
+                                  width: contentOnScreen.width, height: contentOnScreen.height)
+        let crop = viewport.flatMap { CloudGameGeometry.videoRect($0, in: contentFrame) }
         // Match SCK's 1920px cap, rather than advertising the monitor's uncapped Retina scale.
         let scale = min(window.backingScaleFactor, 1920 / max(1, frame.width))
         return WindowInfo(id: CGWindowID(window.windowNumber), ownerPID: ProcessInfo.processInfo.processIdentifier,
@@ -124,6 +130,10 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if sender !== window { return true }
         onCloseRequested?(); return false
+    }
+    func windowWillMove(_ notification: Notification) {
+        guard notification.object as? NSWindow === window, bridge != nil else { return }
+        invalidate("窗口正在移动，自动化已停止；移动完成后请重新启动截图器。")
     }
     func windowWillClose(_ notification: Notification) {
         if let popup = notification.object as? NSWindow { loginWindows.removeAll { $0 === popup } }
