@@ -3605,13 +3605,13 @@ actor BetterGICoreProcessSupervisor {
         _ = try client.request(method: "scheduler.resume", parameters: ["taskId": taskID])
     }
 
-    func stop() {
+    func stop() async {
         intentionalStop = true
         if let client {
             _ = try? client.request(method: "core.shutdown")
             client.disconnect()
         }
-        if let process, process.isRunning { process.terminate() }
+        if let process { await Self.stopProcess(process) }
         callbackClient?.stop()
         callbackTask?.cancel()
         process = nil

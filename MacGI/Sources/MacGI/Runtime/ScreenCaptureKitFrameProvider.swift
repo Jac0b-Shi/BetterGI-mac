@@ -150,6 +150,7 @@ final class ScreenCaptureKitFrameProvider {
                 backendName: "ScreenCaptureKit Stream"
             )
         } catch {
+            if window.isHostedCloud { throw error }
             await stopCapture()
             do {
                 return try quartzFallback.captureWindow(window)
@@ -167,7 +168,8 @@ final class ScreenCaptureKitFrameProvider {
     {
         if let session,
            session.window.id == window.id,
-           session.window.capturePixelSize == window.capturePixelSize {
+           session.window.capturePixelSize == window.capturePixelSize,
+           session.window.frame.size == window.frame.size {
             return session
         }
 
@@ -256,6 +258,11 @@ final class ScreenCaptureKitFrameProvider {
         _ image: CGImage,
         window: WindowInfo
     ) throws -> CGImage {
+        if window.contentRectOverride != nil {
+            guard let rect = CloudGameGeometry.cropRect(imageSize: CGSize(width: image.width, height: image.height), window: window),
+                  let cropped = image.cropping(to: rect) else { throw ScreenCaptureKitFrameError.emptyImage(window.id) }
+            return cropped
+        }
         let topInsetPoints = window.captureRect.minY - window.frame.minY
         guard topInsetPoints > 0 else { return image }
         let sourceWidthPoints = max(1, window.frame.width)
