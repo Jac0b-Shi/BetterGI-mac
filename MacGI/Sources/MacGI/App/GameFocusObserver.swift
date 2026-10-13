@@ -58,6 +58,9 @@ final class GameFocusObserver: NSObject {
             name: NSWorkspace.sessionDidBecomeActiveNotification,
             object: nil)
 
+        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+            NotificationCenter.default.addObserver(self, selector: #selector(environmentChanged(_:)), name: name, object: nil)
+        }
         appState.refreshGameWindowFocus()
         if NSApp.isActive {
             appState.applicationDidBecomeActive()
@@ -68,6 +71,7 @@ final class GameFocusObserver: NSObject {
         delayedRecheckTask?.cancel()
         delayedRecheckTask = nil
         NSWorkspace.shared.notificationCenter.removeObserver(self)
+        NotificationCenter.default.removeObserver(self)
         appState = nil
     }
 
