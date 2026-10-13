@@ -2261,6 +2261,7 @@ final class AppState: ObservableObject {
                 self.runtimeLifecycleMessage = "无法启动：BetterGI Core 尚未就绪。"
                 self.appStatus = .error
                 self.addLog(.error, "Cannot start runtime: BetterGI Core is not ready.")
+                self.finishCloudClose()
                 return
             }
             do {

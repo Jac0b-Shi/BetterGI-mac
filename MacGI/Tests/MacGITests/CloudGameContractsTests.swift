@@ -79,4 +79,16 @@ struct CloudGameContractsTests {
         #expect(rejected)
     }
 
+    @MainActor
+    @Test("Unresponsive WebKit lifecycle returns on deadline and ignores a late reply")
+    func lifecycleDeadline() async throws {
+        do {
+            _ = try await WKWebInputBridge.pageReply(timeout: 0.03) { reply in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { reply.finish(.success(true)) }
+            }
+            Issue.record("Expected a bounded WebKit timeout")
+        } catch CloudWebInputError.timedOut { }
+        try await Task.sleep(for: .milliseconds(100))
+    }
+
 }

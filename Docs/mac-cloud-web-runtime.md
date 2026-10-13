@@ -11,6 +11,7 @@
 - `CloudWebInputDispatcher` 发送上游 `__ysInputInject` / ClientCore 数据包，不发送模拟 DOM `KeyboardEvent`，不调用 Wine 或全局 CGEvent。
 - `Region` 使用实际 video 内容区域。ScreenCaptureKit 捕获无边框窗口后显式裁剪 CSS 留白；窗口的有效像素比例与 SCK 的 1920px 宽度上限一致。云宿主不使用像素比例不一致的 Quartz 回退。
 - Web SDK 在 `.page` 内容世界注入，仅供国服官方 HTTPS cloud 页面使用。SDK 未就绪、断流、导航、网页进程退出或输入确认超时均禁用自动化。
+- WebKit 会话启动和释放使用一次性回调与 3 秒期限；迟到的回调不能安装旧会话，释放无法确认时关闭网页连接。
 - 长按使用带页面 epoch/deadline 校验的等待，不使用 SDK 内部不可取消的延迟 KeyUp。释放检查 SDK 持有集合，不能确认释放时不返回成功确认。
 - 切换 Wine 与云宿主先停止旧 Core；平台回调带本机 generation，旧 Core 的回调不能路由到新宿主。
 - SDK 资源与上游 `BetterGenshinImpact/Resources/JavaScript/ys-input-inject.js` 完全一致，静态门禁检查二者一致性。上游依赖网页内部 Webpack module 53638；网站改版可能导致 SDK 不可用，此时界面显示未就绪，不降级为假输入。

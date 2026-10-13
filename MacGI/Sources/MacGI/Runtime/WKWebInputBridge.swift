@@ -36,30 +36,72 @@ final class WKWebInputBridge: @unchecked Sendable {
 
     @MainActor private weak var webView: WKWebView?
     @MainActor private var epoch: String?
+    @MainActor private var generation: UInt64 = 0
     @MainActor private var pending: [UUID: Reply] = [:]
     @MainActor var canDispatch: (() -> Bool)?
     @MainActor var onFailure: ((String) -> Void)?
 
     @MainActor init(webView: WKWebView) { self.webView = webView }
 
+    @MainActor final class PageReply {
+        private var continuation: CheckedContinuation<Bool, Error>?
+        init(_ continuation: CheckedContinuation<Bool, Error>) { self.continuation = continuation }
+        func finish(_ result: Result<Bool, Error>) {
+            guard let continuation else { return }
+            self.continuation = nil
+            continuation.resume(with: result)
+        }
+    }
+
+    // WebKit cancellation does not necessarily complete a hung JavaScript promise.
+    // A one-shot callback race bounds the native lifecycle without waiting on that promise.
+    @MainActor static func pageReply(timeout: TimeInterval = 3, submit: (PageReply) -> Void) async throws -> Bool {
+        try await withCheckedThrowingContinuation { continuation in
+            let reply = PageReply(continuation)
+            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
+                reply.finish(.failure(CloudWebInputError.timedOut))
+            }
+            submit(reply)
+        }
+    }
+
+    @MainActor private func submitBoolean(_ source: String, arguments: [String: Any], reply: PageReply) {
+        guard let view = webView else { reply.finish(.failure(CloudWebInputError.unavailable)); return }
+        view.callAsyncJavaScript(source, arguments: arguments, in: nil, in: .page,
+            completionHandler: { result in
+                switch result {
+                case .success(let value): reply.finish(.success(value as? Bool == true))
+                case .failure(let error): reply.finish(.failure(error))
+                }
+            })
+    }
+
     @MainActor func beginSession() async throws {
         guard let view = webView, Self.isGameOrigin(view.url), canDispatch?() == true else { throw CloudWebInputError.unavailable }
         suspend()
         let next = UUID().uuidString
-        _ = try await view.callAsyncJavaScript("""
-            const sdk = window.__ysInputInject;
-            if (!sdk) throw new Error('Web SDK unavailable');
-            sdk.releaseAll();
-            const s = sdk.status();
-            if (s.pressedKeys.length || s.pressedButtons.length || s.rtcDataChannelState !== 'open' || !s.gameDataStarted)
-                throw new Error('Web SDK input session not ready');
-            window.__bgiMacInputEpoch = next;
-            return true;
-            """, arguments: ["next": next], in: nil, contentWorld: .page)
+        let currentGeneration = generation
+        let success = try await Self.pageReply { reply in
+            self.submitBoolean("""
+                if (Date.now() >= deadline) throw new Error('input session startup expired');
+                const sdk = window.__ysInputInject;
+                if (!sdk) throw new Error('Web SDK unavailable');
+                sdk.releaseAll();
+                const s = sdk.status();
+                if (s.pressedKeys.length || s.pressedButtons.length || s.rtcDataChannelState !== 'open' || !s.gameDataStarted)
+                    throw new Error('Web SDK input session not ready');
+                window.__bgiMacInputEpoch = next;
+                return true;
+                """, arguments: ["next": next, "deadline": Date().addingTimeInterval(3).timeIntervalSince1970 * 1000], reply: reply)
+        }
+        guard success, generation == currentGeneration, Self.isGameOrigin(view.url), canDispatch?() == true else {
+            throw CloudWebInputError.unavailable
+        }
         epoch = next
     }
 
     @MainActor func suspend() {
+        generation &+= 1
         epoch = nil
         let replies = Array(pending.values); pending.removeAll()
         replies.forEach { $0.finish(.failure(CloudWebInputError.unavailable)) }
@@ -71,13 +113,16 @@ final class WKWebInputBridge: @unchecked Sendable {
         suspend()
         guard let view = webView, Self.isGameOrigin(view.url) else { return false }
         do {
-            return try await view.callAsyncJavaScript("""
-                const sdk = window.__ysInputInject;
-                if (!sdk) return false;
-                sdk.releaseAll();
-                const s = sdk.status();
-                return !s.pressedKeys.length && !s.pressedButtons.length;
-                """, arguments: [:], in: nil, contentWorld: .page) as? Bool == true
+            return try await Self.pageReply { reply in
+                self.submitBoolean("""
+                    if (Date.now() >= deadline) throw new Error('owned input release expired');
+                    const sdk = window.__ysInputInject;
+                    if (!sdk) return false;
+                    sdk.releaseAll();
+                    const s = sdk.status();
+                    return !s.pressedKeys.length && !s.pressedButtons.length;
+                    """, arguments: ["deadline": Date().addingTimeInterval(3).timeIntervalSince1970 * 1000], reply: reply)
+            }
         } catch { return false }
     }
 
