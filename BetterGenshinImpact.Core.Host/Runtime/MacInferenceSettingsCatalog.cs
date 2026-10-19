@@ -103,7 +103,7 @@ public sealed class MacInferenceSettingsCatalog
                 else
                 {
                     using var predictor = factory.CreateYoloPredictor(BgiOnnxModel.BgiTree);
-                    using var region = new ImageRegion(Cv2.ImRead(Path.Combine(_layout.RootPath, "Assets/Model/Domain/test_petrified_trees.jpg")), 0, 0, drawingBoard: new BetterGenshinImpact.Core.Mask.NullMaskWindowDrawingBoard());
+                    using var region = new ImageRegion(Cv2.ImRead(Path.Combine(_layout.RootPath, "Assets/Model/Domain/test_petrified_trees.jpg")), 0, 0, drawingBoard: BetterGenshinImpact.Core.Mask.NullMaskWindowDrawingBoard.Instance);
                     if (region.SrcMat.Empty()) throw new FileNotFoundException("缺少已锁定的古树验证图像。");
                     _ = predictor.Detect(region);
                 }
