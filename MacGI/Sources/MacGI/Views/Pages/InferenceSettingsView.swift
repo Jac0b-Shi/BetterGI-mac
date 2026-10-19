@@ -45,7 +45,7 @@ struct InferenceSettingsView: View {
                     Toggle("", isOn: $settings.paddleOcrCpu.allowSpinning).labelsHidden()
                 }
             }
-            BGISettingLine(title: "保存与验证", subtitle: "验证使用已保存参数及独立模型会话，耗时包含模型加载。") {
+            BGISettingLine(title: "保存与验证", subtitle: "请先停止截图器与任务。验证使用已保存参数及独立会话，耗时包含模型加载。") {
                 Button("保存") { perform(save: true) }
                 Button("验证 OCR") { perform(scene: "ocr") }
                 Button("验证古树") { perform(scene: "tree") }

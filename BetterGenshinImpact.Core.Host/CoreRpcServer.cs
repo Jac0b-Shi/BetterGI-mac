@@ -310,6 +310,22 @@ public sealed class CoreRpcServer(
         }
     }
 
+    private async Task<object> BenchmarkInferenceAsync(string scene, CancellationToken token)
+    {
+        await _runtimeMutationLock.WaitAsync(token);
+        try
+        {
+            if (_triggerDispatcher?.IsRunning == true)
+                throw new InvalidOperationException("请先停止截图器与正在运行的任务，再验证推理。");
+            var semaphore = BetterGenshinImpact.GameTask.TaskRunnerPlatform.TryGetCurrent()?.TaskSemaphore;
+            if (semaphore is not null && !await semaphore.WaitAsync(0, token))
+                throw new InvalidOperationException("请先停止正在运行的任务，再验证推理。");
+            try { return await InferenceSettings.BenchmarkAsync(scene, token); }
+            finally { semaphore?.Release(); }
+        }
+        finally { _runtimeMutationLock.Release(); }
+    }
+
     private async Task<RpcResponse> DispatchAsync(RpcRequest request)
     {
         if (!TokenIsValid(request.SessionToken))
@@ -318,7 +334,7 @@ public sealed class CoreRpcServer(
         try
         {
             if (request.Method == "inference.benchmark")
-                return RpcResponse.Success(request.Id, await InferenceSettings.BenchmarkAsync(
+                return RpcResponse.Success(request.Id, await BenchmarkInferenceAsync(
                     RequiredString(request.Params, "scene"), _shutdown.Token));
             if (request.Method == "runtime.stop")
             {
