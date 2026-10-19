@@ -118,6 +118,9 @@ public class Avatar : ICombatCommandAvatar
     private static readonly Lazy<BgiYoloPredictor> ESkillClassifierLazy = new(() =>
         AutoFightRuntimePlatform.Current.CreateYoloPredictor(BgiOnnxModel.BgiEClassify));
 
+    // E 技能分类模型由所有角色共享，串行执行推理，避免并发调用同一会话。
+    private static readonly object ESkillClassifierLock = new();
+
     public Avatar(CombatScenes combatScenes, string name, int index, Rect nameRect, double manualSkillCd = -1)
     {
         CombatScenes = combatScenes;
@@ -788,7 +791,11 @@ public class Avatar : ICombatCommandAvatar
     {
         var eRect1080 = AutoFightAssets.Get(imageRegion).ERectForClassify;
         using var eRa = imageRegion.DeriveCrop(eRect1080);
-        var result = ESkillClassifierLazy.Value.Predictor.Classify(eRa.CacheImage);
+        YoloResult<Classification> result;
+        lock (ESkillClassifierLock)
+        {
+            result = ESkillClassifierLazy.Value.Predictor.Classify(eRa.CacheImage);
+        }
         var topClass = result.GetTopClass();
         var topClassName = topClass.Name.Name;
         // Logger.LogInformation("E技能就绪分类：{ClassName}，置信度：{Confidence:F2}", topClassName, topClass.Confidence);

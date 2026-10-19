@@ -9,7 +9,10 @@ using BetterGenshinImpact.Core.Recognition.ONNX;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using OpenCvSharp;
-using System.Threading;
+
+#if BGI_PLATFORM_MAC
+using BgiOnnxSessionFactory = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory;
+#endif
 
 namespace BetterGenshinImpact.Core.Recognition.OCR.Paddle;
 
@@ -17,25 +20,23 @@ public class Rec(
     BgiOnnxModel model,
     IReadOnlyList<string> labels,
     OcrVersionConfig config,
-    BgiOnnxFactory bgiOnnxFactory)
+    BgiOnnxSessionFactory bgiOnnxFactory)
     : IDisposable
 {
+    private readonly object _sessionLock = new();
     private readonly InferenceSession _session = bgiOnnxFactory.CreateInferenceSession(model, true);
-    private int _disposed;
+    private bool _disposed;
 
     // _labels = File.ReadAllLines(labelFilePath);
 
     public void Dispose()
     {
-        DisposeSession();
-        GC.SuppressFinalize(this);
-    }
-
-
-    private void DisposeSession()
-    {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        lock (_sessionLock)
+        {
+            if (_disposed) return;
+            _disposed = true;
             _session.Dispose();
+        }
     }
 
     /// <summary>
@@ -121,8 +122,9 @@ public class Rec(
                 })
                 .Select(inputTensor =>
                     {
-                        lock (_session)
+                        lock (_sessionLock)
                         {
+                            ObjectDisposedException.ThrowIf(_disposed, this);
                             // 多线程推理会出现问题，加锁解决。
                             using IDisposableReadOnlyCollection<DisposableNamedOnnxValue> results = _session.Run([
                                 NamedOnnxValue.CreateFromTensor(_session.InputNames[0], inputTensor)

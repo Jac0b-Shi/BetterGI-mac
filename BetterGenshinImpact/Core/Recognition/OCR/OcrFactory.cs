@@ -16,15 +16,29 @@ public class OcrFactory : IDisposable
 {
     // public static IOcrService Media = Create(OcrEngineTypes.Media);
 
+
 #if !BGI_PLATFORM_MAC
-    /// <summary>
-    /// WPF-only: resolves Paddle OCR service via the Windows DI container.
-    /// Not available in Core — use constructor injection with IOcrRuntimeConfigProvider.
-    /// </summary>
-    public static IOcrService Paddle => global::BetterGenshinImpact.App.ServiceProvider.GetRequiredService<OcrFactory>().PaddleOcr;
+    public static IOcrService Paddle => App.ServiceProvider.GetRequiredService<OcrFactory>().PaddleOcr;
 #endif
-    private IOcrService PaddleOcr => _paddleOcrService ??= Create(OcrEngineTypes.Paddle);
     public IOcrService Service => PaddleOcr;
+    public IOcrService PaddleOcr
+    {
+        get
+        {
+            lock (_serviceLock)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                return _paddleOcrService ??= Create(OcrEngineTypes.Paddle);
+            }
+        }
+    }
+    private readonly object _serviceLock = new();
+    private bool _disposed;
+    private PaddleOcrService.PaddleOcrModelType? _activeModelType;
+    public PaddleOcrService.PaddleOcrModelType ActiveModelType
+    {
+        get { lock (_serviceLock) return _activeModelType ?? ResolveModelType(); }
+    }
 
     private IOcrService? _paddleOcrService;
     private readonly ILogger<BgiOnnxFactory> _logger;
@@ -118,39 +132,34 @@ public class OcrFactory : IDisposable
 
     private PaddleOcrService CreatePaddleOcrInstance()
     {
-        var resourceResolver = _resourceResolver
-            ?? throw new InvalidOperationException("OCR resource resolver is not configured.");
+        _activeModelType = ResolveModelType();
+        return new PaddleOcrService(_onnxFactory, _activeModelType, resourceResolver: _resourceResolver!);
+    }
+
+    private PaddleOcrService.PaddleOcrModelType ResolveModelType()
+    {
         return _paddleModel switch
         {
             PaddleOcrModelConfig.V4Auto =>
-                new PaddleOcrService(_onnxFactory,
-                    PaddleOcrService.PaddleOcrModelType.FromCultureInfoV4(GetCultureInfo()) ??
-                    PaddleOcrService.PaddleOcrModelType.V4, resourceResolver: resourceResolver),
+                PaddleOcrService.PaddleOcrModelType.FromCultureInfoV4(GetCultureInfo()) ??
+                    PaddleOcrService.PaddleOcrModelType.V4,
             PaddleOcrModelConfig.V5Auto =>
-                new PaddleOcrService(_onnxFactory,
-                    PaddleOcrService.PaddleOcrModelType.FromCultureInfo(GetCultureInfo()) ??
-                    PaddleOcrService.PaddleOcrModelType.V5, resourceResolver: resourceResolver),
+                PaddleOcrService.PaddleOcrModelType.FromCultureInfo(GetCultureInfo()) ??
+                    PaddleOcrService.PaddleOcrModelType.V5,
             PaddleOcrModelConfig.V5 =>
-                new PaddleOcrService(_onnxFactory,
-                    PaddleOcrService.PaddleOcrModelType.V5, resourceResolver: resourceResolver),
+                PaddleOcrService.PaddleOcrModelType.V5,
             PaddleOcrModelConfig.V6 =>
-                new PaddleOcrService(_onnxFactory,
-                    PaddleOcrService.PaddleOcrModelType.V6, resourceResolver: resourceResolver),
+                PaddleOcrService.PaddleOcrModelType.V6,
             PaddleOcrModelConfig.V4 =>
-                new PaddleOcrService(_onnxFactory,
-                    PaddleOcrService.PaddleOcrModelType.V4, resourceResolver: resourceResolver),
+                PaddleOcrService.PaddleOcrModelType.V4,
             PaddleOcrModelConfig.V4En =>
-                new PaddleOcrService(_onnxFactory,
-                    PaddleOcrService.PaddleOcrModelType.V4En, resourceResolver: resourceResolver),
+                PaddleOcrService.PaddleOcrModelType.V4En,
             PaddleOcrModelConfig.V5Korean =>
-                new PaddleOcrService(_onnxFactory,
-                    PaddleOcrService.PaddleOcrModelType.V5Korean, resourceResolver: resourceResolver),
+                PaddleOcrService.PaddleOcrModelType.V5Korean,
             PaddleOcrModelConfig.V5Latin =>
-                new PaddleOcrService(_onnxFactory,
-                    PaddleOcrService.PaddleOcrModelType.V5Latin, resourceResolver: resourceResolver),
+                PaddleOcrService.PaddleOcrModelType.V5Latin,
             PaddleOcrModelConfig.V5Eslav =>
-                new PaddleOcrService(_onnxFactory,
-                    PaddleOcrService.PaddleOcrModelType.V5Eslav, resourceResolver: resourceResolver),
+                PaddleOcrService.PaddleOcrModelType.V5Eslav,
             _ => throw new ArgumentOutOfRangeException(nameof(_paddleModel),
                 _paddleModel, "不支持的 Paddle OCR 模型配置")
         };
@@ -158,27 +167,23 @@ public class OcrFactory : IDisposable
 
     public Task Unload()
     {
-        if (_paddleOcrService is not IDisposable disposable)
+        lock (_serviceLock)
         {
+            if (_paddleOcrService is IDisposable disposable) disposable.Dispose();
             _paddleOcrService = null;
-            return Task.CompletedTask;
+            _activeModelType = null;
         }
-        try
-        {
-            disposable.Dispose();
-            _paddleOcrService = null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "卸载 OCR 服务时发生错误");
-        }
-
         return Task.CompletedTask;
     }
 
     public void Dispose()
     {
-        Unload().GetAwaiter().GetResult();
+        lock (_serviceLock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            Unload().GetAwaiter().GetResult();
+        }
         GC.SuppressFinalize(this);
     }
 

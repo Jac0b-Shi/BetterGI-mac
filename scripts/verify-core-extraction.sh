@@ -102,7 +102,7 @@ rg -q 'GameTask/CharacterDevelopment/\*\.cs' \
   || fail "CharacterDevelopment is not linked and composed through the macOS Core script host"
 rg -q 'Assets/Model/AvatarGridIcon/avatar.onnx' \
   BetterGenshinImpact.Core/Manifest/model-artifacts.manifest.json \
-  && rg -q 'bettergi-assets-model-1.0.36-nupkg' \
+  && rg -q 'bettergi-assets-model-1.0.38-nupkg' \
     BetterGenshinImpact.Core/Manifest/model-artifacts.source-lock.json \
   && rg -q 'class ArtifactDownloaderSuite' \
     Test/BetterGenshinImpact.Core.Host.Fast.Verification/ArtifactDownloaderSuite.cs \
@@ -337,7 +337,7 @@ fi
 rg -Fq "genshin.craftMaterial('测试材料', 0" \
   Test/BetterGenshinImpact.Core.Host.Verification/Program.cs \
   || fail "Core Host verification does not execute genshin.craftMaterial through ClearScript"
-rg -q 'new CraftMaterialTask\(materialName, quantity, materialType\)\.Start' \
+rg -q 'new CraftMaterialTask\(materialName, quantity, materialType, bonusType\)\.Start' \
   BetterGenshinImpact.Core.Host/Runtime/MacGenshinRuntimePlatform.cs \
   || fail "macOS genshin.CraftMaterial is not composed from the upstream task"
 if rg -n 'TaskContext|Simulation\.SendInput|VisionContext' \

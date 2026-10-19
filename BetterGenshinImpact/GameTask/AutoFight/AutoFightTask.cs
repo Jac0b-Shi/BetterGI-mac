@@ -38,7 +38,7 @@ public class AutoFightTask : ISoloTask
 
     private CancellationToken _ct;
 
-    private readonly BgiYoloPredictor? _predictor;
+    private BgiYoloPredictor? _predictor;
 
     private static DateTime _lastFightFlagTime = DateTime.Now; // 战斗标志最近一次出现的时间
     private static int _skipCheckCounter;
@@ -196,11 +196,6 @@ public class AutoFightTask : ISoloTask
         _taskParam = taskParam;
         _combatScriptBag = CombatScriptParser.ReadAndParse(_taskParam.CombatStrategyPath);
 
-        if (_taskParam.FightFinishDetectEnabled)
-        {
-            _predictor = AutoFightRuntimePlatform.Current.CreateYoloPredictor(BgiOnnxModel.BgiWorld);
-        }
-
         _finishDetectConfig = new TaskFightFinishDetectConfig(_taskParam);
     }
     // 方法1：判断是否是单个数字
@@ -211,6 +206,10 @@ public class AutoFightTask : ISoloTask
     public List<string> checkNames = new();*/
     public async Task Start(CancellationToken ct)
     {
+        using var predictor = _taskParam.FightFinishDetectEnabled
+            ? AutoFightRuntimePlatform.Current.CreateYoloPredictor(BgiOnnxModel.BgiWorld)
+            : null;
+        _predictor = predictor;
         _ct = ct;
         AvatarRecognition.SetCurrentAutoFightParam(_taskParam);
         AvatarRecognition.ClearLegendaryBarTracker();

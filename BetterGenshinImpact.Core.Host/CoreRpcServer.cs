@@ -29,6 +29,7 @@ public sealed class CoreRpcServer(
     private readonly PathingCatalog _pathingCatalog = new(layout);
     private readonly OneDragonCatalog _oneDragonCatalog = new(layout);
     private readonly CommonSettingsCatalog _commonSettings = new(layout);
+    public MacInferenceSettingsCatalog InferenceSettings { get; } = new(layout);
     private readonly SoloTaskSettingsCatalog _soloTaskSettings = new(layout);
     private readonly TriggerSettingsCatalog _triggerSettings = new(layout);
     private readonly MacroSettingsCatalog _macroSettings = new(layout);
@@ -316,6 +317,9 @@ public sealed class CoreRpcServer(
 
         try
         {
+            if (request.Method == "inference.benchmark")
+                return RpcResponse.Success(request.Id, await InferenceSettings.BenchmarkAsync(
+                    RequiredString(request.Params, "scene"), _shutdown.Token));
             if (request.Method == "runtime.stop")
             {
                 return RpcResponse.Success(
@@ -551,6 +555,9 @@ public sealed class CoreRpcServer(
                 "repository.web.setGuideStatus" => _scriptRepositoryCatalog.SetGuideStatus(
                     request.Params?.Value<bool?>("status")
                     ?? throw new ArgumentException("status is required.")),
+                "inference.settings.get" => InferenceSettings.Get(),
+                "inference.settings.save" => InferenceSettings.Save(
+                    request.Params?["settings"] as JObject ?? throw new ArgumentException("settings is required.")),
                 "common.settings.get" => _commonSettings.Get(),
                 "common.settings.save" => _commonSettings.Save(
                     request.Params?["settings"] as JObject

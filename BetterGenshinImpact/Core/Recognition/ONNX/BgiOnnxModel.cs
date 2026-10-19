@@ -79,6 +79,12 @@ public class BgiOnnxModel
         Register("AvatarGridIcon", @"Assets\Model\AvatarGridIcon\avatar.onnx");
 
     /// <summary>
+    /// 物品图标识别模型，固定使用 CPU。
+    /// </summary>
+    public static readonly BgiOnnxModel ItemIcon =
+        Register("ItemIcon", @"Assets\Model\ItemV2\item.onnx");
+
+    /// <summary>
     /// Silero 人声检测模型
     /// </summary>
     public static readonly BgiOnnxModel SileroVad =
@@ -146,7 +152,7 @@ public class BgiOnnxModel
 
     #endregion
 
-    private BgiOnnxModel(string name, string modelRelativePath, string cacheRelativePath)
+    public BgiOnnxModel(string name, string modelRelativePath, string cacheRelativePath)
     {
         Name = name;
         ModelRelativePath = modelRelativePath;
