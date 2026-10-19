@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Compunet.YoloSharp;
 using System.Text.Json;
 using BetterGenshinImpact.Core.Adapters;
 using BetterGenshinImpact.Core.Config;
@@ -56,7 +57,8 @@ public sealed class MacInferenceSettingsCatalog
             MacInferenceSettings saved;
             try { saved = Read(); }
             catch (Exception e) when (e is JsonException or ArgumentException) { saved = Active; }
-            return new { engine = "CPU", maxThreads = Environment.ProcessorCount, saved,
+            return new { engine = "CPU", maxThreads = Environment.ProcessorCount,
+                saved = JObject.Parse(JsonSerializer.Serialize(saved, ConfigJson.Options)),
                 pendingRestart = saved != Active, startupMessage = StartupMessage,
                 runtimeVersion = typeof(Microsoft.ML.OnnxRuntime.InferenceSession).Assembly.GetName().Version?.ToString() };
         }
@@ -105,7 +107,7 @@ public sealed class MacInferenceSettingsCatalog
                     using var predictor = factory.CreateYoloPredictor(BgiOnnxModel.BgiTree);
                     using var region = new ImageRegion(Cv2.ImRead(Path.Combine(_layout.RootPath, "Assets/Model/Domain/test_petrified_trees.jpg")), 0, 0, drawingBoard: BetterGenshinImpact.Core.Mask.NullMaskWindowDrawingBoard.Instance);
                     if (region.SrcMat.Empty()) throw new FileNotFoundException("缺少已锁定的古树验证图像。");
-                    _ = predictor.Detect(region);
+                    _ = predictor.Predictor.Detect(region.CacheImage);
                 }
                 token.ThrowIfCancellationRequested();
                 return new { scene, engine = "CPU", elapsedMs = timer.Elapsed.TotalMilliseconds, validated = true };

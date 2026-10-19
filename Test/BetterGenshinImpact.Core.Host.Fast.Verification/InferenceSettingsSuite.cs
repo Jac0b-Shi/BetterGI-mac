@@ -20,6 +20,8 @@ public sealed class InferenceSettingsSuite : IVerificationSuite
             var response = JObject.FromObject(catalog.Save(JObject.FromObject(changed)));
             context.Require(catalog.Active.CpuThreads == 0 && response.Value<bool>("pendingRestart"),
                 "Saving inference settings leaves existing sessions on the startup snapshot");
+            context.Require(response["saved"]?["paddleOcrCpu"]?["mode"]?.Value<int>() == 2,
+                "Inference RPC exposes camelCase settings consumed by the Swift editor");
             context.Require(new MacInferenceSettingsCatalog(layout).Active == changed,
                 "Restart reads the saved CPU and OCR thread policy");
             var rejected = false;
