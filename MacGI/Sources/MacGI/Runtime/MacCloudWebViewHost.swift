@@ -42,6 +42,8 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
             "if (location.origin === 'https://ys.mihoyo.com' && location.pathname.startsWith('/cloud')) {\n" + sdk + "\n}",
             injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .page))
         webView = WKWebView(frame: .zero, configuration: config)
+        // NSWindow setup can synchronously send backing/display delegate callbacks.
+        bridge = WKWebInputBridge(webView: webView)
         webView.navigationDelegate = self
         webView.uiDelegate = self
 #if DEBUG
@@ -57,7 +59,6 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
         window.delegate = self
         window.contentView = webView
         window.center()
-        bridge = WKWebInputBridge(webView: webView)
         bridge.canDispatch = { [weak self] in
             guard let self else { return false }
             return self.verifyReady() && self.isForeground
