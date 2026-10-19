@@ -146,6 +146,11 @@ fi
 smoke_root=$(mktemp -d ${TMPDIR:-/tmp}/bettergi-recognition-smoke.XXXXXX)
 trap 'rm -rf ${smoke_root}' EXIT
 cp -R ${bundled_resources}/GameTask ${smoke_root}/GameTask
+# Optional local archive cache: ArtifactDownloader still checks source-lock SHA-256 before extraction.
+if [[ -n ${MACGI_SMOKE_DOWNLOAD_CACHE:-} ]]; then
+  mkdir -p ${smoke_root}/Cache/Downloads
+  cp -R "${MACGI_SMOKE_DOWNLOAD_CACHE}/." ${smoke_root}/Cache/Downloads/
+fi
 ${contents}/Resources/BetterGICore/BetterGenshinImpact.Core.Host \
   --recognition-smoke --runtime-root ${smoke_root}
 ${contents}/Resources/BetterGICore/BetterGenshinImpact.Core.Host \

@@ -93,8 +93,11 @@ struct OverviewPage: View {
                 }
                 BGISettingLine(
                     title: "输入后端",
-                    subtitle: appState.inputBackendSelection.subtitle
+                    subtitle: appState.selectedWindow.isHostedCloud ? "Web SDK 输入发送至当前网页游戏会话；首版需要游戏窗口保持前台。" : appState.inputBackendSelection.subtitle
                 ) {
+                    if appState.selectedWindow.isHostedCloud {
+                        Text("Web SDK").foregroundStyle(.secondary)
+                    } else {
                     Picker(
                         "输入后端",
                         selection: Binding(
@@ -108,6 +111,7 @@ struct OverviewPage: View {
                     .labelsHidden()
                     .pickerStyle(.menu)
                     .disabled(!appState.canChangeInputBackend)
+                    }
                 }
                 BGISettingLine(title: "测试图像捕获", subtitle: "测试功能，测试几种截图模式的效果。") {
                     Text("使用真实运行帧")
@@ -141,6 +145,28 @@ struct OverviewPage: View {
                             })
                     )
                     .labelsHidden()
+                }
+            }
+
+            BGISettingGroup(icon: "cloud", title: "云原神（国服）", subtitle: appState.cloudGameStatus) {
+                Button(appState.cloudGameIsOpen ? "显示游戏窗口" : "打开云原神") {
+                    appState.openCloudGame()
+                }
+            } content: {
+                BGISettingLine(title: "内置游戏窗口", subtitle: "游戏内容保持 16:9，可拖动标题栏移动窗口；移动时会停止自动化。请在官方页面内登录与排队。") {
+                    HStack {
+                        Button("用于自动化") { appState.selectCloudGame() }
+                            .disabled(!appState.cloudGameReady || appState.runtimeLifecycle.isTransitioning)
+                        Button("关闭") { appState.closeCloudGame() }
+                            .disabled(!appState.cloudGameIsOpen)
+                    }
+                }
+                BGISettingLine(title: "窗口大小", subtitle: "自动适配屏幕，截图只保留游戏视频区域。") {
+                    HStack {
+                        Button("960 × 540") { appState.resizeCloudGame(width: 960) }
+                        Button("1280 × 720") { appState.resizeCloudGame(width: 1280) }
+                    }
+                    .disabled(!appState.cloudGameIsOpen || appState.runtimeLifecycle.isTransitioning)
                 }
             }
         }
