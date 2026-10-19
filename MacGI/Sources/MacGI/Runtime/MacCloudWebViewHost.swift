@@ -20,6 +20,8 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
     private var lastFrameAt = Date.distantPast
     private var lastPollAt = Date.distantPast
     private var navigationEpoch: UInt64 = 0
+    private var readinessRevision: UInt64 = 0
+    private var validatedWindow: WindowInfo?
     var onStatus: ((String, Bool) -> Void)?
     var onUnavailable: (() -> Void)?
     var onCloseRequested: (() -> Void)?
@@ -56,7 +58,10 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
         window.contentView = webView
         window.center()
         bridge = WKWebInputBridge(webView: webView)
-        bridge.canDispatch = { [weak self] in self?.verifyReady() == true }
+        bridge.canDispatch = { [weak self] in
+            guard let self else { return false }
+            return self.verifyReady() && self.isForeground
+        }
         bridge.onFailure = { [weak self] message in self?.invalidate("输入已暂停：\(message)") }
     }
 
@@ -73,7 +78,15 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
         }
     }
 
-    func focus() { NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil) }
+    var isForeground: Bool {
+        NSApp.isActive && window.isKeyWindow && NSApp.keyWindow === window
+    }
+
+    func focus() {
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(webView)
+    }
 
     func resize(width: CGFloat) {
         guard let screen = window.screen ?? NSScreen.main else { return }
@@ -87,6 +100,11 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
         guard ready else { return false }
         guard Date().timeIntervalSince(lastFrameAt) < 2.5, Date().timeIntervalSince(lastPollAt) < 2.5 else {
             invalidate("视频或页面状态超时，自动化已停止。")
+            return false
+        }
+        guard let validatedWindow, let current = windowInfo(),
+              CloudGameGeometry.matchesCapture(current, validatedWindow) else {
+            invalidate("窗口或视频区域变化，自动化已停止；请重新启动截图器。")
             return false
         }
         return true
@@ -135,6 +153,17 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
         guard notification.object as? NSWindow === window, bridge != nil else { return }
         invalidate("窗口正在移动，自动化已停止；移动完成后请重新启动截图器。")
     }
+    func windowDidResignKey(_ notification: Notification) {
+        guard notification.object as? NSWindow === window else { return }
+        // Do not wait for the app-wide delayed focus observer: an in-flight hold
+        // must be cancelled when another BetterGI window or login popup takes focus.
+        bridge.suspend()
+        onUnavailable?()
+    }
+    func windowDidChangeBackingProperties(_ notification: Notification) {
+        guard notification.object as? NSWindow === window else { return }
+        invalidate("显示器像素比例变化，自动化已停止；请重新启动截图器。")
+    }
     func windowWillClose(_ notification: Notification) {
         if let popup = notification.object as? NSWindow { loginWindows.removeAll { $0 === popup } }
     }
@@ -170,6 +199,8 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
 
     private func invalidate(_ message: String) {
         let wasReady = ready
+        readinessRevision &+= 1
+        validatedWindow = nil
         ready = false
         bridge.suspend()
         onStatus?(message, false)
@@ -179,9 +210,11 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
     private func poll() async {
         guard WKWebInputBridge.isGameOrigin(webView.url) else { return }
         let epoch = navigationEpoch
+        let revision = readinessRevision
+        let initialWindow = windowInfo()
         do {
             let response = try await webView.callAsyncJavaScript(Self.statusScript, arguments: [:], in: nil, contentWorld: .page)
-            guard epoch == navigationEpoch, WKWebInputBridge.isGameOrigin(webView.url) else { return }
+            guard epoch == navigationEpoch, revision == readinessRevision, WKWebInputBridge.isGameOrigin(webView.url) else { return }
             guard let json = response as? String,
                   let result = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
                   let sdk = result["sdk"] as? [String: Any],
@@ -196,20 +229,28 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
             guard Date().timeIntervalSince(lastFrameAt) < 2.5 else { invalidate("视频帧停止更新，自动化已暂停。" ); return }
             viewport = video
             guard let info = windowInfo(), info.contentRectOverride != nil else { invalidate("未能确认游戏视频区域。" ); return }
+            guard initialWindow?.frame == info.frame, initialWindow?.scaleFactor == info.scaleFactor,
+                  !ready || validatedWindow.map({ CloudGameGeometry.matchesCapture($0, info) }) == true else {
+                invalidate("窗口或视频区域变化，自动化已停止；请重新启动截图器。")
+                return
+            }
             _ = try await webView.evaluateJavaScript("window.__bgiMacInputReadyUntil = Date.now() + 2500")
-            guard epoch == navigationEpoch else { return }
+            guard epoch == navigationEpoch, revision == readinessRevision else { return }
+            validatedWindow = info
             lastPollAt = Date()
             ready = true
             onStatus?("视频与 Web SDK 已就绪；首版自动化需要游戏窗口保持前台。", true)
         } catch {
-            if epoch == navigationEpoch { invalidate("无法读取页面状态：\(error.localizedDescription)") }
+            if epoch == navigationEpoch, revision == readinessRevision { invalidate("无法读取页面状态：\(error.localizedDescription)") }
         }
     }
 
     private static let statusScript = #"""
     const sdk = window.__ysInputInject?.status();
     const v = [...document.querySelectorAll('video')].filter(v => {
-      const r = v.getBoundingClientRect(); return r.width >= 320 && r.height >= 180 && v.videoWidth > 0;
+      const r = v.getBoundingClientRect(), style = getComputedStyle(v);
+      return style.visibility === 'visible' && style.display !== 'none' && Number(style.opacity) > 0 &&
+        r.width >= 320 && r.height >= 180 && v.videoWidth > 0;
     }).sort((a,b) => b.clientWidth*b.clientHeight-a.clientWidth*a.clientHeight)[0];
     if (!sdk || !v) return JSON.stringify({});
     if (!window.__bgiVideoFrames) window.__bgiVideoFrames = new WeakMap();

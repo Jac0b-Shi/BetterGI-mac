@@ -18,6 +18,12 @@ enum CloudGameGeometry {
         return local.offsetBy(dx: window.minX, dy: window.minY)
     }
 
+    static func matchesCapture(_ current: WindowInfo, _ validated: WindowInfo) -> Bool {
+        current.id == validated.id && current.frame == validated.frame &&
+            current.contentRectOverride != nil && current.contentRectOverride == validated.contentRectOverride &&
+            current.scaleFactor == validated.scaleFactor
+    }
+
     static func cropRect(imageSize: CGSize, window: WindowInfo) -> CGRect? {
         guard window.frame.width > 0, window.frame.height > 0,
               window.frame.contains(window.captureRect), !window.captureRect.isEmpty else { return nil }

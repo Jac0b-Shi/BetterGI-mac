@@ -258,6 +258,9 @@ final class ScreenCaptureKitFrameProvider {
         _ image: CGImage,
         window: WindowInfo
     ) throws -> CGImage {
+        if window.isHostedCloud && window.contentRectOverride == nil {
+            throw ScreenCaptureKitFrameError.emptyImage(window.id)
+        }
         if window.contentRectOverride != nil {
             guard let rect = CloudGameGeometry.cropRect(imageSize: CGSize(width: image.width, height: image.height), window: window),
                   let cropped = image.cropping(to: rect) else { throw ScreenCaptureKitFrameError.emptyImage(window.id) }

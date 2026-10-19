@@ -35,6 +35,20 @@ struct CloudGameContractsTests {
                 == CGPoint(x: 0.5, y: 0.5))
     }
 
+    @Test("Moved, resized or Retina-switched cloud targets invalidate captured coordinates")
+    func captureGeometryChanges() {
+        func target(x: CGFloat = 100, width: CGFloat = 960, scale: CGFloat = 2) -> WindowInfo {
+            WindowInfo(id: 7, ownerPID: 1, ownerName: "MacGI", title: "云原神",
+                       frame: CGRect(x: x, y: 200, width: width, height: 568), layer: 0,
+                       isOnScreen: true, scaleFactor: scale,
+                       contentRectOverride: CGRect(x: x, y: 228, width: width, height: 540), isHostedCloud: true)
+        }
+        #expect(CloudGameGeometry.matchesCapture(target(), target()))
+        #expect(!CloudGameGeometry.matchesCapture(target(x: 120), target()))
+        #expect(!CloudGameGeometry.matchesCapture(target(width: 1280), target()))
+        #expect(!CloudGameGeometry.matchesCapture(target(scale: 1), target()))
+    }
+
     @Test("Holds use cancellable waits and releases, with no opaque SDK delayed key-up")
     func holdSequence() throws {
         let commands = try CloudWebInputDispatcher.commands(for: .keyHold(key: .f, durationMs: 500), viewport: .zero)

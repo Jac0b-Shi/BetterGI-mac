@@ -187,6 +187,8 @@ final class WKWebInputBridge: @unchecked Sendable {
     const check = () => {
       if (!sdk || window.__bgiMacInputEpoch !== epoch || Date.now() >= deadline || Date.now() >= (window.__bgiMacInputReadyUntil ?? 0))
         throw new Error('input session cancelled or expired');
+      if (!document.hasFocus() || document.visibilityState !== 'visible')
+        throw new Error('cloud game lost foreground focus');
       const s = sdk.status();
       if (s.rtcDataChannelState !== 'open' || s.gameDataStarted !== true)
         throw new Error('cloud game disconnected');

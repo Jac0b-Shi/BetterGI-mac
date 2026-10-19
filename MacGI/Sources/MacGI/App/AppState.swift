@@ -451,7 +451,7 @@ final class AppState: ObservableObject {
     private let runtimeLogWriter: RuntimeLogFileWriter
     private let userDefaults: UserDefaults
     private let launchArguments: [String]
-    @Published private(set) var cloudGameStatus = "使用内置无标题栏窗口登录国服云原神。"
+    @Published private(set) var cloudGameStatus = "使用内置游戏窗口登录国服云原神，可拖动标题栏移动。"
     @Published private(set) var cloudGameReady = false
     @Published private(set) var cloudGameIsOpen = false
     private var cloudWebHost: MacCloudWebViewHost?
@@ -2272,7 +2272,10 @@ final class AppState: ObservableObject {
                 }
                 try await supervisor.startRuntime()
                 _ = try await self.captureFrameForBetterGICore()
-                if self.selectedWindow.isHostedCloud, self.pendingCloudClose || !self.cloudGameReady { throw CloudWebInputError.unavailable }
+                if self.selectedWindow.isHostedCloud {
+                    guard !self.pendingCloudClose, self.cloudWebHost?.verifyReady() == true,
+                          self.cloudWebHost?.isForeground == true else { throw CloudWebInputError.unavailable }
+                }
                 if self.showHUDOnStart {
                     self.isHUDVisible = true
                 }
@@ -5683,6 +5686,12 @@ final class AppState: ObservableObject {
             throw BetterGICoreRPCError.protocolViolation("No real on-screen game window is selected for Core capture.")
         }
         let imageFrame = try await frameProvider.captureWindow(targetWindow)
+        if targetWindow.isHostedCloud {
+            guard selectedWindow.id == targetWindow.id, let host = cloudWebHost, host.verifyReady(),
+                  let current = host.windowInfo(), CloudGameGeometry.matchesCapture(current, targetWindow) else {
+                throw CloudWebInputError.unavailable
+            }
+        }
         recordCapturedFrame(imageFrame)
         return imageFrame
     }
