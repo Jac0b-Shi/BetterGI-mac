@@ -132,8 +132,11 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
 
     func close() async {
         pollingTask?.cancel(); pollingTask = nil
-        await bridge.releaseAndSuspend()
+        // Retire in-flight page queries before the first suspension point in close.
+        readinessRevision &+= 1
+        validatedWindow = nil
         ready = false; viewport = nil
+        await bridge.releaseAndSuspend()
         for popup in loginWindows {
             (popup.contentView as? WKWebView)?.stopLoading()
             popup.delegate = nil; popup.close()
@@ -214,7 +217,7 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
         let initialWindow = windowInfo()
         do {
             let response = try await webView.callAsyncJavaScript(Self.statusScript, arguments: [:], in: nil, contentWorld: .page)
-            guard epoch == navigationEpoch, revision == readinessRevision, WKWebInputBridge.isGameOrigin(webView.url) else { return }
+            guard !Task.isCancelled, epoch == navigationEpoch, revision == readinessRevision, WKWebInputBridge.isGameOrigin(webView.url) else { return }
             guard let json = response as? String,
                   let result = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
                   let sdk = result["sdk"] as? [String: Any],
@@ -235,7 +238,7 @@ final class MacCloudWebViewHost: NSObject, WKNavigationDelegate, WKUIDelegate, N
                 return
             }
             _ = try await webView.evaluateJavaScript("window.__bgiMacInputReadyUntil = Date.now() + 2500")
-            guard epoch == navigationEpoch, revision == readinessRevision else { return }
+            guard !Task.isCancelled, epoch == navigationEpoch, revision == readinessRevision else { return }
             validatedWindow = info
             lastPollAt = Date()
             ready = true
