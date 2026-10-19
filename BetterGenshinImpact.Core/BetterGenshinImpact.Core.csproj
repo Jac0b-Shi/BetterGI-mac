@@ -346,6 +346,9 @@
     <Compile Include="../BetterGenshinImpact/Core/Recognition/ONNX/BgiYoloPredictor.cs" Link="Core/Recognition/ONNX/BgiYoloPredictor.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Runtime/Portable/CpuOnnxRuntimePlatform.cs" Link="Core/Runtime/Portable/CpuOnnxRuntimePlatform.cs" />
     <Compile Include="Runtime/Portable/AssertUtils.Portable.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Recognition/ONNX/PaddleOcrCpuOptions.cs" Link="Core/Recognition/ONNX/PaddleOcrCpuOptions.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Recognition/ONNX/InferenceDeviceTypeJsonConverter.cs" Link="Core/Recognition/ONNX/InferenceDeviceTypeJsonConverter.cs" />
+    <Compile Include="../BetterGenshinImpact/Core/Script/Dependence/YoloPredictorFactory.cs" Link="Core/Script/Dependence/YoloPredictorFactory.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recognition/ONNX/ProviderType.cs" Link="Core/Recognition/ONNX/ProviderType.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recognition/ONNX/InferenceDeviceType.cs" Link="Core/Recognition/ONNX/InferenceDeviceType.cs" />
     <Compile Include="../BetterGenshinImpact/Core/Recognition/ONNX/SVTR/PickTextInference.cs" Link="Core/Recognition/ONNX/SVTR/PickTextInference.cs" />

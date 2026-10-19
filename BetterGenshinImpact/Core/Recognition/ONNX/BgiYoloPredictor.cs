@@ -13,11 +13,13 @@ namespace BetterGenshinImpact.Core.Recognition.ONNX;
 
 public class BgiYoloPredictor : IDisposable
 {
-    private int _disposed;
     private readonly BgiOnnxModel _model;
 
 
     private readonly Lazy<YoloPredictor> _lazyPredictor;
+    private readonly SessionOptions _sessionOptions;
+    private readonly object _syncRoot = new();
+    private bool _disposed;
 
     /// <summary>
     /// 使用 BgiOnnxFactory 创建这个类的实例
@@ -28,14 +30,36 @@ public class BgiYoloPredictor : IDisposable
     protected internal BgiYoloPredictor(BgiOnnxModel onnxModel, string modelPath, SessionOptions sessionOptions)
     {
         _model = onnxModel;
-        _lazyPredictor = new Lazy<YoloPredictor>(() => new YoloPredictor(modelPath,
-            new YoloPredictorOptions
+        _sessionOptions = sessionOptions;
+        _lazyPredictor = new Lazy<YoloPredictor>(() =>
+        {
+            try
             {
-                SessionOptions = sessionOptions
-            }));
+                return new YoloPredictor(modelPath, new YoloPredictorOptions
+                {
+                    SessionOptions = _sessionOptions
+                });
+            }
+            finally
+            {
+                // 会话创建完成（含失败）后不再需要配置；未初始化时由 Dispose 释放。
+                _sessionOptions.Dispose();
+            }
+        });
     }
 
-    public YoloPredictor Predictor => _lazyPredictor.Value;
+    public YoloPredictor Predictor
+    {
+        get
+        {
+            // 串行化延迟初始化与释放，避免创建会话时配置被提前释放。
+            lock (_syncRoot)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                return _lazyPredictor.Value;
+            }
+        }
+    }
 
     /// <summary>
     /// 检测
@@ -73,9 +97,22 @@ public class BgiYoloPredictor : IDisposable
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0 && _lazyPredictor.IsValueCreated)
+        lock (_syncRoot)
         {
-            Predictor.Dispose();
+            if (_disposed) return;
+            _disposed = true;
+            try
+            {
+                if (_lazyPredictor.IsValueCreated)
+                {
+                    _lazyPredictor.Value.Dispose();
+                }
+            }
+            finally
+            {
+                _sessionOptions.Dispose();
+                GC.SuppressFinalize(this);
+            }
         }
         GC.SuppressFinalize(this);
     }

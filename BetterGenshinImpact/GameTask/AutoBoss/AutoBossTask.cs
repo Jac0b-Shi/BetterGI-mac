@@ -60,8 +60,22 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
 
     private RecognitionObject LoadRecognitionObject(string objectName)
     {
+        return LoadRecognitionObject("AutoBoss", objectName);
+    }
+
+    private RecognitionObject LoadRecognitionObject(string taskName, string objectName)
+    {
         var captureRect = _runtime.SystemInfo.ScaleMax1080PCaptureRect;
-        return RecognitionAssets.Get("AutoBoss", objectName, captureRect.Width, captureRect.Height);
+        return RecognitionAssets.Get(taskName, objectName, captureRect.Width, captureRect.Height);
+    }
+
+    private BvLocator[] BuildBigMapLocators(BvPage page)
+    {
+        return
+        [
+            page.Locator(LoadRecognitionObject("QuickTeleport", "MapScaleButton")),
+            page.Locator(LoadRecognitionObject("QuickTeleport", "MapSettingsButton"))
+        ];
     }
 
     private sealed record OriginalResinInfo(int Count, int Limit);
@@ -294,15 +308,16 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
             .WithRoi(ScaleRect(1200, 25, 580, 50));
         
         await page.Flow()
-            //按B打开地图直到识别到树脂图标
             .Do((Action)(() =>
             {
-                if (!resinIconLocator.IsExist())
+                using var capture = CaptureToRectArea();
+                if (!Bv.IsInBigMapUi(capture))
                 {
                     TaskControlPlatform.Current.SimulateAction(GIActions.OpenMap);
                 }
-            })).Until(resinIconLocator)
-            //点击树脂图标直到识别到目标文本
+            }))
+            .UntilAny(BuildBigMapLocators(page))
+            .WaitUntil(resinIconLocator)
             .Click().UntilAnyText(new[] { "全部恢复", "原粹树脂已完全恢复" }, ScaleRect(1180, 75, 620, 200))
             .Run();
 

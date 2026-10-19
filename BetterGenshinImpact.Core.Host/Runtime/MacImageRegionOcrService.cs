@@ -17,10 +17,11 @@ public sealed class MacImageRegionOcrService : IOcrService, IDisposable
     private readonly BgiOnnxFactory _onnxFactory;
     private readonly Lazy<OcrFactory> _factory;
 
-    public MacImageRegionOcrService(RuntimeLayout layout, ILogger<BgiOnnxFactory> logger)
+    public MacImageRegionOcrService(RuntimeLayout layout, ILogger<BgiOnnxFactory> logger, MacInferenceSettings? settings = null)
     {
         _onnxFactory = new BgiOnnxFactory(
-            new CpuOnnxRuntimePlatform(new ModelRootPathResolver(layout.RootPath)));
+            new CpuOnnxRuntimePlatform(new ModelRootPathResolver(layout.RootPath),
+                settings?.CpuThreads ?? 0, settings?.PaddleOcrCpu));
         _factory = new Lazy<OcrFactory>(() =>
         {
             var resourceResolver = new OcrResourcePathResolver(layout.RootPath);

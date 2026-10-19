@@ -107,6 +107,7 @@ For BetterGI-mac:
 - Recognition, model, native dependency or phase-completion changes: run `scripts/verify-core-full.sh`.
 - Build dependencies explicitly, then run verifiers with `--no-build`; do not use an implicit `dotnet run` build in the edit loop.
 - Add new pure contracts to the Fast verifier and new route closure checks to the Pathing verifier. Do not expand the legacy 4,000-line integration programs for behavior that fits an isolated project.
+禁止 新增 BetterGenshinImpact\Assets 目录，这里的资源已经被 BetterGI.Assets.* 的外部资源给占用了。如果要新增资源，需要人工去修改对应 nuget 包的资源。
 
 ## 识别与模拟操作
 

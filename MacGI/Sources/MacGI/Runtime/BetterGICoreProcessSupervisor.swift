@@ -357,6 +357,27 @@ struct BetterGICoreAutoFishingSettings: Sendable, Equatable {
     let saveScreenshotOnKeyTick: Bool
 }
 
+struct BetterGICoreInferenceSettings: Codable, Sendable, Equatable {
+    var cpuThreads = 0
+    var paddleOcrCpu = OCR()
+    struct OCR: Codable, Sendable, Equatable {
+        var mode = 0
+        var detectionThreads = 2
+        var recognitionThreads = 2
+        var interOpThreads = 1
+        var parallelExecution = false
+        var allowSpinning = true
+    }
+}
+
+struct BetterGICoreInferenceStatus: Decodable, Sendable {
+    let engine: String
+    let maxThreads: Int
+    let saved: BetterGICoreInferenceSettings
+    let pendingRestart: Bool
+    let startupMessage: String
+}
+
 struct BetterGICoreCommonSettings: Sendable, Equatable {
     let screenshotEnabled: Bool
     let screenshotUidCoverEnabled: Bool
@@ -990,6 +1011,27 @@ actor BetterGICoreProcessSupervisor {
 
     func notificationSettings() throws -> BetterGINotificationSettings {
         try parseNotificationSettings(runningClient().request(method: "notification.settings.get"))
+    }
+
+    func inferenceSettings(_ settings: BetterGICoreInferenceSettings? = nil) throws -> BetterGICoreInferenceStatus {
+        let result: Any
+        if let settings {
+            let value = try JSONSerialization.jsonObject(with: JSONEncoder().encode(settings))
+            result = try runningClient().request(method: "inference.settings.save", parameters: ["settings": value])
+        } else {
+            result = try runningClient().request(method: "inference.settings.get")
+        }
+        return try JSONDecoder().decode(BetterGICoreInferenceStatus.self,
+            from: JSONSerialization.data(withJSONObject: result))
+    }
+
+    func benchmarkInference(scene: String) throws -> String {
+        let result = try runningClient().request(method: "inference.benchmark", parameters: ["scene": scene])
+        guard let value = result as? [String: Any], let elapsed = value["elapsedMs"] as? Double,
+              value["validated"] as? Bool == true else {
+            throw NSError(domain: "BetterGI.Inference", code: 1, userInfo: [NSLocalizedDescriptionKey: "推理验证响应无效"])
+        }
+        return String(format: "CPU 验证通过，含模型加载耗时 %.0f ms", elapsed)
     }
 
     func commonSettings() throws -> BetterGICoreCommonSettings {

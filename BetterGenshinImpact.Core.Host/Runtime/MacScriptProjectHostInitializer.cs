@@ -58,6 +58,7 @@ public sealed class MacScriptProjectHostInitializer : IScriptProjectHostInitiali
         engine.AddHostObject("dispatcher", new Dispatcher(config ?? new object()));
         engine.AddHostObject("file", new LimitedFile(workDir));
         engine.AddHostObject("http", new Http());
+        engine.AddHostObject("yolo", new YoloPredictorFactory(workDir));
         engine.AddHostObject("notification", new Notification());
         engine.AddHostObject("htmlMask", _htmlMaskFactory(workDir));
         engine.AddHostType("ServerTime", typeof(ServerTime));

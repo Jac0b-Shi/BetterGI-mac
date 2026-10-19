@@ -47,7 +47,7 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
 
     private readonly AutoDomainParam _taskParam;
 
-    private readonly BgiYoloPredictor _predictor;
+    private BgiYoloPredictor _predictor = null!;
 
     private readonly AutoDomainConfig _config;
     private readonly IAutoDomainRuntimePlatform _runtime;
@@ -94,7 +94,6 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
         _config = config;
         _pickKey = pickKey;
         _runtime = runtime;
-        _predictor = runtime.CreateTreePredictor();
 
         if (AutoFightParam.ComboStrategyName.Equals(_taskParam.CombatStrategyPath))
         {
@@ -186,6 +185,8 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
 
     public async Task<Dictionary<string, int>> Start(CancellationToken ct)
     {
+        using var predictor = _runtime.CreateTreePredictor();
+        _predictor = predictor;
         _ct = ct;
         _rewardSummary.Clear();
 
