@@ -22,8 +22,8 @@ public sealed class MacGenshinRuntimePlatform(
     public AutoFishingTaskParam BuildAutoFishingTaskParam() =>
         AutoFishingTaskParam.BuildFromConfig(autoFishing.Config, false);
     public Task<CraftMaterialResult> CraftMaterial(string materialName, int quantity,
-        string? materialType, CancellationToken cancellationToken) =>
-        new CraftMaterialTask(materialName, quantity, materialType).Start(cancellationToken);
+        string? materialType, CancellationToken cancellationToken, string? bonusType = null) =>
+        new CraftMaterialTask(materialName, quantity, materialType, bonusType).Start(cancellationToken);
     public Task ClaimBattlePassRewards(CancellationToken cancellationToken) =>
         new ClaimBattlePassRewardsTask().Start(cancellationToken);
     public Task GoToCraftingBench(string country, CancellationToken cancellationToken) =>

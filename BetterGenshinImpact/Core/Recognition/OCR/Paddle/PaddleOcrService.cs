@@ -16,11 +16,14 @@ using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
 using Size = OpenCvSharp.Size;
 
+#if BGI_PLATFORM_MAC
+using BgiOnnxSessionFactory = BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory;
+#endif
+
 namespace BetterGenshinImpact.Core.Recognition.OCR.Paddle;
 
 public class PaddleOcrService : IOcrService, IDisposable
 {
-    private int _disposed;
     /// <summary>
     ///     Usage:
     ///     https://github.com/sdcb/PaddleSharp/blob/master/docs/ocr.md
@@ -30,6 +33,8 @@ public class PaddleOcrService : IOcrService, IDisposable
     private readonly Det _localDetModel;
 
     private readonly Rec _localRecModel;
+    private readonly object _inferenceLock = new();
+    private bool _disposed;
 
     /// <summary>Gets or sets the official recognition score threshold used to discard low-confidence results.</summary>
     public float DropScore { get; set; } = 0.5f;
@@ -107,7 +112,7 @@ public class PaddleOcrService : IOcrService, IDisposable
                 );
         }
 
-        public (Det, Rec) Build(BgiOnnxFactory onnxFactory
+        public (Det, Rec) Build(BgiOnnxSessionFactory onnxFactory
 #if !BGI_PLATFORM_MAC
             , IOcrResourcePathResolver? resourceResolver = null
 #else
@@ -115,16 +120,18 @@ public class PaddleOcrService : IOcrService, IDisposable
 #endif
             )
         {
-            return (
-                new Det(DetectionModel, DetectionVersion, onnxFactory),
+            var detection = new Det(DetectionModel, DetectionVersion, onnxFactory);
+            try
+            {
+                return (detection,
 #if BGI_PLATFORM_MAC
-                resourceResolver is null
-                    ? throw new ArgumentNullException(nameof(resourceResolver))
-                    : new Rec(RecognitionModel, LoadLabelsFromModel(resourceResolver, RecognitionModel), RecognitionVersion, onnxFactory)
+                    new Rec(RecognitionModel, LoadLabelsFromModel(resourceResolver, RecognitionModel), RecognitionVersion, onnxFactory)
 #else
-                new Rec(RecognitionModel, RecLabel(), RecognitionVersion, onnxFactory)
+                    new Rec(RecognitionModel, RecLabel(), RecognitionVersion, onnxFactory)
 #endif
                 );
+            }
+            catch { detection.Dispose(); throw; }
         }
 
         public static readonly PaddleOcrModelType V4 = Create(
@@ -278,23 +285,47 @@ public class PaddleOcrService : IOcrService, IDisposable
         , IOcrResourcePathResolver resourceResolver
 #endif
         )
+        : this(bgiOnnxFactory.ForCurrentRuntime(), modelType, resourceResolver, true)
+    {
+    }
+
+#if !BGI_PLATFORM_MAC
+    internal PaddleOcrService(BgiOnnxSessionFactory factory, PaddleOcrModelType modelType)
+        : this(factory, modelType, null, true) { }
+#endif
+    internal PaddleOcrService(BgiOnnxSessionFactory bgiOnnxFactory, PaddleOcrModelType modelType
+#if !BGI_PLATFORM_MAC
+        , IOcrResourcePathResolver? resourceResolver
+#else
+        , IOcrResourcePathResolver resourceResolver
+#endif
+        , bool runtimeSnapshot)
     {
         var (modelsDet, modelsRec) = modelType.Build(bgiOnnxFactory, resourceResolver);
         _localDetModel = modelsDet;
         _localRecModel = modelsRec;
 
-        // 预热模型 — use resolver for preheat relative path in Core
+        try
+        {
+            // 预热模型
 #if BGI_PLATFORM_MAC
-        var preHeatPath = resourceResolver.ResolveSidecarPath(modelType.PreHeatImageRelativePath);
+            var preHeatPath = resourceResolver.ResolveSidecarPath(modelType.PreHeatImageRelativePath);
 #else
-        var preHeatPath = modelType.PreHeatImagePath;
+            var preHeatPath = modelType.PreHeatImagePath;
 #endif
-        using var preHeatImageMat = Bv.ImRead(preHeatPath) ??
-                                    throw new FileNotFoundException($"预热图片未找到: {preHeatPath}");
-        // Debug输出结果
-        var preHeatResult = RunAll(preHeatImageMat, 1);
-        Debug.WriteLine(
-            $"PaddleOcrService 预热完成，使用模型: {modelType.DetectionModel.Name} 和 {modelType.RecognitionModel.Name}，结果: {preHeatResult.Text}");
+            using var preHeatImageMat = Bv.ImRead(preHeatPath) ??
+                                        throw new FileNotFoundException($"预热图片未找到: {preHeatPath}");
+            // Debug输出结果
+            var preHeatResult = RunAll(preHeatImageMat, 1);
+            Debug.WriteLine(
+                $"PaddleOcrService 预热完成，使用模型: {modelType.DetectionModel.Name} 和 {modelType.RecognitionModel.Name}，结果: {preHeatResult.Text}");
+        }
+        catch
+        {
+            _localDetModel.Dispose();
+            _localRecModel.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -310,13 +341,17 @@ public class PaddleOcrService : IOcrService, IDisposable
     /// </summary>
     public OcrResult OcrResult(Mat mat)
     {
-        if (mat.Channels() == 4)
+        lock (_inferenceLock)
         {
-            using var mat3 = mat.CvtColor(ColorConversionCodes.BGRA2BGR);
-            return _OcrResult(mat3);
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (mat.Channels() == 4)
+            {
+                using var mat3 = mat.CvtColor(ColorConversionCodes.BGRA2BGR);
+                return _OcrResult(mat3);
         }
 
         return _OcrResult(mat);
+        }
     }
 
     /// <summary>
@@ -324,11 +359,15 @@ public class PaddleOcrService : IOcrService, IDisposable
     /// </summary>
     public string OcrWithoutDetector(Mat mat)
     {
-        var startTime = Stopwatch.GetTimestamp();
-        var str = _localRecModel.Run(mat).Text;
-        var time = Stopwatch.GetElapsedTime(startTime);
-        // Debug.WriteLine($"PaddleOcrWithoutDetector 耗时 {time.TotalMilliseconds}ms 结果: {str}");
-        return str;
+        lock (_inferenceLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            var startTime = Stopwatch.GetTimestamp();
+            var str = _localRecModel.Run(mat).Text;
+            var time = Stopwatch.GetElapsedTime(startTime);
+            // Debug.WriteLine($"PaddleOcrWithoutDetector 耗时 {time.TotalMilliseconds}ms 结果: {str}");
+            return str;
+        }
     }
 
     private OcrResult _OcrResult(Mat mat)
@@ -448,12 +487,13 @@ public class PaddleOcrService : IOcrService, IDisposable
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        lock (_inferenceLock)
         {
-            _localDetModel.Dispose();
-            _localRecModel.Dispose();
+            if (_disposed) return;
+            _disposed = true;
+            try { _localDetModel.Dispose(); }
+            finally { _localRecModel.Dispose(); }
         }
-        GC.SuppressFinalize(this);
     }
 
     /// <summary>

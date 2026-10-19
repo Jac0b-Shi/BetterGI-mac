@@ -54,7 +54,7 @@ public class LinneaMiningTask
 
     #endregion
 
-    private readonly BgiYoloPredictor _predictor;
+    private BgiYoloPredictor _predictor = null!;
     private readonly double _dpi = AutoFightRuntimePlatform.Current.DpiScale;
     private readonly double _widthScale = AutoFightRuntimePlatform.Current.SystemInfo.CaptureAreaRect.Width / 1920.0;
     private readonly double _heightScale = AutoFightRuntimePlatform.Current.SystemInfo.CaptureAreaRect.Height / 1080.0;
@@ -72,7 +72,6 @@ public class LinneaMiningTask
         _scanRounds = scanRounds;
         _mineCount = mineCount;
         _preferRight = scanRounds > 1;
-        _predictor = AutoFightRuntimePlatform.Current.CreateYoloPredictor(BgiOnnxModel.BgiMine);
         ClusterDistanceThreshold = BaseClusterDistance * _widthScale;
         EdgeIgnore = BaseEdgeIgnore * _widthScale;
         AlignmentExpansion = BaseAlignmentExpansion * _widthScale;
@@ -80,6 +79,8 @@ public class LinneaMiningTask
 
     public async Task Start(CancellationToken ct)
     {
+        using var predictor = AutoFightRuntimePlatform.Current.CreateYoloPredictor(BgiOnnxModel.BgiMine);
+        _predictor = predictor;
         var aimingModeEntered = false;
         try
         {

@@ -14,7 +14,7 @@ public interface IGenshinRuntimePlatform
     string MapMatchingMethod { get; }
     AutoFishingTaskParam BuildAutoFishingTaskParam();
     Task<CraftMaterialResult> CraftMaterial(string materialName, int quantity, string? materialType,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken, string? bonusType = null);
     Task ClaimBattlePassRewards(CancellationToken cancellationToken);
     Task GoToCraftingBench(string country, CancellationToken cancellationToken);
     Task GoCraftResin(string country, CancellationToken cancellationToken);

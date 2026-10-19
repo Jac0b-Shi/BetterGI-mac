@@ -26,17 +26,18 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
         private readonly AutoFishingTaskParam param;
 
-        private readonly BgiYoloPredictor _predictor;
+        private BgiYoloPredictor _predictor = null!;
 
         public AutoFishingTask(AutoFishingTaskParam param)
         {
             this.param = param;
             _logger = runtime.GetLogger<AutoFishingTask>();
-            _predictor = runtime.CreateYoloPredictor(BgiOnnxModel.BgiFish);
         }
 
         public async Task Start(CancellationToken ct)
         {
+            using var predictor = runtime.CreateYoloPredictor(BgiOnnxModel.BgiFish);
+            _predictor = predictor;
             this._ct = ct;
             try
             {

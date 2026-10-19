@@ -250,6 +250,13 @@
       "requiredFor": [
         "PaddleOcrService.Preheat.V4En"
       ]
+    },
+    {
+      "id": "DomainTreeTestImage",
+      "relativePath": "Assets/Model/Domain/test_petrified_trees.jpg",
+      "requiredFor": [
+        "InferenceValidation.DomainTree"
+      ]
     }
   ]
 }

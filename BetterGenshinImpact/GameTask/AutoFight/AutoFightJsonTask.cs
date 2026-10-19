@@ -1,5 +1,4 @@
 using BetterGenshinImpact.Core.Input;
-using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoFight.Assets;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
@@ -36,12 +35,6 @@ public class AutoFightJsonTask : ISoloTask
     private readonly JsonCombatStrategy _strategy;
     private CancellationToken _ct;
 
-    /// <summary>
-    /// YOLO目标检测器（BgiWorld模型），用于战斗结束检测
-    /// 当前未使用（战斗结束检测已委托到 AutoFightEndDetection），保留声明以与 TXT 策略保持一致
-    /// 初始化条件：_taskParam.FightFinishDetectEnabled == true
-    /// </summary>
-    private readonly BgiYoloPredictor? _predictor;
 
     private readonly ReturnMainUiTask _returnMainUiTask = new();
     private readonly double _assetScale = AutoFightRuntimePlatform.Current.SystemInfo.AssetScale;
@@ -82,11 +75,6 @@ public class AutoFightJsonTask : ISoloTask
     {
         _taskParam = taskParam;
         _strategy = JsonCombatStrategyParser.ParseFile(_taskParam.CombatStrategyPath);
-
-        if (_taskParam.FightFinishDetectEnabled)
-        {
-            _predictor = AutoFightRuntimePlatform.Current.CreateYoloPredictor(BgiOnnxModel.BgiWorld);
-        }
 
         _finishDetectConfig = new AutoFightTask.TaskFightFinishDetectConfig(_taskParam);
     }

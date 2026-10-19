@@ -21,7 +21,6 @@ namespace BetterGenshinImpact.GameTask.Common.Job;
 /// </summary>
 public class ScanPickTask
 {
-    private readonly BgiYoloPredictor _predictor = AutoFight.AutoFightRuntimePlatform.Current.CreateYoloPredictor(BgiOnnxModel.BgiWorld);
     private readonly double _dpi = AutoFight.AutoFightRuntimePlatform.Current.DpiScale;
 
 
@@ -44,6 +43,8 @@ public class ScanPickTask
 
     public async Task DoOnce(CancellationToken ct, int? seconds = null)
     {
+        // 每次扫描独立持有模型，结束或取消时释放，允许同一任务实例再次扫描。
+        using var predictor = AutoFight.AutoFightRuntimePlatform.Current.CreateYoloPredictor(BgiOnnxModel.BgiWorld);
         var sec = seconds ?? AutoFight.AutoFightRuntimePlatform.Current.AutoFightConfig.PickDropsAfterFightSeconds;
         Stopwatch timeoutStopwatch = Stopwatch.StartNew();
         TimeSpan finishTime = TimeSpan.FromSeconds(sec);
@@ -53,7 +54,7 @@ public class ScanPickTask
 
         while (!ct.IsCancellationRequested && timeoutStopwatch.Elapsed < finishTime)
         {
-            var (hasItems, pickItems) = DetectPickableItems();
+            var (hasItems, pickItems) = DetectPickableItems(predictor);
             // Logger.LogInformation("存在可拾取物品: {0}", hasItems);
             if (!hasItems)
             {
@@ -66,7 +67,7 @@ public class ScanPickTask
                         await WalkByDirection(ct, GIActions.MoveForward, 100);
                     TaskControlPlatform.Current.SimulateAction(GIActions.Drop, KeyType.KeyPress);
                     await Delay(300, ct);
-                    (hasItems, pickItems) = DetectPickableItems();
+                    (hasItems, pickItems) = DetectPickableItems(predictor);
                     if (hasItems) break;
                 }
             }
@@ -145,10 +146,10 @@ public class ScanPickTask
     /// Detects pickable items in the current view
     /// </summary>
     /// <returns>A tuple containing whether items were found and the list of pickable items</returns>
-    private (bool hasItems, List<Rect> pickItems) DetectPickableItems()
+    private (bool hasItems, List<Rect> pickItems) DetectPickableItems(BgiYoloPredictor predictor)
     {
         using var ra = CaptureToRectArea();
-        var resultDic = _predictor.Detect(ra);
+        var resultDic = predictor.Detect(ra);
         // 过滤出可拾取物品
         var pickItems = resultDic.Where(x => x.Key is "drops" or "ore")
             .SelectMany(x => x.Value).ToList();

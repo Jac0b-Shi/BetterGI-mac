@@ -29,6 +29,7 @@ public sealed class CoreRpcServer(
     private readonly PathingCatalog _pathingCatalog = new(layout);
     private readonly OneDragonCatalog _oneDragonCatalog = new(layout);
     private readonly CommonSettingsCatalog _commonSettings = new(layout);
+    public MacInferenceSettingsCatalog InferenceSettings { get; } = new(layout);
     private readonly SoloTaskSettingsCatalog _soloTaskSettings = new(layout);
     private readonly TriggerSettingsCatalog _triggerSettings = new(layout);
     private readonly MacroSettingsCatalog _macroSettings = new(layout);
@@ -309,6 +310,22 @@ public sealed class CoreRpcServer(
         }
     }
 
+    private async Task<object> BenchmarkInferenceAsync(string scene, CancellationToken token)
+    {
+        await _runtimeMutationLock.WaitAsync(token);
+        try
+        {
+            if (_triggerDispatcher?.IsRunning == true)
+                throw new InvalidOperationException("请先停止截图器与正在运行的任务，再验证推理。");
+            var semaphore = BetterGenshinImpact.GameTask.TaskRunnerPlatform.TryGetCurrent()?.TaskSemaphore;
+            if (semaphore is not null && !await semaphore.WaitAsync(0, token))
+                throw new InvalidOperationException("请先停止正在运行的任务，再验证推理。");
+            try { return await InferenceSettings.BenchmarkAsync(scene, token); }
+            finally { semaphore?.Release(); }
+        }
+        finally { _runtimeMutationLock.Release(); }
+    }
+
     private async Task<RpcResponse> DispatchAsync(RpcRequest request)
     {
         if (!TokenIsValid(request.SessionToken))
@@ -316,6 +333,9 @@ public sealed class CoreRpcServer(
 
         try
         {
+            if (request.Method == "inference.benchmark")
+                return RpcResponse.Success(request.Id, await BenchmarkInferenceAsync(
+                    RequiredString(request.Params, "scene"), _shutdown.Token));
             if (request.Method == "runtime.stop")
             {
                 return RpcResponse.Success(
@@ -551,6 +571,9 @@ public sealed class CoreRpcServer(
                 "repository.web.setGuideStatus" => _scriptRepositoryCatalog.SetGuideStatus(
                     request.Params?.Value<bool?>("status")
                     ?? throw new ArgumentException("status is required.")),
+                "inference.settings.get" => InferenceSettings.Get(),
+                "inference.settings.save" => InferenceSettings.Save(
+                    request.Params?["settings"] as JObject ?? throw new ArgumentException("settings is required.")),
                 "common.settings.get" => _commonSettings.Get(),
                 "common.settings.save" => _commonSettings.Save(
                     request.Params?["settings"] as JObject

@@ -8,6 +8,8 @@ struct SettingsPage: View {
         VStack(alignment: .leading, spacing: 14) {
             BGIPageTitle(title: "软件设置")
 
+            InferenceSettingsView()
+
             if let settings = appState.commonSettings {
                 BGISettingGroup(
                     icon: "globe",

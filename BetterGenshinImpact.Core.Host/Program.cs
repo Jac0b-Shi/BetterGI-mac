@@ -138,7 +138,7 @@ server.AttachGameScreenshotAction(new MacGameScreenshotAction(
 var foregroundInputCoordinator = new ForegroundInputCoordinator(
     server.PlatformCallbacks, sessionToken, shutdown.Token);
 var imageRegionOcrService = new MacImageRegionOcrService(
-    layout, loggerFactory.CreateLogger<BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory>());
+    layout, loggerFactory.CreateLogger<BetterGenshinImpact.Core.Recognition.ONNX.BgiOnnxFactory>(), server.InferenceSettings.Active);
 using var musicCoordinator = new MusicCoordinator(
     foregroundInputCoordinator,
     shutdown.Token,
