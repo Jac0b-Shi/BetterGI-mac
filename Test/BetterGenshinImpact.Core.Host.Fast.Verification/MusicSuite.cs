@@ -1,4 +1,5 @@
 using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Mask;
 using BetterGenshinImpact.GameTask.Music.Model;
 using BetterGenshinImpact.GameTask.Music.Service;
 using BetterGenshinImpact.Core.Host.Runtime;
@@ -60,6 +61,38 @@ public sealed class MusicSuite : IVerificationSuite
             context.Require(
                 timeline.Events.Count == 4 && score.PlayableRatio == 1,
                 "Portable music timeline mapping did not retain all playable notes.");
+
+            var player = new GuidedPlayerInput();
+            var gameFocused = false;
+            var guideBoard = new MaskWindowDrawingBoard();
+            var guideLayout = new MusicGuidedKeyLayoutConfig();
+            var guideOverlay = new MacMusicGuidedOverlay(guideBoard, (3840, 2160), guideLayout);
+            using (var guided = new MusicGuidedSession(MusicGuidedSegmentBuilder.Build(timeline),
+                new MusicGuidedSessionOptions { SegmentSize = 1, AutoDetectKeys = false,
+                    InputFactory = () => player, GameHandle = () => 7, IsGameActive = () => gameFocused,
+                    Overlay = guideOverlay, KeyLayout = guideLayout, KeyProfile = profile }))
+            {
+                context.Require(guided.Start(), "Portable guided music did not start with native input injection.");
+                var ring4K = guideBoard.Current.Entries.Single().Shapes.OfType<MaskWindowDrawingLine>().First();
+                context.Require(Math.Abs(ring4K.From.Y - guideLayout.BaseY * 2) < .01,
+                    "Guided rings were not expressed in native 4K capture pixels.");
+                guideOverlay.UpdateCanvasSize((1920, 1080));
+                guided.Pump();
+                var ring1080 = guideBoard.Current.Entries.Single().Shapes.OfType<MaskWindowDrawingLine>().First();
+                context.Require(Math.Abs(ring1080.From.Y * 2 - ring4K.From.Y) < .01 &&
+                    Math.Abs(ring1080.From.X * 2 - ring4K.From.X) < .01,
+                    "Guided rings did not follow a capture resolution change.");
+                player.Press('Q'); player.Release('Q');
+                context.Require(guided.SegmentIndex == 0 && guided.ErrorCount == 0,
+                    "Guided music consumed physical input while the game was unfocused.");
+                gameFocused = true;
+                player.Press('W');
+                context.Require(guided.ErrorCount == 1 && guided.SegmentIndex == 0,
+                    "Guided music accepted a wrong key or advanced the segment.");
+                player.Release('W'); player.Press('Q'); player.Release('Q'); player.Press('W');
+                context.Require(guided.IsFinished && player.Stopped,
+                    "Guided music did not complete the score and detach physical input.");
+            }
 
             var transport = new RecordingTransport();
             transport.KeyDown('q');
@@ -823,6 +856,18 @@ public sealed class MusicSuite : IVerificationSuite
             Task.CompletedTask;
 
         public void CompleteUnavailableProbe() => _completeProbe.TrySetResult();
+    }
+
+    private sealed class GuidedPlayerInput : IMusicGuidedInput
+    {
+        public event Action<int>? KeyPressed;
+        public event Action<int>? KeyReleased;
+        public bool Stopped { get; private set; }
+        public bool Start() => true;
+        public void Press(char key) => KeyPressed?.Invoke(key);
+        public void Release(char key) => KeyReleased?.Invoke(key);
+        public void Stop() => Stopped = true;
+        public void Dispose() => Stop();
     }
 
     private sealed class FixedProfileService(InstrumentProfile profile)

@@ -27,6 +27,7 @@ public sealed class MacTaskRunnerPlatform(
         GameTaskManager.ClearTriggerRequests();
         _ = Invoke("window.metrics", null);
         inputCoordinator.WaitForGameFocus(hostCancellationToken);
+        inputCoordinator.ReleaseAllWhenFocused(hostCancellationToken);
     }
 
     public void InitializeTask(CancellationToken cancellationToken)
@@ -43,6 +44,7 @@ public sealed class MacTaskRunnerPlatform(
         if (waitForInput)
         {
             inputCoordinator.WaitForGameFocus(linked.Token);
+            inputCoordinator.ReleaseAllWhenFocused(linked.Token);
         }
     }
 

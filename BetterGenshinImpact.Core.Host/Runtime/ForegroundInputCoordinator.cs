@@ -199,6 +199,17 @@ public sealed class ForegroundInputCoordinator(
             .GetAwaiter().GetResult() as JObject
         ?? throw new InvalidDataException("window.metrics did not return an object.");
 
+    internal (double Width, double Height) GetCapturePixelSize(CancellationToken cancellationToken)
+    {
+        using var linked = CreateLinkedCancellation(cancellationToken);
+        var metrics = Metrics(linked.Token);
+        var width = metrics.Value<int?>("captureWidth") ?? 0;
+        var height = metrics.Value<int?>("captureHeight") ?? 0;
+        if (width <= 0 || height <= 0)
+            throw new InvalidDataException("window.metrics did not return a positive capture size.");
+        return (width, height);
+    }
+
     public bool IsGameFocused(CancellationToken cancellationToken = default) =>
         focusProbe?.Invoke()
         ?? Metrics(cancellationToken).Value<bool?>("isActive")

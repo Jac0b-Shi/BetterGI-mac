@@ -22,6 +22,7 @@ struct MusicPage: View {
     @State private var searchText = ""
     @State private var selectedProfileName = ""
     @State private var transpose = 0
+    @State private var guidedCalibrationKey = "Q"
     @State private var mappingModeOption: MusicMappingModeOption = .followDefault
     @State private var disabledMidiTrackIndexes: Set<Int> = []
     @State private var seekPosition = 0.0
@@ -161,7 +162,7 @@ struct MusicPage: View {
                 .help("播放")
                 .disabled(!track.isValid
                           || appState.runtimeLifecycle != .running
-                          || appState.musicState.playback.state != .stopped)
+                          || (appState.musicState.playback.state != .stopped || appState.musicState.guided.active))
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 6)
@@ -235,7 +236,7 @@ struct MusicPage: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(selectedProfileName.isEmpty
-                              || appState.musicState.playback.state != .stopped)
+                              || (appState.musicState.playback.state != .stopped || appState.musicState.guided.active))
                 }
             } else {
                 Text("选择曲目后可调整输出乐器、移调和 MIDI 轨道。")
@@ -252,6 +253,30 @@ struct MusicPage: View {
             symbolName: "waveform"
         ) {
             VStack(spacing: 12) {
+                HStack {
+                    Toggle("引导式跟弹（仅提示，由玩家演奏）", isOn: $appState.musicGuidedMode)
+                    Stepper("每段 \(appState.musicGuidedSegmentSize) 次", value: $appState.musicGuidedSegmentSize, in: 1...20)
+                    Toggle("按顺序", isOn: $appState.musicGuidedStrictOrder)
+                    Toggle("自动识别琴键", isOn: $appState.musicGuidedAutoDetect)
+                    Toggle("显示引导圈", isOn: $appState.musicGuidedOverlayEnabled)
+                }.disabled(appState.musicState.guided.active || (appState.musicState.playback.state != .stopped || appState.musicState.guided.active))
+                if appState.musicState.guided.active {
+                    DisclosureGroup("跟弹键位校准（自动保存）") {
+                        Button("重新识别琴键") { appState.redetectGuidedMusic() }
+                        guidedLayoutNumber("左上键 X", \.baseX)
+                        guidedLayoutNumber("左上键 Y", \.baseY)
+                        guidedLayoutNumber("列间距", \.columnSpacing)
+                        guidedLayoutNumber("排间距", \.rowSpacing)
+                        guidedLayoutNumber("排偏移", \.rowIndent)
+                        guidedLayoutNumber("引导圈半径", \.ringRadius)
+                        guidedLayoutNumber("引导圈线宽", \.ringThickness)
+                        Picker("单键校准", selection: $guidedCalibrationKey) {
+                            ForEach(Array("QWERTYUASDFGHJZXCVBNM").map(String.init), id: \.self) { Text($0).tag($0) }
+                        }
+                        guidedKeyOffset("单键横向偏移", horizontal: true)
+                        guidedKeyOffset("单键纵向偏移", horizontal: false)
+                    }
+                }
                 HStack(spacing: 10) {
                     Text(formatDuration(seekPosition))
                         .font(BGIFonts.console)
@@ -274,7 +299,7 @@ struct MusicPage: View {
                 HStack(spacing: 14) {
                     playbackButton("backward.end.fill", help: "上一首") {
                         appState.previousMusic()
-                    }
+                    }.disabled(appState.musicState.guided.active)
                     playbackButton(
                         appState.musicState.playback.state == .paused
                             ? "play.fill" : "pause.fill",
@@ -286,10 +311,10 @@ struct MusicPage: View {
                     playbackButton("stop.fill", help: "停止") {
                         appState.stopMusic()
                     }
-                    .disabled(appState.musicState.playback.state == .stopped)
+                    .disabled(appState.musicState.playback.state == .stopped && !appState.musicState.guided.active)
                     playbackButton("forward.end.fill", help: "下一首") {
                         appState.nextMusic()
-                    }
+                    }.disabled(appState.musicState.guided.active)
 
                     Divider().frame(height: 24)
 
@@ -318,7 +343,7 @@ struct MusicPage: View {
                     Button {
                         appState.startSelectedMusic()
                     } label: {
-                        Label("开始演奏", systemImage: "play.fill")
+                        Label(appState.musicGuidedMode ? "开始跟弹" : "开始演奏", systemImage: "play.fill")
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!appState.canStartMusicPlayback)
@@ -353,6 +378,32 @@ struct MusicPage: View {
                     Spacer()
                 }
             }
+        }
+    }
+
+    private func guidedLayoutNumber(_ title: String, _ key: WritableKeyPath<BetterGIMusicGuidedLayout, Double>) -> some View {
+        HStack {
+            Text(title)
+            TextField("", value: Binding(get: { appState.musicState.guided.keyLayout[keyPath: key] }, set: { value in
+                var layout = appState.musicState.guided.keyLayout
+                layout[keyPath: key] = value
+                appState.updateGuidedMusicLayout(layout)
+            }), format: .number).frame(width: 100)
+        }
+    }
+    private func guidedKeyOffset(_ title: String, horizontal: Bool) -> some View {
+        HStack {
+            Text(title)
+            TextField("", value: Binding(get: {
+                let offset = appState.musicState.guided.keyLayout.keyOffsets[guidedCalibrationKey] ?? .init()
+                return horizontal ? offset.x : offset.y
+            }, set: { value in
+                var layout = appState.musicState.guided.keyLayout
+                var offset = layout.keyOffsets[guidedCalibrationKey] ?? .init()
+                if horizontal { offset.x = value } else { offset.y = value }
+                layout.keyOffsets[guidedCalibrationKey] = offset
+                appState.updateGuidedMusicLayout(layout)
+            }), format: .number).frame(width: 100)
         }
     }
 

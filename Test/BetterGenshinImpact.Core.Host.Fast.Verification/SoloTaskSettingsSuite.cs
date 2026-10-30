@@ -105,12 +105,26 @@ public sealed class SoloTaskSettingsSuite : IVerificationSuite
             var catalog = new SoloTaskSettingsCatalog(layout);
             var domainSettings = JObject.FromObject(catalog.Get("AutoDomain"));
             context.Require(((JArray)domainSettings["domainOptions"]!).Values<string>()
-                .Contains(BetterGenshinImpact.GameTask.AutoDomain.AutoDomainTask.DevelopmentGuideOption),
+                .Contains(BetterGenshinImpact.GameTask.AutoDomain.AutoDomainTask.TrainingGuideOption),
                 "AutoDomain did not expose the real development-guide destination.");
-            domainSettings["domainName"] = BetterGenshinImpact.GameTask.AutoDomain.AutoDomainTask.DevelopmentGuideOption;
+            domainSettings["domainName"] = BetterGenshinImpact.GameTask.AutoDomain.AutoDomainTask.TrainingGuideOption;
             context.Require(JObject.FromObject(catalog.Save("AutoDomain", domainSettings)).Value<string>("domainName")
-                == BetterGenshinImpact.GameTask.AutoDomain.AutoDomainTask.DevelopmentGuideOption,
+                == BetterGenshinImpact.GameTask.AutoDomain.AutoDomainTask.TrainingGuideOption,
                 "AutoDomain rejected the upstream development-guide destination.");
+            domainSettings["originalResin20UseCount"] = 3;
+            domainSettings["originalResin40UseCount"] = 4;
+            domainSettings["trainingGuideCalculateRunsEnabled"] = true;
+            domainSettings["trainingGuideRunPreference"] = 17;
+            domainSettings["trainingGuideCraftingBonusReservePercent"] = 99;
+            domainSettings["trainingGuideRewardFailureBudgetEnabled"] = true;
+            catalog.Save("AutoDomain", domainSettings);
+            var guideReloaded = JObject.FromObject(new SoloTaskSettingsCatalog(layout).Get("AutoDomain"));
+            context.Require(guideReloaded.Value<int>("trainingGuideRunPreference") == 0 &&
+                            guideReloaded.Value<int>("trainingGuideCraftingBonusReservePercent") == 20 &&
+                            guideReloaded.Value<bool>("trainingGuideRewardFailureBudgetEnabled") &&
+                            guideReloaded.Value<int>("originalResin20UseCount") == 3 &&
+                            guideReloaded.Value<int>("originalResin40UseCount") == 4,
+                "Training guide settings did not clamp and persist through the public catalog.");
             var combo = JObject.FromObject(catalog.Save("AutoCombo", JObject.FromObject(new
             {
                 planningLlmEndpoint = "http://127.0.0.1:12345/v1",

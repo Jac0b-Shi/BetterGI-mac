@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 extension AppState {
     var selectedMusicTrack: BetterGIMusicTrack? {
@@ -8,6 +9,7 @@ extension AppState {
 
     var canStartMusicPlayback: Bool {
         runtimeLifecycle == .running
+            && !musicState.guided.active
             && musicState.playback.state == .stopped
             && selectedMusicTrack?.isValid == true
             && !musicLoading
@@ -58,6 +60,7 @@ extension AppState {
     }
 
     func startSelectedMusic() {
+        if musicGuidedMode { startSelectedGuidedMusic(); return }
         guard runtimeLifecycle == .running else {
             musicStatus = "请先启动运行时并选中原神窗口。"
             return
@@ -89,6 +92,73 @@ extension AppState {
         }
     }
 
+    func startSelectedGuidedMusic() {
+        guard canStartMusicPlayback, let supervisor = betterGICoreSupervisor, let index = selectedMusicTrackIndex else { return }
+        musicLoading = true
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.musicLoading = false }
+            do {
+                self.musicGuidedKeyMonitor.isGameFrontmost = { [weak self] in
+                    guard let self else { return false }
+                    return self.runtimeLifecycle == .running && ForegroundWindowGuard.isTargetFrontmost(self.selectedWindow)
+                }
+                try self.musicGuidedKeyMonitor.start()
+                let state = try await supervisor.startGuidedMusic(index: index, windowID: self.selectedWindow.id,
+                    segmentSize: self.musicGuidedSegmentSize, strictOrder: self.musicGuidedStrictOrder, autoDetect: self.musicGuidedAutoDetect, overlayEnabled: self.musicGuidedOverlayEnabled)
+                self.musicGuidedKeyMonitor.onExit = { [weak self] in self?.stopMusic() }
+                self.musicGuidedKeyMonitor.onRedetect = { [weak self] in self?.redetectGuidedMusic() }
+                self.musicGuidedKeyMonitor.onKey = { [weak self] key, down, modifiers in
+                    guard let self, let session = state.guided.session else { return }
+                    let previous = self.musicGuidedKeyTask
+                    self.musicGuidedKeyTask = Task { [weak self] in
+                        await previous?.value
+                        do { try await supervisor.guidedMusicKey(session: session, key: key, down: down, modifiers: modifiers) }
+                        catch {
+                            guard self?.musicState.guided.session == session else { return }
+                            self?.stopMusic(); self?.addLog(.error, error.localizedDescription)
+                        }
+                    }
+                }
+                if self.musicGuidedOverlayEnabled { self.isHUDVisible = true }
+                self.applyMusicState(state)
+            } catch {
+                self.musicGuidedKeyMonitor.stop()
+                self.musicStatus = "无法开始跟弹：\(error.localizedDescription)"
+            }
+        }
+    }
+
+    func redetectGuidedMusic() {
+        guard let supervisor = betterGICoreSupervisor, let session = musicState.guided.session, musicState.guided.active else { return }
+        musicGuidedEditRevision &+= 1
+        let revision = musicGuidedEditRevision
+        Task { [weak self] in
+            do {
+                let state = try await supervisor.redetectGuidedMusic(session: session)
+                guard self?.musicState.guided.session == session, self?.musicState.guided.active == true,
+                      self?.musicGuidedEditRevision == revision else { return }
+                self?.applyMusicState(state)
+            } catch { self?.addLog(.error, "跟弹键位识别失败：\(error.localizedDescription)") }
+        }
+    }
+    func updateGuidedMusicLayout(_ layout: BetterGIMusicGuidedLayout) {
+        guard let supervisor = betterGICoreSupervisor, let session = musicState.guided.session, musicState.guided.active else { return }
+        var layout = layout
+        layout.manualCalibrated = true
+        musicState.guided.keyLayout = layout
+        musicGuidedEditRevision &+= 1
+        let revision = musicGuidedEditRevision
+        Task { [weak self] in
+            do {
+                let state = try await supervisor.updateGuidedMusicLayout(session: session, layout: layout)
+                guard self?.musicState.guided.session == session, self?.musicState.guided.active == true,
+                      self?.musicGuidedEditRevision == revision else { return }
+                self?.applyMusicState(state)
+            } catch { self?.addLog(.error, "跟弹键位调整失败：\(error.localizedDescription)") }
+        }
+    }
+
     func pauseOrResumeMusic() {
         let method = musicState.playback.state == .paused
             ? "music.resume" : "music.pause"
@@ -96,6 +166,7 @@ extension AppState {
     }
 
     func stopMusic() {
+        musicGuidedKeyMonitor.stop()
         runMusicCommand("music.stop")
     }
 
@@ -188,7 +259,10 @@ extension AppState {
         let selectedFullPath = selectedMusicTrack?.fullPath
         musicState = state
         musicPlaybackMode = state.playbackMode
-        if state.playback.state != .stopped {
+        if state.guided.active {
+            musicStatus = "跟弹：第 \(state.guided.segmentIndex + 1)/\(state.guided.segmentCount) 段，已弹 \(state.guided.progress) 次，错误 \(state.guided.errors) 次。请切回游戏手动演奏，Esc 停止。"
+            startMusicPlaybackPolling()
+        } else if state.playback.state != .stopped {
             musicSpeed = state.playback.speed
             if state.playback.queueIndex >= 0 {
                 selectedMusicTrackIndex = state.playback.queueIndex
@@ -198,6 +272,8 @@ extension AppState {
                 : "正在演奏：\(state.playback.trackName)"
             startMusicPlaybackPolling()
         } else {
+            musicGuidedKeyMonitor.stop()
+            if let error = state.guided.error { addLog(.error, error) }
             musicPlaybackPollTask?.cancel()
             musicPlaybackPollTask = nil
             musicStatus = state.rootFolder.isEmpty

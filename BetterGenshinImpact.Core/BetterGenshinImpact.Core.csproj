@@ -141,6 +141,12 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoMusicGame/AutoMusicGameRuntimePlatform.cs" Link="GameTask/AutoMusicGame/AutoMusicGameRuntimePlatform.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoMusicGame/AutoMusicGameTask.cs" Link="GameTask/AutoMusicGame/AutoMusicGameTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Music/Model/*.cs" Link="GameTask/Music/Model/%(Filename)%(Extension)" />
+    <Compile Include="../BetterGenshinImpact/Core/Config/MusicConfig.cs" Link="Core/Config/MusicConfig.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicGuidedInput.cs" Link="GameTask/Music/Service/MusicGuidedInput.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicGuidedSession.cs" Link="GameTask/Music/Service/MusicGuidedSession.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicGuidedSegmentBuilder.cs" Link="GameTask/Music/Service/MusicGuidedSegmentBuilder.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicKeyAutoDetector.cs" Link="GameTask/Music/Service/MusicKeyAutoDetector.cs" />
+    <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicKeyLayout.cs" Link="GameTask/Music/Service/MusicKeyLayout.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicInterfaces.cs" Link="GameTask/Music/Service/MusicInterfaces.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicInstrumentSwitcher.cs" Link="GameTask/Music/Service/MusicInstrumentSwitcher.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/Music/Service/MusicScoreParser.cs" Link="GameTask/Music/Service/MusicScoreParser.cs" />
@@ -468,6 +474,7 @@
     <Compile Include="../BetterGenshinImpact/GameTask/AutoCook/AutoCookTask.cs" Link="GameTask/AutoCook/AutoCookTask.cs" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoArtifactSalvage/*.cs" Link="GameTask/AutoArtifactSalvage/%(Filename)%(Extension)" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoDomain/*.cs" Link="GameTask/AutoDomain/%(Filename)%(Extension)" />
+    <Compile Include="../BetterGenshinImpact/GameTask/AutoDomain/TrainingGuide/**/*.cs" Exclude="../BetterGenshinImpact/GameTask/AutoDomain/TrainingGuide/Configuration/TrainingGuideDomainOptions.cs" Link="GameTask/AutoDomain/TrainingGuide/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoDomain/Model/*.cs" Link="GameTask/AutoDomain/Model/%(Filename)%(Extension)" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoBoss/*.cs" Link="GameTask/AutoBoss/%(Filename)%(Extension)" />
     <Compile Include="../BetterGenshinImpact/GameTask/AutoGeniusInvokation/**/*.cs" Link="GameTask/AutoGeniusInvokation/%(RecursiveDir)%(Filename)%(Extension)" />

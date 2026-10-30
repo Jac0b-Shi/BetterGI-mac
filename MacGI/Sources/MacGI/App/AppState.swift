@@ -410,6 +410,14 @@ final class AppState: ObservableObject {
     @Published var musicUseCustomBpm = false
     @Published var musicCustomBpm = 120.0
     @Published var musicAutoSwitchInstrument = false
+    @Published var musicGuidedMode = false
+    @Published var musicGuidedSegmentSize = 5
+    @Published var musicGuidedStrictOrder = true
+    @Published var musicGuidedAutoDetect = true
+    @Published var musicGuidedOverlayEnabled = true
+    let musicGuidedKeyMonitor = MusicGuidedKeyMonitor()
+    var musicGuidedKeyTask: Task<Void, Never>?
+    var musicGuidedEditRevision: UInt64 = 0
 
     // MARK: Window & capture (typed — not strings)
 
@@ -4924,7 +4932,18 @@ final class AppState: ObservableObject {
         maxArtifactStar: String? = nil, fightEndDelay: Double? = nil,
         shortMovement: Bool? = nil, walkToF: Bool? = nil,
         leftRightMoveTimes: Int? = nil, autoEat: Bool? = nil,
-        rewardRecognitionEnabled: Bool? = nil, reviveRetryCount: Int? = nil
+        rewardRecognitionEnabled: Bool? = nil, reviveRetryCount: Int? = nil,
+        trainingGuideCalculateRunsEnabled: Bool? = nil,
+        trainingGuideRunPreference: Int? = nil,
+        trainingGuideCraftingBonusReservePercent: Int? = nil,
+        trainingGuideRewardRecognitionEnabled: Bool? = nil,
+        trainingGuideRewardFailureBudgetEnabled: Bool? = nil,
+        trainingGuideDiagnosticsEnabled: Bool? = nil,
+        trainingGuideLowARAdaptationEnabled: Bool? = nil,
+        trainingGuideFallbackDomainName: String? = nil,
+        trainingGuideFallbackSundaySelectedValue: String? = nil,
+        originalResin20UseCount: Int? = nil,
+        originalResin40UseCount: Int? = nil
     ) {
         guard let supervisor = betterGICoreSupervisor, let current = autoDomainSettings else { return }
         let next = BetterGICoreAutoDomainSettings(
@@ -4947,7 +4966,18 @@ final class AppState: ObservableObject {
             autoEat: autoEat ?? current.autoEat,
             rewardRecognitionEnabled:
                 rewardRecognitionEnabled ?? current.rewardRecognitionEnabled,
-            reviveRetryCount: reviveRetryCount ?? current.reviveRetryCount)
+            reviveRetryCount: reviveRetryCount ?? current.reviveRetryCount,
+            trainingGuideCalculateRunsEnabled: trainingGuideCalculateRunsEnabled ?? current.trainingGuideCalculateRunsEnabled,
+            trainingGuideRunPreference: trainingGuideRunPreference ?? current.trainingGuideRunPreference,
+            trainingGuideCraftingBonusReservePercent: trainingGuideCraftingBonusReservePercent ?? current.trainingGuideCraftingBonusReservePercent,
+            trainingGuideRewardRecognitionEnabled: trainingGuideRewardRecognitionEnabled ?? current.trainingGuideRewardRecognitionEnabled,
+            trainingGuideRewardFailureBudgetEnabled: trainingGuideRewardFailureBudgetEnabled ?? current.trainingGuideRewardFailureBudgetEnabled,
+            trainingGuideDiagnosticsEnabled: trainingGuideDiagnosticsEnabled ?? current.trainingGuideDiagnosticsEnabled,
+            trainingGuideLowARAdaptationEnabled: trainingGuideLowARAdaptationEnabled ?? current.trainingGuideLowARAdaptationEnabled,
+            trainingGuideFallbackDomainName: trainingGuideFallbackDomainName ?? current.trainingGuideFallbackDomainName,
+            trainingGuideFallbackSundaySelectedValue: trainingGuideFallbackSundaySelectedValue ?? current.trainingGuideFallbackSundaySelectedValue,
+            originalResin20UseCount: originalResin20UseCount ?? current.originalResin20UseCount,
+            originalResin40UseCount: originalResin40UseCount ?? current.originalResin40UseCount)
         Task { [weak self] in
             do { self?.autoDomainSettings = try await supervisor.saveAutoDomainSettings(next) }
             catch { self?.addLog(.error, "AutoDomain settings save failed: \(error.localizedDescription)") }
@@ -5486,6 +5516,7 @@ final class AppState: ObservableObject {
     }
 
     func shutdownInputBackend() {
+        musicGuidedKeyMonitor.stop()
         systemMetricsSamplingTask?.cancel()
         systemMetricsSamplingTask = nil
         inputDispatcher.shutdown()

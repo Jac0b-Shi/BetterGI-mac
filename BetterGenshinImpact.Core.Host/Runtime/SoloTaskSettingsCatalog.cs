@@ -514,6 +514,9 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             config.DomainName = domainName;
             config.SpecifyResinUse = RequiredBool(settings, "specifyResinUse");
             config.OriginalResinUseCount = NonNegative(settings, "originalResinUseCount");
+            if (settings["originalResin20UseCount"] is not null) config.OriginalResin20UseCount = NonNegative(settings, "originalResin20UseCount");
+            if (settings["originalResin40UseCount"] is not null) config.OriginalResin40UseCount = NonNegative(settings, "originalResin40UseCount");
+
             config.CondensedResinUseCount = NonNegative(settings, "condensedResinUseCount");
             config.TransientResinUseCount = NonNegative(settings, "transientResinUseCount");
             config.FragileResinUseCount = NonNegative(settings, "fragileResinUseCount");
@@ -525,6 +528,22 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
             config.AutoEat = RequiredBool(settings, "autoEat");
             config.RewardRecognitionEnabled = RequiredBool(settings, "rewardRecognitionEnabled");
             config.ReviveRetryCount = RequiredInt(settings, "reviveRetryCount");
+            if (settings["trainingGuideCalculateRunsEnabled"] is not null) config.TrainingGuideCalculateRunsEnabled = settings.Value<bool>("trainingGuideCalculateRunsEnabled");
+            if (settings["trainingGuideRunPreference"] is not null) config.TrainingGuideRunPreference = settings.Value<int>("trainingGuideRunPreference");
+            if (settings["trainingGuideCraftingBonusReservePercent"] is not null) config.TrainingGuideCraftingBonusReservePercent = settings.Value<int>("trainingGuideCraftingBonusReservePercent");
+            if (settings["trainingGuideRewardRecognitionEnabled"] is not null) config.TrainingGuideRewardRecognitionEnabled = settings.Value<bool>("trainingGuideRewardRecognitionEnabled");
+            if (settings["trainingGuideRewardFailureBudgetEnabled"] is not null) config.TrainingGuideRewardFailureBudgetEnabled = settings.Value<bool>("trainingGuideRewardFailureBudgetEnabled");
+            if (settings["trainingGuideDiagnosticsEnabled"] is not null) config.TrainingGuideDiagnosticsEnabled = settings.Value<bool>("trainingGuideDiagnosticsEnabled");
+            if (settings["trainingGuideLowARAdaptationEnabled"] is not null) config.TrainingGuideLowARAdaptationEnabled = settings.Value<bool>("trainingGuideLowARAdaptationEnabled");
+            if (settings["trainingGuideFallbackDomainName"] is not null) config.TrainingGuideFallbackDomainName = settings.Value<string>("trainingGuideFallbackDomainName") ?? string.Empty;
+            if (settings["trainingGuideFallbackSundaySelectedValue"] is not null) config.TrainingGuideFallbackSundaySelectedValue = settings.Value<string>("trainingGuideFallbackSundaySelectedValue") ?? string.Empty;
+            if (!string.IsNullOrEmpty(config.TrainingGuideFallbackDomainName) &&
+                (config.TrainingGuideFallbackDomainName == AutoDomainTask.TrainingGuideOption ||
+                 !DomainOptions().Contains(config.TrainingGuideFallbackDomainName, StringComparer.Ordinal)))
+                throw new ArgumentException("Unknown training guide fallback domain.");
+            if (config.TrainingGuideFallbackSundaySelectedValue is not ("" or "1" or "2" or "3"))
+                throw new ArgumentException("Unsupported training guide reward selection.");
+
 
             var fightConfig = LoadConfig<AutoFightConfig>(root, "autoFightConfig");
             fightConfig.StrategyName = strategyName;
@@ -826,6 +845,17 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
         autoEat = config.AutoEat,
         rewardRecognitionEnabled = config.RewardRecognitionEnabled,
         reviveRetryCount = config.ReviveRetryCount,
+        trainingGuideCalculateRunsEnabled = config.TrainingGuideCalculateRunsEnabled,
+        trainingGuideRunPreference = config.TrainingGuideRunPreference,
+        trainingGuideCraftingBonusReservePercent = config.TrainingGuideCraftingBonusReservePercent,
+        trainingGuideRewardRecognitionEnabled = config.TrainingGuideRewardRecognitionEnabled,
+        trainingGuideRewardFailureBudgetEnabled = config.TrainingGuideRewardFailureBudgetEnabled,
+        trainingGuideDiagnosticsEnabled = config.TrainingGuideDiagnosticsEnabled,
+        trainingGuideLowARAdaptationEnabled = config.TrainingGuideLowARAdaptationEnabled,
+        trainingGuideFallbackDomainName = config.TrainingGuideFallbackDomainName,
+        trainingGuideFallbackSundaySelectedValue = config.TrainingGuideFallbackSundaySelectedValue,
+        originalResin20UseCount = config.OriginalResin20UseCount,
+        originalResin40UseCount = config.OriginalResin40UseCount,
     };
 
     private static object Describe(AutoArtifactSalvageConfig config) => new
@@ -926,7 +956,7 @@ public sealed class SoloTaskSettingsCatalog(RuntimeLayout layout)
     }
 
     private static string[] DomainOptions() =>
-        MapLazyAssets.Get().DomainNameList.Append(AutoDomainTask.DevelopmentGuideOption).ToArray();
+        MapLazyAssets.Get().DomainNameList.Append(AutoDomainTask.TrainingGuideOption).ToArray();
 
     private string[] StrategyOptions()
     {
