@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.Core.Host.Runtime;
 
-public sealed class MusicCoordinator : IDisposable
+public sealed partial class MusicCoordinator : IDisposable
 {
     private readonly CancellationToken _hostCancellationToken;
     private readonly ILogger<MusicCoordinator> _logger;
@@ -34,8 +34,10 @@ public sealed class MusicCoordinator : IDisposable
         ForegroundInputCoordinator input,
         CancellationToken hostCancellationToken,
         ILoggerFactory loggerFactory,
-        IMusicInstrumentSwitcher? instrumentSwitcher = null)
+        IMusicInstrumentSwitcher? instrumentSwitcher = null,
+        string? guidedSettingsPath = null)
     {
+        _guidedSettingsPath = guidedSettingsPath;
         _hostCancellationToken = hostCancellationToken;
         _input = input;
         _logger = loggerFactory.CreateLogger<MusicCoordinator>();
@@ -72,7 +74,7 @@ public sealed class MusicCoordinator : IDisposable
         await _mutationLock.WaitAsync(_hostCancellationToken);
         try
         {
-            if (_playbackService.Snapshot.State != MusicPlaybackState.Stopped ||
+            if (IsGuidedActive || _playbackService.Snapshot.State != MusicPlaybackState.Stopped ||
                 Volatile.Read(ref _sessionStarting) != 0)
             {
                 throw new InvalidOperationException("播放期间不能切换曲谱目录。");
@@ -127,6 +129,7 @@ public sealed class MusicCoordinator : IDisposable
             savedTrackFullPath = _stateStore.State.CurrentTrackFullPath,
             savedPositionMilliseconds = _stateStore.State.CurrentPositionMilliseconds,
             playback = ToSnapshotForCatalog(_playbackService.Snapshot),
+            guided = GuidedState(),
         };
     }
 
@@ -142,6 +145,7 @@ public sealed class MusicCoordinator : IDisposable
         await _mutationLock.WaitAsync(_hostCancellationToken);
         try
         {
+            if (IsGuidedActive) throw new InvalidOperationException("请先停止引导式跟弹。");
             if (_playableQueue.Count == 0)
             {
                 throw new InvalidOperationException("曲库中没有可播放的有效曲谱。");
@@ -152,7 +156,7 @@ public sealed class MusicCoordinator : IDisposable
                 throw new ArgumentOutOfRangeException(nameof(index));
             }
 
-            if (_playbackService.Snapshot.State != MusicPlaybackState.Stopped ||
+            if (IsGuidedActive || _playbackService.Snapshot.State != MusicPlaybackState.Stopped ||
                 Volatile.Read(ref _sessionStarting) != 0)
             {
                 throw new InvalidOperationException("已有曲目正在播放。");
@@ -258,30 +262,39 @@ public sealed class MusicCoordinator : IDisposable
 
     public async Task<object> StopAsync()
     {
-        var hadActiveSession =
-            _playbackService.Snapshot.State != MusicPlaybackState.Stopped ||
-            Volatile.Read(ref _sessionStarting) != 0;
+        // Cancel before joining the mutation gate so a pending startup can unwind.
+        _guidedCancellation?.Cancel();
         _playbackCancellation?.Cancel();
-        Volatile.Write(ref _sessionStarting, 0);
-        _playbackService.Stop();
-        var task = _playbackTask;
-        if (task is not null)
+        await _mutationLock.WaitAsync(_hostCancellationToken);
+        try
         {
-            try
+            await StopGuidedAsync();
+            var hadActiveSession =
+                _playbackService.Snapshot.State != MusicPlaybackState.Stopped ||
+                Volatile.Read(ref _sessionStarting) != 0;
+            _playbackCancellation?.Cancel();
+            Volatile.Write(ref _sessionStarting, 0);
+            _playbackService.Stop();
+            var task = _playbackTask;
+            if (task is not null)
             {
-                await task;
+                try
+                {
+                    await task;
+                }
+                catch (OperationCanceledException)
+                {
+                }
             }
-            catch (OperationCanceledException)
-            {
-            }
-        }
 
-        if (hadActiveSession)
-        {
-            _stateStore.State.CurrentPositionMilliseconds = 0;
+            if (hadActiveSession)
+            {
+                _stateStore.State.CurrentPositionMilliseconds = 0;
+            }
+            _stateStore.Save();
+            return State();
         }
-        _stateStore.Save();
-        return State();
+        finally { _mutationLock.Release(); }
     }
 
     public object Next()
@@ -326,7 +339,7 @@ public sealed class MusicCoordinator : IDisposable
         await _mutationLock.WaitAsync(_hostCancellationToken);
         try
         {
-            if (_playbackService.Snapshot.State != MusicPlaybackState.Stopped ||
+            if (IsGuidedActive || _playbackService.Snapshot.State != MusicPlaybackState.Stopped ||
                 Volatile.Read(ref _sessionStarting) != 0)
             {
                 throw new InvalidOperationException("播放期间不能修改曲目映射。");
@@ -375,6 +388,7 @@ public sealed class MusicCoordinator : IDisposable
             return;
         }
 
+        DisposeGuided();
         _playbackService.SnapshotChanged -= OnSnapshotChanged;
         _playbackService.PlaybackEnded -= OnPlaybackEnded;
         _playbackCancellation?.Cancel();

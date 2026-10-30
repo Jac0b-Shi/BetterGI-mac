@@ -27,6 +27,7 @@ public sealed class ScriptFilePathSuite : IVerificationSuite
         var root = Path.Combine(
             Path.GetTempPath(), $"bettergi-script-file-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
+        var externalRoot = root + "-external";
         try
         {
             var expected = Path.Combine(root, "data", "store.json");
@@ -61,10 +62,24 @@ public sealed class ScriptFilePathSuite : IVerificationSuite
                 await files.WriteText("local/async.json", "{\"ok\":true}") &&
                 File.Exists(Path.Combine(root, "local", "async.json")),
                 "LimitedFile rejected a valid relative path during asynchronous writes.");
+            Directory.CreateDirectory(externalRoot);
+            var protectedFile = Path.Combine(externalRoot, "keep.txt");
+            await File.WriteAllTextAsync(protectedFile, "keep", cancellationToken);
+            Directory.CreateSymbolicLink(Path.Combine(root, "linked"), externalRoot);
+            context.Require(!files.DeletePathSync("linked/keep.txt") && File.Exists(protectedFile) &&
+                            files.DeletePathSync("linked") && File.Exists(protectedFile),
+                "DeletePathSync followed an external parent link or failed to remove only the link itself.");
+            var relativeRoot = new LimitedFile(Path.GetRelativePath(Environment.CurrentDirectory, root));
+            context.Require(!files.DeletePathSync(".") && !relativeRoot.DeletePathSync(".") && Directory.Exists(root),
+                "DeletePathSync accepted deletion of the script root with an absolute or relative root.");
+            context.Require(files.DeletePathSync("local") && !Directory.Exists(Path.Combine(root, "local")) &&
+                            !files.DeletePathSync($"../{Path.GetFileName(sibling)}"),
+                "DeletePathSync failed a contained deletion or accepted an escaped path.");
         }
         finally
         {
             Directory.Delete(root, recursive: true);
+            if (Directory.Exists(externalRoot)) Directory.Delete(externalRoot, recursive: true);
         }
 
         cancellationToken.ThrowIfCancellationRequested();

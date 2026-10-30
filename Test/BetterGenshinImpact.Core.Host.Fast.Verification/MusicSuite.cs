@@ -61,6 +61,25 @@ public sealed class MusicSuite : IVerificationSuite
                 timeline.Events.Count == 4 && score.PlayableRatio == 1,
                 "Portable music timeline mapping did not retain all playable notes.");
 
+            var player = new GuidedPlayerInput();
+            var gameFocused = false;
+            using (var guided = new MusicGuidedSession(MusicGuidedSegmentBuilder.Build(timeline),
+                new MusicGuidedSessionOptions { SegmentSize = 1, AutoDetectKeys = false,
+                    InputFactory = () => player, GameHandle = () => 7, IsGameActive = () => gameFocused }))
+            {
+                context.Require(guided.Start(), "Portable guided music did not start with native input injection.");
+                player.Press('Q'); player.Release('Q');
+                context.Require(guided.SegmentIndex == 0 && guided.ErrorCount == 0,
+                    "Guided music consumed physical input while the game was unfocused.");
+                gameFocused = true;
+                player.Press('W');
+                context.Require(guided.ErrorCount == 1 && guided.SegmentIndex == 0,
+                    "Guided music accepted a wrong key or advanced the segment.");
+                player.Release('W'); player.Press('Q'); player.Release('Q'); player.Press('W');
+                context.Require(guided.IsFinished && player.Stopped,
+                    "Guided music did not complete the score and detach physical input.");
+            }
+
             var transport = new RecordingTransport();
             transport.KeyDown('q');
             transport.KeyDown('Q');
@@ -823,6 +842,18 @@ public sealed class MusicSuite : IVerificationSuite
             Task.CompletedTask;
 
         public void CompleteUnavailableProbe() => _completeProbe.TrySetResult();
+    }
+
+    private sealed class GuidedPlayerInput : IMusicGuidedInput
+    {
+        public event Action<int>? KeyPressed;
+        public event Action<int>? KeyReleased;
+        public bool Stopped { get; private set; }
+        public bool Start() => true;
+        public void Press(char key) => KeyPressed?.Invoke(key);
+        public void Release(char key) => KeyReleased?.Invoke(key);
+        public void Stop() => Stopped = true;
+        public void Dispose() => Stop();
     }
 
     private sealed class FixedProfileService(InstrumentProfile profile)

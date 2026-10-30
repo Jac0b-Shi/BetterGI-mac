@@ -81,6 +81,33 @@ struct BetterGIMusicPlaybackSnapshot: Equatable, Sendable {
         queueIndex: -1)
 }
 
+struct BetterGIMusicGuidedOffset: Codable, Equatable, Sendable {
+    var x: Double = 0
+    var y: Double = 0
+}
+struct BetterGIMusicGuidedLayout: Codable, Equatable, Sendable {
+    var baseX: Double = 458.6
+    var baseY: Double = 674.9
+    var columnSpacing: Double = 167.4
+    var rowSpacing: Double = 134.5
+    var rowIndent: Double = 0
+    var ringRadius: Double = 52
+    var ringThickness: Double = 4
+    var manualCalibrated = false
+    var keyOffsets: [String: BetterGIMusicGuidedOffset] = [:]
+}
+
+struct BetterGIMusicGuidedState: Equatable, Sendable {
+    var active = false
+    var session: String? = nil
+    var error: String? = nil
+    var segmentIndex = 0
+    var segmentCount = 0
+    var progress = 0
+    var errors = 0
+    var keyLayout = BetterGIMusicGuidedLayout()
+}
+
 struct BetterGIMusicState: Equatable, Sendable {
     let rootFolder: String
     let folderHistory: [String]
@@ -90,6 +117,7 @@ struct BetterGIMusicState: Equatable, Sendable {
     let profiles: [BetterGIMusicProfile]
     let tracks: [BetterGIMusicTrack]
     let playback: BetterGIMusicPlaybackSnapshot
+    var guided = BetterGIMusicGuidedState()
 
     static let empty = BetterGIMusicState(
         rootFolder: "",
@@ -267,7 +295,35 @@ extension BetterGICoreRPCClient {
                 durationMilliseconds: try number(playbackValue, "durationMilliseconds"),
                 speed: try number(playbackValue, "speed"),
                 trackName: try string(playbackValue, "trackName"),
-                queueIndex: try integer(playbackValue, "queueIndex")))
+                queueIndex: try integer(playbackValue, "queueIndex")),
+            guided: decodeGuided(root["guided"]))
+    }
+
+    private static func decodeGuided(_ value: Any?) -> BetterGIMusicGuidedState {
+        guard let value = value as? [String: Any] else { return .init() }
+        return .init(active: value["active"] as? Bool ?? false,
+                     session: value["session"] as? String, error: value["error"] as? String,
+                     segmentIndex: value["segmentIndex"] as? Int ?? 0,
+                     segmentCount: value["segmentCount"] as? Int ?? 0,
+                     progress: value["progress"] as? Int ?? 0, errors: value["errors"] as? Int ?? 0,
+                     keyLayout: (try? JSONDecoder().decode(BetterGIMusicGuidedLayout.self,
+                        from: JSONSerialization.data(withJSONObject: value["keyLayout"] ?? [:]))) ?? .init())
+    }
+
+    func startGuidedMusic(index: Int, windowID: UInt32, segmentSize: Int, strictOrder: Bool, autoDetect: Bool, overlayEnabled: Bool = true) throws -> BetterGIMusicState {
+        try Self.decodeMusicState(request(method: "music.guided.start", parameters: [
+            "index": index, "windowID": Int(windowID), "segmentSize": segmentSize,
+            "strictOrder": strictOrder, "autoDetectKeys": autoDetect, "overlayEnabled": overlayEnabled]))
+    }
+    func redetectGuidedMusic(session: String) throws -> BetterGIMusicState {
+        try Self.decodeMusicState(request(method: "music.guided.redetect", parameters: ["session": session]))
+    }
+    func updateGuidedMusicLayout(session: String, layout: BetterGIMusicGuidedLayout) throws -> BetterGIMusicState {
+        let value = try JSONSerialization.jsonObject(with: JSONEncoder().encode(layout))
+        return try Self.decodeMusicState(request(method: "music.guided.layout", parameters: ["session": session, "keyLayout": value]))
+    }
+    func guidedMusicKey(session: String, key: Int, down: Bool, modifiers: Bool) throws {
+        _ = try request(method: "music.guided.key", parameters: ["session": session, "key": key, "down": down, "modifiers": modifiers])
     }
 
     private static func object(_ value: Any?, _ name: String) throws -> [String: Any] {
@@ -314,6 +370,20 @@ extension BetterGICoreRPCClient {
 }
 
 extension BetterGICoreProcessSupervisor {
+    func redetectGuidedMusic(session: String) throws -> BetterGIMusicState {
+        try runningClient().redetectGuidedMusic(session: session)
+    }
+    func updateGuidedMusicLayout(session: String, layout: BetterGIMusicGuidedLayout) throws -> BetterGIMusicState {
+        try runningClient().updateGuidedMusicLayout(session: session, layout: layout)
+    }
+
+    func startGuidedMusic(index: Int, windowID: UInt32, segmentSize: Int, strictOrder: Bool, autoDetect: Bool, overlayEnabled: Bool = true) throws -> BetterGIMusicState {
+        try runningClient().startGuidedMusic(index: index, windowID: windowID, segmentSize: segmentSize, strictOrder: strictOrder, autoDetect: autoDetect, overlayEnabled: overlayEnabled)
+    }
+    func guidedMusicKey(session: String, key: Int, down: Bool, modifiers: Bool) throws {
+        try runningClient().guidedMusicKey(session: session, key: key, down: down, modifiers: modifiers)
+    }
+
     func musicState() throws -> BetterGIMusicState {
         try runningClient().musicState()
     }

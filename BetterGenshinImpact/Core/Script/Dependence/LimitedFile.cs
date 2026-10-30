@@ -556,4 +556,60 @@ public class LimitedFile(string rootPath)
             return false;
         }
     }
+
+    /// <summary>
+    /// 删除文件或文件夹（相对于根目录），文件夹为递归删除
+    /// </summary>
+    /// <param name="path">文件或文件夹路径（相对于根目录）</param>
+    /// <returns>是否删除成功</returns>
+    public bool DeletePathSync(string path)
+    {
+        try
+        {
+            // 标准化路径
+            path = NormalizePath(path);
+
+            // 禁止删除根目录本身
+            if (string.Equals(
+                    Path.TrimEndingDirectorySeparator(path),
+                    Path.TrimEndingDirectorySeparator(Path.GetFullPath(rootPath)),
+                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
+            ))
+            {
+                _logger.LogError("DeletePathSync 异常: DeletePathSync 拒绝删除根目录 {Path}，这样你会消失的！", path);
+                return false;
+            }
+
+            // A nested symlink/junction must not turn a relative delete into an external delete.
+            // The final component may itself be a link: deleting that link does not traverse its target.
+            var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(rootPath));
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            for (var parent = Directory.GetParent(path); parent is not null && !string.Equals(parent.FullName, root, comparison); parent = parent.Parent)
+            {
+                if ((parent.Attributes & FileAttributes.ReparsePoint) != 0)
+                    throw new ArgumentException("删除路径不能经过符号链接或目录联接。");
+            }
+
+            // 文件夹递归删除
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, true);
+                return true;
+            }
+
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+                return true;
+            }
+
+            _logger.LogError("DeletePathSync 异常: 路径不存在 {Path}", path);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("DeletePathSync 异常: {Message}", ex.Message);
+            return false;
+        }
+    }
 }

@@ -508,6 +508,18 @@ struct BetterGICoreAutoDomainSettings: Sendable, Equatable {
     let autoEat: Bool
     let rewardRecognitionEnabled: Bool
     let reviveRetryCount: Int
+    var trainingGuideCalculateRunsEnabled: Bool = true
+    var trainingGuideRunPreference: Int = 0
+    var trainingGuideCraftingBonusReservePercent: Int = 7
+    var trainingGuideRewardRecognitionEnabled: Bool = true
+    var trainingGuideRewardFailureBudgetEnabled: Bool = false
+    var trainingGuideDiagnosticsEnabled: Bool = false
+    var trainingGuideLowARAdaptationEnabled: Bool = false
+    var trainingGuideFallbackDomainName: String = ""
+    var trainingGuideFallbackSundaySelectedValue: String = ""
+
+    var originalResin20UseCount: Int = 0
+    var originalResin40UseCount: Int = 0
 }
 
 struct BetterGICoreNamedOption: Sendable, Equatable, Identifiable {
@@ -3146,6 +3158,9 @@ actor BetterGICoreProcessSupervisor {
                 "domainName": settings.domainName,
                 "specifyResinUse": settings.specifyResinUse,
                 "originalResinUseCount": settings.originalResinUseCount,
+                "originalResin20UseCount": settings.originalResin20UseCount,
+                "originalResin40UseCount": settings.originalResin40UseCount,
+
                 "condensedResinUseCount": settings.condensedResinUseCount,
                 "transientResinUseCount": settings.transientResinUseCount,
                 "fragileResinUseCount": settings.fragileResinUseCount,
@@ -3158,6 +3173,16 @@ actor BetterGICoreProcessSupervisor {
                 "autoEat": settings.autoEat,
                 "rewardRecognitionEnabled": settings.rewardRecognitionEnabled,
                 "reviveRetryCount": settings.reviveRetryCount,
+                "trainingGuideCalculateRunsEnabled": settings.trainingGuideCalculateRunsEnabled,
+                "trainingGuideRunPreference": settings.trainingGuideRunPreference,
+                "trainingGuideCraftingBonusReservePercent": settings.trainingGuideCraftingBonusReservePercent,
+                "trainingGuideRewardRecognitionEnabled": settings.trainingGuideRewardRecognitionEnabled,
+                "trainingGuideRewardFailureBudgetEnabled": settings.trainingGuideRewardFailureBudgetEnabled,
+                "trainingGuideDiagnosticsEnabled": settings.trainingGuideDiagnosticsEnabled,
+                "trainingGuideLowARAdaptationEnabled": settings.trainingGuideLowARAdaptationEnabled,
+                "trainingGuideFallbackDomainName": settings.trainingGuideFallbackDomainName,
+                "trainingGuideFallbackSundaySelectedValue": settings.trainingGuideFallbackSundaySelectedValue,
+
             ]]
         ))
     }
@@ -3432,7 +3457,18 @@ actor BetterGICoreProcessSupervisor {
                      fightEndDelay: fightEndDelay, shortMovement: shortMovement,
                      walkToF: walkToF, leftRightMoveTimes: moveTimes, autoEat: autoEat,
                      rewardRecognitionEnabled: rewardRecognition,
-                     reviveRetryCount: reviveRetryCount)
+                     reviveRetryCount: reviveRetryCount,
+                     trainingGuideCalculateRunsEnabled: value["trainingGuideCalculateRunsEnabled"] as? Bool ?? true,
+                     trainingGuideRunPreference: value["trainingGuideRunPreference"] as? Int ?? 0,
+                     trainingGuideCraftingBonusReservePercent: value["trainingGuideCraftingBonusReservePercent"] as? Int ?? 7,
+                     trainingGuideRewardRecognitionEnabled: value["trainingGuideRewardRecognitionEnabled"] as? Bool ?? true,
+                     trainingGuideRewardFailureBudgetEnabled: value["trainingGuideRewardFailureBudgetEnabled"] as? Bool ?? false,
+                     trainingGuideDiagnosticsEnabled: value["trainingGuideDiagnosticsEnabled"] as? Bool ?? false,
+                     trainingGuideLowARAdaptationEnabled: value["trainingGuideLowARAdaptationEnabled"] as? Bool ?? false,
+                     trainingGuideFallbackDomainName: value["trainingGuideFallbackDomainName"] as? String ?? "",
+                     trainingGuideFallbackSundaySelectedValue: value["trainingGuideFallbackSundaySelectedValue"] as? String ?? "",
+                     originalResin20UseCount: value["originalResin20UseCount"] as? Int ?? 0,
+                     originalResin40UseCount: value["originalResin40UseCount"] as? Int ?? 0)
     }
 
     private func decodeAutoLeyLineOutcropSettings(_ value: Any) throws

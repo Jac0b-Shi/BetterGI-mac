@@ -32,6 +32,11 @@ public interface ITaskControlPlatform
     void InputText(string text);
     void PressEscape();
     ImageRegion CaptureToRectArea(bool forceNew);
+    ImageRegion CaptureToRectArea(bool forceNew, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return CaptureToRectArea(forceNew);
+    }
 }
 
 public static class TaskControlPlatform

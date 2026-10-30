@@ -787,6 +787,43 @@ struct SoloTasksPage: View {
     @ViewBuilder
     private var autoDomainSettings: some View {
         if let settings = appState.autoDomainSettings {
+            BGISettingLine(title: "原粹树脂（20）次数", subtitle: "指定树脂次数时生效") {
+                TextField("", value: Binding(get: { settings.originalResin20UseCount }, set: { appState.saveAutoDomainSettings(originalResin20UseCount: $0) }), format: .number).frame(width: 90)
+            }
+            BGISettingLine(title: "原粹树脂（40）次数", subtitle: "指定树脂次数时生效") {
+                TextField("", value: Binding(get: { settings.originalResin40UseCount }, set: { appState.saveAutoDomainSettings(originalResin40UseCount: $0) }), format: .number).frame(width: 90)
+            }
+            BGISettingLine(title: "培养指南规划刷取次数", subtitle: "") {
+                Toggle("", isOn: Binding(get: { settings.trainingGuideCalculateRunsEnabled }, set: { appState.saveAutoDomainSettings(trainingGuideCalculateRunsEnabled: $0) })).toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(title: "刷取偏好", subtitle: "") {
+                Picker("", selection: Binding(get: { settings.trainingGuideRunPreference }, set: { appState.saveAutoDomainSettings(trainingGuideRunPreference: $0) })) { Text("预留合成天赋收益").tag(0); Text("不依赖合成天赋收益").tag(1) }.labelsHidden()
+            }
+            BGISettingLine(title: "预留合成收益（%）", subtitle: "") {
+                Stepper("\(settings.trainingGuideCraftingBonusReservePercent)", value: Binding(get: { settings.trainingGuideCraftingBonusReservePercent }, set: { appState.saveAutoDomainSettings(trainingGuideCraftingBonusReservePercent: $0) }), in: 0...20)
+            }
+            BGISettingLine(title: "识别培养材料奖励", subtitle: "") {
+                Toggle("", isOn: Binding(get: { settings.trainingGuideRewardRecognitionEnabled }, set: { appState.saveAutoDomainSettings(trainingGuideRewardRecognitionEnabled: $0) })).toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(title: "奖励识别失败后按预算继续", subtitle: "") {
+                Toggle("", isOn: Binding(get: { settings.trainingGuideRewardFailureBudgetEnabled }, set: { appState.saveAutoDomainSettings(trainingGuideRewardFailureBudgetEnabled: $0) })).toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(title: "保存培养诊断", subtitle: "") {
+                Toggle("", isOn: Binding(get: { settings.trainingGuideDiagnosticsEnabled }, set: { appState.saveAutoDomainSettings(trainingGuideDiagnosticsEnabled: $0) })).toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(title: "低冒险等阶适配", subtitle: "") {
+                Toggle("", isOn: Binding(get: { settings.trainingGuideLowARAdaptationEnabled }, set: { appState.saveAutoDomainSettings(trainingGuideLowARAdaptationEnabled: $0) })).toggleStyle(.switch).labelsHidden()
+            }
+            BGISettingLine(title: "培养完成后的备选秘境", subtitle: "") {
+                Picker("", selection: Binding(get: { settings.trainingGuideFallbackDomainName }, set: { appState.saveAutoDomainSettings(trainingGuideFallbackDomainName: $0) })) {
+                    ForEach([""] + settings.domainOptions.filter { $0 != "根据提升指南选择秘境" }, id: \.self) { Text($0.isEmpty ? "不选择" : $0).tag($0) }
+                }.labelsHidden()
+            }
+            BGISettingLine(title: "备选秘境奖励序号", subtitle: "") {
+                Picker("", selection: Binding(get: { settings.trainingGuideFallbackSundaySelectedValue }, set: { appState.saveAutoDomainSettings(trainingGuideFallbackSundaySelectedValue: $0) })) {
+                    ForEach(["", "1", "2", "3"], id: \.self) { Text($0.isEmpty ? "不选择" : $0).tag($0) }
+                }.labelsHidden()
+            }
             BGISettingLine(title: "选择战斗策略", subtitle: "用于战斗") {
                 Picker("", selection: Binding(
                     get: { settings.strategyName },

@@ -998,13 +998,13 @@ var requiredRuntimeAssetPaths = new HashSet<string>(StringComparer.Ordinal)
 // Complete package content is installed, not only the legacy SIFT sidecars.
 // B12.2 independently compares this set with the verified official NuGet archives.
 var mapPackagePaths = artifactsArray.EnumerateArray()
-    .Where(a => a.GetProperty("sourceId").GetString() == "bettergi-assets-map-1.0.24-nupkg")
+    .Where(a => a.GetProperty("sourceId").GetString() == "bettergi-assets-map-1.0.25-nupkg")
     .Select(a => a.GetProperty("destinationRelativePath").GetString()!).ToHashSet(StringComparer.Ordinal);
 var otherPackagePaths = artifactsArray.EnumerateArray()
-    .Where(a => a.GetProperty("sourceId").GetString() == "bettergi-assets-other-1.0.27-nupkg")
+    .Where(a => a.GetProperty("sourceId").GetString() == "bettergi-assets-other-1.0.28-nupkg")
     .Select(a => a.GetProperty("destinationRelativePath").GetString()!).ToHashSet(StringComparer.Ordinal);
-Assert("B11.6.1.4 complete Map 1.0.24 has 725 assets", mapPackagePaths.Count == 725, $"got {mapPackagePaths.Count}");
-Assert("B11.6.1.4 complete Other 1.0.27 has 9 assets", otherPackagePaths.Count == 9, $"got {otherPackagePaths.Count}");
+Assert("B11.6.1.4 complete Map 1.0.25 has 725 assets", mapPackagePaths.Count == 725, $"got {mapPackagePaths.Count}");
+Assert("B11.6.1.4 complete Other 1.0.28 has 9 assets", otherPackagePaths.Count == 9, $"got {otherPackagePaths.Count}");
 requiredRuntimeAssetPaths.UnionWith(mapPackagePaths);
 requiredRuntimeAssetPaths.UnionWith(otherPackagePaths);
 var expectedLockedArtifactCount = manifestPhysicalPaths.Union(requiredRuntimeAssetPaths).Count();
@@ -1444,7 +1444,7 @@ var lockedRuntimeRoot = Path.Combine(Path.GetTempPath(), "bgi-locked-runtime-" +
             $"expected={artifact.Sha256}, actual={actualSha256}");
     }
 
-    foreach (var packageId in new[] { "bettergi-assets-map-1.0.24-nupkg", "bettergi-assets-other-1.0.27-nupkg" })
+    foreach (var packageId in new[] { "bettergi-assets-map-1.0.25-nupkg", "bettergi-assets-other-1.0.28-nupkg" })
     {
         var source = downloaderLock.Sources.Single(s => s.Id == packageId);
         var archivePath = Path.Combine(sharedArchiveCacheDir, $"bettergi-{source.Sha256}.nupkg");
@@ -2972,7 +2972,7 @@ try
 
     // Stage the navigation fixture from the same frozen package as production.
     var mapStageSource = downloaderLock.Sources.Single(source =>
-        source.Id == "bettergi-assets-map-1.0.24-nupkg");
+        source.Id == "bettergi-assets-map-1.0.25-nupkg");
     var mapStagePaths = new HashSet<string>(StringComparer.Ordinal)
     {
         "Assets/Map/Teyvat/mapback_info.json",

@@ -3059,6 +3059,8 @@ try
         ?? throw new InvalidDataException("cancelled scheduler.run omitted taskId");
     Require(await WaitForFileAsync(cancelledSchedulerMarker, TimeSpan.FromSeconds(5), cancellation.Token),
         "scheduler.stop verification did not enter the real Shell project before cancellation");
+    var releasesBeforeStop = Volatile.Read(ref cancelledSchedulerReleaseAllCount);
+    Require(releasesBeforeStop == 1, "Task startup did not release owned input exactly once after focus recovery.");
     var schedulerStop = await ExchangeAsync(
         connection, "scheduler-stop", "scheduler.stop", sessionToken,
         JObject.FromObject(new { taskId = cancelledSchedulerTaskId }), cancellation.Token);
@@ -3068,8 +3070,8 @@ try
     await cancelledSchedulerResponder;
     Require(await File.ReadAllTextAsync(cancelledSchedulerMarker) == "scheduler-cancelled",
         "scheduler.stop verification did not preserve the Shell entry marker");
-    Require(cancelledSchedulerReleaseAllCount == 1,
-        $"scheduler.stop dispatched releaseAll {cancelledSchedulerReleaseAllCount} times instead of once");
+    Require(cancelledSchedulerReleaseAllCount == releasesBeforeStop + 1,
+        $"scheduler.stop dispatched releaseAll {cancelledSchedulerReleaseAllCount - releasesBeforeStop} times instead of once");
     Require(cancelledSchedulerStates.FirstOrDefault() == "running" &&
             cancelledSchedulerStates.LastOrDefault() == "cancelled",
         "scheduler.stop did not preserve running/cancelled lifecycle");
@@ -3940,12 +3942,6 @@ static async Task StageMapBack3Async(string runtimeRoot, CancellationToken cance
         Source = "BetterGI release 0.62.0 map layer data",
         RedistributionStatus = "allowed"
     };
-    var mapLicense = new BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.LicenseEvidenceEntry
-    {
-        SpdxId = "GPL-3.0",
-        Source = "BetterGI.Assets.Map signed NuGet package and bettergi-libraries repository",
-        RedistributionStatus = "allowed-under-GPLv3"
-    };
     BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.ArtifactEntry Artifact(
         string sourceId, string destination, string member, long size, string sha256,
         BetterGenshinImpact.Core.Infrastructure.ArtifactDownloader.LicenseEvidenceEntry licenseEvidence) => new()
@@ -3971,21 +3967,16 @@ static async Task StageMapBack3Async(string runtimeRoot, CancellationToken cance
                 "e64715356c3e6e84646d4022533c4c7a709c57cfc93b92213a4cfc8d52b90fc4", license),
             Artifact(source.Id, "Assets/Map/Teyvat/MapBack_3_gray.webp", "BetterGI/Assets/Map/Teyvat/MapBack_3_gray.webp", 1302572,
                 "1bfafc57afbda3d0dd4a89a301d2ae645f47df3ad456eb63c856adc0193d1379", license),
-            Artifact(mapSource.Id, "Assets/Map/Teyvat/Teyvat_0_256.png",
-                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256.png", 4333300,
-                "b0d24c66d503c24a2957d663ca96b292174b02b3cd28ef4871bdeefec37d677a", mapLicense),
-            Artifact(mapSource.Id, "Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin",
-                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin", 1073604,
-                "875fbec29e8991564a9908a9ef9dc8bd8b4b618119093069c04697910d9bb35f", mapLicense),
-            Artifact(mapSource.Id, "Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png",
-                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png", 4321965,
-                "4331d3553f87544e4da2e77b3f1716df372ffbef0c58aaec70c645b137cbcd16", mapLicense),
-            Artifact(mapSource.Id, "Assets/Map/Teyvat/Teyvat_0_2048_SIFT.kp.bin",
-                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_2048_SIFT.kp.bin", 19071892,
-                "281200aa5ab94e88eb553d2e98a2440843e2ed5b1e63621594f5a0d0c0bea60f", mapLicense),
-            Artifact(mapSource.Id, "Assets/Map/Teyvat/Teyvat_0_2048_SIFT.mat.png",
-                "contentFiles/any/any/Assets/Map/Teyvat/Teyvat_0_2048_SIFT.mat.png", 75022450,
-                "024a33eab7616ae7d76275a8b4758748d1714a4911bc67015b829b1c8aeee3a0", mapLicense)
+            completeLock.Artifacts.Single(artifact => artifact.SourceId == mapSource.Id &&
+                artifact.DestinationRelativePath == "Assets/Map/Teyvat/Teyvat_0_256.png"),
+            completeLock.Artifacts.Single(artifact => artifact.SourceId == mapSource.Id &&
+                artifact.DestinationRelativePath == "Assets/Map/Teyvat/Teyvat_0_256_SIFT.kp.bin"),
+            completeLock.Artifacts.Single(artifact => artifact.SourceId == mapSource.Id &&
+                artifact.DestinationRelativePath == "Assets/Map/Teyvat/Teyvat_0_256_SIFT.mat.png"),
+            completeLock.Artifacts.Single(artifact => artifact.SourceId == mapSource.Id &&
+                artifact.DestinationRelativePath == "Assets/Map/Teyvat/Teyvat_0_2048_SIFT.kp.bin"),
+            completeLock.Artifacts.Single(artifact => artifact.SourceId == mapSource.Id &&
+                artifact.DestinationRelativePath == "Assets/Map/Teyvat/Teyvat_0_2048_SIFT.mat.png")
         ]
     };
     var temporaryLockPath = Path.Combine(Path.GetTempPath(), $"bgi-host-map-{Guid.NewGuid():N}.json");

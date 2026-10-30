@@ -36,6 +36,11 @@ struct BetterGICoreMusicTests {
                 "mappingMode": "MelodicOctaveFold",
                 "midiTracks": [],
             ]],
+            "guided": [
+                "active": true, "session": "guide-session", "segmentIndex": 2,
+                "segmentCount": 8, "progress": 3, "errors": 1,
+                "keyLayout": try JSONSerialization.jsonObject(with: JSONEncoder().encode(BetterGIMusicGuidedLayout()))
+            ],
             "playback": [
                 "state": "Playing",
                 "positionMilliseconds": 250.0,
@@ -46,6 +51,9 @@ struct BetterGICoreMusicTests {
             ],
         ])
 
+        #expect(state.guided.active && state.guided.session == "guide-session")
+        #expect(state.guided.segmentIndex == 2 && state.guided.progress == 3)
+        #expect(state.guided.keyLayout.columnSpacing == 167.4)
         #expect(state.tracks.count == 1)
         #expect(state.tracks[0].format == "Keyboard")
         #expect(state.tracks[0].mappingMode == "MelodicOctaveFold")

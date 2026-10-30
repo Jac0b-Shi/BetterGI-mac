@@ -440,6 +440,28 @@ public sealed class CoreRpcServer(
                     request.Id,
                     await Music.ScanAsync(RequiredString(request.Params, "rootFolder")));
             }
+            if (request.Method == "music.guided.start")
+            {
+                if (!RequiredTriggerDispatcher().IsRunning) throw new InvalidOperationException("请先启动截图器。");
+                return RpcResponse.Success(request.Id, await Music.StartGuidedAsync(
+                    RequiredInt(request.Params, "index"), RequiredInt(request.Params, "windowID"),
+                    request.Params?.Value<int?>("segmentSize") ?? 5,
+                    request.Params?.Value<bool?>("strictOrder") ?? true,
+                    request.Params?.Value<bool?>("autoDetectKeys") ?? true,
+                    request.Params?.Value<bool?>("overlayEnabled") ?? true,
+                    request.Params?["keyLayout"]?.ToObject<BetterGenshinImpact.Core.Config.MusicGuidedKeyLayoutConfig>()));
+            }
+            if (request.Method == "music.guided.redetect")
+                return RpcResponse.Success(request.Id, await Music.RedetectGuidedAsync(RequiredString(request.Params, "session")));
+            if (request.Method == "music.guided.layout")
+                return RpcResponse.Success(request.Id, await Music.UpdateGuidedLayoutAsync(RequiredString(request.Params, "session"),
+                    request.Params?["keyLayout"]?.ToObject<BetterGenshinImpact.Core.Config.MusicGuidedKeyLayoutConfig>()
+                    ?? throw new ArgumentException("缺少键位布局。")));
+            if (request.Method == "music.guided.key")
+                return RpcResponse.Success(request.Id, Music.GuidedKey(
+                    RequiredString(request.Params, "session"), RequiredInt(request.Params, "key"),
+                    request.Params?.Value<bool?>("down") ?? false,
+                    request.Params?.Value<bool?>("modifiers") ?? false));
             if (request.Method == "music.play")
             {
                 if (!RequiredTriggerDispatcher().IsRunning)

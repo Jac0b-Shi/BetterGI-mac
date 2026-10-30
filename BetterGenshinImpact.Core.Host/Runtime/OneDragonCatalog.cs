@@ -328,7 +328,7 @@ public sealed class OneDragonCatalog(
         return new OneDragonConfigOptions(
             ["枫丹", "稻妻", "璃月", "蒙德"],
             ["挪德卡莱", "枫丹", "稻妻", "璃月", "蒙德"],
-            ["", AutoDomainTask.DevelopmentGuideOption, .. (domainNameProvider?.Invoke() ?? MapLazyAssets.Get().DomainNameList)],
+            ["", AutoDomainTask.TrainingGuideOption, .. (domainNameProvider?.Invoke() ?? MapLazyAssets.Get().DomainNameList)],
             ["", "1", "2", "3"],
             ["", .. AutoBossData.SupportedBossNames],
             fightStrategies,

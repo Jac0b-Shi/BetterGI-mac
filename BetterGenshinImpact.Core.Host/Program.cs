@@ -146,7 +146,8 @@ using var musicCoordinator = new MusicCoordinator(
     instrumentSwitcher: new MusicInstrumentSwitcher(
         loggerFactory.CreateLogger<MusicInstrumentSwitcher>(),
         imageRegionOcrService,
-        () => gameTaskManagerPlatform.SystemInfo));
+        () => gameTaskManagerPlatform.SystemInfo),
+    guidedSettingsPath: Path.Combine(layout.UserPath, "music-guided.json"));
 server.AttachMusicCoordinator(musicCoordinator);
 var externalKeyMappingResolver = new ExternalKeyMappingResolver(layout);
 var globalMethodRuntime = new MacGlobalMethodRuntime(

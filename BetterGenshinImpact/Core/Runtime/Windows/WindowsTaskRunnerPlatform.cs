@@ -37,6 +37,7 @@ public sealed class WindowsTaskRunnerPlatform : ITaskRunnerPlatform
         TaskContext.Instance().Runtime?.MaskWindowMapState.Reset();
         MaskWindowDrawingPlatform.Current.ClearAll();
         TaskContext.Instance().Runtime?.Window.Activate();
+        BetterGenshinImpact.Core.Input.InputHub.ReleaseAll();
     }
 
     public void EndTask()
