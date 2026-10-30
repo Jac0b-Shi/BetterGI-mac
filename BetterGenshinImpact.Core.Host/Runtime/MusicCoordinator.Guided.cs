@@ -70,14 +70,17 @@ public sealed partial class MusicCoordinator
                 {
                     (double Width, double Height) size;
                     using (var first = TaskControlPlatform.Current.CaptureToRectArea(true, guideToken))
-                        size = (first.Width, first.Height);
+                    {
+                        var captureBounds = first.ConvertPositionToGameCaptureRegion(0, 0, first.Width, first.Height);
+                        size = (captureBounds.Width, captureBounds.Height);
+                    }
                     var input = new MacMusicGuidedInput();
                     var overlay = new MacMusicGuidedOverlay(MaskWindowDrawingPlatform.Current, size, _guidedLayout);
                     var session = new MusicGuidedSession(presses, new MusicGuidedSessionOptions {
                         SegmentSize = segmentSize, StrictOrder = strictOrder, AutoDetectKeys = autoDetectKeys, OverlayEnabled = overlayEnabled,
                         KeyLayout = _guidedLayout, KeyProfile = profile, TrackName = score.DisplayTitle,
                         InputFactory = () => input, GameHandle = () => (nint)windowID,
-                        CaptureSize = () => size, HasModifiers = () => input.HasModifiers,
+                        CaptureSize = () => overlay.CanvasSize, HasModifiers = () => input.HasModifiers,
                         CaptureFrame = () => { using var frame = TaskControlPlatform.Current.CaptureToRectArea(true, guideToken); return frame.SrcMat.Clone(); },
                         IsGameActive = () => _input.IsGameFocused(linked.Token), Overlay = overlay,
                         Logger = text => _logger.LogInformation("{GuidedMusic}", text),
@@ -94,10 +97,13 @@ public sealed partial class MusicCoordinator
                         }
                         while (!linked.IsCancellationRequested)
                         {
+                            // Detection uses a normalised frame; the native HUD always consumes capture pixels.
+                            var captureSize = _input.GetCapturePixelSize(guideToken);
                             lock (_guidedGate)
                             {
                                 if (session.IsFinished) break;
                                 if (!_input.IsGameFocused(linked.Token)) { input.Stop(); input.Start(); }
+                                overlay.UpdateCanvasSize(captureSize);
                                 session.Pump();
                             }
                             await Task.Delay(100, linked.Token);

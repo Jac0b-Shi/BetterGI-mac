@@ -18,9 +18,11 @@ internal sealed class MacMusicGuidedOverlay : IMusicGuidedOverlay
     private HashSet<char> _held = [];
     private string _title = string.Empty;
     public MacMusicGuidedOverlay(IMaskWindowDrawingBoard board, (double Width, double Height) size, MusicGuidedKeyLayoutConfig layout)
-    { _board = board; CanvasSize = size; _layout = layout; }
+    { _board = board; _canvasSize = size; _layout = layout; }
     public bool IsAttached { get; private set; }
-    public (double Width, double Height) CanvasSize { get; }
+    private (double Width, double Height) _canvasSize;
+    public (double Width, double Height) CanvasSize { get { lock (_sync) return _canvasSize; } }
+    public void UpdateCanvasSize((double Width, double Height) size) { lock (_sync) _canvasSize = size; }
     public event Action? ExitRequested { add { } remove { } }
     public bool Attach(nint gameHandle) { lock (_sync) { IsAttached = gameHandle != 0; return IsAttached; } }
     public void UpdateDetach() { lock (_sync) { IsAttached = false; _board.Clear(_group); } }
@@ -40,7 +42,8 @@ internal sealed class MacMusicGuidedOverlay : IMusicGuidedOverlay
         {
         if (!IsAttached) return;
         var shapes = new List<MaskWindowDrawingShape>();
-        shapes.Add(new MaskWindowDrawingText(hint ?? _title, new MaskPoint(25, 60), new MaskWindowDrawingTextStyle(Color.White, 24)));
+        var scale = Math.Min(_canvasSize.Width / 1920, _canvasSize.Height / 1080);
+        shapes.Add(new MaskWindowDrawingText(hint ?? _title, new MaskPoint(25 * scale, 60 * scale), new MaskWindowDrawingTextStyle(Color.White, 24 * scale)));
         for (var i = 0; i < _presses.Count; i++)
         {
             if (_satisfied.Contains(i)) continue;
@@ -48,14 +51,14 @@ internal sealed class MacMusicGuidedOverlay : IMusicGuidedOverlay
             {
                 if (!_positions.TryGetValue(key, out var p)) continue;
                 var radius = p.Size / 2 * (1 + .16 * i);
-                var stroke = new MaskWindowDrawingStroke(_held.Contains(key) ? Color.Lime : Color.Gold, Math.Max(1, _layout.RingThickness * Math.Min(CanvasSize.Width / 1920, CanvasSize.Height / 1080)));
+                var stroke = new MaskWindowDrawingStroke(_held.Contains(key) ? Color.Lime : Color.Gold, Math.Max(1, _layout.RingThickness));
                 // Closed polyline rings use the same portable drawing primitives as the HUD.
                 for (var segment = 0; segment < 40; segment++)
                 {
                     MaskPoint PointAt(int n) => new(p.X + radius * Math.Cos(n * Math.Tau / 40), p.Y + radius * Math.Sin(n * Math.Tau / 40));
                     shapes.Add(new MaskWindowDrawingLine(PointAt(segment), PointAt(segment + 1), stroke));
                 }
-                shapes.Add(new MaskWindowDrawingText($"{i + 1}:{key}", new MaskPoint(p.X - radius / 2, p.Y - radius - 22), new MaskWindowDrawingTextStyle(Color.Gold, 20)));
+                shapes.Add(new MaskWindowDrawingText($"{i + 1}:{key}", new MaskPoint(p.X - radius / 2, p.Y - radius - 22 * scale), new MaskWindowDrawingTextStyle(Color.Gold, 20 * scale)));
             }
         }
         _board.Set(_group, shapes);

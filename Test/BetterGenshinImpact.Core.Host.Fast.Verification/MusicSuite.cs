@@ -1,4 +1,5 @@
 using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Mask;
 using BetterGenshinImpact.GameTask.Music.Model;
 using BetterGenshinImpact.GameTask.Music.Service;
 using BetterGenshinImpact.Core.Host.Runtime;
@@ -63,11 +64,24 @@ public sealed class MusicSuite : IVerificationSuite
 
             var player = new GuidedPlayerInput();
             var gameFocused = false;
+            var guideBoard = new MaskWindowDrawingBoard();
+            var guideLayout = new MusicGuidedKeyLayoutConfig();
+            var guideOverlay = new MacMusicGuidedOverlay(guideBoard, (3840, 2160), guideLayout);
             using (var guided = new MusicGuidedSession(MusicGuidedSegmentBuilder.Build(timeline),
                 new MusicGuidedSessionOptions { SegmentSize = 1, AutoDetectKeys = false,
-                    InputFactory = () => player, GameHandle = () => 7, IsGameActive = () => gameFocused }))
+                    InputFactory = () => player, GameHandle = () => 7, IsGameActive = () => gameFocused,
+                    Overlay = guideOverlay, KeyLayout = guideLayout, KeyProfile = profile }))
             {
                 context.Require(guided.Start(), "Portable guided music did not start with native input injection.");
+                var ring4K = guideBoard.Current.Entries.Single().Shapes.OfType<MaskWindowDrawingLine>().First();
+                context.Require(Math.Abs(ring4K.From.Y - guideLayout.BaseY * 2) < .01,
+                    "Guided rings were not expressed in native 4K capture pixels.");
+                guideOverlay.UpdateCanvasSize((1920, 1080));
+                guided.Pump();
+                var ring1080 = guideBoard.Current.Entries.Single().Shapes.OfType<MaskWindowDrawingLine>().First();
+                context.Require(Math.Abs(ring1080.From.Y * 2 - ring4K.From.Y) < .01 &&
+                    Math.Abs(ring1080.From.X * 2 - ring4K.From.X) < .01,
+                    "Guided rings did not follow a capture resolution change.");
                 player.Press('Q'); player.Release('Q');
                 context.Require(guided.SegmentIndex == 0 && guided.ErrorCount == 0,
                     "Guided music consumed physical input while the game was unfocused.");
