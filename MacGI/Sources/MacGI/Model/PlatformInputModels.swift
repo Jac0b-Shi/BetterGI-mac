@@ -10,6 +10,7 @@ enum BetterGIInputEventMarker {
 enum InputDeliveryMode: String, Equatable, Sendable {
     case foregroundCGEvent
     case wineBridge
+    case webSdk
 }
 
 enum BackgroundTextInputPolicy: String, Equatable, Sendable {

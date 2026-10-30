@@ -68,7 +68,7 @@ final class BGIScreenCaptureKitAudioCapture: NSObject, BGIAudioSampleProvider, S
                 )
                 let configuration = SCStreamConfiguration()
                 configuration.capturesAudio = true
-                configuration.excludesCurrentProcessAudio = true
+                configuration.excludesCurrentProcessAudio = targetProcessID != ProcessInfo.processInfo.processIdentifier
                 configuration.sampleRate = 16_000
                 configuration.channelCount = 1
                 configuration.width = 2

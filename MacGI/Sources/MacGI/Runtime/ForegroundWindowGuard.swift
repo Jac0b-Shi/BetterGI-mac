@@ -19,6 +19,9 @@ struct ForegroundWindowGuard {
         guard let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier else {
             return false
         }
+        if window.isHostedCloud {
+            return MainActor.assumeIsolated { frontPID == window.ownerPID && NSApp.keyWindow?.windowNumber == Int(window.id) }
+        }
         return frontPID == window.ownerPID
     }
 
