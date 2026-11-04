@@ -78,7 +78,7 @@ public partial class CombatCommand
         {
             if (Args is { Count: > 0 })
             {
-                var s = double.Parse(Args![0]);
+                var s = ParseSeconds(Args![0]);
                 avatar.Attack((int)TimeSpan.FromSeconds(s).TotalMilliseconds);
             }
             else
@@ -90,7 +90,7 @@ public partial class CombatCommand
         {
             if (Args is { Count: > 0 })
             {
-                var s = double.Parse(Args![0]);
+                var s = ParseSeconds(Args![0]);
                 avatar.Charge((int)TimeSpan.FromSeconds(s).TotalMilliseconds);
             }
             else
@@ -100,32 +100,32 @@ public partial class CombatCommand
         }
         else if (Method == Method.Walk)
         {
-            var s = double.Parse(Args![1]);
+            var s = ParseSeconds(Args![1]);
             avatar.Walk(Args![0], (int)TimeSpan.FromSeconds(s).TotalMilliseconds);
         }
         else if (Method == Method.W)
         {
-            var s = double.Parse(Args![0]);
+            var s = ParseSeconds(Args![0]);
             avatar.Walk("w", (int)TimeSpan.FromSeconds(s).TotalMilliseconds);
         }
         else if (Method == Method.A)
         {
-            var s = double.Parse(Args![0]);
+            var s = ParseSeconds(Args![0]);
             avatar.Walk("a", (int)TimeSpan.FromSeconds(s).TotalMilliseconds);
         }
         else if (Method == Method.S)
         {
-            var s = double.Parse(Args![0]);
+            var s = ParseSeconds(Args![0]);
             avatar.Walk("s", (int)TimeSpan.FromSeconds(s).TotalMilliseconds);
         }
         else if (Method == Method.D)
         {
-            var s = double.Parse(Args![0]);
+            var s = ParseSeconds(Args![0]);
             avatar.Walk("d", (int)TimeSpan.FromSeconds(s).TotalMilliseconds);
         }
         else if (Method == Method.Wait)
         {
-            var s = double.Parse(Args![0]);
+            var s = ParseSeconds(Args![0]);
             avatar.Wait((int)TimeSpan.FromSeconds(s).TotalMilliseconds);
         }
         else if (Method == Method.Ready)
@@ -144,7 +144,7 @@ public partial class CombatCommand
         {
             if (Args is { Count: > 0 })
             {
-                var s = double.Parse(Args![0]);
+                var s = ParseSeconds(Args![0]);
                 avatar.Dash((int)TimeSpan.FromSeconds(s).TotalMilliseconds);
             }
             else

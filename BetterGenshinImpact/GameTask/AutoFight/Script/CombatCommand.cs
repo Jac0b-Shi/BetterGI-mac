@@ -1,6 +1,7 @@
 using BetterGenshinImpact.Helpers;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace BetterGenshinImpact.GameTask.AutoFight.Script;
 
@@ -33,7 +34,7 @@ public partial class CombatCommand
         if (Method == Method.Walk)
         {
             AssertUtils.IsTrue(Args.Count == 2, "walk方法必须有两个入参，第一个参数是方向，第二个参数是行走时间。例：walk(s, 0.2)");
-            AssertUtils.IsTrue(double.Parse(Args[1]) > 0, "行走时间必须大于0");
+            AssertUtils.IsTrue(ParseSeconds(Args[1]) > 0, "行走时间必须大于0");
         }
         else if (Method == Method.W || Method == Method.A || Method == Method.S || Method == Method.D)
         {
@@ -61,6 +62,9 @@ public partial class CombatCommand
             AssertUtils.IsTrue(int.TryParse(Args[0], out _), "滚动格数必须是整数");
         }
     }
+
+    // Combat scripts use '.' as the decimal separator on every platform.
+    internal static double ParseSeconds(string value) => double.Parse(value, CultureInfo.InvariantCulture);
 
     public override string ToString() => $"<CombatCommand {Name}, {Method}({Args}) (rounds {ActivatingRound})>";
 }
