@@ -46,7 +46,7 @@ final class QuartzWindowImageFrameProvider {
         }
 
         let fullImage = imageRef.takeRetainedValue()
-        let image = cropToGameClient(fullImage, window: window)
+        let image = try cropToGameClient(fullImage, window: window)
         guard image.width > 0, image.height > 0 else {
             throw QuartzWindowImageFrameError.emptyImage(window.id)
         }
@@ -72,7 +72,12 @@ final class QuartzWindowImageFrameProvider {
         )
     }
 
-    private func cropToGameClient(_ image: CGImage, window: WindowInfo) -> CGImage {
+    private func cropToGameClient(_ image: CGImage, window: WindowInfo) throws -> CGImage {
+        if window.contentRectOverride != nil {
+            guard let rect = CloudGameGeometry.cropRect(imageSize: CGSize(width: image.width, height: image.height), window: window),
+                  let cropped = image.cropping(to: rect) else { throw ScreenCaptureKitFrameError.emptyImage(window.id) }
+            return cropped
+        }
         let expectedWidth = Int(window.capturePixelSize.width.rounded())
         let expectedHeight = Int(window.capturePixelSize.height.rounded())
         guard image.width >= expectedWidth, image.height > expectedHeight,

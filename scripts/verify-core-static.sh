@@ -39,3 +39,7 @@ rg -q 'class ChildSessionService' \
 rg -q 'WineBridgeSessionInvalidationMode' \
   MacGI/Sources/MacGI/Runtime/WineBridgeInputDispatcher.swift
 rg -q 'background' MacGI/Sources/MacGI/Runtime/BetterGICorePlatformAdapter.swift
+
+# The hosted WKWebView uses the same packet SDK as upstream; do not silently fork it.
+cmp "${repo_root}/BetterGenshinImpact/Resources/JavaScript/ys-input-inject.js" \
+    "${repo_root}/MacGI/Sources/MacGI/Resources/CloudGame/ys-input-inject.js"

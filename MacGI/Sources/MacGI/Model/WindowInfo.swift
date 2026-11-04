@@ -52,11 +52,14 @@ struct WindowInfo: Identifiable, Equatable, Hashable, Sendable {
     /// The safety gate blocks capture and input for synthetic sentinels.
     let isSynthetic: Bool
 
+    let contentRectOverride: CGRect?
+    let isHostedCloud: Bool
+
     // MARK: Init
 
     init(id: CGWindowID, ownerPID: pid_t, ownerName: String,
          title: String, frame: CGRect, layer: Int,
-         isOnScreen: Bool, scaleFactor: CGFloat, isSynthetic: Bool = false) {
+         isOnScreen: Bool, scaleFactor: CGFloat, isSynthetic: Bool = false, contentRectOverride: CGRect? = nil, isHostedCloud: Bool = false) {
         self.id = id
         self.ownerPID = ownerPID
         self.ownerName = ownerName
@@ -66,12 +69,15 @@ struct WindowInfo: Identifiable, Equatable, Hashable, Sendable {
         self.isOnScreen = isOnScreen
         self.scaleFactor = scaleFactor
         self.isSynthetic = isSynthetic
+        self.contentRectOverride = contentRectOverride
+        self.isHostedCloud = isHostedCloud
     }
 
     // MARK: Derived
 
     /// Game client rectangle in Quartz screen points, excluding the Wine title bar.
     var captureRect: CGRect {
+        if let contentRectOverride { return contentRectOverride }
         guard isLikelyGameWindow, ownerName.localizedCaseInsensitiveContains("wine") else {
             return frame
         }
@@ -108,6 +114,7 @@ struct WindowInfo: Identifiable, Equatable, Hashable, Sendable {
     /// This mirrors BetterGI's `TaskContext.GameHandle` preference: the real game
     /// handle wins over launcher/helper windows, even when the launcher is larger.
     var gameWindowSelectionPriority: Int {
+        if isHostedCloud { return 0 }
         let lowerTitle = title.lowercased()
         let lowerOwner = ownerName.lowercased()
         let hasLocalizedGameTitle = lowerTitle.contains("原神")

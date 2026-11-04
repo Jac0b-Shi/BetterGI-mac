@@ -459,6 +459,84 @@ final class AppState: ObservableObject {
     private let runtimeLogWriter: RuntimeLogFileWriter
     private let userDefaults: UserDefaults
     private let launchArguments: [String]
+    @Published private(set) var cloudGameStatus = "使用内置游戏窗口登录国服云原神，可拖动标题栏移动。"
+    @Published private(set) var cloudGameReady = false
+    @Published private(set) var cloudGameIsOpen = false
+    private var cloudWebHost: MacCloudWebViewHost?
+    private var pendingCloudClose = false
+    private var closingCloudGame = false
+    private var changingCloudTarget = false
+    private var startAfterCloudSwitch = false
+
+    func openCloudGame() {
+        guard !closingCloudGame else { return }
+        do {
+            if cloudWebHost == nil {
+                let host = try MacCloudWebViewHost(defaults: userDefaults)
+                host.onStatus = { [weak self, weak host] message, ready in
+                    guard let self else { return }
+                    self.cloudGameStatus = message; self.cloudGameReady = ready
+                    if self.selectedWindow.isHostedCloud, let info = host?.windowInfo() {
+                        self.selectedWindow = info
+                    }
+                }
+                host.onUnavailable = { [weak self] in
+                    guard let self, self.selectedWindow.isHostedCloud else { return }
+                    self.stopRuntime()
+                }
+                host.onCloseRequested = { [weak self] in self?.closeCloudGame() }
+                cloudWebHost = host
+            }
+            cloudGameIsOpen = true
+            cloudWebHost?.open()
+            refreshWindows()
+        } catch { cloudGameStatus = error.localizedDescription; addLog(.error, cloudGameStatus) }
+    }
+
+    func focusCloudGame() { cloudWebHost?.focus() }
+    func resizeCloudGame(width: CGFloat) { cloudWebHost?.resize(width: width) }
+    func selectCloudGame() {
+        guard cloudGameReady, let info = cloudWebHost?.windowInfo() else { return }
+        setSelectedWindow(info)
+    }
+
+    func closeCloudGame() {
+        guard cloudWebHost != nil, !closingCloudGame else { return }
+        pendingCloudClose = true
+        cloudWebHost?.bridge.suspend()
+        if runtimeLifecycle == .running, selectedWindow.isHostedCloud { stopRuntime(); return }
+        guard !runtimeLifecycle.isTransitioning, !changingCloudTarget else { return }
+        finishCloudClose()
+    }
+
+    private func finishCloudClose() {
+        guard pendingCloudClose, !closingCloudGame, let host = cloudWebHost else { return }
+        closingCloudGame = true
+        Task { [weak self] in
+            guard let self else { return }
+            if self.selectedWindow.isHostedCloud {
+                if self.coreStartupInFlight { await self.coreStartupTask?.value }
+                self.corePlatformGeneration &+= 1
+                await self.betterGICoreSupervisor?.stop()
+                self.betterGICoreSupervisor = nil; self.coreStatus = .missing
+            }
+            await host.close()
+            self.pendingCloudClose = false; self.closingCloudGame = false
+            self.cloudWebHost = nil; self.cloudGameIsOpen = false; self.cloudGameReady = false
+            self.cloudGameStatus = "云原神窗口已关闭。"
+            if self.selectedWindow.isHostedCloud {
+                self.applySelectedWindow(.unavailable())
+            }
+            self.refreshWindows()
+        }
+    }
+
+    private func selectableWindows() -> [WindowInfo] {
+        var windows = QuartzWindowEnumerator.enumerateApplicationWindows()
+        if let cloud = cloudWebHost?.windowInfo() { windows.append(cloud) }
+        return windows
+    }
+
     var inputDeliveryMode: InputDeliveryMode { inputDispatcher.deliveryMode }
     var inputDeliveryCapabilities: InputDeliveryCapabilities {
         inputDispatcher.capabilities
@@ -467,6 +545,7 @@ final class AppState: ObservableObject {
     private var runtimeFrameIndex: UInt64 = 0
     private var schedulerExecutionTask: Task<Void, Never>?
     private var oneDragonExecutionTask: Task<Void, Never>?
+    var corePlatformGeneration: UInt64 = 0
     var betterGICoreSupervisor: BetterGICoreProcessSupervisor?
     private var coreStartupTask: Task<Void, Never>?
     private let systemMetricsSampler = MacSystemMetricsSampler()
@@ -2081,6 +2160,7 @@ final class AppState: ObservableObject {
         do {
             NSLog("BetterGI Core supervisor resolving packaged executable")
             let supervisor = try BetterGICoreProcessSupervisor(store: runtimeResourceStore)
+            corePlatformGeneration &+= 1
             let adapter = BetterGICorePlatformAdapter(appState: self)
             let handshake = try await supervisor.start(
                 progressHandler: { [weak self] phase in
@@ -2154,7 +2234,7 @@ final class AppState: ObservableObject {
             return
         }
         refreshPermissionStatus()
-        guard screenCapturePermissionGranted, accessibilityPermissionGranted else {
+        guard screenCapturePermissionGranted, (selectedWindow.isHostedCloud || accessibilityPermissionGranted) else {
             runtimeLifecycle = .failed
             runtimeLifecycleMessage = "无法启动：请先授予屏幕录制和辅助功能权限。"
             appStatus = .error
@@ -2166,6 +2246,11 @@ final class AppState: ObservableObject {
             runtimeLifecycleMessage = "无法启动：没有选中真实、可见的原神窗口。"
             appStatus = .error
             addLog(.error, "Cannot start runtime: no real on-screen game window is selected.")
+            return
+        }
+        guard !changingCloudTarget, !pendingCloudClose else { return }
+        if selectedWindow.isHostedCloud, !cloudGameReady {
+            runtimeLifecycleMessage = "请先在云原神窗口内进入游戏，等待视频与输入 SDK 就绪。"
             return
         }
         runtimeLifecycle = .starting
@@ -2184,11 +2269,21 @@ final class AppState: ObservableObject {
                 self.runtimeLifecycleMessage = "无法启动：BetterGI Core 尚未就绪。"
                 self.appStatus = .error
                 self.addLog(.error, "Cannot start runtime: BetterGI Core is not ready.")
+                self.finishCloudClose()
                 return
             }
             do {
+                if self.selectedWindow.isHostedCloud {
+                    guard let host = self.cloudWebHost, host.verifyReady(), !self.pendingCloudClose else { throw CloudWebInputError.unavailable }
+                    host.focus()
+                    try await host.bridge.beginSession()
+                }
                 try await supervisor.startRuntime()
                 _ = try await self.captureFrameForBetterGICore()
+                if self.selectedWindow.isHostedCloud {
+                    guard !self.pendingCloudClose, self.cloudWebHost?.verifyReady() == true,
+                          self.cloudWebHost?.isForeground == true else { throw CloudWebInputError.unavailable }
+                }
                 if self.showHUDOnStart {
                     self.isHUDVisible = true
                 }
@@ -2205,12 +2300,14 @@ final class AppState: ObservableObject {
                 self.attemptAutoStartSchedulerGroups()
             } catch {
                 try? await supervisor.stopRuntime()
+                if self.selectedWindow.isHostedCloud { await self.cloudWebHost?.bridge.releaseAndSuspend() }
                 await self.frameProvider.stopCapture()
                 self.captureStatus = .error
                 self.runtimeLifecycle = .failed
                 self.runtimeLifecycleMessage = "无法启动：\(error.localizedDescription)"
                 self.appStatus = .error
                 self.addLog(.error, "Cannot start runtime: \(error.localizedDescription)")
+                self.finishCloudClose()
             }
         }
     }
@@ -2225,8 +2322,13 @@ final class AppState: ObservableObject {
         let gameIsFrontmost = isWindowValid
             && !selectedWindow.isSynthetic
             && frontmostPID == selectedWindow.ownerPID
+            && (!selectedWindow.isHostedCloud || NSApp.keyWindow?.windowNumber == Int(selectedWindow.id))
         if isGameWindowFrontmost != gameIsFrontmost {
             isGameWindowFrontmost = gameIsFrontmost
+            if !gameIsFrontmost, selectedWindow.isHostedCloud, runtimeLifecycle == .running {
+                cloudWebHost?.bridge.suspend()
+                stopRuntime()
+            }
         }
         recomputeHUDPresentation()
     }
@@ -2257,7 +2359,7 @@ final class AppState: ObservableObject {
     private static let inputBackendSelectionKey = "input.backend"
 
     var canChangeInputBackend: Bool {
-        !inputDispatcherWasInjected
+        !inputDispatcherWasInjected && !selectedWindow.isHostedCloud && !changingCloudTarget
             && (runtimeLifecycle == .stopped || runtimeLifecycle == .failed)
     }
 
@@ -2527,6 +2629,13 @@ final class AppState: ObservableObject {
                 self.addLog(.debug, "BetterGI Core runtime stop acknowledged.")
                 await self.frameProvider.stopCapture()
                 self.cancelRuntimeGeometryRefresh()
+                if self.selectedWindow.isHostedCloud, let host = self.cloudWebHost {
+                    let released = await host.bridge.releaseAndSuspend()
+                    if !released {
+                        self.addLog(.warn, "Web SDK 未确认全部按键释放，将关闭窗口以终止网页连接。")
+                        self.pendingCloudClose = true
+                    }
+                }
                 self.captureTimestamps = []
                 self.measuredCaptureFPS = 0
                 self.captureStatus = .missing
@@ -2536,12 +2645,14 @@ final class AppState: ObservableObject {
                 self.runtimeLifecycleMessage = completionMessage
                 self.appStatus = .idle
                 self.addLog(.info, completionLog)
+                if self.pendingCloudClose { self.finishCloudClose(); return }
                 if let window = self.pendingRuntimeWindowSelection {
                     self.pendingRuntimeWindowSelection = nil
+                    self.startAfterCloudSwitch = window.isHostedCloud != (self.inputDispatcher.deliveryMode == .webSdk)
                     self.applySelectedWindow(window)
                     self.addLog(.info,
                         "Restarting BetterGI runtime with the selected capture window.")
-                    self.startRuntime()
+                    if !self.changingCloudTarget { self.startRuntime() }
                 }
             } catch {
                 self.pendingRuntimeWindowSelection = nil
@@ -2550,6 +2661,8 @@ final class AppState: ObservableObject {
                 self.runtimeLifecycleMessage = "停止失败：\(error.localizedDescription)"
                 self.appStatus = .error
                 self.addLog(.error, "Cannot stop runtime: \(error.localizedDescription)")
+                self.cloudWebHost?.bridge.suspend()
+                self.finishCloudClose()
             }
         }
     }
@@ -5102,7 +5215,8 @@ final class AppState: ObservableObject {
     }
 
     func refreshWindows() {
-        let windows = QuartzWindowEnumerator.enumerateApplicationWindows()
+        guard !changingCloudTarget else { return }
+        let windows = selectableWindows()
         if windows.isEmpty {
             if stopRuntimeIfGameProcessExited() {
                 availableWindows = []
@@ -5169,7 +5283,7 @@ final class AppState: ObservableObject {
 
     @discardableResult
     func refreshSelectedWindowGeometry() -> WindowInfo? {
-        let windows = QuartzWindowEnumerator.enumerateApplicationWindows()
+        let windows = selectableWindows()
         if let refreshed = windows.first(where: { $0.id == selectedWindow.id }) {
             if refreshed != selectedWindow {
                 selectedWindow = refreshed
@@ -5349,6 +5463,39 @@ final class AppState: ObservableObject {
     }
 
     private func applySelectedWindow(_ window: WindowInfo) {
+        let needsCloudSwitch = window.isHostedCloud != (inputDispatcher.deliveryMode == .webSdk)
+        if needsCloudSwitch {
+            guard !changingCloudTarget, !coreStartupInFlight else {
+                addLog(.warn, "Core 正在切换或启动，请稍后选择云原神窗口。")
+                return
+            }
+            changingCloudTarget = true
+            runtimeLifecycle = .starting
+            runtimeLifecycleMessage = "正在切换游戏宿主与输入会话..."
+            Task { [weak self] in
+                guard let self else { return }
+                self.cloudWebHost?.bridge.suspend()
+                self.corePlatformGeneration &+= 1
+                await self.betterGICoreSupervisor?.stop()
+                self.betterGICoreSupervisor = nil
+                self.coreStatus = .missing
+                self.inputDispatcher.shutdown()
+                if window.isHostedCloud, let host = self.cloudWebHost {
+                    self.inputDispatcher = CloudWebInputDispatcher(bridge: host.bridge, windowID: window.id)
+                } else {
+                    self.inputDispatcher = InputDispatcherFactory.make(selection: self.inputBackendSelection, launchArguments: self.launchArguments)
+                }
+                self.changingCloudTarget = false
+                self.runtimeLifecycle = .stopped
+                self.applySelectedWindow(window)
+                if self.startAfterCloudSwitch && !self.pendingCloudClose {
+                    self.startAfterCloudSwitch = false
+                    self.startRuntime()
+                }
+                self.finishCloudClose()
+            }
+            return
+        }
         manuallySelectedWindowID = window.id
         selectedWindow = window
         gameWindowStatus = .detected
@@ -5561,11 +5708,21 @@ final class AppState: ObservableObject {
     }
 
     func captureFrameForBetterGICore() async throws -> CaptureImageFrame {
+        if selectedWindow.isHostedCloud {
+            guard let host = cloudWebHost, host.verifyReady(), let info = host.windowInfo(), info.contentRectOverride != nil else { throw CloudWebInputError.unavailable }
+            selectedWindow = info
+        }
         let targetWindow = selectedWindow
         guard targetWindow.id != 0, targetWindow.isOnScreen, !targetWindow.isSynthetic else {
             throw BetterGICoreRPCError.protocolViolation("No real on-screen game window is selected for Core capture.")
         }
         let imageFrame = try await frameProvider.captureWindow(targetWindow)
+        if targetWindow.isHostedCloud {
+            guard selectedWindow.id == targetWindow.id, let host = cloudWebHost, host.verifyReady(),
+                  let current = host.windowInfo(), CloudGameGeometry.matchesCapture(current, targetWindow) else {
+                throw CloudWebInputError.unavailable
+            }
+        }
         recordCapturedFrame(imageFrame)
         return imageFrame
     }

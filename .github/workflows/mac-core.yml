@@ -78,6 +78,11 @@ jobs:
         run: >
           "${{ runner.temp }}/bettergi-app/MacGI.app/Contents/Resources/BetterGICore/BetterGenshinImpact.Core.Host"
           --dependency-smoke
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify hosted cloud input ownership
+        run: node scripts/verify-cloud-web-input.mjs
       - name: Test Swift UI and platform adapters
         working-directory: MacGI
         run: swift test

@@ -68,6 +68,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
     }
 
     private weak var appState: AppState?
+    private let generation: UInt64
     private var audioCapture: BGIAudioSampleProvider?
     private let captureRing: BetterGICoreCaptureRing
     private let htmlMaskController: MacHTMLMaskController
@@ -78,6 +79,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
     @MainActor
     init(appState: AppState) {
         self.appState = appState
+        generation = appState.corePlatformGeneration
         captureRing = BetterGICoreCaptureRing(runURL: appState.betterGICoreRunURL)
         htmlMaskController = MacHTMLMaskController(appState: appState)
     }
@@ -99,6 +101,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                     guard let self, let appState = self.appState else {
                         throw BetterGICorePlatformAdapterError.invalidParameters("AppState is unavailable.")
                     }
+                    try self.requireCurrentGeneration(appState)
                     transfer.result = .success(try self.handleOnMain(
                         method: transfer.method,
                         parameters: transfer.parameters,
@@ -129,6 +132,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                         throw BetterGICorePlatformAdapterError.invalidParameters(
                             "AppState is unavailable.")
                     }
+                    try self.requireCurrentGeneration(appState)
                     if transfer.method == "input.dispatch" {
                         if transfer.parameters?["action"] as? String == "inputText",
                            !appState.isGameWindowFrontmost {
@@ -296,11 +300,10 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
                 guard let appState = self?.appState else {
                     throw BetterGICorePlatformAdapterError.invalidParameters("AppState is unavailable.")
                 }
+                guard let self else { throw BetterGICorePlatformAdapterError.invalidParameters("Capture adapter unavailable.") }
+                try self.requireCurrentGeneration(appState)
                 let frame = try await appState.captureFrameForBetterGICore()
-                guard let self else {
-                    throw BetterGICorePlatformAdapterError.invalidParameters(
-                        "Capture ring is unavailable.")
-                }
+                try self.requireCurrentGeneration(appState)
                 transfer.result = .success(try self.captureRing.write(frame))
             } catch {
                 transfer.result = .failure(error)
@@ -317,6 +320,13 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
     }
 
     @MainActor
+    private func requireCurrentGeneration(_ appState: AppState) throws {
+        guard generation == appState.corePlatformGeneration else {
+            throw BetterGICorePlatformAdapterError.inputRejected("Core platform session has been retired.")
+        }
+    }
+
+    @MainActor
     private func handleOnMain(method: String, parameters: [String: Any]?, appState: AppState) throws -> Any {
         switch method {
         case "window.metrics":
@@ -328,7 +338,7 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             let workingArea = NSScreen.main?.visibleFrame ?? rect
             let pixelSize = window.capturePixelSize
             let scale = window.scaleFactor
-            let isActive = NSWorkspace.shared.frontmostApplication?.processIdentifier == window.ownerPID
+            let isActive = ForegroundWindowGuard.isTargetFrontmost(window)
             return [
                 "width": Int(pixelSize.width), "height": Int(pixelSize.height),
                 "captureX": Int(rect.minX * scale), "captureY": Int(rect.minY * scale),
@@ -405,6 +415,13 @@ final class BetterGICorePlatformAdapter: @unchecked Sendable {
             return ["acknowledged": true]
         case "game.close":
             appState.addLog(.warn, "Core requested game.close.")
+            if appState.selectedWindow.isHostedCloud {
+                appState.closeCloudGame()
+                return ["acknowledged": true]
+            }
+            guard appState.selectedWindow.ownerPID != ProcessInfo.processInfo.processIdentifier else {
+                throw BetterGICorePlatformAdapterError.invalidParameters("game.close cannot terminate the BetterGI host process.")
+            }
             guard let application = NSRunningApplication(
                 processIdentifier: appState.selectedWindow.ownerPID
             ), application.terminate() else {

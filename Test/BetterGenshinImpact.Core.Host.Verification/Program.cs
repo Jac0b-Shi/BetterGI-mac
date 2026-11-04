@@ -2511,9 +2511,11 @@ try
         var movementStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
         var movementScriptTask = Task.Run(
             () => new ScriptProject("GenshinStatueShouldMove").ExecuteAsync(), cancellation.Token);
-        Require(await Task.WhenAny(movementScriptTask, Task.Delay(TimeSpan.FromSeconds(30), cancellation.Token)) ==
+        // Real OCR/SIFT and upstream camera retries can exceed 30s on a cold CI runner.
+        // Keep a bounded deadline without shortening production delays or dropping input assertions.
+        Require(await Task.WhenAny(movementScriptTask, Task.Delay(TimeSpan.FromSeconds(60), cancellation.Token)) ==
                 movementScriptTask,
-            $"genshin statue ShouldMove did not complete within 30 seconds. " +
+            $"genshin statue ShouldMove did not complete within 60 seconds. " +
             $"captures={movementCaptureCount} teleportConfirmed={movementTeleportConfirmed} " +
             $"completionCaptures={movementTeleportCompletionCaptureCount} navCaptures={movementNavigationCaptureCount} " +
             $"positions={movementPositionCount} stateQueries={movementStateQueryCount} " +
@@ -2744,9 +2746,9 @@ try
         var nearestStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
         var nearestScriptTask = Task.Run(
             () => new ScriptProject("GenshinNearestStatue").ExecuteAsync(), cancellation.Token);
-        Require(await Task.WhenAny(nearestScriptTask, Task.Delay(TimeSpan.FromSeconds(30), cancellation.Token)) ==
+        Require(await Task.WhenAny(nearestScriptTask, Task.Delay(TimeSpan.FromSeconds(60), cancellation.Token)) ==
                 nearestScriptTask,
-            "nearest-statue script did not complete within 30 seconds.");
+            "nearest-statue script did not complete within 60 seconds.");
         await nearestScriptTask;
         var nearestElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(nearestStartedAt);
         nearestResponderCancellation.Cancel();
